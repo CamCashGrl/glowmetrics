@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour } from "../../lib/analytics"
-import { toLocalDateStr } from "../../lib/analytics/localTime"
+import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -14,11 +13,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
-import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
-import CommandCenter from './CommandCenter'
-import Performance from './Performance'
-import Fans from './Fans'
+import { isProPlan } from '../../lib/plan'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
@@ -26,42 +21,11 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
 // and StreamPlanner/MoneyMap alone pull in all of recharts.
-// Behavior-triggered upgrade copy — keyed by the `source` passed to
-// openUpgradeModal(source). Each trigger fires because of something the
-// user actually just did, so the headline should say that back to them
-// instead of one generic pitch for every context. Falls back to
-// UPGRADE_COPY.default for any source not listed here.
-const UPGRADE_COPY = {
-  default: {
-    headline: "Unlock Your Full Earning Potential",
-    subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
-  },
-  multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
-  },
-  whales_cutoff: {
-    headline: "You've found your top fans",
-    subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
-  },
-  whales_empty: {
-    headline: "Unlock Your Full Fan Insights",
-    subhead: "See your highest-value fans, repeat spenders, and who's worth re-engaging.",
-  },
-  creator_report: {
-    headline: "You have enough data for deeper insights",
-    subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
-  },
-}
-
 const TAB_LOADING = (
   <div style={{ padding: "80px 0", textAlign: "center" }}>
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
   </div>
 )
-const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
-const Settings = dynamic(() => import('./Settings'), { ssr: false, loading: () => TAB_LOADING })
-const OnboardingChecklist = dynamic(() => import('./OnboardingChecklist'), { ssr: false })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
@@ -216,14 +180,12 @@ function ImportSparkle() {
   return <canvas ref={ref} style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }} />
 }
 
-// Formats an ALREADY creator-local hour (its only caller reads
-// platformTimes[...].hours, which is bucketed with toLocalHour). It used to
-// treat the input as UTC and shift it by the BROWSER's offset — a second
-// conversion in a different zone than the analytics.
 const formatHour = (hour) => {
-  const localHourIn = parseInt(hour)
-  if (isNaN(localHourIn)) return "—"
-  const h = ((localHourIn % 24) + 24) % 24
+  const utcHour = parseInt(hour)
+  if (isNaN(utcHour)) return "—"
+  const offsetHours = new Date().getTimezoneOffset() / -60
+  const localHour = ((utcHour + offsetHours) % 24 + 24) % 24
+  const h = Math.round(localHour)
   if (h === 0) return "12 AM"
   if (h < 12) return `${h} AM`
   if (h === 12) return "12 PM"
@@ -869,7 +831,7 @@ function buildGameTitles(game, { mood = 'none', tokenGoal = 0, toy = '' }) {
   return results.slice(0, 5)
 }
 
-function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, timezone = 'UTC' }) {
+function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
   const [innerTab,  setInnerTab]  = useState("quick")
 
   // Quick tab state
@@ -904,39 +866,29 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, timez
 
   const buildCtx = (overrides = {}) => {
     const now = new Date()
-    // Creator-local, NOT the browser clock. This is compared against
-    // bestHour below (canonicalBestTimes.bestWindow.localHour, creator-local),
-    // so reading the browser's hour made "Peak NOW"/"Peak in Xh" wrong by the
-    // offset between the two zones for any creator not sitting in their own
-    // saved timezone.
-    const currentHour = toLocalHour(now.toISOString(), timezone)
+    const currentHour = now.getHours() // local hour, not UTC
     const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
-    // Generic "peak" claim (the Title Generator's chips say "Peak NOW"/"Peak
-    // in Xh" — no "today" framing), so this reads canonicalBestTimes.
-    // bestWindow directly — same source as the command-bar Peak Window KPI
-    // — instead of the legacy analytics.bestHour, with its own second,
-    // hand-rolled mean-based fallback calculated from `sessions` right here
-    // when analytics.bestHour was absent. That fallback was a third
-    // independent "best hour" formula that could disagree with both the
-    // legacy field it backstopped and the canonical engine; the canonical
-    // engine already has its own confidence-tiered handling for sparse data,
-    // so no local fallback calculation is needed here at all.
-    const bestHour = analytics?.canonicalBestTimes?.bestWindow
-      ? analytics.canonicalBestTimes.bestWindow.localHour
-      : null
+    const _analyticsBestHourCtx = analytics?.bestHour || null
+    let bestHour = null
+    if (_analyticsBestHourCtx) {
+      bestHour = parseInt(_analyticsBestHourCtx.hour) // already local from analytics.js toLocalHour
+    } else {
+      const hourUSD = {}; const hourCount = {}
+      ;(sessions || []).forEach(s => {
+        const h = new Date(s.startTime).getHours() // local hour
+        hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
+        hourCount[h] = (hourCount[h] || 0) + 1
+      })
+      const bestHourEntry = Object.entries(hourUSD).map(([h, usd]) => [h, usd / (hourCount[h] || 1)]).sort((a,b) => b[1]-a[1])[0]
+      bestHour = bestHourEntry ? parseInt(bestHourEntry[0]) : null
+    }
     // bestHour is already a local hour — format directly, no offset needed
     const fmtLocalHour = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`
     const bestHourLabel = (bestHour === null || isNaN(bestHour)) ? null : fmtLocalHour(bestHour)
     const hoursUntilPeak = bestHour !== null ? (bestHour - currentHour + 24) % 24 : 99
     const isPeakNow = hoursUntilPeak <= 1
     const peakSoon = hoursUntilPeak <= 3 && !isPeakNow
-    // meaningfulSessions — same canonical population the Overview KPI card and
-    // the Daily Brief now use. Previously read the page-level `sessions`
-    // (= analytics.sessions = allValidSessions), giving the Title Generator a
-    // third, lower average than the two figures shown on Overview.
-    const _ctxSessions = analytics?.meaningfulSessions || []
-    const avgSessionUSD = _ctxSessions.length
-      ? _ctxSessions.reduce((s, x) => s + (x.totalUSD || 0), 0) / _ctxSessions.length : 0
+    const avgSessionUSD = sessions?.length ? sessions.reduce((s,x) => s + x.totalUSD, 0) / sessions.length : 0
     return {
       isPeakNow, peakSoon, bestHour, bestHourLabel, hoursUntilPeak,
       tokenGoal: overrides.tokenGoal !== undefined ? overrides.tokenGoal : tokenGoal,
@@ -1423,12 +1375,6 @@ export default function Dashboard() {
     : 'overview'
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  // Which tabs this browser has ever opened — powers the onboarding
-  // checklist's action items (report/whales/live) without a DB write.
-  const [visitedTabs, setVisitedTabs] = useState(() => {
-    if (typeof window === 'undefined') return []
-    try { return JSON.parse(localStorage.getItem('camcash_visited_tabs') || '[]') } catch (_) { return [] }
-  })
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [promoCodeStatus, setPromoCodeStatus] = useState(null) // { type: 'success'|'error', message }
   const [promoCodeSubmitting, setPromoCodeSubmitting] = useState(false)
@@ -1453,17 +1399,20 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
+  const [whaleFilter, setWhaleFilter] = useState("ALL")
+  const [platformFilter, setPlatformFilter] = useState("ALL")
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
+  const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-  const [upgradeModalSource, setUpgradeModalSource] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [chartDrillDay, setChartDrillDay] = useState(null)
   // Element that had focus right before the fan profile modal opened, so we
   // can return focus to it (the "View Fan" button) once the modal closes.
   // Set synchronously in the "View Fan" onClick (via e.currentTarget) rather
@@ -1562,7 +1511,6 @@ export default function Dashboard() {
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackSent, setFeedbackSent] = useState(false)
-  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -1613,22 +1561,6 @@ export default function Dashboard() {
 
   const isBetaUser = true
   const isPro = isProPlan(profile)
-  // Whether to SAY "free trial" in upgrade copy.
-  //
-  // This used to also require !profile?.stripe_customer_id, on the reasoning
-  // that anyone who had been a Stripe customer might already have used a
-  // trial. That was wrong twice over. A stripe_customer_id is created when
-  // checkout OPENS, so abandoning checkout — or having a card declined —
-  // permanently downgraded the creator's copy to the plain price, which is
-  // exactly backwards: someone who just tried to pay and failed is the person
-  // most worth offering a trial to. It also silently hid this copy from the
-  // owner's own test account, making the feature look unshipped.
-  //
-  // It is moot now regardless: the 7-day trial lives on the Stripe PRICE
-  // (recurring.trial_period_days), so every subscription created from it
-  // trials, whatever the customer's history. Promising a trial to any non-Pro
-  // creator is therefore accurate, not optimistic.
-  const trialEligible = !isPro
   const uploadLimit = Infinity
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -1636,24 +1568,7 @@ export default function Dashboard() {
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
     gtmTrack('paywall_hit', { feature: source })
-    setUpgradeModalSource(source || 'default')
     setShowUpgradeModal(true)
-  }
-
-  // ── PRO PREVIEW IMPRESSION TRACKING ─────────────────────────────────────
-  // One event (pro_preview_viewed) with a `feature` property, not a
-  // separate event per locked surface — so "which Pro value proposition
-  // caused engagement" is one queryable dimension, not N event names.
-  // Distinct from upgrade_click/paywall_hit (fired by openUpgradeModal
-  // above, the CLICK side of the funnel on every CTA already) — this is
-  // the IMPRESSION side: the free user actually saw the locked preview,
-  // whether or not they clicked it. Deduped per session via a ref so
-  // re-renders of the same surface don't spam the event.
-  const proPreviewFiredRef = useRef(new Set())
-  const trackProPreviewViewed = (feature) => {
-    if (proPreviewFiredRef.current.has(feature)) return
-    proPreviewFiredRef.current.add(feature)
-    gtmTrack('pro_preview_viewed', { feature })
   }
 
   const redeemPromoCode = async () => {
@@ -1729,12 +1644,6 @@ export default function Dashboard() {
   // Tab persistence
   const handleTabChange = (tab) => {
     gtmTrack('tab_switched', { tab_name: tab })
-    // Live Mode is the one tab that's ENTIRELY a locked Pro preview for
-    // free users (see the isPro gate a few hundred lines below) — this is
-    // the funnel's "Pro preview viewed" step for that surface specifically,
-    // fired at the moment of actually landing on it, not just clicking an
-    // upgrade CTA (which upgrade_click/paywall_hit already cover elsewhere).
-    if (tab === 'live' && !isPro) trackProPreviewViewed('live_mode')
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
@@ -1745,18 +1654,6 @@ export default function Dashboard() {
       document.body.scrollTop = 0
     }
   }
-
-  // Record every tab this browser opens, for the onboarding checklist —
-  // watches activeTab directly rather than wrapping every setActiveTab call
-  // site (Sidebar and the "Go Live" button both set it without going
-  // through handleTabChange).
-  useEffect(() => {
-    if (!activeTab || visitedTabs.includes(activeTab)) return
-    const next = [...visitedTabs, activeTab]
-    setVisitedTabs(next)
-    try { localStorage.setItem('camcash_visited_tabs', JSON.stringify(next)) } catch (_) {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
 
   // Counter bump when new tips arrive
   useEffect(() => {
@@ -1900,26 +1797,6 @@ export default function Dashboard() {
   }, [activeTab, user])
 
   useEffect(() => {
-    // Stripe redirects here with ?success=true&plan=X after checkout
-    // completes (app/api/stripe/checkout/route.js's success_url) — this was
-    // previously unhandled: no funnel event, no user-visible confirmation
-    // that the upgrade actually went through. Closes the funnel's final
-    // step (signup->import->first-insight->pro-preview->upgrade-click->
-    // checkout-started->subscription-completed). Strips the query params
-    // after firing so a page refresh doesn't double-count.
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('success') === 'true') {
-        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
-        window.history.replaceState({}, '', window.location.pathname)
-      } else if (params.get('canceled') === 'true') {
-        gtmTrack('checkout_canceled', {})
-        window.history.replaceState({}, '', window.location.pathname)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
     // Restore saved tab
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('camcash_tab')
@@ -1954,7 +1831,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone')
+        .select('plan, plan_expires_at')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -2009,11 +1886,6 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            // Browser-fallback tier only (see lib/timezone.js) — this is the
-            // "NO DB calls" lightweight recompute path, so it can't re-fetch
-            // profiles.timezone here; loadData()'s full reload path resolves
-            // the canonical profile timezone and is what corrects this on
-            // the next full load.
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
@@ -2211,14 +2083,7 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      // Canonical timezone contract (canonical-analytics-rules.md): the
-      // creator's saved profiles.timezone is the source of truth; browser
-      // detection is fallback-only, used to auto-populate the profile once
-      // (see autoPopulateTimezoneIfMissing) rather than being read live on
-      // every load.
-      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
-      const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
-      autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
+      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
       const PAGE = 1000
       // First page also asks for the exact row count, so the remaining pages
       // (if any) can be fired off in parallel instead of one round trip at a
@@ -2450,6 +2315,8 @@ const stopImportMessageRotation = () => {
   const insights = analytics?.insights || []
   const platforms = analytics?.platforms || []
   const dependencyRisk = analytics?.dependencyRisk || null
+  const preTipBehavior = analytics?.preTipBehavior || null
+  const trueHourlyAvg  = analytics?.trueHourlyAvg  || []
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
@@ -2488,84 +2355,263 @@ const stopImportMessageRotation = () => {
   const platformBestTimes     = analytics?.platformBestTimes     || {}
   const earningsVelocity      = analytics?.earningsVelocity      ?? null
   const platformVelocity      = analytics?.platformVelocity      || {}
-  // Canonical missed revenue (lib/analytics/missedRevenue.js): median $/hr in
-  // the platform's own best day+hour window vs its overall median $/hr, times
-  // sessions outside that window. Meaningful sessions only, creator-local.
-  const missedRevenueByPlat   = analytics?.missedRevenue?.cumulative_by_platform || {}
+  const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
   const returningVsNew        = analytics?.returningVsNew        || null
   const topFanDependency      = analytics?.topFanDependency      || null
 
-  // ── RESOLVED CREATOR TIMEZONE ────────────────────────────────────────
-  // THE single timezone value every local-time analytical calculation on
-  // this page consumes. Contract (lib/timezone.js): profiles.timezone is
-  // the source of truth; the browser's zone is a fallback used only to
-  // auto-populate the profile once, never read live as the analytical
-  // basis. Defined here (rather than lower down, where it used to live as
-  // _momTz) because platformTimes below is the first analytical consumer.
-  const creatorTz = resolveCreatorTimezone(profile?.timezone).timezone
-
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
-  // so hour/day reflects when money actually came in, not when the session
-  // started.
-  //
-  // Bucketed in the creator's resolved timezone via toLocalHour/toLocalDow
-  // (lib/analytics/localTime.js — the same primitives the canonical
-  // bestTimes engine and Stream Planner use). Previously this used
-  // getUTCHours()/getUTCDay(), so the "Earnings by hour of day" heatmap and
-  // the per-platform day totals were bucketed in UTC while being presented
-  // as the creator's own hours — a tip at 7 PM Pacific landed in the 02:00
-  // bucket, and one after 4 PM Pacific was attributed to the next day.
-  const LOCAL_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips, creatorTz], () => {
+  // so hour/day reflects when money actually came in, not when the session started
+  // Use UTC to match the database timestamps
+  const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
     const pt = {}
     tips.forEach(t => {
       if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
-      const ts = t.date_time || t.dateRaw
-      const hour = toLocalHour(ts, creatorTz)
-      const day = LOCAL_DAYS_LONG[toLocalDow(ts, creatorTz)]
+      const dt = new Date(t.date_time || t.dateRaw)
+      const hour = dt.getUTCHours()
+      const day = UTC_DAYS_LONG[dt.getUTCDay()]
       pt[t.platform].hours[hour] = (pt[t.platform].hours[hour] || 0) + (t.usd || 0)
       pt[t.platform].days[day]   = (pt[t.platform].days[day]   || 0) + (t.usd || 0)
     })
     return pt
   })
 
-  // Free plan: the Fans tab caps at the 3 highest spenders (`whales` is
-  // already sorted by total spend upstream). Pro sees everyone. Fans.js
-  // receives this as a prop and applies it; it is not applied here.
-  // REMOVED with the Phase 4 Fans rebuild: buildWhatsNextAlerts() and
-  // buildReengageList(), plus their memoised results. Both fed only the old
-  // "Your Top Earners" milestone/at-risk lists. Fans.js derives the same
-  // priorities from canonical per-fan fields (expectedNextTip, churnRisk,
-  // avgDaysBetweenTips) instead of a second heuristic pass over `whales`.
-  // The re-engage message templates buildReengageList() carried were never
-  // the ones the creator saw — the message modal has always built its own
-  // list (see `messages` in the modal below), so nothing user-facing changed.
-  const FREE_FAN_LIMIT = 3
-  // Impression event — fires once per render where the locked fan preview is
-  // actually on screen, not once per blurred card. Fans.js renders that
-  // preview from the same `whales` array and the same limit, so this
-  // condition matches what the creator sees.
-  if (activeTab === 'whales' && !isPro && whales.length > FREE_FAN_LIMIT) trackProPreviewViewed('whale_intelligence')
+  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips], () => whales.filter(w => {
+    if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
+    if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
+    if (chartDrillDay) {
+      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+      const tippedOnDay = fanTips.some(t => {
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        return dayShort === chartDrillDay
+      })
+      if (!tippedOnDay) return false
+    }
+    return true
+  }))
 
-  // REMOVED with the Phase 4 Fans rebuild: filteredWhales, visibleWhales,
-  // hiddenWhales and lockedFanStats. They existed only to feed the old Top
-  // Fans grid — its tier/platform filter pills, its blurred card slice and
-  // its locked-stats panel — all of which Fans.js replaces. filteredWhales
-  // in particular re-ran a per-fan tip scan on every render for a
-  // chartDrillDay filter whose only trigger (the platform heatmap's "View
-  // top fans from <day>" button) was itself removed in the Phase 3
-  // Performance rebuild, so it could never match anything again.
+  // Free plan: Top Fans CRM grid caps at the 3 highest spenders (already
+  // sorted into `whales` by total spend upstream). Pro sees everyone.
+  const FREE_FAN_LIMIT = 3
+  const visibleWhales = isPro ? filteredWhales : filteredWhales.slice(0, FREE_FAN_LIMIT)
+  const hiddenWhales = isPro ? [] : filteredWhales.slice(FREE_FAN_LIMIT)
+  const lockedFanStats = memoOn(derivedCacheRef.current, 'lockedFanStats', [filteredWhales, isPro], () => {
+    if (isPro) return null
+    const hidden = filteredWhales.slice(FREE_FAN_LIMIT)
+    if (hidden.length === 0) return null
+    return {
+      hiddenCount: hidden.length,
+      goneCold: hidden.filter(w => w.tier === 'Dormant' || (w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical')).length,
+      whaleTier: hidden.filter(w => w.tier === 'Whale').length,
+      hiddenLifetimeValue: hidden.reduce((s, w) => s + (w.totalUSD || 0), 0),
+    }
+  })
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
   const freePlatformLimitReached = !isPro && allPlatforms.length > 0
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
+  const buildWhatsNextAlerts = () => {
+    const now = Date.now()
+    const strikeHot = []
+    const winBack = []
+    const milestone = []
+    const onlineNow = []
+    const dormant = []
+    const performance = []
+
+    // Helper: get personalized re-engage message based on fan behavior
+    const getPersonalMsg = (w) => {
+      const name = w.username
+      if (w.hasPrivates && w.privateCount >= 2)
+        return `Hey ${name}! Been thinking about doing more privates lately 👀 You always make them so fun 💕`
+      if (w.tipCount >= 20 && w.avgTipSize < 5)
+        return `Hey ${name}! I always love seeing your name pop up in chat 💕 Going live soon — come say hi!`
+      if (w.avgTipSize >= 20)
+        return `Hey ${name}! I was literally just thinking about that amazing tip you sent 🥺 Going live tonight 🔥`
+      return `Hey ${name}! I've been thinking about you lately 💕 I'm going live soon and would love to see you there 🔥`
+    }
+
+    // 1. STRIKE WHILE HOT — tipped in last 24h AND high tip probability
+    whales.forEach(w => {
+      const hrs = (now - new Date(w.lastTipDate)) / 3600000
+      if (hrs <= 24 && w.tipProbability?.level === 'High') {
+        strikeHot.push({
+          type: 'strike_hot', icon: '🔥', color: C.orange, severity: 'success',
+          title: `Strike while ${w.username} is hot`,
+          message: `They tipped in the last 24 hours and their tip probability is high — go live NOW while they're warm`,
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: getPersonalMsg(w)
+        })
+      }
+    })
+
+    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
+    whales.filter(w => w.totalUSD >= 50).forEach(w => {
+      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (days >= 45 && days <= 90) {
+        const name = w.username
+        winBack.push({
+          type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
+          title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
+          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+          cta: 'Copy Message', username: name, whale: w,
+          reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
+        })
+      }
+    })
+
+    // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
+    // Exclude fans gone > 90 days: they belong in At Risk, not Close to Milestone
+    const milestones = [50, 100, 200, 500]
+    whales.forEach(w => {
+      const daysSinceMilestone = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (daysSinceMilestone > 90) return
+      for (const m of milestones) {
+        const remaining = m - w.totalUSD
+        if (remaining > 0 && remaining <= m * 0.10) {
+          milestone.push({
+            type: 'milestone', icon: '💰', color: C.gold, severity: 'info',
+            title: `${w.username} is $${remaining.toFixed(0)} away from $${m}`,
+            message: `They've spent $${w.totalUSD.toFixed(0)} lifetime — a little encouragement could push them to the $${m} milestone`,
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: getPersonalMsg(w)
+          })
+          break
+        }
+      }
+    })
+
+    // 4. ONLINE NOW / ONLINE SOON
+    whales.slice(0, 5).forEach(w => {
+      if (w.tipCount < 5) return
+      const fanTips = (w.tips && w.tips.length > 0)
+        ? w.tips
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+      if (fanTips.length < 5) return
+      const hourCounts = {}
+      fanTips.forEach(t => {
+        // FIX: use getUTCHours() — tips stored in UTC
+        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        hourCounts[h] = (hourCounts[h] || 0) + 1
+      })
+      const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+      if (!bestHour) return
+      const peakHour = parseInt(bestHour[0])
+      const currentUTCHr = new Date().getUTCHours()
+      const hoursAway = (peakHour - currentUTCHr + 24) % 24
+      const _pf0 = bestHour[1] / fanTips.length
+      const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+      const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
+      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+      if (hoursAway <= 2 && probability >= 40) {
+        onlineNow.push({
+          type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
+          title: `${w.username} is probably online right now`,
+          message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: getPersonalMsg(w)
+        })
+      } else if (hoursAway <= 10 && probability >= 40) {
+        onlineNow.push({
+          type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
+          title: `${w.username} is likely online in ~${hoursAway}h`,
+          message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
+          cta: null, username: w.username, whale: w, reengageMsg: ''
+        })
+      }
+    })
+
+    // 5. DORMANT
+    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      if (days >= 7 && days <= 44) {
+        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+        dormant.push({
+          type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
+          title: `You haven't heard from ${w.username} in ${timeStr}`,
+          message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+          cta: 'Copy Message', username: w.username, whale: w,
+          reengageMsg: getPersonalMsg(w)
+        })
+      }
+    })
+
+
+    // Social mention alerts (keep, they're genuinely useful)
+    const socialAlerts = []
+    const SOCIAL_KEYWORDS = {
+      snapchat: /snap\s?chat|snapchat|snap/i,
+      instagram: /instagram|insta|ig\b/i,
+      twitter: /twitter|x\.com|\bx\b/i,
+      onlyfans: /onlyfans|only fans|of\b/i,
+    }
+    whales.forEach(w => {
+      if (!w.tipNotes || w.tipNotes.length === 0) return
+      Object.entries(SOCIAL_KEYWORDS).forEach(([platform, regex]) => {
+        const matchingNote = w.tipNotes.find(n => regex.test(n))
+        if (matchingNote) {
+          const usernameMatch = matchingNote.match(/@[\w.]+|(?:my|is|:)\s*([\w.@]+)/i)
+          const extractedUser = usernameMatch ? usernameMatch[1] || usernameMatch[0] : null
+          socialAlerts.push({
+            type: 'social_mention', icon: '📱', color: C.cyan, severity: 'info',
+            title: `${w.username} mentioned ${platform.charAt(0).toUpperCase() + platform.slice(1)}`,
+            message: extractedUser
+              ? `They left their ${platform} as "${extractedUser}" in a tip note — add them before you forget!`
+              : `They mentioned ${platform} in a tip note — ask them for their handle next time`,
+            cta: 'Copy Message', username: w.username, whale: w,
+            reengageMsg: getPersonalMsg(w)
+          })
+        }
+      })
+    })
+
+    // Merge in priority order, cap at 6
+    return [
+      ...strikeHot,
+      ...winBack,
+      ...milestone,
+      ...onlineNow,
+      ...dormant,
+      ...performance,
+      ...socialAlerts,
+    ].slice(0, 6)
+  }
+
+  // ── Build re-engage list outside JSX for the same reason
+  const buildReengageList = () => {
+    const now = Date.now()
+    const messageSets = [
+      (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
+      (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
+      (name) => `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
+    ]
+    return whales
+      .filter(w => {
+        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        return days >= 3 && days <= 60 && w.totalUSD >= 10
+      })
+      .sort((a, b) => b.totalUSD - a.totalUSD)
+      .slice(0, 5)
+      .map((w, i) => {
+        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        return {
+          whale: w,
+          days,
+          urgency: days > 30 ? C.red : days > 14 ? C.orange : C.gold,
+          msg: messageSets[i % messageSets.length](w.username)
+        }
+      })
+  }
+
+  // ============================================================
+  // REAL-TIME INTELLIGENCE COMPUTED FROM ACTUAL DB DATA
+  // ============================================================
+
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    // Creator-local current hour. Was the BROWSER's hour; all the analytics
-    // hours it is compared against below are creator-local.
-    const utcHour = toLocalHour(now.toISOString(), creatorTz)
+    const utcHour = now.getHours() // local hour — analytics hours are already local
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const todayName = DAYS[now.getDay()] // local day of week
 
@@ -2583,14 +2629,7 @@ const stopImportMessageRotation = () => {
         todayBestPlat = plat
       }
     })
-    // Phase 1B: all-time fallback now reads the canonical best-time result
-    // (lib/analytics/bestTimes.js — session-based, median $/hour,
-    // confidence-tiered) instead of the legacy tip-level computeBestTimes()
-    // output, per the approved Best-Time Migration Matrix. Same {hour, avg}
-    // shape preserved so every downstream consumer below (bhLabel,
-    // displayAvg, peakAvg, sessionsAtPeak) is unaffected by the source swap.
-    const _canonicalBest = analytics?.canonicalBestTimes?.bestWindow
-    const bestHour = _canonicalBest ? { hour: _canonicalBest.localHour, avg: _canonicalBest.medianUsdPerHour } : null
+    const bestHour = analytics?.bestHour
     const _bhRaw = todayBestHourNum !== null ? todayBestHourNum : (bestHour ? parseInt(bestHour.hour) : null)
     const bh = (_bhRaw !== null && !isNaN(_bhRaw)) ? _bhRaw : null
     const bhLabel = bh === null ? null : fmtHour(bh)
@@ -2602,11 +2641,7 @@ const stopImportMessageRotation = () => {
     tips.forEach(t => {
       const p = t.platform || 'Chaturbate'
       const d = new Date(t.date_time || t.dateRaw)
-      // Creator-local. The old comment claimed this matched analytics.js's
-      // toLocalHour — it did not: toLocalHour resolves the creator's saved
-      // timezone, getHours() resolves the browser's, so this bucket silently
-      // disagreed with every other hour bucket in the app.
-      const h = toLocalHour(t.date_time || t.dateRaw, creatorTz)
+      const h = d.getHours() // local hour to match analytics.js toLocalHour
       const bucket = Math.floor(d.getTime() / 3600000)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
@@ -2639,47 +2674,18 @@ const stopImportMessageRotation = () => {
     const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
     const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
 
-    // Best day — canonicalBestTimes.bestWindow, not legacy analytics.bestDay
-    // (tip-level mean). This card already reads the canonical hour (bh,
-    // above) for "today's peak"; using the legacy field just for "is today
-    // your best day" let the two halves of the same card disagree — e.g. bh
-    // correctly reflecting a Wednesday canonical window while isBestDay was
-    // computed against a legacy "Friday" answer, so the 🏆 badge could be
-    // wrong on the exact day the canonical hour says is best.
-    const bestDay = analytics?.canonicalBestTimes?.bestWindow
-      ? { day: analytics.canonicalBestTimes.bestWindow.localDay, avg: analytics.canonicalBestTimes.bestWindow.medianUsdPerHour }
-      : null
+    // Best day
+    const bestDay = analytics?.bestDay
     const isBestDay = bestDay?.day === todayName
-    // meaningfulSessions, not analytics.sessions (= allValidSessions, which
-    // still includes low_signal sessions). The Overview KPI card's "Avg Per
-    // Session" already uses meaningfulSessions, and lib/analytics/sessions.js
-    // documents that population as "the population every rate calculation
-    // should use" — so reading allValidSessions here put two different
-    // answers to "what is a session worth?" on the same screen. On the real
-    // regression CSV that gap is $2.79 (168 allValid) vs $5.10 (78
-    // meaningful) — the same class of contradiction reported as
-    // "$2 avg vs $10 avg per session".
-    const _avgPop = analytics?.meaningfulSessions || []
-    const sessionAvg = _avgPop.length
-      ? _avgPop.reduce((s, x) => s + (x.totalUSD || 0), 0) / _avgPop.length : 0
+    const sessionAvg = analytics?.sessions?.length
+      ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
 
     // Income prediction for peak window — use median-based displayAvg as single source of truth
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
-      // Creator-local — `bh` is canonicalBestTimes.bestWindow.localHour, so
-      // bucketing these sessions with the browser clock compared two
-      // different clocks.
-      const h = toLocalHour(s.startTime, creatorTz)
+      const h = new Date(s.startTime).getHours() // local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    // UNIT CONSISTENCY: every tier here is $/HOUR — displayAvg resolves to a
-    // per-hour-bucket figure (todayBestAvg/bestPlatPeakAvg/bestPlatNowAvg,
-    // all "$ earned within an hour"), and bestHour.avg is
-    // canonicalBestTimes.bestWindow.medianUsdPerHour. sessionAvg was
-    // previously the last fallback here, silently swapping in a $/SESSION
-    // value and feeding it to a forecast rendered as an hourly figure.
-    // Dropped rather than converted: if no $/hour figure qualifies, the
-    // honest output is no forecast, not one in the wrong unit.
-    const peakAvg = displayAvg || bestHour?.avg || 0
+    const peakAvg = displayAvg || bestHour?.avg || sessionAvg
     const predictionLow = Math.max(0, Math.round(peakAvg - (peakAvg * 0.4)))
     const predictionHigh = Math.round(peakAvg + (peakAvg * 0.4))
 
@@ -2736,7 +2742,7 @@ const stopImportMessageRotation = () => {
         if (!w.tips || w.tips.length < 3) return false
         if (w.totalUSD < 3) return false
         const hc = {}
-        w.tips.forEach(t => { const h = toLocalHour(t.date_time || t.dateRaw, creatorTz); hc[h] = (hc[h] || 0) + 1 })
+        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
         return (peakH - utcHour + 24) % 24 <= 1
       })
@@ -2750,10 +2756,8 @@ const stopImportMessageRotation = () => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    // Creator-local "now" — both of these are compared against tip data that
-    // is now bucketed in the creator's zone, and surfaced in alert copy.
-    const alertCurrentHour = toLocalHour(new Date().toISOString(), creatorTz)
-    const currentDay = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][toLocalDow(new Date().toISOString(), creatorTz)]
+    const alertCurrentHour = new Date().getUTCHours()
+    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
@@ -2762,7 +2766,8 @@ const stopImportMessageRotation = () => {
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const day = UTC_DAYS_LONG[toLocalDow(t.date_time || t.dateRaw, creatorTz)]
+      const d = new Date(t.date_time || t.dateRaw)
+      const day = UTC_DAYS_LONG[d.getUTCDay()]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -2778,17 +2783,14 @@ const stopImportMessageRotation = () => {
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // Bucketed in the creator's resolved timezone (was getUTCHours()): the
-    // resulting hour is compared against "now" and rendered as a local time.
+    // FIX: use getUTCHours() — tips are stored in UTC
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
-      // Absolute hour-bucket key for session dedup — intentionally UTC-based
-      // (it is an opaque identity key, never displayed or compared to a
-      // wall-clock hour), so it is correct regardless of timezone.
+      // Floor to UTC hour-bucket key for deduplication
       const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = toLocalHour(t.date_time || t.dateRaw, creatorTz)
+      const h = d.getUTCHours()
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
       platHourUSD[p][h] += t.usd || 0
@@ -2805,7 +2807,8 @@ const stopImportMessageRotation = () => {
     })
 
     const platNames = Object.keys(platHourAvg)
-    const currentUTCHour = toLocalHour(new Date().toISOString(), creatorTz)
+    // Use UTC current hour to match stored data
+    const currentUTCHour = new Date().getUTCHours()
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
         const hourVal = platHourAvg[plat][currentUTCHour] || 0
@@ -2814,7 +2817,7 @@ const stopImportMessageRotation = () => {
           const otherVal = platHourAvg[other][currentUTCHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = (() => { const _lh=((currentUTCHour%24)+24)%24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+            const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((currentUTCHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
@@ -2829,25 +2832,25 @@ const stopImportMessageRotation = () => {
     // Uses actual peak hour from their tip history
     const topWhales = [...whales].sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 5)
     topWhales.forEach(w => {
-      if (w.tipCount < 3) return
+      const fanTips = (w.tips && w.tips.length > 0)
+        ? w.tips
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+      if (fanTips.length < 3) return
 
-      // Canonical peak hour (identifyWhales' peakLocalHour), NOT a local
-      // re-bucketing. Three defects were stacked here:
-      //   1. This was a third independent implementation of "this fan's peak
-      //      hour" — identifyWhales() already computes it, and the Fans tab
-      //      had its own copy too (removed in the Phase 4 rebuild).
-      //   2. It bucketed with new Date(...).getHours(), the BROWSER's zone,
-      //      then compared the result against toLocalHour(now, creatorTz),
-      //      the CREATOR's zone — so `hoursAway` was a difference between two
-      //      different clocks whenever those zones disagreed, which is the
-      //      normal case for a travelling or non-local creator.
-      //   3. The "{n}% confidence" it rendered came from
-      //      peakFraction * 200 * proximityDecay clamped to 25-90 — a
-      //      hand-rolled score with nothing calibrating it, shown to the
-      //      creator as a probability.
-      if (w.peakLocalHour == null) return
-      const peakHour = w.peakLocalHour
-      const hoursAway = (peakHour - toLocalHour(new Date().toISOString(), creatorTz) + 24) % 24
+      // Use local hours — tips' date_time is UTC but getHours() converts to browser local
+      const hourCounts = {}
+      fanTips.forEach(t => {
+        const h = new Date(t.date_time || t.dateRaw).getHours() // local hour
+        hourCounts[h] = (hourCounts[h] || 0) + 1
+      })
+      const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
+      if (!sortedHours.length) return
+
+      const peakHour = parseInt(sortedHours[0][0]) // already local
+      const hoursAway = (peakHour - new Date().getHours() + 24) % 24
+      const _pf1 = sortedHours[0][1] / fanTips.length
+      const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+      const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
 
@@ -2861,7 +2864,7 @@ const stopImportMessageRotation = () => {
         alerts.push({
           type: 'whale_online_soon', priority: 1, icon: '⏰', color: '#F59E0B',
           title: `${w.username} likely online in ~${hoursAway}h on ${w.platform}`,
-          message: `Your top whale peaks at ${label} — ${w.peakHourTipCount} of their ${w.tipCount} tips land in that hour. Prep your stream on ${w.platform}; they've spent $${w.totalUSD.toFixed(0)} with you.`
+          message: `Your top whale peaks at ${label} with ${confidence}% confidence. Prep your stream on ${w.platform} — they've spent $${w.totalUSD.toFixed(0)} with you.`
         })
       }
     })
@@ -2888,53 +2891,25 @@ const stopImportMessageRotation = () => {
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 6)
   }
 
+  const whatsNextAlerts = memoOn(derivedCacheRef.current, 'whatsNextAlerts', [whales, tips], buildWhatsNextAlerts)
+  const reengageList = memoOn(derivedCacheRef.current, 'reengageList', [whales], buildReengageList)
   // re-runs every minuteTick (as well as when the underlying data changes)
   const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [tips, analytics, whales, minuteTick], buildDailyBrief)
 
-  // ── BEST-TIME SOURCE RECONCILIATION ─────────────────────────────────────
-  // Per the Free/Pro UX audit's best-time reconciliation pass: ONE metric,
-  // ONE definition, ONE source of truth, per distinct product question —
-  // and any surface answering a genuinely different question must be
-  // labeled as such, never silently substituted for the generic claim.
-  //
-  // Two genuinely different questions get asked on this page:
-  //
-  // 1. "What is my peak/best time to stream, in general?" (no day-of-week
-  //    scoping) — the command-bar "Peak Window" KPI, the "You're Losing
-  //    Money" missed-revenue card, and Smart Insights' peak-window insight
-  //    all ask this. canonicalBestTimes.bestWindow (lib/analytics/bestTimes.js
-  //    — session-based, median $/hour, confidence-tiered) is the DEFAULT,
-  //    authoritative source for this question, full stop. It used to lose to
-  //    engineInsights.daily_plan.best_hour (the SQL get_user_insights engine)
-  //    whenever that was present — meaning a completely different, narrower
-  //    SQL calculation (see canonicalTodaySpecificHourLocal below) could
-  //    silently override the canonical account-wide answer on a generic
-  //    "peak window" label with no indication anything had changed sources.
-  const canonicalPeakHourLocal = analytics?.canonicalBestTimes?.bestWindow
-    ? analytics.canonicalBestTimes.bestWindow.localHour
-    : null
-  const canonicalPeakLabel = canonicalPeakHourLocal != null
-    ? (() => { const _lh = ((canonicalPeakHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
-    : null
-
-  // 2. "What is my best hour specifically for TODAY's day-of-week,
-  //    historically?" — a genuinely different, narrower question (SQL's
-  //    get_user_insights filters to tips that fell on today's weekday, min 2;
-  //    the canonical engine has no such day-of-week-only mode). Used ONLY by
-  //    the Daily Brief card below, whose copy explicitly says "today" — never
-  //    by a surface using generic "peak window" language. dailyBrief.bh is
-  //    itself already a graceful degradation chain (today-specific JS
-  //    calculation, then the canonical account-wide window as a last
-  //    resort — see buildDailyBrief() above), so this alone is the correct
-  //    fallback order for a "today" claim; it must not also feed the
-  //    generic peak-window claim above.
-  const canonicalTodaySpecificHourLocal = (
+  // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
+  // Single source of truth used by the header, Daily Brief, and Losing Money.
+  // Prefer engineInsights daily_plan (most specific), then today's analytics best
+  // hour from dailyBrief, then the all-time analytics best hour as final fallback.
+  // All three sources are already user-local hours: get_user_insights is called
+  // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
+  // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
+  const canonicalPeakHourLocal = (
     engineInsights?.daily_plan?.best_hour ??
     dailyBrief?.bh ??
-    null
+    (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
   )
-  const canonicalTodaySpecificLabel = canonicalTodaySpecificHourLocal != null
-    ? (() => { const _lh = ((canonicalTodaySpecificHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+  const canonicalPeakLabel = canonicalPeakHourLocal != null
+    ? (() => { const _lh = ((canonicalPeakHourLocal % 24) + 24) % 24; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
     : null
 
   // re-runs every minuteTick (as well as when the underlying data changes)
@@ -2942,29 +2917,17 @@ const stopImportMessageRotation = () => {
   void minuteTick // ensures re-render when minute changes
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
-  // Canonical source: analytics.monthlyData (lib/analytics.js), bucketed by
-  // creator-local calendar month with growthPct pre-computed once — see
-  // canonical-analytics-rules.md's Monthly-Growth Reconciliation. Do not
-  // recompute month boundaries here.
-  //
-  // monthlyData only contains months that actually have tip data — it is
-  // NOT guaranteed to have an entry for the real current calendar month, so
-  // "last entry" is not a safe stand-in for "this month" (a creator who
-  // hasn't tipped yet this month would otherwise see last month's revenue
-  // mislabeled as "this month"). Match the real current-month key instead,
-  // via the same resolved-timezone contract lib/timezone.js defines.
-  const _momMonthly = analytics?.monthlyData || []
-  const _momTz = creatorTz // single resolved source, hoisted above platformTimes
-  const _momCurrentKey = (() => {
-    try { return new Intl.DateTimeFormat('en-CA', { timeZone: _momTz }).format(new Date()).slice(0, 7) }
-    catch { return null }
-  })()
-  const _momThisIdx = _momCurrentKey ? _momMonthly.findIndex(m => m.month === _momCurrentKey) : -1
-  const _momThisMonth = _momThisIdx >= 0 ? _momMonthly[_momThisIdx] : null
-  const _momPrevMonth = _momThisIdx > 0 ? _momMonthly[_momThisIdx - 1] : null
-  const _momThisRev = _momThisMonth?.usd ?? 0
-  const _momPrevRev = _momPrevMonth?.usd ?? 0
-  const growthPct = _momThisMonth?.growthPct ?? null
+  const _momNow = new Date()
+  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
+  const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
+    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
+      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
+      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
+      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
+      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
+      const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
+      return { momThisRev, momPrevRev, growthPct }
+    })
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
@@ -2977,13 +2940,13 @@ const stopImportMessageRotation = () => {
     const readiness = getDashboardReadiness({
       totalTips:     tips.length,
       totalSessions: analytics?.meaningfulSessionCount || 0,
-      totalFans:     analytics?.uniqueFanCount ?? 0,
+      totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
       totalEarnings: analytics?.totalUSD || 0,
       dateRangeDays: drRangeDays,
       streamDays:    drStreamDays,
     })
     const isLowData  = readiness !== 'ready'
-    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount ?? 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
     const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
     const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
     return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
@@ -3083,31 +3046,6 @@ const stopImportMessageRotation = () => {
            underneath the visually-shifted bar. This clears the fixed mobile
            hamburger button (36px + 14px) both at rest and once scrolled. */
         @media (max-width: 768px) { .sticky-command-bar { top: 56px !important; margin-bottom: 68px !important; } }
-
-        /* ── COMMAND BAR "WAKE UP" — plays once on mount (page load/navigation
-           into /dashboard), never replays on in-app tab switches since the bar
-           itself never remounts when activeTab changes. Short + staggered:
-           pill first, KPIs settle in next, Go Live gets one glow sweep. ── */
-        @keyframes cmdbarFadeSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes golive-wake-sweep {
-          0%   { box-shadow: 0 0 16px rgba(16,185,129,0.25); }
-          40%  { box-shadow: 0 0 28px rgba(34,211,238,0.55), 0 0 15px rgba(16,185,129,0.4); }
-          100% { box-shadow: 0 0 16px rgba(16,185,129,0.25); }
-        }
-        .cmdbar-wake .cmdbar-kpi { animation: cmdbarFadeSlide 400ms ease-out both; }
-        .cmdbar-wake .cmdbar-kpi-1 { animation-delay: 60ms; }
-        .cmdbar-wake .cmdbar-kpi-2 { animation-delay: 110ms; }
-        .cmdbar-wake .cmdbar-kpi-3 { animation-delay: 160ms; }
-        .cmdbar-wake .cmdbar-kpi-4 { animation-delay: 200ms; }
-        .cmdbar-wake .cmdbar-kpi-5 { animation-delay: 240ms; }
-        .cmdbar-wake-pill { animation: cmdbarFadeSlide 350ms ease-out both; }
-        .cmdbar-wake-btn { animation: cmdbarFadeSlide 400ms ease-out 120ms both, golive-wake-sweep 900ms ease-out 550ms 1; }
-        .cmdbar-golive { transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease; }
-        .cmdbar-golive:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 0 22px rgba(34,211,238,0.35), 0 0 14px rgba(16,185,129,0.3); }
-        @media (prefers-reduced-motion: reduce) {
-          .cmdbar-wake .cmdbar-kpi, .cmdbar-wake-pill, .cmdbar-wake-btn { animation: none !important; }
-          .cmdbar-golive:hover { transform: none; }
-        }
 
         @keyframes shimmer-sweep {
           0%   { background-position: -200% center; }
@@ -3212,40 +3150,8 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
-
-        {/* ── TRIAL COUNTDOWN ──
-            Shown only while a card-backed trial is actually running (Stripe's
-            trial_end, mirrored to profiles.trial_ends_at by the webhook). Not
-            an upsell and not a countdown to a lost feature — the user already
-            has everything; this is just honest notice of when billing starts,
-            with a link to cancel. Disappears the moment the trial converts. */}
-        {(() => {
-          const daysLeft = trialDaysRemaining(profile)
-          if (daysLeft == null) return null
-          return (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-              padding: '12px 16px', borderRadius: 16, marginBottom: 18,
-              background: 'linear-gradient(90deg, rgba(34,211,238,0.10), rgba(236,72,153,0.10))',
-              border: '1px solid rgba(34,211,238,0.22)',
-            }}>
-              <span style={{ fontSize: 13.5, color: C.white, fontWeight: 700 }}>
-                {daysLeft === 1 ? 'Last day of your free trial' : `${daysLeft} days left in your free trial`}
-              </span>
-              <span style={{ fontSize: 12.5, color: C.text }}>
-                Your subscription starts automatically when it ends — cancel any time before then.
-              </span>
-              <button
-                onClick={() => setActiveTab('settings')}
-                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.cyan, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                Manage billing
-              </button>
-            </div>
-          )
-        })()}
 
         {/* ── STICKY COMMAND BAR ── */}
         {(() => {
@@ -3272,363 +3178,1659 @@ const stopImportMessageRotation = () => {
           const momentumColor = !liveActive ? '#475569'
             : atPeak ? '#10B981'
             : liveRoomHealth.directionColor
-          const localNow = toLocalHour(new Date().toISOString(), creatorTz)
+          const localNow = new Date().getHours()
           const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
-          // Same precedence as the Daily Brief card below (engineInsights first,
-          // then the client-side hour-bucketed calc) — these used to be computed
-          // independently, which could show two different "best platform" values
-          // on the same screen. tips[0]?.platform is not a real fallback (just
-          // whichever tip happens to be first in the array), so it's dropped.
-          // ONE canonical answer (analytics.bestPlatformByRate) — ranked by
-          // usdPerHour, excluding the parser's "Unknown" bucket and any
-          // platform with no measurable hours. engineInsights' best_platform
-          // ranks by AVG(usd) PER TIP, which on the owner's real account
-          // returned "Unknown" (13 undetected tips averaging $13.51 vs
-          // Chaturbate's $0.36 across 4,835), so this KPI read
-          // "Best Platform: Unknown" while the Creator Report showed the
-          // same bucket at $0.00/hr.
-          const bestPlat = analytics?.bestPlatformByRate?.platform || null
+          const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
-
-          // ── truthful live status — single source of truth is useLiveSessionEngine,
-          // never a second status system. 'active' phase covers server status 'live';
-          // live_substate further distinguishes actively-broadcasting from paused. ──
-          const livePhase = liveEngine.phase
-          const liveSubstate = liveEngine.serverSession?.live_substate
-          const isPaused = livePhase === 'active' && liveSubstate === 'paused'
-          const statusInfo =
-            livePhase === 'starting' ? { label: 'STARTING', color: '#F59E0B', pulse: true } :
-            livePhase === 'inactive_warning' ? { label: 'INACTIVE', color: '#FB923C', pulse: true } :
-            (livePhase === 'justEnded' || livePhase === 'resolved') ? { label: 'ENDING', color: '#94A3B8', pulse: false } :
-            livePhase === 'active' ? { label: isPaused ? 'LIVE · PAUSED' : 'LIVE', color: '#10B981', pulse: !isPaused } :
-            { label: 'OFFLINE', color: '#64748B', pulse: false }
-          const liveDurationLabel = (() => {
-            if (livePhase !== 'active' || !liveEngine.duration) return null
-            const secs = liveEngine.duration.active_duration_seconds || 0
-            const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60)
-            return h > 0 ? `Live for ${h}h ${m}m` : `Live for ${m}m`
-          })()
-          const updatedLabel = lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null
-
           return (
-            <div className="sticky-command-bar cmdbar-wake" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 14, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '14px 32px', background: 'rgba(5,7,15,0.88)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
-
-              {/* primary row — Total Earned dominant, secondary metrics + Go Live, wraps instead of clipping/scrolling */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px 24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px 24px', minWidth: 0 }}>
-                  <div className="cmdbar-kpi cmdbar-kpi-1" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
-                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Total Earned</div>
-                    <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, background: 'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', whiteSpace: 'nowrap' }}>${safeRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </div>
-
-                  <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
-
-                  <div className="cmdbar-kpi cmdbar-kpi-2" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
-                    <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3, cursor: 'help' }}>Est. $/Hour</div>
-                    {hourlyRateUnlocked ? (
-                      <div title={hourlyRateSubtext} style={{ fontSize: 18, fontWeight: 800, color: '#22D3EE', whiteSpace: 'nowrap', cursor: 'help' }}>${safeAvg.toFixed(2)}</div>
-                    ) : (
-                      <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize: 13, fontWeight: 700, color: '#7d8aa3', whiteSpace: 'nowrap', cursor: 'pointer' }}>🔒 Locked</div>
-                    )}
-                  </div>
-
-                  <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.07)', flexShrink: 0 }} />
-
-                  <div className="cmdbar-kpi cmdbar-kpi-3" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0 }}>
-                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Momentum</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: momentumColor, whiteSpace: 'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
-                  </div>
-
-                  <div className="cmdbar-kpi cmdbar-kpi-4" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0, opacity: 0.85 }}>
-                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Best Platform</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', whiteSpace: 'nowrap' }}>{bestPlat || '—'}</div>
-                  </div>
-
-                  <div className="cmdbar-kpi cmdbar-kpi-5" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flexShrink: 0, opacity: 0.85 }}>
-                    <div style={{ fontSize: 10, color: '#8a93ab', textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 3 }}>Peak Window</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace: 'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
-                  </div>
+            <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', height: 48, gap: 8 }}>
+                {/* Metrics scroll independently so Go Live — outside this container — never gets clipped or scrolled out of view on narrower desktop widths */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', flex: '1 1 auto', minWidth: 0 }}>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', paddingRight:20, borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Total Earned</div>
+                  <div style={{ fontSize:18, fontWeight:900, background:'linear-gradient(135deg,#60a5fa,#f472b6)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', whiteSpace:'nowrap' }}>${safeRevenue.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
                 </div>
-
-                <button className="cmdbar-golive cmdbar-wake-btn" onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'live'); window.scrollTo({ top: 0, behavior: 'instant' }); } }} style={{ padding: '10px 22px', borderRadius: 12, background: 'linear-gradient(135deg,#10B981,#22D3EE)', border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 0 16px rgba(16,185,129,0.25)', letterSpacing: 0.3, flexShrink: 0 }}>
-                  ⚡ Go Live
-                </button>
-              </div>
-
-              {/* secondary row — truthful status pill + updated/live-duration + refresh + new-tip feedback */}
-              <div className="cmdbar-wake-pill" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 20, background: `${statusInfo.color}1A`, border: `1px solid ${statusInfo.color}40` }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusInfo.color, boxShadow: `0 0 6px ${statusInfo.color}`, animation: statusInfo.pulse ? 'pulse-msg 2s infinite' : 'none' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: statusInfo.color, letterSpacing: 0.3 }}>{statusInfo.label}</span>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div title={HOURLY_RATE_TOOLTIP} style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2, cursor:'help' }}>Estimated $/Hour</div>
+                  {hourlyRateUnlocked ? (
+                    <div title={hourlyRateSubtext} style={{ fontSize:18, fontWeight:900, color:'#22D3EE', whiteSpace:'nowrap', cursor:'help' }}>${safeAvg.toFixed(2)}</div>
+                  ) : (
+                    <div onClick={() => handleTabChange('upload')} title={hourlyRateSubtext} style={{ fontSize:13, fontWeight:700, color:'#7d8aa3', whiteSpace:'nowrap', cursor:'pointer' }}>🔒 Locked</div>
+                  )}
                 </div>
-
-                {(liveDurationLabel || updatedLabel) && (
-                  <span key={liveDurationLabel || (lastRefreshed && lastRefreshed.getTime())} className={!liveDurationLabel ? 'recently-updated' : ''} style={{ fontSize: 11, color: '#7d8aa3', padding: '2px 6px', borderRadius: 4 }}>
-                    {liveDurationLabel || updatedLabel}
-                  </span>
-                )}
-
-                {isRefreshing && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94A3B8' }}>
-                    <div style={{ width: 12, height: 12, border: '1.5px solid rgba(34,211,238,0.3)', borderTopColor: '#22D3EE', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-                    Refreshing...
-                  </div>
-                )}
-                {newTipCount > 0 && (
-                  <div style={{ padding: '3px 10px', borderRadius: 20, background: 'rgba(236,72,153,0.15)', border: '1px solid rgba(236,72,153,0.35)', fontSize: 11, fontWeight: 700, color: '#EC4899', animation: 'alertEnter 0.3s ease forwards' }}>
-                    +<span key={newTipCount} className={counterBumping ? 'counter-bump' : ''}>{newTipCount}</span> new tip{newTipCount > 1 ? 's' : ''}
-                  </div>
-                )}
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Momentum</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:momentumColor, whiteSpace:'nowrap', animation: atPeak ? 'cmd-pulse 1.5s infinite' : 'none' }}>{momentum}</div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', borderRight:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Best Platform</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#a78bfa', whiteSpace:'nowrap' }}>{bestPlat || '—'}</div>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', justifyContent:'center', padding:'0 20px', flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:'#8a93ab', textTransform:'uppercase', letterSpacing:0.6, fontWeight:600, marginBottom:2 }}>Peak Window</div>
+                  <div style={{ fontSize:13, fontWeight:800, color: atPeak ? '#10B981' : '#fbbf24', whiteSpace:'nowrap' }}>{_eiPeakLabel ? `${_eiPeakLabel}${peakLabel ? ` · ${peakLabel}` : ''}` : '—'}</div>
+                </div>
+                </div>
+                <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8, alignItems:'center', position:'relative' }}>
+                  <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
+                    ⚡ Go Live
+                  </button>
+                </div>
               </div>
             </div>
           )
         })()}
+
+        {/* ── LIVE STATUS BAR ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 20, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 6px #10B981", animation: "pulse-msg 2s infinite" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#10B981" }}>LIVE</span>
+          </div>
+          {isRefreshing && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#94A3B8" }}>
+              <div style={{ width: 12, height: 12, border: "1.5px solid rgba(34,211,238,0.3)", borderTopColor: "#22D3EE", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              Refreshing...
+            </div>
+          )}
+          {lastRefreshed && !isRefreshing && (
+            <span key={lastRefreshed.getTime()} className="recently-updated" style={{ fontSize: 11, color: "#7d8aa3", padding: "2px 6px", borderRadius: 4 }}>
+              Updated {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+          {newTipCount > 0 && (
+            <div style={{ padding: "3px 10px", borderRadius: 20, background: "rgba(236,72,153,0.15)", border: "1px solid rgba(236,72,153,0.35)", fontSize: 11, fontWeight: 700, color: "#EC4899", animation: "alertEnter 0.3s ease forwards" }}>
+              +<span key={newTipCount} className={counterBumping ? "counter-bump" : ""}>{newTipCount}</span> new tip{newTipCount > 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
 
         {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
         {_isLowData && (
           <DashboardProgressCard
             totalTips={tips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
-            totalFans={analytics?.uniqueFanCount ?? 0}
+            totalFans={analytics?.uniqueFanCount || 0}
             totalEarnings={analytics?.totalUSD || 0}
             readiness={dashboardReadiness}
             onImport={() => handleTabChange('upload')}
           />
         )}
 
-        {activeTab === "report" && (
-          <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} engineInsights={engineInsights} />
-          </div>
-        )}
-
-        {activeTab === "settings" && (
-          <Settings
-            user={user} profile={profile} isPro={isPro} supabase={supabase}
-            onTimezoneSaved={(tz) => {
-              setProfile(p => ({ ...(p || {}), timezone: tz }))
-              loadData(user.id, true, { silent: true })
-            }}
-          />
-        )}
-
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
 
-            <OnboardingChecklist
-              tips={tips}
-              isPro={isPro}
-              visitedTabs={visitedTabs}
-              onNavigate={handleTabChange}
-              onUpgrade={() => openUpgradeModal('default')}
-            />
+            {/* ═══════════════════════════════════════
+                1. MONEY SNAPSHOT
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // ── empty state — show null; DashboardProgressCard above covers zero-data ──
+              if (tips.length === 0) return null
 
-            {/* ═══════════════════════════════════════════════════════
-                COMMAND CENTER — DISCOVER -> EXPLAIN -> OPPORTUNITY ->
-                ACTION -> MEASURE. Replaces the former sections 1-3
-                (Money Snapshot KPI wall, growth charts, Daily Brief),
-                which led with totals and buried the insight.
-                All values read from the frozen analytics layer.
-            ═══════════════════════════════════════════════════════ */}
-            <CommandCenter
-              analytics={analytics}
-              isPro={isPro}
-              nowActions={(() => {
-                // Moved from the old Overview's "Make Money Right Now"
-                // section. Merges nextMoves + top realTimeAlerts, dedupes,
-                // and prepends the SQL engine's go-live signal, capped at 3.
-                const merged = []
-                ;(nextMoves || []).forEach(a => {
-                  merged.push({ icon: a.icon, color: a.color || C.cyan, text: a.text, cta: a.cta, username: a.username, source: 'move' })
-                })
-                ;(realTimeAlerts || []).slice(0, 3).forEach(a => {
-                  const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
-                  if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
-                })
-                if (engineInsights?.go_live_status?.status) {
-                  const gl = engineInsights.go_live_status
-                  const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
-                  const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                  // get_user_insights is called with p_timezone, so
-                  // go_live_status.current_hour is ALREADY creator-local.
-                  const localHour = gl.current_hour ?? toLocalHour(new Date().toISOString(), creatorTz)
-                  const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
-                  const glText = gl.multiplier
-                    ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${analytics?.bestPlatformByRate?.platform || 'your top platform'}.`
-                    : `Go-live signal: ${gl.status} — check your stream timing`
-                  merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
-                }
-                return merged.slice(0, 3)
+              const now = new Date()
+              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
+              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+              const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
+              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
+              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
+
+              // ── Per-card month-over-month trend ──
+              // Meaningful sessions only (analytics.meaningfulSessions), matching the
+              // valid-session rule used everywhere else — never the raw session list.
+              const meaningfulSessions = analytics?.meaningfulSessions || []
+              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
+              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
+                ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
+
+              const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce((s,x) => s+(x.totalUSD||0),0) / meaningfulSessions.length : 0
+              const tmAvgSession = thisMonthMeaningful.length ? thisMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthMeaningful.length : null
+              const pmAvgSession = prevMonthMeaningful.length ? prevMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthMeaningful.length : null
+              const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
+                ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
+
+              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
+              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
+
+              // trend badge renderer
+              const TrendBadge = ({ pct }) => {
+                if (pct === null || isNaN(pct)) return null
+                const up = pct >= 0
+                return <span style={{ fontSize:10, fontWeight:700, color: up ? '#10B981' : '#f87171', marginLeft:6 }}>{up ? '↑' : '↓'}{Math.abs(pct)}%</span>
+              }
+
+              // Card row intentionally shows different metrics than the sticky command
+              // bar above (which already covers Total Earned / Estimated $/Hour) —
+              // these four add depth instead of repeating the same headline numbers.
+              const cardDefs = [
+                { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
+                  value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
+                  icon:'💰', isHero:true },
+                { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
+                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
+                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
+                  icon:'🎯' },
+                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
+                  value: whales.length > 0 ? whales.length.toLocaleString() : '—',
+                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
+                  icon:'👥' },
+                { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
+                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
+                  sub: meaningfulSessions.length > 0
+                    ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
+                    : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
+                  icon:'🎥' }
+              ]
+
+              // Earnings velocity per platform for velocity strip
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
+              return (
+                <>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 14 }}>
+                    {cardDefs.map((s, i) => (
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 16, padding: "13px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default', display:'flex', flexDirection:'column' }}>
+                        {/* accent top bar */}
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'16px 16px 0 0' }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>{s.label}</span>
+                          <span style={{ fontSize: 18, opacity: 0.75 }}>{s.icon}</span>
+                        </div>
+                        <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
+                          {s.value}<TrendBadge pct={s.trend} />
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* section divider */}
+                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:14 }} />
+                </>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                TOKENS VS HOURS ONLINE + MONTHLY GROWTH
+            ═══════════════════════════════════════ */}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+
+            {/* ═══════════════════════════════════════
+                DAILY BRIEF — overview only, below earnings
+            ═══════════════════════════════════════ */}
+        {/* ═══════════════════════════════════════════════════════
+            DAILY BRIEF — always visible, above all tabs
+            Refreshes based on UTC time + your real session data
+        ═══════════════════════════════════════════════════════ */}
+        {dailyBrief && (() => {
+          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
+            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
+            reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
+          const bhLabel = canonicalPeakLabel || _bhLabel
+          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
+          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
+          // bestHour/platformBestTimes use internally (lib/analytics.js).
+          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
+          return (
+            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
+
+              {/* Header bar */}
+              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
+                    {atPeak ? '🟢' : '📋'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {atPeak
+                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
+                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
+                  }
+                </div>
+              </div>
+
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
+                {bhLabel && (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
+                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {`Since it's ${todayName}`}
+                        {isBestDay ? ` (your highest-earning day)` : ``}
+                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
+                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
+                        {`. Stream `}
+                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
+                        {` to earn `}
+                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
+                        {` — longer sessions earn `}
+                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
+                        {` on average.`}
+                      </div>
+                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
+                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
+                        </div>
+                      )}
+                      {atPeak && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
+                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ROW 1 — Today / Peak Window / Best Platform */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
+                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
+                      {(() => {
+                        const _bdA = bestDay?.avg || sessionAvg
+                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
+                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
+                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
+                      })()}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
+                    {bestTimeLock.locked ? (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
+                        <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
+                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
+                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
+                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>{(!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}</div>
+                  </div>
+
+                  {bhLabel && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                    </div>
+                  )}
+                </div>
+
+                {/* ROW 2 — Likely Online + Re-engage */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+                  {/* Likely Online */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
+                        Likely Online Right Now
+                      </div>
+                      {likelyOnline.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Re-engage */}
+                  {!atPeak && reengageFans.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        ⚠️ Re-engage Today
+                      </div>
+                      {reengageFans.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* If neither list has data */}
+                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
+                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
+                      No fan alerts right now — check back after more sessions.
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )
+        })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                2. PRIMARY ACTION CENTER — "Make Money Right Now"
+                Merges: What Should I Do + Live Intelligence top alerts
+                Shows max 3 actions ranked by revenue impact
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // Merge nextMoves + top realTimeAlerts, deduplicate, cap at 3
+              const merged = []
+
+              // Add nextMoves first (already ranked by priority)
+              ;(nextMoves || []).forEach(a => {
+                merged.push({ icon: a.icon, color: a.color || C.cyan, text: a.text, cta: a.cta, username: a.username, source: 'move' })
+              })
+
+              // Add top realTimeAlerts that aren't duplicated
+              ;(realTimeAlerts || []).slice(0, 3).forEach(a => {
+                const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
+                if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
+              })
+
+              // Prepend engineInsights go_live_status as the top signal when available
+              if (engineInsights?.go_live_status?.status) {
+                const gl = engineInsights.go_live_status
+                const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
+                const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
+                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
+                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
+                const glText = gl.multiplier
+                  ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
+                  : `Go-live signal: ${gl.status} — check your stream timing`
+                merged.unshift({ icon: glIcon, color: glColor, text: glText, cta: false, source: 'engine' })
+              }
+
+              const actions = merged.slice(0, 3)
+              if (!actions.length) return null
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.2)", animation: "fadeUp 0.3s ease 0.1s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>⚡</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Make Money Right Now</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Ranked by estimated revenue impact from your real data</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {actions.map((a, i) => (
+                      <div key={i} className={`alert-enter alert-pulse-info alert-row`} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", background: i === 0 ? `${a.color}18` : `${a.color}0d`, border: `1px solid ${i === 0 ? a.color + '50' : a.color + '28'}`, borderRadius: 12, boxShadow: i === 0 ? `0 0 18px ${a.color}18` : 'none', animationDelay: `${i * 40}ms` }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = `0 4px 20px ${a.color}28` }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = i === 0 ? `0 0 18px ${a.color}18` : 'none' }}>
+                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1 }}>
+                          <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icon}</span>
+                          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55 }}>{a.text}</div>
+                        </div>
+                        {a.cta && (
+                          <button onClick={() => { const w = whales.find(wh => wh.username === a.username); if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) } }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${a.username}`}
+                            title="Message fan"
+                            style={{ flexShrink: 0, padding: 6, borderRadius: 8, background: "none", border: "none", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={18} /></button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                3. WHAT'S WORKING — Strategy
+                Platform performance + best time + best day merged
+            ═══════════════════════════════════════ */}
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.15s both" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#F59E0B,#10B981)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📊</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>What's Working</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Platform, time & session strategy from your data</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
+              {(() => {
+                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+                const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
+                const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
+                if (!allPlats.length) return null
+                return (
+                  <div style={{ marginBottom: 18 }}>
+                    {/* Platform ROI row: formula = total_earnings / total_hours */}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
+                    <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
+                      {allPlats.map((p, i) => {
+                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : null)
+                        const bestTime = platformBestTimes[p.platform]
+                        const col = platColors[p.platform] || C.blue
+                        const isTop = i === 0
+                        return (
+                          <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: isTop ? `${col}12` : `${col}08`, border: `1px solid ${isTop ? col + '40' : col + '20'}`, transition: "transform 0.15s, box-shadow 0.15s", position: "relative" }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = `0 4px 16px ${col}20` }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                            {isTop && <div style={{ position: "absolute", top: 8, right: 8, fontSize: 9, padding: "2px 6px", borderRadius: 10, background: `${col}25`, color: col, fontWeight: 700 }}>TOP ROI</div>}
+                            <div style={{ fontSize: 11, fontWeight: 700, color: col, marginBottom: 6 }}>{p.platform.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')}</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
+                            <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} total · {(p.hours || 0).toFixed(0)}h streamed</div>
+                            {(() => {
+                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                            const ptimes = analytics?.platformBestTimes?.[p.platform]
+                            const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
+                            const bestDayEntry = ptimes?.bestDay
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                                {bestDayEntry && (
+                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: `${col}10`, border: `1px solid ${col}25`, fontSize: 11, color: col }}>
+                                    Best day: <strong>{bestDayEntry.day}s</strong> ${(bestDayEntry.avg || 0).toFixed(0)} avg
+                                  </div>
+                                )}
+                                {todayHour && (
+                                  <div style={{ padding: '5px 8px', borderRadius: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)', fontSize: 11, color: '#10B981' }}>
+                                    Today ({todayUTCName}): <strong>{fmtH(todayHour.hour)}</strong> ${(todayHour.avg || 0).toFixed(0)}/hr avg
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Best day — use the top per-platform figure so the number matches the platform cards above */}
+                    {(() => {
+                      const platTimes = analytics?.platformBestTimes || {}
+                      let topPlat = null, topDay = null, topAvg = 0
+                      Object.entries(platTimes).forEach(([plat, times]) => {
+                        if (times?.bestDay && times.bestDay.avg > topAvg) {
+                          topAvg = times.bestDay.avg
+                          topDay = times.bestDay.day
+                          topPlat = plat
+                        }
+                      })
+                      if (!topPlat) return null
+                      const platLabel = topPlat.replace('BongaCams','Bonga').replace('MyFreeCams','MFC')
+                      return (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", marginBottom: 0 }}>
+                          <span style={{ fontSize: 16 }}>📅</span>
+                          <div style={{ fontSize: 13, color: C.white }}>
+                            <strong>{topDay}s on {platLabel}</strong> earn the most — <span style={{ color: C.gold }}>${topAvg.toFixed(0)} avg per session</span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
               })()}
-              onMessageFan={(username) => {
-                const w = whales.find(wh => wh.username === username)
-                if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }
-              }}
-              firstName={profile?.display_name || null}
-              onPlanStream={() => handleTabChange('planner')}
-              onViewFans={() => handleTabChange('whales')}
-              onSeePerformance={() => handleTabChange('platforms')}
-              onUpgrade={(src) => openUpgradeModal(src)}
-            />
 
-            {/* ═══════════════════════════════════════════════════════
-                The Overview's old stacked sections were RELOCATED, not
-                deleted, so this tab is one Command Center rather than a
-                Command Center with a second dashboard underneath:
+              {/* Platform day heatmap */}
+              {(() => {
+                const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+                const platDayUSD = {}; const platDayDates = {}
+                tips.forEach(t => {
+                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
+                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
+                  if (!platDayUSD[p]) platDayUSD[p] = {}
+                  if (!platDayDates[p]) platDayDates[p] = {}
+                  platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
+                  if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
+                  platDayDates[p][shortDay].add(dateKey)
+                })
+                const platDayAvg = {}
+                Object.keys(platDayUSD).forEach(p => {
+                  platDayAvg[p] = {}
+                  UTC_DAYS.forEach(d => {
+                    const total = platDayUSD[p][d] || 0; const activeDays = platDayDates[p]?.[d]?.size || 1
+                    platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
+                  })
+                })
+                const platList = Object.keys(platDayAvg)
+                if (platList.length < 1) return null
+                const todayShort = UTC_DAYS[new Date().getUTCDay()]
+                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                return (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Platform by Day of Week</span>
+                      <span style={{ fontSize: 11, color: C.muted, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>avg $/active day</span>
+                    </div>
+                    <div className="heatmap-wrap" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "80px repeat(7, 1fr)", gap: 3, minWidth: 480 }}>
+                      <div />
+                      {UTC_DAYS.map(d => (
+                        <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: d === todayShort ? C.cyan : C.muted, paddingBottom: 4 }}>{d}</div>
+                      ))}
+                      {platList.map(plat => {
+                        const dayVals = UTC_DAYS.map(d => platDayAvg[plat][d] || 0)
+                        const maxVal = Math.max(...dayVals, 0.01)
+                        return [
+                          <div key={plat + '_l'} style={{ fontSize: 10, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", paddingRight: 4, lineHeight: 1.3 }}>{plat.replace('BongaCams','Bonga').replace(/chaturbate/i,'CB').replace('MyFreeCams','MFC')}</div>,
+                          ...UTC_DAYS.map(d => {
+                            const val = platDayAvg[plat][d] || 0
+                            const intensity = maxVal > 0 ? val / maxVal : 0
+                            const isToday = d === todayShort
+                            const bg = val === 0 ? "rgba(255,255,255,0.03)" : intensity < 0.25 ? "rgba(34,211,238,0.12)" : intensity < 0.5 ? "rgba(34,211,238,0.30)" : intensity < 0.75 ? "rgba(34,211,238,0.60)" : "rgba(34,211,238,0.90)"
+                            return (
+                              <div key={d} title={`${plat} ${d}: avg $${val.toFixed(2)}/day`}
+                                onClick={() => { if (val > 0) { setChartDrillDay(d); handleTabChange("whales") } }}
+                                style={{ height: 32, borderRadius: 5, background: bg, border: isToday ? "2px solid rgba(34,211,238,0.7)" : "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", cursor: val > 0 ? "pointer" : "default", transition: "all 0.15s", transform: "scale(1)" }}
+                                onMouseEnter={e => { if (val > 0) { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 0 8px rgba(34,211,238,0.5)" } }}
+                                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "" }}>
+                                {val > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: intensity > 0.45 ? "#fff" : C.muted }}>${val >= 100 ? Math.round(val) : val.toFixed(0)}</span>}
+                              </div>
+                            )
+                          })
+                        ]
+                      })}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.muted }}>Today ({todayLong}) highlighted in cyan. Darker = more earnings. Click any cell to filter Top Fans by that day. <span style={{ color: C.cyan }}>Click any cell to filter Top Fans by that day.</span></div>
+                  </div>
+                  </div>
+                )
+              })()}
+            </div>
 
-                  "Make Money Right Now"  -> CommandCenter (nowActions prop
-                                             below; the same merge of
-                                             go_live_status + nextMoves +
-                                             realTimeAlerts, rendered inside
-                                             the Command Center's hierarchy)
-                  "What's Working"        -> Performance (platforms tab)
-                  "Your Top Earners"      -> Fans (whales tab)
-                  "You're Losing Money"   -> Performance (platforms tab)
-                  "Revenue Dependency Risk" -> Performance (platforms tab)
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                4. YOUR TOP EARNERS
+                A. Likely Online Now  B. Milestones  C. At Risk
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const currentUTCHourTE = new Date().getUTCHours()
+              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
 
-                "Smart Insights" was NOT relocated. All three of its insights
-                restated a claim already on screen: peak-window (the Command
-                Center hero), highest-ROI platform (the hero's evidence chip
-                and Performance's Platform ROI cards) and top lifetime
-                supporter (Who deserves your attention, and the Fans tab). Its
-                only other branch was a fallback asserting "sessions over 60
-                minutes earn disproportionately more", which no calculation in
-                this repo produces. Per the cleanup rule -- keep genuinely
-                synthesized insights, drop repeated claims -- nothing in it
-                survived. No logic was lost: every figure it read is still
-                rendered by the card that owns it.
-            ═══════════════════════════════════════════════════════ */}
+              const likelyOnline = whales
+                .filter(w => w.tipCount >= 3)
+                .map(w => {
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const hourCounts = {}
+                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
+                  if (!sorted.length) return null
+                  const peakHour = parseInt(sorted[0][0])
+                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
+                  // peakFraction: share of this fan's tips that fall at their peak hour
+                  const peakFraction = sorted[0][1] / fanTips.length
+                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
+                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
+                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
+                  return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
+                })
+                .filter(Boolean)
+                .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
+                .sort((a,b) => b.totalUSD - a.totalUSD)
+                .slice(0, 3)
 
-            {/* The "Tip Behavior Patterns" card that used to sit here was
-                removed in the dead-UI pass: analytics.preTipBehavior was
-                permanently null, so it never rendered. It wasn't implemented
-                instead because its "peak tipping window" duplicated
-                canonicalBestTimes.bestWindow (the single best-time source
-                everything else was just consolidated onto) and its
-                clusteringDetected/recommendation fields had no definition
-                anywhere — filling them in would have meant inventing
-                metrics. Avg-gap-between-tips remains available from the SQL
-                engine (get_user_insights' session_optimization) if a future
-                card wants it, sourced from there rather than a second JS
-                implementation. */}
+              // Deduplicate: a fan should only appear in one category (highest priority wins)
+              // Priority: Likely Online > Close to Milestone > At Risk
+              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
+
+              const milestones = (whatsNextAlerts || [])
+                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
+                .slice(0, 3)
+              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
+
+              const atRisk = reengageList
+                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
+                .slice(0, 3)
+
+              const hasAny = likelyOnline.length || milestones.length || atRisk.length
+              if (!hasAny) return null
+
+              const fanCard = (w, opts = {}) => (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
+                      {opts.sub ? ` · ${opts.sub}` : ''}
+                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
+                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
+                      {` · ${w.platform}`}
+                    </div>
+                    </div>
+                  </div>
+                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
+                  {opts.action && (
+                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
+                      {opts.btnLabel || "💌"}
+                    </button>
+                  )}
+                </div>
+              )
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
+                    </div>
+                  </div>
+
+                  {/* A. Likely Online Now */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                        Likely Online Now
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {likelyOnline.map((w, i) => fanCard(w, {
+                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
+                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
+                          sub: `peaks at ${w.peakLabel}`,
+                          badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: "none", pulseBtn: true
+                        }))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B. Close to Milestone */}
+                  {milestones.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {milestones.map((a, i) => {
+                          const w = a.whale
+                          if (!w) return null
+                          return fanCard(w, {
+                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
+                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
+                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
+                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
+                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
+                          })
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* C. At Risk — Re-engage */}
+                  {atRisk.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
+                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
+                          avatarBg: `${urgency}20`, avatarColor: urgency,
+                          sub: `${days}d since last tip`,
+                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
+                          btnLabel: "💌"
+                        }))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // Only show a fan re-engagement warning if the model has actually
+              // been online enough for the fan to have had a realistic chance to tip.
+              // Rule: model must have ≥3 sessions in the last N days, where N = fan's
+              // average tipping frequency. No-shows aren't "at risk" — we just weren't live.
+              const hasStreamedEnough = (whale) => {
+                if (!whale?.avgDaysBetweenTips) return true
+                const windowDays = Math.max(7, Math.round(whale.avgDaysBetweenTips))
+                const cutoff = Date.now() - windowDays * 86400000
+                const sessionsInWindow = sessions.filter(s => new Date(s.startTime).getTime() >= cutoff).length
+                return sessionsInWindow >= 3
+              }
+              const allAlerts = [
+                ...(lossAlerts || []).filter(a =>
+                  (a.type === 'fan_churn') ? hasStreamedEnough(a.whale) : true
+                ),
+                ...(alerts || []).filter(a =>
+                  (a.type === 'churn_risk') ? hasStreamedEnough(a.whale) : true
+                ).slice(0, 3)
+              ].slice(0, 6)
+              const missedEntries = Object.entries(missedRevenueByPlat)
+                .filter(([,m]) => m.missedRevenue > 5)
+                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
+              if (!allAlerts.length && !missedEntries.length) return null
+              const peakHourLabel = canonicalPeakLabel
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(251,146,60,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚨</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>You're Losing Money</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Inactivity, cold fans, missed windows</div>
+                    </div>
+                  </div>
+
+                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
+                  {missedEntries.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
+                      {missedEntries.map(([plat, m], i) => (
+                        <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {peakHourLabel} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted }}>
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {peakHourLabel} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Stream at {peakHourLabel}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {allAlerts.map((a, i) => (
+                      <div key={i} className={`alert-enter alert-pulse-${a.severity === "critical" ? "critical" : "warning"} alert-row`} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}`, animationDelay: `${i * 50}ms` }}>
+                        <div style={{ fontSize: 13, color: C.white, marginBottom: 3 }}>{a.icon} {a.message}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>👉 {a.action}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                6. SMART INSIGHTS — scannable, lower priority
+            ═══════════════════════════════════════ */}
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
+                </div>
+
+                {(() => {
+                  // Build insights from data already in scope — no API call needed
+                  const _ins = []
+
+                  // 1. Peak hour insight
+                  if (canonicalPeakLabel) {
+                    const _pPlat = dailyBrief?.displayPlat || 'your top platform'
+                    const _pAvg = dailyBrief?.displayAvg
+                    _ins.push({
+                      title: `Your peak window is ${canonicalPeakLabel} on ${_pPlat}`,
+                      body: _pAvg > 0
+                        ? `Sessions at this hour average $${_pAvg.toFixed(0)} — ${Math.round(_pAvg / Math.max(avgPerHour, 0.01) * 10) / 10}x your overall rate. Go live during this window to maximise earnings.`
+                        : `This is when your fans are most active. Streaming at this time consistently will grow your peak-hour session count.`,
+                      action: `Schedule your next stream around ${canonicalPeakLabel}`
+                    })
+                  }
+
+                  // 2. Best platform insight
+                  const _topPlatEntry = Object.entries(platformVelocity || {}).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1])[0]
+                  if (_topPlatEntry) {
+                    const [_tp, _tv] = _topPlatEntry
+                    const _tpLabel = _tp.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'Chaturbate')
+                    _ins.push({
+                      title: `${_tpLabel} is your highest-ROI platform at $${_tv.toFixed(2)}/hr`,
+                      body: Object.keys(platformVelocity).length > 1
+                        ? `Focus your high-effort streams here. Lower-ROI platforms can fill off-peak slots, but ${_tpLabel} should get your peak-hour time.`
+                        : `Your sessions here average $${_tv.toFixed(2)}/hr. Consistent streaming builds compounding fan loyalty — each session raises your baseline.`,
+                      action: `Prioritise ${_tpLabel} for peak-hour streams`
+                    })
+                  }
+
+                  // 3. Session average vs top fan contribution
+                  const _topWhale = whales?.[0]
+                  if (_topWhale && _topWhale.totalUSD > 0) {
+                    const _pct = totalRevenue > 0 ? Math.round((_topWhale.totalUSD / totalRevenue) * 100) : 0
+                    _ins.push({
+                      title: `${_topWhale.username} accounts for ${_pct}% of your lifetime revenue`,
+                      body: _pct >= 30
+                        ? `High fan concentration is a risk — if they churn your earnings drop sharply. Nurture 2–3 backup whales to reduce dependency.`
+                        : `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
+                      action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
+                    })
+                  } else if (avgPerHour > 0) {
+                    // Fallback: session avg insight
+                    const _sessAvg = sessions.length > 0 ? totalRevenue / sessions.length : 0
+                    _ins.push({
+                      title: `You average $${_sessAvg.toFixed(0)} per session at $${avgPerHour.toFixed(2)}/hr`,
+                      body: `Sessions over 60 minutes earn disproportionately more — longer streams let tipping patterns compound. Aim for at least one 90-min session per week.`,
+                      action: `Try a 90-min stream at your peak hour`
+                    })
+                  }
+
+                  if (_ins.length === 0) return (
+                    <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Upload more session data to generate personalised insights.</div>
+                  )
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {_ins.map((ins, i) => (
+                        <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
+                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>{ins.body}</div>
+                          <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+
+            {/* Dependency risk + pre-tip behavior — kept, moved lower */}
+            {dependencyRisk && dependencyRisk.level !== 'low' && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: dependencyRisk.level === 'high' ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    {dependencyRisk.level === 'high' ? '🚨' : '⚠️'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Revenue Dependency Risk — {dependencyRisk.level === 'high' ? 'High' : 'Medium'}</div>
+                    <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>{dependencyRisk.message}</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {[
+                        { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
+                        { label: "Top 3 fans", value: `${dependencyRisk.top3Pct}%` },
+                        { label: "Top 5 fans", value: `${dependencyRisk.top5Pct}%` },
+                        { label: "Loss if #1 leaves", value: `$${dependencyRisk.lossIfTopFanLeaves}` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {preTipBehavior && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 20 }}>🧠</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
+                  </div>
+                  {preTipBehavior.peakTippingWindow && (
+                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
+                  💡 {preTipBehavior.recommendation}
+                </div>
+                {preTipBehavior.clusteringDetected && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
+                    🔥 Tip clustering detected — fans tip in bursts. Acknowledge tips publicly to trigger more.
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         )}
 
-        {/* Trend charts live on Performance, not the Command Center — the
-            Command Center answers "what should I do next", this answers
-            "what happened". Relocated here from the old Overview tab. */}
-        {/* ═══════════════════════════════════════════════════════
-            PHASE 3 — PERFORMANCE. Answers "what happened", not "what
-            should I do" (the Command Center's job) or "who should I pay
-            attention to" (Fans). Replaces three earlier things stacked on
-            this tab: the standalone DashboardGrowthCharts mount, the
-            sections relocated here from the old Overview in Phase 2
-            (What's Working / You're Losing Money / Revenue Dependency
-            Risk), and the legacy "Platform Comparison" card pile —
-            which itself contained a real defect this rebuild fixes by
-            omission: its per-platform "Peak time" insight ranked hours by
-            raw total $ earned, not $/hour, the exact thing
-            canonical-analytics-rules.md's Best Time section says never to
-            do, and it duplicated (and could disagree with) the one
-            canonical bestWindow every other surface reads. That insight
-            is not reintroduced here.
-            All content Performance.js renders is read from the frozen
-            analytics layer. DashboardGrowthCharts is the one exception,
-            mounted here (not inside Performance.js) because its
-            daily/weekly/time-of-day modes need raw tips/sessions —
-            Performance.js itself receives analytics only, same discipline
-            as CommandCenter.js.
-        ═══════════════════════════════════════════════════════ */}
-        {activeTab === "platforms" && (
-          <Performance
-            analytics={analytics}
-            isPro={isPro}
-            onUpgrade={(src) => openUpgradeModal(src)}
-            earningsTrend={tips.length > 0 ? (
-              <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />
-            ) : null}
-          />
-        )}
+        {activeTab === "platforms" && (() => {
+          // ── Time filter
+          const now = Date.now()
+          const filterMs = platformTimeFilter === "7D" ? 7 * 86400000
+                         : platformTimeFilter === "30D" ? 30 * 86400000
+                         : platformTimeFilter === "90D" ? 90 * 86400000
+                         : null
 
-        {/* ═══════════════════════════════════════════════════════
-            PHASE 4 — FANS. Answers "who should I pay attention to", as an
-            action queue rather than a CRM grid. Replaces two stacked
-            blocks: the "Your Top Earners" section relocated here in Phase 2
-            (Likely Online / Milestones / At Risk) and the filterable Top
-            Fans card grid with its Fan Intelligence panel.
+          const filteredTips = filterMs
+            ? tips.filter(t => now - new Date(t.date_time).getTime() <= filterMs)
+            : tips
 
-            That relocated block carried a real duplicate calculation: it
-            re-bucketed every fan's tips by creator-local hour to find their
-            peak hour, which identifyWhales() already computes once
-            (typicalOnlineHours, and now its numeric peakLocalHour form).
-            Fans.js reads the canonical field instead, so there is one
-            implementation of "when is this fan usually around".
+          // Rebuild platform stats from filtered tips using same logic as engine
+          const pfMap = {}
+          filteredTips.forEach(t => {
+            const k = t.platform || "Unknown"
+            if (!pfMap[k]) pfMap[k] = { platform: k, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+            pfMap[k].totalUSD += t.usd || 0
+            pfMap[k].tips += 1
+          })
+          // Overlay session data for hour counts
+          const filteredSessions = filterMs
+            ? sessions.filter(s => now - new Date(s.startTime).getTime() <= filterMs)
+            : sessions
+          filteredSessions.forEach(s => {
+            if (!pfMap[s.platform]) pfMap[s.platform] = { platform: s.platform, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
+            pfMap[s.platform].sessions.add(s.id || s.startTime)
+            pfMap[s.platform].hours += s.durationHours || 0
+          })
+          const filteredPlatforms = Object.values(pfMap).map(p => ({
+            platform: p.platform,
+            totalUSD: parseFloat((p.totalUSD || 0).toFixed(2)),
+            sessions: p.sessions.size,
+            hours: parseFloat((p.hours || 0).toFixed(1)),
+            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : 0,
+            avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
+            tipCount: p.tips
+          })).sort((a, b) => b.totalUSD - a.totalUSD)
 
-            Fans.js reads canonical per-fan fields only and computes
-            nothing — same discipline as CommandCenter.js and
-            Performance.js. Free/Pro gating uses the same FREE_FAN_LIMIT
-            this tab already enforced.
-        ═══════════════════════════════════════════════════════ */}
-        {activeTab === "whales" && (
-          <Fans
-            analytics={analytics}
-            isPro={isPro}
-            freeFanLimit={FREE_FAN_LIMIT}
-            onMessageFan={(username) => {
-              const w = whales.find(wh => wh.username === username)
-              if (w) { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }
-            }}
-            onUpgrade={(src) => openUpgradeModal(src)}
-            onPlanStream={() => handleTabChange('planner')}
-          />
-        )}
+          const displayPlatforms = filteredPlatforms.length > 0 ? filteredPlatforms : platforms
+          const maxUSD = Math.max(...displayPlatforms.map(p => p.totalUSD), 1)
+          const maxUPH = Math.max(...displayPlatforms.map(p => p.usdPerHour), 1)
 
-        {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (() => {
-          // Live Mode is Pro-only (real-time coaching/room-health/predictive
-          // nudges is Layer 3 "Action" intelligence). Per the no-surprise-
-          // locks rule: this must be visible and explained BEFORE the user
-          // starts a session, never discovered mid-stream — so free users
-          // never reach LiveEnginePage at all, not even to see it locked
-          // once inside. Personalized where the user's own real data
-          // supports it; never a fabricated number.
-          const bw = analytics?.canonicalBestTimes?.bestWindow
-          const bestWindowLine = bw
-            ? `Your data shows a real earning pattern around ${fmtHour(bw.localHour)} — Live Mode tracks your pace against it in real time and tells you when you're ahead or behind.`
-            : whales.length > 0
-              ? `You have ${whales.length} repeat fan${whales.length === 1 ? '' : 's'} in your history. Live Mode flags them the moment they show up in a session, in real time.`
-              : `Live Mode tracks your session pace, room health, and fan activity in real time while you stream.`
+          const getPlatformInsights = (p) => {
+            const insights = []
+            const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
+            const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
+            const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
+
+            // For best day: compute avg per active day (not raw total which is misleading)
+            const dayData = platformTimes[p.platform]?.days || {}
+            const dayAvgs = Object.entries(dayData).map(([day, total]) => {
+              // Count distinct calendar dates for this platform+day combo
+              const activeDates = new Set(
+                tips.filter(t => {
+                  if (t.platform !== p.platform) return false
+                  const dt = new Date(t.date_time || t.dateRaw)
+                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
+                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
+              ).size
+              return [day, activeDates > 0 ? total / activeDates : 0]
+            })
+            const bDay = dayAvgs.sort((a, b) => b[1] - a[1])[0]
+
+            const isTop = displayPlatforms.length > 1 && p.totalUSD === maxUSD
+            const isTopUPH = displayPlatforms.length > 1 && p.usdPerHour === maxUPH
+            if (isTop)    insights.push({ icon: "🏆", text: "Your highest revenue platform", color: C.gold })
+            if (isTopUPH && !isTop) insights.push({ icon: "⚡", text: "Most efficient — highest $/hour", color: C.cyan })
+            if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
+            if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
+            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
+            if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
+            return insights
+          }
+
+          const PLATFORM_EMOJI = { Chaturbate: "🟣", BongaCams: "🔴", MyFreeCams: "🟠", CamSoda: "🟢", Stripchat: "🔵", Flirt4Free: "💜" }
+
           return (
-            <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 0' }}>
-              <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>🔴</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>While you&apos;re live, CamCash can watch your pace for you</div>
-                <div style={{ fontSize: 13, color: C.muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>{bestWindowLine}</div>
+            <div>
+              {/* HEADER + TIME FILTER */}
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
+                <div>
+                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 6 }}>🎯 Platform Comparison</h1>
+                  <p style={{ fontSize: 13, color: C.muted }}>See exactly where your time is most valuable</p>
+                </div>
+                <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+                  {[["ALL","All Time"],["7D","7 Days"],["30D","30 Days"],["90D","90 Days"]].map(([val, label]) => (
+                    <button key={val} onClick={() => setPlatformTimeFilter(val)} style={{
+                      padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s",
+                      background: platformTimeFilter === val ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent",
+                      color: platformTimeFilter === val ? C.white : C.muted,
+                      boxShadow: platformTimeFilter === val ? "0 0 12px rgba(59,130,246,0.4)" : "none"
+                    }}>{label}</button>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
-                {[
-                  { icon: '⚡', label: 'Real-time revenue pace', desc: 'See exactly how tonight compares to your average as tips come in.' },
-                  { icon: '🐳', label: 'Whale alerts', desc: 'Know instantly when a top fan joins your room.' },
-                  { icon: '🧭', label: 'Room-health coaching', desc: 'Live prompts when engagement or pace is slipping.' },
-                  { icon: '🎯', label: 'Peak-window countdown', desc: 'A live countdown to your own historical best hour.' },
-                ].map((f, i) => (
-                  <div key={i} style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ fontSize: 18, marginBottom: 6 }}>{f.icon}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 3 }}>{f.label}</div>
-                    <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{f.desc}</div>
+
+              {/* PLATFORM RECOMMENDATION BANNER */}
+              {displayPlatforms.length >= 2 && (() => {
+                const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
+                const top = sorted[0]
+                const bottom = sorted[sorted.length - 1]
+                if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
+                  const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
+                  return (
+                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 20 }}>⚡</span>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+
+              {/* SUMMARY ROW — only when 2+ platforms */}
+              {displayPlatforms.length >= 2 && (() => {
+                const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+                const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
+                const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
+                const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+                    {[
+                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
+                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
+                      { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
+                      { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
+                    ].map(({ icon, label, value, sub, color }) => (
+                      <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )
+              })()}
+
+              {/* PLATFORM CARDS */}
+              {displayPlatforms.map((p, i) => {
+                const insights = getPlatformInsights(p)
+                const revenueBarPct = Math.round((p.totalUSD / maxUSD) * 100)
+                const uphBarPct     = Math.round((p.usdPerHour / maxUPH) * 100)
+                const isTop = p.totalUSD === maxUSD && displayPlatforms.length > 1
+                const avgSessionUSD = p.sessions > 0 ? (p.totalUSD / p.sessions) : 0
+                const emoji = PLATFORM_EMOJI[p.platform] || "🎥"
+
+                return (
+                  <div key={i} className="dash-card" style={{
+                    ...glassCard, borderRadius: 16, padding: 28, marginBottom: 20,
+                    border: isTop ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.08)",
+                    boxShadow: isTop ? "0 0 30px rgba(245,158,11,0.1), 0 0 60px rgba(236,72,153,0.08)" : glassCard.boxShadow
+                  }}>
+                    {/* HEADER */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: isTop ? "linear-gradient(135deg, rgba(245,158,11,0.3), rgba(251,146,60,0.2))" : "rgba(255,255,255,0.06)", border: isTop ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                          {emoji}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{p.platform}</div>
+                          <div style={{ fontSize: 12, color: C.muted }}>{p.sessions} sessions · {(p.hours || 0).toFixed(1)}h streamed</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        {isTop && <div style={{ padding: "4px 12px", borderRadius: 20, background: "rgba(245,158,11,0.2)", border: "1px solid rgba(245,158,11,0.4)", fontSize: 11, fontWeight: 700, color: C.gold }}>🏆 Top Platform</div>}
+                        <div style={{ fontSize: 11, color: C.muted, padding: "4px 10px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>#{i + 1} of {displayPlatforms.length}</div>
+                      </div>
+                    </div>
+
+                    {/* STAT GRID */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
+                      {[
+                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green },
+                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan },
+                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink },
+                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* PERFORMANCE BARS */}
+                    <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+                      {[
+                        { label: "Revenue share", pct: revenueBarPct, color: C.green },
+                        { label: "$/Hour efficiency", pct: uphBarPct, color: C.cyan },
+                      ].map(({ label, pct, color }) => (
+                        <div key={label}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color }}>{pct}%</span>
+                          </div>
+                          <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${color}, ${color}80)`, transition: "width 0.6s ease" }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* HOURLY HEATMAP — uses trueHourlyAvg (avg per active day per UTC hour) */}
+                    {(() => {
+                      // Filter trueHourlyAvg to this platform using platformTimes for totals
+                      const hourData = platformTimes[p.platform]?.hours || {}
+                      const maxEarning = Math.max(...Object.values(hourData), 1)
+                      return (
+                        <div style={{ marginBottom: 20 }}>
+                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day (UTC total)</div>
+                          <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", overflowX: "auto" }}>
+                            {Array.from({ length: 24 }, (_, h) => {
+                              const val = hourData[h] || 0
+                              const intensity = val / maxEarning
+                              const bg = intensity === 0
+                                ? "rgba(255,255,255,0.04)"
+                                : intensity < 0.33
+                                ? "rgba(34,211,238,0.2)"
+                                : intensity < 0.66
+                                ? "rgba(34,211,238,0.55)"
+                                : "rgba(34,211,238,0.95)"
+                              const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?"12a":_lh<12?`${_lh}a`:_lh===12?"12p":`${_lh-12}p` })()
+                              return (
+                                <div key={h} title={`${label}: $${val.toFixed(0)}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
+                                  <div style={{ width: 18, height: 24, borderRadius: 3, background: bg, border: "1px solid rgba(255,255,255,0.06)" }} />
+                                  {h % 6 === 0 && <div style={{ fontSize: 8, color: C.muted }}>{label}</div>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* FAN LOYALTY + BEST STREAM LENGTH */}
+                    {(() => {
+                      const platTips = tips.filter(t => t.platform === p.platform)
+                      const fanCounts = {}
+                      platTips.forEach(t => { fanCounts[t.username] = (fanCounts[t.username] || 0) + 1 })
+                      const loyalFans = Object.values(fanCounts).filter(c => c >= 3).length
+
+                      const platSessions = sessions.filter(s => s.platform === p.platform)
+                      const longS = platSessions.filter(s => s.durationMinutes > 60)
+                      const shortS = platSessions.filter(s => s.durationMinutes <= 60)
+                      const longAvg = longS.length ? longS.reduce((s, x) => s + x.totalUSD, 0) / longS.length : 0
+                      const shortAvg = shortS.length ? shortS.reduce((s, x) => s + x.totalUSD, 0) / shortS.length : 0
+                      const streamLengthPct = shortAvg > 0 && longAvg > shortAvg ? Math.round(((longAvg - shortAvg) / shortAvg) * 100) : 0
+
+                      return (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                          <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>👥 Fan Loyalty</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: C.pink }}>{loyalFans}</div>
+                            <div style={{ fontSize: 11, color: C.muted }}>fans tipped 3+ times</div>
+                          </div>
+                          {streamLengthPct >= 10 && longS.length >= 2 && shortS.length >= 2 ? (
+                            <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>⏱️ Stream Length</div>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>+{streamLengthPct}%</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>more earned over 60 min</div>
+                            </div>
+                          ) : (
+                            <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>📊 Sessions</div>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>{p.sessions}</div>
+                              <div style={{ fontSize: 11, color: C.muted }}>total streams</div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+
+                    {/* INSIGHTS */}
+                    {insights.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {insights.map((ins, j) => (
+                          <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
+                            <span style={{ fontSize: 13, color: ins.color || C.text }}>{ins.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {displayPlatforms.length === 0 && (
+                <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 8 }}>No platform data yet</div>
+                  <div style={{ fontSize: 13, color: C.muted }}>Import your CSV files to see how your platforms compare</div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+        {activeTab === "whales" && (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 2 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 20 }}>🐳</span> Top Fans
+                </h1>
+                <span style={{ fontSize: 13, color: C.text }}>Your highest-value supporters ranked by total spend</span>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <button onClick={() => openUpgradeModal('live_mode_locked')} style={{ padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
-                  {trialEligible ? "Start My 7-Day Pro Trial →" : "Turn On Live Coaching →"}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {chartDrillDay && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 10, background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.35)", fontSize: 12, color: C.cyan, fontWeight: 600 }}>
+                    📅 {chartDrillDay}s only
+                    <button onClick={() => setChartDrillDay(null)} style={{ background: "none", border: "none", color: C.text, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+                  </div>
+                )}
+                <button onClick={() => setFanSearchOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  🔍 Search Fan
                 </button>
               </div>
             </div>
-          )
-        })())}
+
+            {/* FILTERS — each pill group scrolls horizontally within itself on
+                narrow screens instead of clipping options past the viewport edge */}
+            <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap", maxWidth: "100%" }}>
+              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
+                {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
+                  const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
+                  const active = whaleFilter === t
+                  return (
+                    <button key={t} className="tier-filter-btn" onClick={() => setWhaleFilter(t)}
+                      style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0, whiteSpace: "nowrap", background: active ? "linear-gradient(135deg, #22D3EE, #EC4899)" : "transparent", color: active ? "#06101A" : C.text }}>
+                      {t === "ALL" ? "All" : t}
+                      <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, opacity: active ? 0.75 : 0.6 }}>{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {allPlatforms.length > 1 && (
+                <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
+                  {["ALL", ...allPlatforms].map(p => (
+                    <button key={p} className="tier-filter-btn" onClick={() => setPlatformFilter(p)} style={{ padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", flexShrink: 0, whiteSpace: "nowrap", background: platformFilter === p ? "rgba(34,211,238,0.18)" : "transparent", color: platformFilter === p ? C.cyan : C.text }}>{p}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ALL TIPPERS — CRM Card Grid */}
+            {filteredWhales.length === 0 ? (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 4 }}>No fans match this filter</div>
+                <div style={{ fontSize: 12, color: C.text }}>Try a different tier or clear the platform filter</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
+                {visibleWhales.map((w, i) => {
+                  const tc = TIER_COLORS[w.tier] || C.cyan
+                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
+                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
+                  const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
+                  // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
+                  // instead of a second, inconsistent day-threshold calc — that duplicate
+                  // was why nearly every card showed "High" regardless of actual pattern.
+                  const cr = w.churnRisk?.level
+                  const riskLevel = cr === "Low" ? { label: "Low", color: C.green, pct: 20 }
+                    : cr === "Medium" ? { label: "Medium", color: C.gold, pct: 55 }
+                    : cr === "High" ? { label: "High", color: C.red, pct: 80 }
+                    : cr === "Critical" ? { label: "Critical", color: C.red, pct: 95 }
+                    : null
+                  const riskReason = riskLevel && (riskLevel.label === "High" || riskLevel.label === "Critical")
+                    ? `Inactive for ${days} days`
+                    : riskLevel?.label === "Medium" ? "Spend has slowed" : null
+                  return (
+                    <div key={i}
+                      className="hoverable"
+                      style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.08)', cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px rgba(0,0,0,0.4)` }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
+
+                      {/* TOP ROW — avatar, name, badges, score */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        {/* Avatar */}
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                          {(w.username || '?').charAt(0).toUpperCase()}
+                        </div>
+                        {/* Name + badges */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div title={w.username} style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>{w.username}</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
+                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.05)', color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || 'Unknown'}</span>
+                          </div>
+                        </div>
+                        {/* Relationship score */}
+                        <div title="Relationship score" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: `2px solid ${scoreColor}45`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
+                        </div>
+                      </div>
+
+                      {/* PRIMARY METRICS — typography-led, no heavy tiles */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, marginBottom: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{(w.tipCount || 0).toLocaleString()}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }} title={w.lastTipDate ? new Date(w.lastTipDate).toLocaleString() : undefined}>{formatLastActive(days).replace('Last active ', '')}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Last active</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>${(w.avgTipSize || 0).toFixed(2)}</div>
+                          <div style={{ fontSize: 10, color: C.text }}>Avg. tip</div>
+                        </div>
+                      </div>
+
+                      {/* RETENTION RISK */}
+                      {riskLevel && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 9, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention risk</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
+                          </div>
+                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
+                          </div>
+                          {riskReason && <div style={{ fontSize: 10, color: C.text, marginTop: 4 }}>{riskReason}</div>}
+                        </div>
+                      )}
+
+                      {/* ACTIONS — one primary, two secondary */}
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
+                          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                          title="View fan profile">View Fan</button>
+                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                          className="heart-envelope-btn"
+                          aria-label={`Message ${w.username}`}
+                          title="Message fan"
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
+                        <button onClick={() => setNoteTarget(w.username)}
+                          aria-label={`Add note for ${w.username}`}
+                          title="Add note"
+                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* 🔒 LOCKED FAN STATS — shown to free users once there are more
+                fans than the free grid displays. Real counts pulled from the
+                same filteredWhales list, not a generic upsell. */}
+            {lockedFanStats && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 20, border: '1px solid rgba(236,72,153,0.25)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #22D3EE, #EC4899)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #EC4899, #a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🔒</div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                      {lockedFanStats.hiddenCount} more {lockedFanStats.hiddenCount === 1 ? 'fan' : 'fans'} you're not seeing
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Here's what's in your data right now</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.white, marginBottom: 2 }}>{lockedFanStats.hiddenCount}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Top spenders found</div>
+                  </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: lockedFanStats.goneCold > 0 ? C.red : C.white, marginBottom: 2 }}>{lockedFanStats.goneCold}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Whales gone cold</div>
+                  </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.gold, marginBottom: 2 }}>{lockedFanStats.whaleTier}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>In the Whale tier</div>
+                  </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.green, marginBottom: 2 }}>${lockedFanStats.hiddenLifetimeValue.toFixed(0)}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Lifetime value, unseen</div>
+                  </div>
+                </div>
+                <button onClick={() => openUpgradeModal('whales_cutoff')} style={{ width: '100%', padding: '12px 20px', borderRadius: 10, background: 'linear-gradient(135deg,#22D3EE,#EC4899)', border: 'none', color: '#06101A', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+                  🔓 See All {filteredWhales.length} Fans
+                </button>
+              </div>
+            )}
+
+            {/* 💎 WHALE INTELLIGENCE PANEL */}
+            {filteredWhales.length > 0 && (
+              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧠</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Fan Intelligence</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Deep behavior patterns, projections & how to engage each fan</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {filteredWhales.slice(0, isPro ? 5 : 3).map((w, i) => {
+                    const tags = []
+                    if (w.hasPrivates && w.privateCount >= 2) tags.push({ label: "📷 Cam2Cam spender", color: C.pink })
+                    if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })
+                    if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper", color: C.cyan })
+                    if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
+                    if (w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical") tags.push({ label: "🚨 At churn risk", color: C.red })
+                    if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
+                    if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
+                    if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
+
+                    // Relationship status
+                    const relStatus = w.daysSinceLastTip <= 7
+                      ? { label: "🔥 Hot", color: C.orange }
+                      : w.daysSinceLastTip <= 30
+                      ? { label: "👀 Watching", color: C.cyan }
+                      : w.daysSinceLastTip <= 60
+                      ? { label: "❄️ Cooling", color: C.blue }
+                      : { label: "💀 At Risk", color: C.red }
+
+                    // Spending velocity vs avg fan
+                    const avgFanUSD = whales.length > 0 ? whales.reduce((s, ww) => s + ww.totalUSD, 0) / whales.length : 1
+                    const velocity = avgFanUSD > 0 ? (w.totalUSD / avgFanUSD).toFixed(1) : "1.0"
+                    const velocityPct = Math.min(100, Math.round((w.totalUSD / Math.max(...whales.map(ww => ww.totalUSD))) * 100))
+
+                    // Coaching bullets
+                    const getCoachingBullets = () => {
+                      const bullets = []
+                      if (w.churnRisk?.level === "Critical") {
+                        bullets.push({ text: "Send a personal message today — they may not return without one", color: C.red })
+                        bullets.push({ text: "Reference something specific — their username, a past tip, or a show they loved", color: C.red })
+                        bullets.push({ text: "Offer something exclusive to bring them back (early access, private goal)", color: C.orange })
+                      } else if (w.churnRisk?.level === "High") {
+                        bullets.push({ text: "Re-engage this week — their pattern shows they go cold fast without contact", color: C.orange })
+                        bullets.push({ text: "Offer something special: a goal just for them or a shoutout next stream", color: C.gold })
+                        bullets.push({ text: "Keep the message short and warm — don't make it feel like a sales pitch", color: C.muted })
+                      } else if (w.tipProbability?.level === "High") {
+                        bullets.push({ text: "Go live during their active window — they're very likely to tip", color: C.green })
+                        bullets.push({ text: "Set a tip goal that matches their avg ($" + w.avgTipSize.toFixed(0) + ") — it feels achievable to them", color: C.cyan })
+                        bullets.push({ text: "Acknowledge them by name in stream — they respond to direct recognition", color: C.muted })
+                      } else if (w.hasPrivates) {
+                        bullets.push({ text: "Offer a private show — they've already bought one before", color: C.pink })
+                        bullets.push({ text: "Mention privates casually in stream — a soft reminder works well with this fan type", color: C.muted })
+                        bullets.push({ text: "They respond to exclusivity — make them feel like a VIP", color: C.gold })
+                      } else if (w.avgTipSize >= 20) {
+                        bullets.push({ text: "Give them VIP attention in stream — big tippers notice when they're seen", color: C.gold })
+                        bullets.push({ text: "Set a goal around their avg tip size ($" + w.avgTipSize.toFixed(0) + ") — they enjoy being the hero", color: C.cyan })
+                        bullets.push({ text: "Thank them publicly and specifically — it reinforces the behavior", color: C.muted })
+                      } else if (w.tipCount >= 20) {
+                        bullets.push({ text: "Thank them publicly — frequent tippers love recognition in front of the room", color: C.cyan })
+                        bullets.push({ text: "Small goals and countdowns keep micro-tippers engaged and clicking", color: C.muted })
+                        bullets.push({ text: "Consistency is their love language — show up regularly and they will too", color: C.muted })
+                      } else {
+                        bullets.push({ text: "Keep them warm — consistent presence builds loyalty over time", color: C.muted })
+                        bullets.push({ text: "Greet them by name next time they appear in chat", color: C.muted })
+                        bullets.push({ text: "They have potential — early engagement now converts them to regulars", color: C.cyan })
+                      }
+                      return bullets
+                    }
+                    const coachingBullets = getCoachingBullets()
+                    const tierColor = TIER_COLORS[w.tier] || C.cyan
+
+                    return (
+                      <div key={i} style={{ padding: 18, borderRadius: 14, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        {/* HEADER ROW */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 9, background: `${tierColor}20`, border: `1px solid ${tierColor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: tierColor }}>
+                              {w.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
+                                <span style={{ padding: "2px 8px", borderRadius: 20, background: `${relStatus.color}15`, border: `1px solid ${relStatus.color}30`, fontSize: 10, fontWeight: 700, color: relStatus.color }}>{relStatus.label}</span>
+                              </div>
+                              <span style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</span>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
+                            <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
+                            <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
+                              style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
+                              {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
+                            </button>
+                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                              className="heart-envelope-btn"
+                              aria-label={`Message ${w.username}`}
+                              title="Message fan"
+                              style={{ padding: 6, borderRadius: 8, background: "rgba(255,43,174,0.1)", border: "1px solid rgba(255,43,174,0.25)", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={17} /></button>
+                          </div>
+                        </div>
+
+                        {/* PERSONALITY TAGS */}
+                        {tags.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                            {tags.map((tag, j) => (
+                              <span key={j} style={{ padding: "3px 10px", borderRadius: 20, background: `${tag.color}15`, border: `1px solid ${tag.color}30`, fontSize: 11, fontWeight: 600, color: tag.color }}>{tag.label}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* METRICS ROW */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                          {/* Spending velocity */}
+                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>SPENDING VELOCITY</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 6 }}>{velocity}x avg fan</div>
+                            <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+                              <div style={{ height: "100%", width: `${velocityPct}%`, borderRadius: 2, background: `linear-gradient(90deg, ${C.gold}, ${C.orange})` }} />
+                            </div>
+                          </div>
+                          {/* Visit pattern */}
+                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ACTIVE WINDOW</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: C.cyan }}>{w.typicalOnlineHours !== 'Unknown' ? w.typicalOnlineHours : '—'}</div>
+                          </div>
+                          {/* Monthly projection */}
+                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>MONTHLY VALUE</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${w.lifetimeValue?.monthly > 0 ? w.lifetimeValue.monthly.toFixed(0) : '—'}</div>
+                          </div>
+                        </div>
+
+                        {/* TIP NOTES */}
+                        {w.tipNotes && w.tipNotes.length > 0 && (
+                          <div style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Recent Tip Notes</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 64, overflowY: "auto" }}>
+                              {w.tipNotes.slice(-2).reverse().map((note, j) => (
+                                <div key={j} style={{ padding: "6px 10px", background: `${C.indigo}10`, border: `1px solid ${C.indigo}20`, borderRadius: 6, fontSize: 11, color: C.text, fontStyle: "italic" }}>
+                                  "{note}"
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* COACHING BULLETS */}
+                        <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10 }}>
+                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 Action Plan</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {coachingBullets.map((b, j) => (
+                              <div key={j} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ color: b.color, fontSize: 12, flexShrink: 0, marginTop: 1 }}>•</span>
+                                <span style={{ fontSize: 12, color: b.color, lineHeight: 1.4 }}>{b.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {filteredWhales.length <= 3 && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, textAlign: "center", border: "1px solid rgba(59,130,246,0.2)" }}>
+                <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Upload more data to discover more fans • Pro unlocks full profiles & behavior patterns</div>
+                <button onClick={() => openUpgradeModal("whales_empty")} style={{ padding: "8px 20px", borderRadius: 8, background: "linear-gradient(135deg,rgba(59,130,246,0.3),rgba(236,72,153,0.3))", border: "1px solid rgba(59,130,246,0.4)", color: C.white, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  🔓 See What Pro Unlocks
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "live" && <LiveEnginePage embedded />}
 
         {activeTab === "live-sessions" && (() => {
           const fmtSessionDuration = (secs) => {
@@ -3855,10 +5057,7 @@ const stopImportMessageRotation = () => {
             if (s.uniqueFans <= 2 && s.tipCount > 10)
               recommendations.push("Diversify your audience — most tips came from 1–2 fans. Engage lurkers with low-barrier goals")
             if (durationMins < 30 && s.totalUSD > 0)
-              // "could 2x your earnings" removed — that multiplier was hardcoded,
-              // not derived from this creator's short-vs-long session history or
-              // any calculation in the codebase, while reading as her own data.
-              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min — short sessions give tipping momentum less time to build. Try extending to 45–60 min`)
+              recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min. Extending to 45–60 min could 2x your earnings`)
             if (spikes.length >= 2)
               recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
             if (revenuePerMin > 0 && revenuePerMin < 0.10)
@@ -4279,7 +5478,7 @@ const stopImportMessageRotation = () => {
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
                   You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
                 </div>
-                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -4418,29 +5617,12 @@ const stopImportMessageRotation = () => {
               <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
                 Your plan
               </div>
-              {isPro ? (() => {
-                // Everyone inside the dashboard has access now (gated app —
-                // see the /start-trial redirect above), so this line's job is
-                // to say WHICH kind of access, not to sell anything.
-                const state = getAccessState(profile)
-                const daysLeft = trialDaysRemaining(profile)
-                const label = state === 'trialing'
-                  ? `✦ Free trial — ${daysLeft === 1 ? 'last day' : `${daysLeft} days left`}`
-                  : state === 'legacy'
-                    ? '✦ Founding member access'
-                    : '✦ Subscription active'
-                const sub = state === 'trialing'
-                  ? '— billing starts automatically when the trial ends; cancel any time before then'
-                  : state === 'legacy'
-                    ? '— full access, on the house, for being here early'
-                    : '— track and compare unlimited platforms'
-                return (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>{label}</span>
-                    <span style={{ fontSize: 12, color: C.text }}>{sub}</span>
-                  </div>
-                )
-              })() : (
+              {isPro ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: C.indigo }}>✦ Subscription active</span>
+                  <span style={{ fontSize: 12, color: C.text }}>— track and compare unlimited platforms</span>
+                </div>
+              ) : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
                     The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
@@ -4520,18 +5702,12 @@ const stopImportMessageRotation = () => {
           const bestMo = analytics?.bestMonth
           const totalUSD = analytics?.totalUSD || 0
           const now = new Date()
-          // Creator-local calendar month/day. analytics.monthlyData is keyed by
-          // LOCAL month (lib/analytics.js's monthKeyLocal), so a UTC-derived key
-          // could miss the current month entirely near a month boundary — and
-          // dayOfMonth feeds the end-of-month projection below.
-          const _localYmd = toLocalDateStr(now.toISOString(), creatorTz)   // YYYY-MM-DD
-          const thisMonthKey = _localYmd.slice(0, 7)
-          const [_lY, _lM, _lD] = _localYmd.split('-').map(Number)
+          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
           const thisMonth = monthly.find(m => m.month === thisMonthKey)
           const thisMonthUSD = thisMonth?.usd || 0
           const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(_lY, _lM, 0).getDate()
-          const dayOfMonth = _lD
+          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
+          const dayOfMonth = now.getUTCDate()
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
@@ -4792,7 +5968,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} timezone={creatorTz} />
+            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
           </div>
         )}
 
@@ -4905,18 +6081,17 @@ const stopImportMessageRotation = () => {
             tipsTotalUSD={analytics?.totalUSD ?? null}
             liveTotalUSD={liveTipsTotalUSD}
             onViewFan={viewFanProfile}
-            timezone={creatorTz}
           />
         )}
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} />
+            : <StreamPlanner tips={tips} isPro={isPro} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} />
+            : <MoneyMap tips={tips} isPro={isPro} />
         )}
       </div>
 
@@ -4986,7 +6161,7 @@ const stopImportMessageRotation = () => {
         const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
         whaleTips.forEach(t => {
-          const d = toLocalDow(t.date_time, creatorTz)
+          const d = new Date(t.date_time).getUTCDay()
           const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
           if (key in dayCounts) dayCounts[key]++
         })
@@ -5285,8 +6460,8 @@ const stopImportMessageRotation = () => {
             <div style={{ padding: 36 }}>
               <div style={{ textAlign: "center", marginBottom: 28 }}>
                 <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>Unlock Your Full Earning Potential</h2>
+                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>You're only seeing a preview of your data.<br/>Here's what's waiting for you inside:</p>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
                 {[
@@ -5303,15 +6478,9 @@ const stopImportMessageRotation = () => {
                   </div>
                 ))}
               </div>
-              {/* Was: "Most creators miss 30-60% of their earning potential
-                  without this" — an invented statistic about creators we have
-                  never measured. Replaced with a claim that is true and
-                  checkable: what is actually being offered. */}
-              {trialEligible && (
-                <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                  <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Free for 7 days — every Pro feature, on your own data</div>
-                </div>
-              )}
+              <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
+                <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
+              </div>
               <Button
                 disabled={earlyAccessSubmitting}
                 onClick={async () => {
@@ -5338,15 +6507,9 @@ const stopImportMessageRotation = () => {
                   }
                 }}
                 style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                {earlyAccessSubmitting
-                  ? "Redirecting to checkout..."
-                  : trialEligible ? "Start my 7-day free trial →" : "🔓 Upgrade to Pro — $19.99/mo"}
+                {earlyAccessSubmitting ? "Redirecting to checkout..." : "🔓 Upgrade to Pro — $19.99/mo"}
               </Button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
-                {trialEligible
-                  ? `Card required to start. $19.99/mo begins after ${TRIAL_DAYS} days — cancel any time before then and you pay nothing.`
-                  : "Secure checkout powered by Stripe • Cancel anytime"}
-              </div>
+              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Secure checkout powered by Stripe • Cancel anytime</div>
               <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
                 Maybe later
               </button>
@@ -5415,38 +6578,10 @@ const stopImportMessageRotation = () => {
                     onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
                   />
                   <Button
-                    disabled={!feedbackText.trim() || feedbackSubmitting}
-                    onClick={async () => {
-                      if (!feedbackText.trim() || feedbackSubmitting) return
-                      setFeedbackSubmitting(true)
-                      const typeLabel = feedbackType === 'feature' ? 'Feature Request' : 'Bug Report'
-                      const payload = {
-                        message: `[${typeLabel}] ${feedbackText.trim()}`,
-                        page_url: typeof window !== 'undefined' ? window.location.href : '',
-                        page_title: typeof window !== 'undefined' ? document.title : '',
-                        user_agent: typeof window !== 'undefined' ? navigator.userAgent : '',
-                        referrer: typeof document !== 'undefined' ? document.referrer : '',
-                        user_id: user?.id || null,
-                        created_at: new Date().toISOString(),
-                      }
-                      // Same two-step pattern as the site-wide FeedbackWidget: persist
-                      // to Supabase first (so it always shows up in /admin even if the
-                      // email fails), then fire the notification email — never block
-                      // the "thanks" confirmation on either one.
-                      try { await supabase.from('feedback').insert([payload]) } catch (_) {}
-                      try {
-                        await fetch('/api/feedback', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload),
-                        })
-                      } catch (_) {}
-                      track('feedback_submitted', { type: feedbackType, length: feedbackText.length })
-                      setFeedbackSubmitting(false)
-                      setFeedbackSent(true)
-                    }}
+                    disabled={!feedbackText.trim()}
+                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
                     style={{ width: "100%", padding: "12px", fontSize: 14 }}>
-                    {feedbackSubmitting ? 'Sending…' : feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
+                    {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
                   </Button>
                 </>
               )}
@@ -5552,12 +6687,7 @@ const stopImportMessageRotation = () => {
 
       {shareModalOpen && (() => {
         const topFan = whales[0]
-        // Canonical (session-based, median $/hour) best window, not the legacy
-        // tip-level analyticsbestDay — the two can disagree (e.g. legacy "best
-        // day" landing on a day the canonical engine wouldn't even qualify as
-        // confident), and this share card should say the same day the rest of
-        // the app is being migrated to treat as authoritative.
-        const bestDayLabel = analytics?.canonicalBestTimes?.bestWindow?.localDay || null
+        const bestDayLabel = analyticsbestDay?.day || null
         const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
         const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
         const cardLines = [

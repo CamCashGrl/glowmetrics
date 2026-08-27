@@ -1,6 +1,5 @@
 "use client"
 import { useMemo, useState } from "react"
-import { toLocalHour, toLocalDow, toLocalDateStr } from "../../lib/analytics/localTime"
 import {
   ComposedChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -19,19 +18,15 @@ const FAINT  = "#5E647C"
 
 const fmtUsd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
-// All keys are derived from the creator's LOCAL calendar date/hour
-// (toLocalDateStr/toLocalHour with the resolved profiles.timezone), then
-// anchored to UTC midnight so the Intl formatters below — which are pinned to
-// timeZone:"UTC" — render exactly that local calendar date back out. Keys were
-// previously raw UTC, so a tip late on a local evening was charted on the next
-// day/week/month, and "Time of Day" bucketed a creator's 7 PM into 02:00.
-const dayKey   = (date, tz) => toLocalDateStr(date, tz)
-const weekKey  = (date, tz) => {
-  const [y, m, d] = toLocalDateStr(date, tz).split("-").map(Number)
-  const dow = toLocalDow(date, tz) || 7 // Mon=1 .. Sun=7
-  return new Date(Date.UTC(y, m - 1, d - dow + 1)).toISOString().slice(0, 10)
+function isoWeekStart(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+  const day = d.getUTCDay() || 7 // Mon=1 .. Sun=7
+  d.setUTCDate(d.getUTCDate() - day + 1)
+  return d
 }
-const monthKey = (date, tz) => toLocalDateStr(date, tz).slice(0, 7)
+const dayKey   = (date) => date.toISOString().slice(0, 10)
+const weekKey  = (date) => isoWeekStart(date).toISOString().slice(0, 10)
+const monthKey = (date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 
 const DAY_FMT   = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })
 const WEEK_FMT  = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
@@ -42,25 +37,25 @@ const MODE_CONFIG = {
   daily:   { keyFn: dayKey,   fmt: DAY_FMT,   label: "Daily",   unit: "days",   take: 14 },
   weekly:  { keyFn: weekKey,  fmt: WEEK_FMT,  label: "Weekly",  unit: "weeks",  take: 12 },
   monthly: { keyFn: monthKey, fmt: MONTH_FMT, label: "Monthly", unit: "months", take: 12 },
-  time:    { keyFn: (d, tz) => String(toLocalHour(d, tz)), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
+  time:    { keyFn: (d) => String(d.getUTCHours()), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
 }
 
-function tokensVsHoursSeries(tips, sessions, mode, tz) {
+function tokensVsHoursSeries(tips, sessions, mode) {
   const { keyFn, take } = MODE_CONFIG[mode]
   const isTime = mode === "time"
   const map = {}
   for (const t of tips) {
     const d = new Date(t.date_time || t.dateRaw)
     if (isNaN(d.getTime())) continue
-    const k = keyFn(d, tz)
-    if (!map[k]) map[k] = { key: k, sortDate: isTime ? d : new Date(`${k.length === 7 ? k + '-01' : k}T00:00:00Z`), tokens: 0, hours: 0 }
+    const k = keyFn(d)
+    if (!map[k]) map[k] = { key: k, sortDate: d, tokens: 0, hours: 0 }
     map[k].tokens += Number(t.tokens || 0)
   }
   for (const s of sessions) {
     const d = new Date(s.startTime)
     if (isNaN(d.getTime())) continue
-    const k = keyFn(d, tz)
-    if (!map[k]) map[k] = { key: k, sortDate: isTime ? d : new Date(`${k.length === 7 ? k + '-01' : k}T00:00:00Z`), tokens: 0, hours: 0 }
+    const k = keyFn(d)
+    if (!map[k]) map[k] = { key: k, sortDate: d, tokens: 0, hours: 0 }
     map[k].hours += Number(s.durationHours || 0)
   }
   const rows = Object.values(map).sort((a, b) =>
@@ -75,33 +70,19 @@ function tokensVsHoursSeries(tips, sessions, mode, tz) {
   }))
 }
 
-// Fallback only — used when the canonical analytics.monthlyData prop isn't
-// available yet. Prefer canonicalMonthlySeries() below, which reads
-// lib/analytics.js's local-calendar-month bucketing (the source of truth
-// per canonical-analytics-rules.md's Monthly-Growth Reconciliation) instead
-// of recomputing UTC month boundaries here.
-function monthlyUsdSeries(tips, tz) {
+function monthlyUsdSeries(tips) {
   const map = {}
   for (const t of tips) {
     const d = new Date(t.date_time || t.dateRaw)
     if (isNaN(d.getTime())) continue
-    const k = monthKey(d, tz)
-    if (!map[k]) map[k] = { key: k, sortDate: new Date(`${k}-01T00:00:00Z`), usd: 0 }
+    const k = monthKey(d)
+    if (!map[k]) map[k] = { key: k, sortDate: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)), usd: 0 }
     map[k].usd += Number(t.usd || 0)
   }
   return Object.values(map)
     .sort((a, b) => a.key.localeCompare(b.key))
     .slice(-6)
     .map((row) => ({ ...row, label: MONTH_FMT.format(row.sortDate), usd: parseFloat(row.usd.toFixed(2)) }))
-}
-
-// Adapts analytics.monthlyData (month: "YYYY-MM", usd, growthPct) into this
-// chart's { key, sortDate, label, usd } row shape.
-function canonicalMonthlySeries(monthlyData) {
-  return monthlyData.slice(-6).map((m) => {
-    const sortDate = new Date(`${m.month}-01T00:00:00Z`)
-    return { key: m.month, sortDate, usd: m.usd, growthPct: m.growthPct, gapMonths: m.gapMonths, label: MONTH_FMT.format(sortDate) }
-  })
 }
 
 const GrowthTooltip = ({ active, payload, label }) => {
@@ -121,29 +102,22 @@ const GrowthTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function DashboardGrowthCharts({ tips, sessions, monthlyData, timezone = 'UTC' }) {
+export default function DashboardGrowthCharts({ tips, sessions }) {
   const [mode, setMode] = useState("weekly")
 
-  const series = useMemo(() => tokensVsHoursSeries(tips, sessions || [], mode, timezone), [tips, sessions, mode, timezone])
-  const monthly = useMemo(
-    () => (monthlyData && monthlyData.length ? canonicalMonthlySeries(monthlyData) : monthlyUsdSeries(tips, timezone)),
-    [tips, monthlyData, timezone]
-  )
+  const series = useMemo(() => tokensVsHoursSeries(tips, sessions || [], mode), [tips, sessions, mode])
+  const monthly = useMemo(() => monthlyUsdSeries(tips), [tips])
 
   const thisMonth = monthly[monthly.length - 1] || null
   const prevMonth = monthly[monthly.length - 2] || null
-  // Prefer the canonical growthPct already computed by lib/analytics.js;
-  // fall back to a local calc only when monthlyData wasn't supplied.
-  const growthPct = thisMonth?.growthPct !== undefined
-    ? thisMonth.growthPct
-    : (thisMonth && prevMonth && prevMonth.usd > 0
-        ? Math.round(((thisMonth.usd - prevMonth.usd) / prevMonth.usd) * 100)
-        : null)
+  const growthPct = thisMonth && prevMonth && prevMonth.usd > 0
+    ? Math.round(((thisMonth.usd - prevMonth.usd) / prevMonth.usd) * 100)
+    : null
   const isPositive = growthPct !== null && growthPct >= 0
   // monthly[] only has an entry for months that actually have tip data, so the
   // last entry is "the current calendar month" only when its key matches today —
   // otherwise it's a past, already-complete month.
-  const isThisMonthPartial = thisMonth?.key === monthKey(new Date(), timezone)
+  const isThisMonthPartial = thisMonth?.key === monthKey(new Date())
 
   if (!tips || tips.length === 0) return null
 
@@ -217,19 +191,7 @@ export default function DashboardGrowthCharts({ tips, sessions, monthlyData, tim
                   color: isPositive ? GREEN : RED,
                 }}>
                   {isPositive ? "▲" : "▼"} {Math.abs(growthPct)}%
-                  {/* thisMonth.gapMonths > 0 means the "previous month" this % is
-                      measured against wasn't actually last month — one or more
-                      zero-activity calendar months sit between them (lib/analytics.js's
-                      monthlyData only has entries for months with real tip data).
-                      A gap makes an otherwise-correct percentage read as continuous
-                      month-over-month growth when it isn't — flag it instead of
-                      silently saying "vs last month" for a comparison that skipped
-                      several months. */}
-                  <span style={{ color: MUTED, fontWeight: 500, marginLeft: 4 }}>
-                    {thisMonth.gapMonths > 0
-                      ? `vs last active month (${thisMonth.gapMonths}mo gap)`
-                      : "vs last month"}
-                  </span>
+                  <span style={{ color: MUTED, fontWeight: 500, marginLeft: 4 }}>vs last month</span>
                 </div>
               )}
             </div>

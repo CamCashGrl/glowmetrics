@@ -228,17 +228,7 @@ export function DashboardProgressCard({ totalTips = 0, totalSessions = 0, totalF
   ]
 
   return (
-    <div className="dpc-ambient-glow" style={{ borderRadius: 22, border: '1px solid rgba(255,255,255,0.09)', background: 'rgba(12,16,34,0.78)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', padding: '18px 22px', marginBottom: 20, position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.28)' }}>
-      <style jsx>{`
-        @keyframes dpcAmbientGlow {
-          0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.28), 0 0 0 rgba(124,92,255,0); }
-          50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.28), 0 0 24px rgba(124,92,255,0.18), 0 0 14px rgba(22,244,255,0.12); }
-        }
-        .dpc-ambient-glow { animation: dpcAmbientGlow 3.6s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) {
-          .dpc-ambient-glow { animation: none; }
-        }
-      `}</style>
+    <div style={{ borderRadius: 22, border: '1px solid rgba(255,255,255,0.09)', background: 'rgba(12,16,34,0.78)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', padding: '18px 22px', marginBottom: 20, position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.28)' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: grad }} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
         <div>
