@@ -29,15 +29,15 @@ export const metadata = {
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-multistream-cam-sites-with-obs' },
   openGraph: {
     title: 'How to Multistream Cam Sites With OBS: What Models Need to Know',
-    description: DESCRIPTION,
-    url: CANONICAL,
+    description: 'How to plan a multi-platform cam setup with OBS, including direct vs relay delivery, bandwidth, chat management, testing order, and platform-rule checks.',
+    url: 'https://www.camcashgrl.com/blog/how-to-multistream-cam-sites-with-obs',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'How to Multistream Cam Sites With OBS: What Models Need to Know',
-    description: DESCRIPTION,
+    description: 'How to plan a multi-platform cam setup with OBS, including direct vs relay delivery, bandwidth, chat management, testing order, and platform-rule checks.',
   },
 }
 
@@ -122,17 +122,17 @@ export default function Page() {
 
       <section style={{ marginTop: 38 }}>
         <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
+        <div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Can I multistream with OBS?</div>
-  <p style={...s.p, marginBottom: 0}>OBS can be part of a multistreaming workflow, but the exact method depends on how streams are delivered and whether each destination currently permits simultaneous broadcasting.</p>
+  <p style={{...s.p, marginBottom: 0}}>OBS can be part of a multistreaming workflow, but the exact method depends on how streams are delivered and whether each destination currently permits simultaneous broadcasting.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does multistreaming use more upload bandwidth?</div>
-  <p style={...s.p, marginBottom: 0}>It can, particularly when separate streams are sent directly to multiple destinations. The actual requirement depends on the workflow and encoding method.</p>
+  <p style={{...s.p, marginBottom: 0}}>It can, particularly when separate streams are sent directly to multiple destinations. The actual requirement depends on the workflow and encoding method.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Should I add several sites at once?</div>
-  <p style={...s.p, marginBottom: 0}>No. Test one platform first, confirm stability, then add destinations one at a time so you can identify problems quickly.</p>
+  <p style={{...s.p, marginBottom: 0}}>No. Test one platform first, confirm stability, then add destinations one at a time so you can identify problems quickly.</p>
 </div>
       </section>
     </ArticleLayout>
