@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { track } from "../../../lib/track";
 
 const CARD = {
   background: "rgba(13, 17, 38, 0.72)",
@@ -25,6 +26,14 @@ export default function ProductDetailClient({ product, seo, related = [] }) {
   // Etsy listing so buyers see the real product before clicking through.
   const allImages = [product.coverImage, ...product.galleryImages];
   const [activeImage, setActiveImage] = useState(0);
+
+  useEffect(() => {
+    track("shop_product_viewed", {
+      slug: product.slug,
+      product: product.shortTitle,
+      price: product.price,
+    });
+  }, [product.slug, product.shortTitle, product.price]);
 
   return (
     <div
@@ -147,10 +156,22 @@ export default function ProductDetailClient({ product, seo, related = [] }) {
               {product.price}
             </div>
 
+            {/* The single most important event on the shop: past this click
+                the buyer is on Etsy and nothing here can observe them again.
+                Without it, revenue can be attributed to a listing but never
+                to the page that sent them. */}
             <a
               href={product.etsyUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                track("shop_etsy_clicked", {
+                  slug: product.slug,
+                  product: product.shortTitle,
+                  price: product.price,
+                  source: "product_detail",
+                })
+              }
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -334,6 +355,15 @@ export default function ProductDetailClient({ product, seo, related = [] }) {
                 <Link
                   key={item.slug}
                   href={`/shop/${item.slug}`}
+                  onClick={() =>
+                    track("shop_product_clicked", {
+                      slug: item.slug,
+                      product: item.shortTitle,
+                      price: item.price,
+                      source: "related",
+                      from_slug: product.slug,
+                    })
+                  }
                   style={{
                     display: "block",
                     borderRadius: 16,
