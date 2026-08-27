@@ -18,14 +18,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import ConfidenceBadge from './ConfidenceBadge'
+import { C, GRADIENT, panel, panelInset, panelHero, primaryBtn as sharedPrimaryBtn, sectionLabel } from './theme'
 
-const C = {
-  white: '#F1F5F9', text: '#94A3B8', muted: '#64748B', dim: '#475569',
-  cyan: '#22D3EE', indigo: '#7C5CFF',
-  border: 'rgba(255,255,255,0.09)',
-  rule: 'rgba(255,255,255,0.07)',
-}
-const GRADIENT = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -147,7 +141,7 @@ export function ReportActions({ actions, isPro, onAction, onUpgrade }) {
           {rest.map(a => (
             <button key={a.source} onClick={() => (isPro ? onAction?.(a) : onUpgrade?.(a.source))} style={{
               padding: '10px 17px', borderRadius: 100, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`,
+              background: C.card2, border: `1px solid ${C.border}`,
               color: C.white, fontSize: 12.5, fontWeight: 700,
             }}>{a.label}</button>
           ))}

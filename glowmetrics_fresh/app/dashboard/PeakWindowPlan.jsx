@@ -28,13 +28,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import ConfidenceBadge from './ConfidenceBadge'
+import { C, GRADIENT, panel, panelInset, panelHero, primaryBtn as sharedPrimaryBtn, sectionLabel } from './theme'
 
-const C = {
-  white: '#F1F5F9', text: '#94A3B8', muted: '#64748B',
-  cyan: '#22D3EE', indigo: '#7C5CFF',
-  border: 'rgba(255,255,255,0.09)', card: 'rgba(255,255,255,0.03)',
-}
-const GRADIENT = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
 
 const fmtHour = (h) => {
   const hh = ((Number(h) % 24) + 24) % 24
@@ -111,7 +106,7 @@ export default function PeakWindowPlan({
         {onImport && (
           <button onClick={onImport} style={{
             marginTop: 13, padding: '9px 16px', borderRadius: 10, cursor: 'pointer',
-            background: 'rgba(255,255,255,0.04)', border: `1px solid ${C.border}`,
+            background: C.card2, border: `1px solid ${C.border}`,
             color: C.white, fontSize: 12.5, fontWeight: 700,
           }}>Add more history</button>
         )}

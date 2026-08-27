@@ -1,4 +1,6 @@
 'use client'
+
+import { C, GRADIENT, panel, panelInset, panelHero, primaryBtn as sharedPrimaryBtn, sectionLabel } from './theme'
 // ═══════════════════════════════════════════════════════════════════════════
 // WHAT CHANGED — the reason to come back tomorrow
 //
@@ -13,11 +15,6 @@
 // would have reported it.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const C = {
-  white: '#F1F5F9', text: '#94A3B8', muted: '#64748B',
-  cyan: '#22D3EE', green: '#10B981',
-  border: 'rgba(255,255,255,0.09)', card: 'rgba(255,255,255,0.03)',
-}
 
 const EVIDENCE_LABEL = {
   sessionsAnalyzed: 'sessions analysed',

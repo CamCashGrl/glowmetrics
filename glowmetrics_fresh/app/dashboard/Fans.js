@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
 import WindowFanOverlap from "./WindowFanOverlap"
+import { EnvelopeHeartIcon } from "./icons"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -36,7 +37,7 @@ const C = {
   white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
 }
 const glassCard = {
-  background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
+  background: C.card, border: `1px solid ${C.border}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 26px rgba(0,0,0,0.45)",
 }
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
@@ -118,7 +119,7 @@ const PRIORITY_RULES = [
   },
 ]
 
-function FanRow({ fan, rule, ctx, onMessage }) {
+function FanRow({ fan, rule, ctx, onMessage, pulse = false }) {
   return (
     // flexWrap + a flex-basis on the text column, so the action button drops
     // to its own line on narrow screens instead of squeezing the text. Without
@@ -160,13 +161,23 @@ function FanRow({ fan, rule, ctx, onMessage }) {
         </div>
       </div>
 
+      {/* The message action carries the envelope-heart glyph, as it always has
+          on every other Message surface. `heart-envelope-btn-idle` is the slow
+          breathing animation defined in page.js — it is applied to one row at
+          a time (the highest-priority fan) because animating every row of a
+          long list pegs the compositor. */}
       <button
         onClick={() => onMessage?.(fan.username)}
+        className={pulse ? "heart-envelope-btn-idle" : "heart-envelope-btn"}
+        aria-label={`Message ${fan.username}`}
         style={{
-          flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          padding: "9px 14px", borderRadius: 10, cursor: "pointer",
           background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
           color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-        }}>{rule.action}</button>
+        }}>
+        <EnvelopeHeartIcon size={15} />{rule.action}
+      </button>
     </div>
   )
 }
@@ -183,6 +194,7 @@ export default function Fans({
   onMessageFan,
   onUpgrade,
   onPlanStream,
+  onSearchFans,
 }) {
   const whales = analytics?.whales || []
   const bestWindow = analytics?.canonicalBestTimes?.bestWindow || null
@@ -253,9 +265,23 @@ export default function Fans({
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
       {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>Fans</div>
-        <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5 }}>Who deserves your attention, and what to do about it.</div>
+      {/* The Search Fan pill is the original control, in its original styling.
+          The modal it opens survived the redesign but lost every trigger, so
+          it had become unreachable dead code. */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>Fans</div>
+          <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5 }}>Who deserves your attention, and what to do about it.</div>
+        </div>
+        {onSearchFans && (
+          <button onClick={onSearchFans} style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9,
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+            color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0,
+          }}>
+            🔍 Search Fan
+          </button>
+        )}
       </div>
 
       {/* ── SNAPSHOT ───────────────────────────────────────────────── */}
@@ -299,8 +325,8 @@ export default function Fans({
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-            {visible.map(({ fan, rule }) => (
-              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} />
+            {visible.map(({ fan, rule }, i) => (
+              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} pulse={i === 0} />
             ))}
 
             {/* The two blurred "locked" fan rows that used to sit here are

@@ -18,13 +18,8 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import ConfidenceBadge from './ConfidenceBadge'
+import { C, GRADIENT, panel, panelInset, panelHero, primaryBtn as sharedPrimaryBtn, sectionLabel } from './theme'
 
-const C = {
-  white: '#F1F5F9', text: '#94A3B8', muted: '#64748B',
-  cyan: '#22D3EE', indigo: '#7C5CFF',
-  border: 'rgba(255,255,255,0.09)',
-}
-const GRADIENT = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
 
 /**
  * @param {Object}   props
@@ -45,9 +40,8 @@ export default function NextBestMove({
 
   return (
     <div style={{
-      position: 'relative', overflow: 'hidden', borderRadius: 22,
-      border: '1px solid rgba(124,92,255,0.22)',
-      background: 'linear-gradient(150deg, rgba(124,92,255,0.10), rgba(34,211,238,0.05) 55%, rgba(255,255,255,0.02))',
+      ...panelHero,
+      position: 'relative', overflow: 'hidden',
       padding: '26px 26px 24px',
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: GRADIENT }} />

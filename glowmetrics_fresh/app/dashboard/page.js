@@ -3739,6 +3739,7 @@ const stopImportMessageRotation = () => {
             }}
             onUpgrade={(src) => openUpgradeModal(src)}
             onPlanStream={() => handleTabChange('planner')}
+            onSearchFans={() => setFanSearchOpen(true)}
           />
         )}
 
