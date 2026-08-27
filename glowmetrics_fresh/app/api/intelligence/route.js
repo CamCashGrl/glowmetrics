@@ -17,6 +17,8 @@
 //        creator has actually been SHOWN the report, never on background loads.
 
 import { NextResponse } from 'next/server'
+import { resolvePlatformEntitlement, filterEntitledRows } from '../../../lib/platformEntitlement'
+import { buildReportDiscoveries } from '../../../lib/reportDiscoveries'
 import { createSupabaseRouteClient } from '../../../lib/supabase-server'
 import { isProPlan } from '../../../lib/plan'
 import { resolveCreatorTimezone } from '../../../lib/timezone'
@@ -29,7 +31,7 @@ import { GATE } from '../../../lib/intelligence/insights'
 async function build(supabase, user) {
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan, plan_expires_at, timezone, last_seen_intelligence')
+    .select('plan, plan_expires_at, timezone, last_seen_intelligence, primary_pro_platform')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -39,7 +41,12 @@ async function build(supabase, user) {
   // Ownership is structural — loadUserTips() is passed the server-derived
   // auth id, never anything from the request.
   const tips = await loadUserTips(supabase, user.id)
-  const analytics = aggregateRows(tips, timezone)
+  // Same entitlement boundary the dashboard applies, so this route and the
+  // client can never disagree about what is in scope. Access only — the stored
+  // rows are untouched, and a free plan is filtered by nothing.
+  const entitlement = resolvePlatformEntitlement({ profile, rows: tips })
+  const entitledTips = filterEntitledRows(entitlement, tips)
+  const analytics = aggregateRows(entitledTips, timezone)
   const intelligence = computeIntelligence({ analytics, profile })
 
   const current = snapshot(intelligence)
@@ -70,6 +77,17 @@ async function build(supabase, user) {
         progress: m.progress, proCta: m.proCta || null,
       })),
       nextMilestone: nextMilestone(intelligence),
+      /** The ordered canonical discoveries, so onboarding and any other
+       *  surface can render the creator's strongest finding without a second
+       *  analytics path. Same mapper the Creator Report and Command Center use. */
+      discoveries: buildReportDiscoveries({ analytics, intelligence }),
+      /** Counts only — used by onboarding's first-aha fan line. */
+      fanOverlap: analytics.bestWindowFanOverlap
+        ? {
+            count: analytics.bestWindowFanOverlap.count,
+            topSupporterCount: analytics.bestWindowFanOverlap.topSupporterCount || 0,
+          }
+        : null,
       /** null on a first read — see the baseline note above. */
       changed: diff,
       isFirstRead: !baseline,

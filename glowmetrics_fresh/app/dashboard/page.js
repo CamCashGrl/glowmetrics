@@ -20,6 +20,7 @@ import ContextualUpgradeModal from './ContextualUpgradeModal'
 import PeakWindowPlan from './PeakWindowPlan'
 import { SessionsNav, SessionsOverview, LiveSessionsEmpty } from './SessionsHome'
 import { buildUpgradeContext } from '../../lib/upgradeContexts'
+import { resolvePlatformEntitlement, filterEntitledRows } from '../../lib/platformEntitlement'
 import { atLeast, CLAIMABLE_FLOOR } from '../../lib/intelligence/states'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
@@ -1464,6 +1465,10 @@ export default function Dashboard() {
   // pointing at them) — SESSION_TAB_ALIASES maps each onto this destination
   // plus the right sub-tab, so nothing that used to navigate here breaks.
   const [sessionsSubTab, setSessionsSubTab] = useState('overview')
+  const [platformEntitlement, setPlatformEntitlement] = useState(null)
+  // The diff between the creator's stored baseline and now, for "What changed".
+  const [changedSinceLastVisit, setChangedSinceLastVisit] = useState(null)
+  const seenBaselineRef = useRef(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
   const [messageTarget, setMessageTarget] = useState(null)
@@ -1953,6 +1958,28 @@ export default function Dashboard() {
     }
   }, [])
 
+  // ── WHAT CHANGED SINCE THE LAST CHECK ────────────────────────────────────
+  // GET returns the diff against profiles.last_seen_intelligence; the POST that
+  // follows advances that baseline to now. Ordering matters: the baseline moves
+  // only AFTER the diff is in hand, so a change can never be swallowed by the
+  // very visit that should have reported it. Runs once per dashboard visit.
+  useEffect(() => {
+    if (!user || seenBaselineRef.current) return
+    seenBaselineRef.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/intelligence', { credentials: 'include' })
+        if (!res.ok) return
+        const data = await res.json().catch(() => ({}))
+        if (!cancelled) setChangedSinceLastVisit(data?.changed || null)
+        // Advance the baseline. Existing route, existing column, no new schema.
+        await fetch('/api/intelligence', { method: 'POST', credentials: 'include' }).catch(() => {})
+      } catch { /* the dashboard renders fine without a diff */ }
+    })()
+    return () => { cancelled = true }
+  }, [user])
+
   useEffect(() => {
     // Restore saved tab
     if (typeof window !== 'undefined') {
@@ -2258,7 +2285,11 @@ export default function Dashboard() {
       // detection is fallback-only, used to auto-populate the profile once
       // (see autoPopulateTimezoneIfMissing) rather than being read live on
       // every load.
-      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      // Entitlement fields are read in the SAME query that already fetches the
+      // timezone — profiles is the existing subscription source of truth, so no
+      // extra round trip and no second system.
+      const { data: profileTzRow } = await supabase.from('profiles')
+        .select('timezone, plan, plan_expires_at, primary_pro_platform').eq('id', uid).maybeSingle()
       const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
       autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
@@ -2290,6 +2321,24 @@ export default function Dashboard() {
         // same one-name-per-site view aggregateRows() produces internally.
         // Normalization only — see canonicalPlatform() in lib/constants.js.
         allData = normalizeRowPlatforms(allData)
+
+        // ── PRO PLATFORM ENTITLEMENT (enforced here, once) ────────────────
+        // A Pro subscription entitles ONE platform to full history; the second
+        // gets a rolling 31-day window ending at its own newest record. This is
+        // the single access boundary: everything downstream — the engine, the
+        // intelligence layer, MoneyMap, StreamPlanner, Fans — reads the same
+        // entitled view, so no two surfaces can disagree about what is in scope.
+        //
+        // NOTHING IS DELETED. `allData` is the in-memory array for this render;
+        // the rows stay in Supabase exactly as imported, and changing the
+        // primary platform later simply re-slices this view.
+        // Free plans are untouched: resolvePlatformEntitlement() reports
+        // isPro:false and filterEntitledRows() returns everything.
+        const entitlement = resolvePlatformEntitlement({ profile: profileTzRow, rows: allData })
+        const entitledData = filterEntitledRows(entitlement, allData)
+        setPlatformEntitlement(entitlement)
+        allData = entitledData
+
         setTips(allData)
         try {
           const result = runEngine(allData, userTz)
@@ -3501,7 +3550,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} />
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} />
           </div>
         )}
 
@@ -3537,6 +3586,8 @@ const stopImportMessageRotation = () => {
             <CommandCenter
               analytics={analytics}
               intelligence={intelligence}
+              changedSinceLastVisit={changedSinceLastVisit}
+              onImport={() => handleTabChange('upload')}
               isPro={isPro}
               nowActions={(() => {
                 // Moved from the old Overview's "Make Money Right Now"

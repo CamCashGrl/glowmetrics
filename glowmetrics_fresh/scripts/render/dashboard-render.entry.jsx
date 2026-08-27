@@ -11,6 +11,10 @@ import WindowFanOverlap from '../../app/dashboard/WindowFanOverlap'
 import ContextualUpgradeModal from '../../app/dashboard/ContextualUpgradeModal'
 import PeakWindowPlan from '../../app/dashboard/PeakWindowPlan'
 import PlatformOpportunity from '../../app/dashboard/PlatformOpportunity'
+import NextBestMove from '../../app/dashboard/NextBestMove'
+import WhatChanged from '../../app/dashboard/WhatChanged'
+import { buildReportDiscoveries, buildReportFacts, buildReportActions, primaryMove } from '../../lib/reportDiscoveries'
+import { resolvePlatformEntitlement, filterEntitledRows } from '../../lib/platformEntitlement'
 import { buildUpgradeContext, UPGRADE_SOURCE, UPGRADE_CONTEXT_KEYS } from '../../lib/upgradeContexts'
 import { aggregateRows } from '../../lib/analytics'
 import { computeIntelligence } from '../../lib/intelligence/readiness'
@@ -318,6 +322,104 @@ const platModal = renderToStaticMarkup(<ContextualUpgradeModal open onClose={() 
 check('the modal preserves the platform discovery',
   /stronger observed hourly rate on BongaCams than Stripchat/.test(platModal), true)
 check('the modal renders the platform CTA', platModal.includes('Compare My Platforms'), true)
+
+console.log('\nJ. PRODUCT REDESIGN — visible in the rendered output')
+const plainer = (h) => h.replace(/<!-- -->/g, '')
+const discoveries = buildReportDiscoveries({ analytics, intelligence })
+const facts = buildReportFacts({ analytics, tips })
+const actions = buildReportActions(discoveries)
+console.log(`  · discoveries found: ${discoveries.map(d => `${d.id}${d.claimable ? '' : '(building)'}`).join(', ') || 'none'}`)
+
+// ── Command Center: one dominant move ────────────────────────────────────
+const nbmFree = plainer(renderToStaticMarkup(
+  <NextBestMove discovery={primaryMove(discoveries)} intelligence={intelligence} isPro={false} onUpgrade={() => {}} onImport={() => {}} />))
+const nbmPro = plainer(renderToStaticMarkup(
+  <NextBestMove discovery={primaryMove(discoveries)} intelligence={intelligence} isPro onAction={() => {}} onImport={() => {}} />))
+const nbmNone = plainer(renderToStaticMarkup(
+  <NextBestMove discovery={null} isPro={false} onImport={() => {}} />))
+check('the primary block renders a next best move', /Your next best move/i.test(nbmFree), true)
+check('it names the actual discovery', nbmFree.includes(primaryMove(discoveries).title), true)
+check('it shows evidence beside the claim', nbmFree.includes(primaryMove(discoveries).evidence[0].value), true)
+// The strongest discovery is often the hourly rate, which has nothing to DO
+// about it. The primary block must still produce a move.
+check('the chosen move actually carries an action',
+  !!(primaryMove(discoveries)?.action) || discoveries.every(d => !d.action), true)
+check('exactly one button in the primary block', (nbmFree.match(/<button/g) || []).length, 1)
+check('free and pro both get one action', (nbmPro.match(/<button/g) || []).length, 1)
+check('no discovery still renders an honest primary',
+  /still learning your business/.test(nbmNone), true)
+
+// ── What changed ─────────────────────────────────────────────────────────
+check('a first visit renders nothing at all',
+  renderToStaticMarkup(<WhatChanged diff={null} />), '')
+const wcQuiet = plainer(renderToStaticMarkup(<WhatChanged diff={{ improved: [], evidenceDelta: {}, pctDelta: 0 }} />))
+check('a quiet visit says so, without inventing activity',
+  /Nothing new since your last visit/.test(wcQuiet), true)
+const wcBusy = plainer(renderToStaticMarkup(<WhatChanged diff={{
+  improved: [{ id: 'peak_window', label: 'Peak earning window', newlyClaimable: true, isDiscovery: true }],
+  evidenceDelta: { sessionsAnalyzed: 14, fansIdentified: 3 }, pctDelta: 7,
+}} />))
+check('a real change is reported', /Peak earning window/.test(wcBusy), true)
+check('newly-claimable is stated as such', /now supported by enough evidence/.test(wcBusy), true)
+check('evidence deltas are shown', /\+14/.test(wcBusy) && /sessions analysed/.test(wcBusy), true)
+check('calibration movement is shown', /\+7 calibration/.test(wcBusy), true)
+
+// ── Creator Report: a narrative, not a card grid ─────────────────────────
+const reportFree = plainer(renderToStaticMarkup(
+  <CreatorReport analytics={analytics} tips={tips} intelligence={intelligence} isPro={false} timezone="UTC" onUpgrade={() => {}} firstName="Daphne" />))
+const reportPro = plainer(renderToStaticMarkup(
+  <CreatorReport analytics={analytics} tips={tips} intelligence={intelligence} isPro timezone="UTC" onUpgrade={() => {}} />))
+check('the report is personalised', /What CamCash has learned about Daphne/.test(reportFree), true)
+check('it states its source', /Built entirely from the data you have imported/.test(reportFree), true)
+check('it shows the real date range',
+  reportFree.includes(new Date(facts.from).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })), true)
+check('it shows the real tip count', reportFree.includes(facts.tips.toLocaleString('en-US')), true)
+check('it has a "what we learned" section', /What we learned/.test(reportFree), true)
+check('every discovery is narrated',
+  discoveries.every(d => reportFree.includes(d.title)), true)
+check('each narrated discovery carries its meaning',
+  discoveries.every(d => reportFree.includes(d.meaning.slice(0, 40))), true)
+check('claimable discoveries say what to do with them',
+  actions.length === 0 || /What to do with it/.test(reportFree), true)
+check('there is a single actions section', (reportFree.match(/What to do next/g) || []).length <= 1, true)
+check('free sees ONE Pro section', (reportFree.match(/What Pro helps you do with these/g) || []).length, 1)
+check('pro sees none', (reportPro.match(/What Pro helps you do with these/g) || []).length, 0)
+check('the supporting detail is demoted below it',
+  reportFree.indexOf('What we learned') < reportFree.indexOf('The numbers behind it'), true)
+const reportEmpty = plainer(renderToStaticMarkup(
+  <CreatorReport analytics={emptyAnalytics} tips={[]} intelligence={emptyIntel} isPro={false} timezone="UTC" onUpgrade={() => {}} />))
+check('a low-data creator gets an honest report',
+  /No pattern has enough evidence behind it yet/.test(reportEmpty), true)
+check('and is never shown a fabricated finding',
+  /strongest observed/.test(reportEmpty), false)
+
+// ── No unsupported claims anywhere in the new surfaces ───────────────────
+const NEW_SURFACES = (nbmFree + nbmPro + nbmNone + wcQuiet + wcBusy + reportFree + reportPro + reportEmpty).toLowerCase()
+for (const bad of ['likely to tip', 'will make', 'guaranteed', 'projected', 'ai prediction', 'expected to earn']) {
+  check(`no rendered redesign surface says "${bad}"`, NEW_SURFACES.includes(bad), false)
+}
+
+// ── Entitlement enforced on real rows ────────────────────────────────────
+const entRows = [
+  ...Array.from({ length: 40 }, (_, i) => ({ platform: 'BongaCams', date_time: `2026-01-${String(1 + (i % 28)).padStart(2, '0')}T12:00:00Z`, usd: 2 })),
+  ...Array.from({ length: 12 }, (_, i) => ({ platform: 'Chaturbate', date_time: `2026-02-${String(1 + i).padStart(2, '0')}T12:00:00Z`, usd: 3 })),
+  { platform: 'Chaturbate', date_time: '2025-06-01T12:00:00Z', usd: 99 },
+]
+const proProfile = { plan: 'pro', plan_expires_at: null }
+const ent = resolvePlatformEntitlement({ profile: proProfile, rows: entRows })
+const entitled = filterEntitledRows(ent, entRows)
+check('the primary keeps every row',
+  entitled.filter(r => r.platform === 'BongaCams').length,
+  entRows.filter(r => r.platform === 'BongaCams').length)
+check('the secondary is cut to its rolling window',
+  entitled.some(r => r.platform === 'Chaturbate' && r.date_time.startsWith('2025-06')), false)
+check('recent secondary rows survive',
+  entitled.filter(r => r.platform === 'Chaturbate').length, 12)
+check('the source array is untouched', entRows.length, 53)
+check('window start is latest minus 30 days',
+  ent.secondaryWindowStart.toISOString().slice(0, 10), '2026-01-13')
+const freeEnt = resolvePlatformEntitlement({ profile: { plan: 'free' }, rows: entRows })
+check('a free creator loses nothing', filterEntitledRows(freeEnt, entRows).length, 53)
 
 console.log(`\n  ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -619,6 +619,14 @@ export default function OnboardingPage(){
   const[preview,setPreview]=useState(null)
   const[parseError,setParseError]=useState('')
   const[importResult,setImportResult]=useState(null)
+  // ── FIRST AHA ────────────────────────────────────────────────────────────
+  // Read from the canonical intelligence layer AFTER the import lands, so the
+  // onboarding screen and the dashboard cannot disagree, and onboarding can
+  // never claim a pattern the engine has not confirmed.
+  const[aha,setAha]=useState(null)
+  const[ahaLoading,setAhaLoading]=useState(false)
+  const[ahaFans,setAhaFans]=useState(0)
+  const[ahaTopSupporters,setAhaTopSupporters]=useState(0)
   const[importError,setImportError]=useState('')
   const[upgradeBlocked,setUpgradeBlocked]=useState(null)
   const[isFirstImport,setIsFirstImport]=useState(true)
@@ -660,7 +668,19 @@ export default function OnboardingPage(){
     // Named distinctly from the generic step_viewed event so the funnel's
     // "first useful insight" step is directly queryable, per the funnel
     // instrumentation checklist, without filtering step_viewed by 'done'.
-    if(step==='done')track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
+    if(step==='done'){
+      track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
+      setAhaLoading(true)
+      fetch('/api/intelligence',{credentials:'include'})
+        .then(r=>r.ok?r.json():null)
+        .then(data=>{
+          setAha(data?.discoveries?.[0]||null)
+          setAhaFans(data?.fanOverlap?.count||0)
+          setAhaTopSupporters(data?.fanOverlap?.topSupporterCount||0)
+        })
+        .catch(()=>setAha(null))
+        .finally(()=>setAhaLoading(false))
+    }
   },[step,user])
 
   async function markDone(){
@@ -1093,8 +1113,8 @@ export default function OnboardingPage(){
               <div style={{position:'absolute',inset:0,animation:'flashPulse 1s ease-out 1',background:'rgba(33,230,243,0)',pointerEvents:'none'}}/>
               <div style={{width:64,height:64,borderRadius:22,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:900,color:'#fff',margin:'0 auto 16px',boxShadow:'0 0 55px rgba(255,47,174,0.45),0 0 100px rgba(33,230,243,0.3)',animation:'glowPulse 2.5s ease-in-out infinite'}}>✓</div>
               <div style={EYE}>First Insights</div>
-              <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
-              <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>Here's a beautiful preview of what we found.</p>
+              <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>{aha&&aha.claimable?'CamCash found a pattern in your history':'Your data is ready'}</h1>
+              <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>{aha&&aha.claimable?'Read from the sessions you just imported — nothing estimated on your behalf.':'Here is exactly what CamCash read from your import.'}</p>
               <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:14}}>
                 {[
                   {label:'Tips Imported',value:tipsDisplayed,color:CYAN,prefix:'',suffix:' tips',delay:'0s'},
@@ -1120,27 +1140,64 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div style={{borderRadius:14,border:`1px solid ${PINK}33`,background:`rgba(255,47,174,0.05)`,padding:'13px 15px',marginBottom:14,textAlign:'left',display:'flex',gap:10}}>
-                <span style={{fontSize:18,flexShrink:0}}>⚡</span>
-                <div>
-                  <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
-                  {preview?.bestHour?(
-                    // preview.bestHour is the single hour with the highest total
-                    // token sum across the just-parsed rows (buildPreview() above)
-                    // — no minimum-sample or confidence-tier requirement, unlike
-                    // the dashboard's canonical bestWindow (session-based, median,
-                    // requires 4+ sessions before it's shown as "your best time" at
-                    // all). This preview can legitimately be one or two rows'
-                    // worth of signal. "Your sweet spot" overstated that as a
-                    // settled fact; framing it as an early read from this import
-                    // — confirmed or revised once the dashboard has full session
-                    // data — matches what this number actually is.
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>This import shows an early signal around <strong style={{color:PINK}}>{preview.bestHour}</strong> — your dashboard will confirm this once it has more sessions to work with.</p>
-                  ):(
-                    <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
+              {/* ══ FIRST AHA ═════════════════════════════════════════════
+                  This used to render preview.bestHour — the single highest
+                  token-sum hour in the rows just parsed, with NO minimum sample
+                  and no confidence tier. On a small first import that is one or
+                  two rows' worth of signal presented as a finding.
+
+                  It now reads the canonical intelligence layer, the same one the
+                  dashboard reads, so onboarding can never claim a pattern the
+                  engine has not confirmed. When nothing is claimable yet it says
+                  so and names the evidence that is missing. */}
+              {ahaLoading&&(
+                <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',padding:'16px 15px',marginBottom:14,textAlign:'left',fontSize:12,color:'rgba(148,163,184,0.8)'}}>
+                  Reading your history…
+                </div>
+              )}
+
+              {!ahaLoading&&aha&&aha.claimable&&(
+                <div style={{borderRadius:16,border:'1px solid rgba(124,92,255,0.28)',background:'linear-gradient(140deg,rgba(124,92,255,0.10),rgba(33,230,243,0.05))',padding:'17px 17px',marginBottom:14,textAlign:'left'}}>
+                  <div style={{fontSize:10,fontWeight:800,color:CYAN,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:7}}>{aha.eyebrow}</div>
+                  <div style={{fontSize:21,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.02em',lineHeight:1.15,marginBottom:11}}>{aha.title}</div>
+                  <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:11}}>
+                    {(aha.evidence||[]).slice(0,3).map(e=>(
+                      <div key={e.label}>
+                        <div style={{fontSize:14,fontWeight:900,color:CYAN}}>{e.value}</div>
+                        <div style={{fontSize:9.5,color:'rgba(148,163,184,0.7)',marginTop:2}}>{e.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{fontSize:12.5,color:'rgba(203,213,225,0.88)',lineHeight:1.65}}>{aha.meaning}</div>
+                  {ahaFans>0&&(
+                    <div style={{marginTop:11,paddingTop:11,borderTop:'1px solid rgba(255,255,255,0.07)',fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.6}}>
+                      <strong style={{color:PINK}}>{ahaFans} repeat fan{ahaFans===1?'':'s'}</strong> tipped during it{ahaTopSupporters>0?<> — {ahaTopSupporters} {ahaTopSupporters===1?'is':'are'} among your Top Supporters</>:null}.
+                    </div>
+                  )}
+                  {aha.action&&(
+                    <div style={{marginTop:11,fontSize:12,color:'#fff',lineHeight:1.55}}>
+                      <strong style={{color:'#A78BFA'}}>Your next move · </strong>{aha.action.label}.
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
+
+              {!ahaLoading&&aha&&!aha.claimable&&(
+                <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.09)',background:'rgba(255,255,255,0.03)',padding:'15px 15px',marginBottom:14,textAlign:'left'}}>
+                  <div style={{fontSize:10,fontWeight:800,color:CYAN,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:6}}>Still calibrating</div>
+                  <div style={{fontSize:12.5,color:'rgba(203,213,225,0.85)',lineHeight:1.65}}>{aha.meaning}</div>
+                  {aha.nextMilestone&&(<div style={{marginTop:8,fontSize:12,color:CYAN}}>Next: {aha.nextMilestone}.</div>)}
+                </div>
+              )}
+
+              {!ahaLoading&&!aha&&(
+                <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.09)',background:'rgba(255,255,255,0.03)',padding:'15px 15px',marginBottom:14,textAlign:'left'}}>
+                  <div style={{fontSize:12.5,color:'rgba(203,213,225,0.85)',lineHeight:1.65}}>
+                    Your data is in. No pattern has enough evidence behind it yet — import more of your
+                    history and CamCash will tell you the moment one does.
+                  </div>
+                </div>
+              )}
 
               <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',padding:'12px 14px',marginBottom:16,textAlign:'left',display:'flex',alignItems:'flex-start',gap:10}}>
                 <div style={{fontSize:18,flexShrink:0}}>📧</div>

@@ -212,6 +212,23 @@ export function buildReportFacts({ analytics, tips = [] } = {}) {
   }
 }
 
+/**
+ * The discovery the "next best move" should be built from.
+ *
+ * NOT simply the strongest one. The strongest discovery is often the hourly
+ * rate, which is a finding with nothing to DO about it — leading with it left
+ * the dashboard's primary block with no action at all, which is the one thing
+ * it must never be. So: the strongest discovery that carries an action, and
+ * only if none does, the strongest discovery overall (which then renders as an
+ * evidence-building step rather than a move).
+ *
+ * @param {Array} discoveries - buildReportDiscoveries() output, already ordered
+ * @returns {Object|null}
+ */
+export function primaryMove(discoveries = []) {
+  return discoveries.find(d => d.claimable && d.action) || discoveries[0] || null
+}
+
 /** The actions worth offering, derived only from claimable discoveries. */
 export function buildReportActions(discoveries = []) {
   return discoveries.filter(d => d.claimable && d.action).map(d => ({

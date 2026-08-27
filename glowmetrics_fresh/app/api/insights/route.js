@@ -14,6 +14,7 @@
 // path onto this same canonical JS source is out of Phase 1 scope (SQL
 // can't import Node modules) and is tracked as follow-up work.
 import { NextResponse } from 'next/server'
+import { resolvePlatformEntitlement, filterEntitledRows } from '../../../lib/platformEntitlement'
 import { createSupabaseRouteClient } from '../../../lib/supabase-server'
 import { isProPlan } from '../../../lib/plan'
 import { resolveCreatorTimezone } from '../../../lib/timezone'
@@ -29,7 +30,7 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan, plan_expires_at, timezone')
+    .select('plan, plan_expires_at, timezone, primary_pro_platform')
     .eq('id', user.id)
     .maybeSingle()
   const isPro = isProPlan(profile)
@@ -51,7 +52,10 @@ export async function GET() {
     })
   }
 
-  const analytics = aggregateRows(tips, timezone)
+  // The same entitlement boundary the dashboard and /api/intelligence apply.
+  // Access only: stored rows are untouched, free plans filter nothing.
+  const analytics = aggregateRows(filterEntitledRows(
+    resolvePlatformEntitlement({ profile, rows: tips }), tips), timezone)
   const meaningfulSessions = analytics.meaningfulSessions || []
   const missed = computeMissedRevenue(meaningfulSessions, timezone)
 

@@ -368,21 +368,26 @@ export default function ImportSuccess({
   const hasMeasuredChange =
     evidenceRows.length > 0 || (changed?.improved?.length ?? 0) > 0
 
-  // Honest headline. The only branch that celebrates is the one where the
-  // engine says a threshold was actually crossed.
-  const headline = discoveries.length
-    ? "New insight unlocked"
+  // RESULT -> PROOF -> NEXT MOVE.
+  //
+  // The headline states WHAT WAS FOUND, not that an upload succeeded. Only the
+  // first branch celebrates, and only because the engine says a threshold was
+  // actually crossed — the count comes from the diff, never from optimism. A
+  // creator whose data did not move is told exactly that.
+  const found = discoveries.length
+  const headline = found
+    ? `CamCash found ${found} new ${found === 1 ? "pattern" : "patterns"} in your history`
     : hasMeasuredChange
-      ? "Your report just got smarter"
-      : "Your data is in"
+      ? "Your data is ready — your patterns just got sharper"
+      : "Your data is ready"
 
-  const subhead = discoveries.length
-    ? "That import gave CamCash enough evidence to confirm something new about your streaming."
+  const subhead = found
+    ? "That import gave CamCash enough evidence to state something new about your streaming."
     : hasMeasuredChange
-      ? "CamCash analyzed your new data and sharpened what it knows about your patterns."
+      ? "CamCash re-read your history with the new data and sharpened what it already knew."
       : changed
-        ? "Your data was added successfully. CamCash is still building confidence in your existing patterns."
-        : "Your data was added successfully and is now part of your analysis."
+        ? "Everything imported cleanly. No pattern crossed a threshold this time — CamCash is still building confidence in the ones you have."
+        : "Everything imported cleanly and is now part of your analysis."
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "8px 0 4px" }}>

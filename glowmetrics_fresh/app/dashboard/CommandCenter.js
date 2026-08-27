@@ -3,6 +3,9 @@ import { useMemo } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
 import WindowFanOverlap from "./WindowFanOverlap"
 import PeakWindowPlan from "./PeakWindowPlan"
+import NextBestMove from "./NextBestMove"
+import WhatChanged from "./WhatChanged"
+import { buildReportDiscoveries, primaryMove } from "../../lib/reportDiscoveries"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -201,6 +204,10 @@ function WindowProof({ windowRate, baselineRate, sessions, intelligence, dayLabe
 
 export default function CommandCenter({
   analytics,
+  // The diff /api/intelligence returns against the creator's stored baseline.
+  // Presentation only — this component computes no change of its own.
+  changedSinceLastVisit = null,
+  onImport,
   // computeIntelligence() output, threaded from the dashboard. Presentation
   // only: it decides which confidence WORD appears beside a claim, never any
   // number, and never whether a card renders.
@@ -220,6 +227,10 @@ export default function CommandCenter({
   onMessageFan,
 }) {
   // ── All values READ from the frozen layer. No local aggregation. ──
+  // The strongest discovery that actually carries an action — a "next best
+  // move" with nothing to do is not a move. Canonically ordered, never
+  // templated; falls back to the strongest finding when none has an action.
+  const primaryDiscovery = primaryMove(buildReportDiscoveries({ analytics, intelligence }))
   const bestWindow   = analytics?.canonicalBestTimes?.bestWindow || null
   const earlySignal  = analytics?.canonicalBestTimes?.earlySignal || null
   const grid         = analytics?.canonicalBestTimes?.grid || []
@@ -291,6 +302,28 @@ export default function CommandCenter({
         </div>
       </div>
 
+      {/* ══ ZONE 1 — PRIMARY ═════════════════════════════════════════
+          One dominant move, chosen by evidence strength from the creator's own
+          canonical discoveries. Everything below is deliberately quieter. */}
+      <NextBestMove
+        discovery={primaryDiscovery}
+        intelligence={intelligence}
+        isPro={isPro}
+        onAction={(action) => {
+          if (action.source === 'stream_planner') onPlanStream?.()
+          else if (action.source === 'window_fan_overlap') onViewFans?.()
+          else if (action.source === 'platform_comparison') onSeePerformance?.()
+        }}
+        onUpgrade={onUpgrade}
+        onImport={onImport}
+      />
+
+      {/* ══ ZONE 2 — SECONDARY ═══════════════════════════════════════
+          Why today differs from yesterday. Renders nothing on a first visit,
+          and says so plainly when nothing actually moved. */}
+      <WhatChanged diff={changedSinceLastVisit} />
+
+      {/* ══ ZONE 3 — SUPPORTING EVIDENCE ═════════════════════════════ */}
       {/* ── HERO: YOUR NEXT BEST MOVE ──────────────────────────────── */}
       <div style={{
         background: hasWindow ? HERO_GRADIENT : "rgba(15,20,32,0.75)",

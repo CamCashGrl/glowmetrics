@@ -2,6 +2,10 @@
 
 import { useEffect } from "react"
 import { badgeFor } from "../../lib/intelligence/states"
+import { buildReportDiscoveries, buildReportFacts, buildReportActions } from "../../lib/reportDiscoveries"
+import {
+  ReportHeader, ReportDiscovery, ReportActions, ReportPro, ReportEmpty, SectionTitle,
+} from "./ReportNarrative"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import { resolveCurrentMonthGrowth } from "../../lib/analytics"
@@ -1411,6 +1415,7 @@ export default function CreatorReport({
   // component never computes confidence, progress or thresholds itself.
   intelligence = null,
   timezone = "UTC",
+  firstName = null,
 }) {
   const safeAnalytics = analytics || {}
 
@@ -1652,6 +1657,13 @@ export default function CreatorReport({
         : Number(largestRevenueLeak[1] || 0)
       : 0
 
+  // ── THE REPORT'S OWN DATA ─────────────────────────────────
+  // Read, ordered and gated by lib/reportDiscoveries.js. No metric, threshold
+  // or confidence is computed in this component.
+  const reportDiscoveries = buildReportDiscoveries({ analytics: safeAnalytics, intelligence })
+  const reportFacts = buildReportFacts({ analytics: safeAnalytics, tips })
+  const reportActions = buildReportActions(reportDiscoveries)
+
   // ----------------------------------------------------------
   // TRACKING
   // ----------------------------------------------------------
@@ -1712,7 +1724,7 @@ export default function CreatorReport({
       platformCount,
     })
 
-    onUpgrade?.()
+    onUpgrade?.(source)
   }
 
   // ----------------------------------------------------------
@@ -1721,119 +1733,39 @@ export default function CreatorReport({
 
   return (
     <div>
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
+      {/* ══ THE REPORT ═══════════════════════════════════════════════
+          A generated document, not another tab of cards: header naming the
+          creator's own data range, then her discoveries strongest-first, each
+          told as discovery -> evidence -> what it means -> what to do with it.
+          Every value is read from buildReportDiscoveries(), which gates each
+          claim on the canonical ladder. The detailed dashboard sections that
+          used to open this page now sit BELOW it as supporting reference. */}
+      <ReportHeader facts={reportFacts} calibration={intelligence?.calibration} firstName={firstName} />
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 15,
-          marginBottom: 17,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 900,
-                color: C.white,
-              }}
-            >
-              🧾 Your Creator Report
-            </div>
+      <SectionTitle>What we learned</SectionTitle>
+      {reportDiscoveries.length > 0 ? (
+        reportDiscoveries.map((d, i) => (
+          <ReportDiscovery key={d.id} discovery={d} index={i} intelligence={intelligence} />
+        ))
+      ) : (
+        <ReportEmpty facts={reportFacts} nextEvidence={nextEvidence} onImport={handleImport} />
+      )}
 
-            <div
-              style={{
-                padding: "4px 7px",
-                borderRadius: 20,
-                fontSize: 8,
-                fontWeight: 900,
-                color:
-                  reportState === "rich"
-                    ? C.green
-                    : reportState === "developing"
-                      ? C.cyan
-                      : C.gold,
-                background:
-                  reportState === "rich"
-                    ? "rgba(16,185,129,0.08)"
-                    : reportState === "developing"
-                      ? "rgba(34,211,238,0.08)"
-                      : "rgba(245,158,11,0.08)",
-              }}
-            >
-              {reportState === "rich"
-                ? "HIGH SIGNAL"
-                : reportState === "developing"
-                  ? "DEVELOPING"
-                  : "EARLY SIGNAL"}
-            </div>
-          </div>
+      <ReportActions
+        actions={reportActions}
+        isPro={isPro}
+        onAction={(a) => handleUpgrade(a.source)}
+        onUpgrade={(source) => handleUpgrade(source)}
+      />
 
-          <div
-            style={{
-              marginTop: 4,
-              fontSize: 12,
-              color: C.muted,
-            }}
-          >
-            Your numbers become more useful as CamCash
-            gets more history to work with.
-          </div>
-        </div>
+      {!isPro && <ReportPro actions={reportActions} onUpgrade={(source) => handleUpgrade(source)} />}
 
-        {!isPro && (
-          <ProButton
-            source="creator_report_header"
-            onClick={() =>
-              handleUpgrade("creator_report_header")
-            }
-          >
-            Unlock Creator Pro
-          </ProButton>
-        )}
+      {/* ══ SUPPORTING DETAIL ════════════════════════════════════════
+          Everything below is the same reference material as before, kept
+          intact and demoted beneath the narrative. */}
+      <div style={{ marginTop: 44, paddingTop: 26, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        <SectionTitle>The numbers behind it</SectionTitle>
       </div>
-
-      {/* ======================================================
-          CALIBRATION
-      ====================================================== */}
-
-      <CalibrationCard
-        calibration={intelligence?.calibration}
-        reportState={overallReportState}
-        isPro={isPro}
-        onImport={handleImport}
-        nextEvidence={nextEvidence}
-      />
-
-      <PeakWindowCard
-        claimable={peakWindowIsClaimable}
-        window={canonicalBestWindow}
-        earlySignal={earlySignalWindow}
-        state={peakWindowState}
-        evidence={peakWindowEvidence}
-        platformLabel={
-          (peakWindowIsClaimable ? canonicalBestWindow : earlySignalWindow)?.topPlatform
-            ? displayPlatform(
-                (peakWindowIsClaimable ? canonicalBestWindow : earlySignalWindow).topPlatform
-              )
-            : null
-        }
-        isPro={isPro}
-        onUpgrade={onUpgrade}
-        onImport={handleImport}
-      />
 
       {/* ======================================================
           CORE NUMBERS
