@@ -1,16 +1,19 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
+const DESCRIPTION = 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.'
+const CANONICAL = 'https://www.camcashgrl.com/blog/what-cam-sites-allow-external-broadcasting'
+
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
   description: 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.',
-  url: 'https://www.camcashgrl.com/blog/which-cam-sites-allow-external-broadcasting',
+  url: 'https://www.camcashgrl.com/blog/what-cam-sites-allow-external-broadcasting',
   datePublished: '2026-08-26',
   dateModified: '2026-08-26',
   author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
   publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
-  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/which-cam-sites-allow-external-broadcasting' },
+  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/what-cam-sites-allow-external-broadcasting' },
 }
 
 const faqSchema = {
@@ -26,7 +29,7 @@ const faqSchema = {
 export const metadata = {
   title: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
   description: 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.',
-  alternates: { canonical: 'https://www.camcashgrl.com/blog/which-cam-sites-allow-external-broadcasting' },
+  alternates: { canonical: 'https://www.camcashgrl.com/blog/what-cam-sites-allow-external-broadcasting' },
   openGraph: {
     title: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
     description: DESCRIPTION,
@@ -122,17 +125,17 @@ export default function Page() {
 
       <section style={{ marginTop: 38 }}>
         <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
+        <div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Is external broadcasting the same as multistreaming?</div>
-  <p style={...s.p, marginBottom: 0}>No. External broadcasting uses software such as OBS to produce/send the stream. Multistreaming means delivering that stream to multiple platforms.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>No. External broadcasting uses software such as OBS to produce/send the stream. Multistreaming means delivering that stream to multiple platforms.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does OBS support every cam site?</div>
-  <p style={...s.p, marginBottom: 0}>No. Platform support and connection methods vary. Verify the current broadcaster documentation for each platform.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>No. Platform support and connection methods vary. Verify the current broadcaster documentation for each platform.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does a platform allowing OBS mean I can multistream?</div>
-  <p style={...s.p, marginBottom: 0}>No. Technical compatibility does not automatically determine whether simultaneous broadcasting is permitted.</p>
+  <p style={{ ...s.p, marginBottom: 0 }}>No. Technical compatibility does not automatically determine whether simultaneous broadcasting is permitted.</p>
 </div>
       </section>
     </ArticleLayout>
