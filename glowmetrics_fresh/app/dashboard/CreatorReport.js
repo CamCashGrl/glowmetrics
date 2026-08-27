@@ -67,9 +67,19 @@ const C = {
   white: "#F1F5F9",
   muted: "#94A3B8",
   dim: "#64748B",
-  card: "rgba(12,16,34,0.78)",
-  card2: "rgba(15,20,32,0.72)",
-  border: "rgba(255,255,255,0.09)",
+  card: "rgba(15,20,32,0.75)",
+  card2: "#161e2e",
+  border: "rgba(255,255,255,0.08)",
+}
+
+// The dashboard's authentic card treatment — the blue/pink bloom is what
+// makes a card read as a card against the page. The report had been using a
+// bloom-less copy, which is why it read as a flat list of sections.
+const reportCard = {
+  background: C.card,
+  border: `1px solid ${C.border}`,
+  backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
 }
 
 // ------------------------------------------------------------
@@ -1435,8 +1445,7 @@ export default function CreatorReport({
           marginBottom: 19,
           borderRadius: 18,
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          ...reportCard,
         }}
       >
         <SectionHeader
@@ -1464,8 +1473,7 @@ export default function CreatorReport({
           marginBottom: 19,
           borderRadius: 18,
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          ...reportCard,
         }}
       >
         <SectionHeader
@@ -1675,8 +1683,7 @@ export default function CreatorReport({
           marginBottom: 19,
           borderRadius: 18,
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          ...reportCard,
         }}
       >
         <SectionHeader
@@ -1822,8 +1829,7 @@ export default function CreatorReport({
         style={{
           borderRadius: 18,
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          ...reportCard,
         }}
       >
         <SectionHeader

@@ -18,6 +18,7 @@ import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
 import UnimportedPlatforms from './UnimportedPlatforms'
+import FreeTierNotice from './FreeTierNotice'
 import PeakWindowPlan from './PeakWindowPlan'
 import { SessionsNav, SessionsOverview, LiveSessionsEmpty } from './SessionsHome'
 import { buildUpgradeContext } from '../../lib/upgradeContexts'
@@ -3290,6 +3291,17 @@ const stopImportMessageRotation = () => {
         .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
         @keyframes cmd-pulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
 
+        /* You're in your peak window right now — a slow green breath around
+           the command bar. Subtle on purpose: it should register in
+           peripheral vision, not demand attention while she is streaming. */
+        @keyframes peak-window-glow {
+          0%,100% { box-shadow: 0 2px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(16,185,129,0.20), 0 6px 34px rgba(16,185,129,0.14); }
+          50%     { box-shadow: 0 2px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(16,185,129,0.48), 0 8px 46px rgba(16,185,129,0.30); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sticky-command-bar { animation: none !important; }
+        }
+
         /* ── CSV IMPORTER STATES ── */
         .import-spinner {
           width: 15px; height: 15px; flex-shrink: 0; border-radius: 50%;
@@ -3476,7 +3488,7 @@ const stopImportMessageRotation = () => {
           const updatedLabel = lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null
 
           return (
-            <div className="sticky-command-bar cmdbar-wake" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 14, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '14px 32px', background: 'rgba(5,7,15,0.88)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
+            <div className="sticky-command-bar cmdbar-wake" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 14, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '14px 32px', background: 'rgba(5,7,15,0.88)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.06)'}`, boxShadow: '0 2px 24px rgba(0,0,0,0.45)', animation: atPeak ? 'peak-window-glow 2.8s ease-in-out infinite' : 'none' }}>
 
               {/* primary row — Total Earned dominant, secondary metrics + Go Live, wraps instead of clipping/scrolling */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px 24px' }}>
@@ -3548,6 +3560,14 @@ const stopImportMessageRotation = () => {
             </div>
           )
         })()}
+
+        {/* One dismissible line telling a free creator what she has, in her
+            own numbers. Not a wall — she can close it and it stays closed. */}
+        <FreeTierNotice
+          isPro={isPro}
+          fanCount={analytics?.uniqueFanCount ?? 0}
+          onUpgrade={(src) => openUpgradeModal(src)}
+        />
 
         {/* ── PLATFORMS SHE NAMED BUT HAS NOT IMPORTED ────────────────
             Uses the onboarding roster to separate "does not stream there"

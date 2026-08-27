@@ -3,6 +3,7 @@ import { useMemo, useState } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
 import WindowFanOverlap from "./WindowFanOverlap"
 import { EnvelopeHeartIcon } from "./icons"
+import FanRoster from "./FanRoster"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -440,64 +441,18 @@ export default function Fans({
             </div>
           </div>
           <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
-            Ranked by lifetime tips · everything here is observed history
+            Ranked by lifetime tips · searchable, grouped by platform and tier
           </div>
 
-          <input
-            value={fanQuery}
-            onChange={(e) => setFanQuery(e.target.value)}
-            placeholder="Search supporters by name…"
-            aria-label="Search supporters by name"
-            style={{
-              width: "100%", padding: "10px 13px", marginBottom: 12,
-              background: "rgba(5,9,24,0.72)", border: `1px solid ${C.border}`,
-              borderRadius: 10, color: C.white, fontSize: 13, outline: "none",
-            }}
+          {/* Full roster with the original two actions, tier chips and the
+              teaser layer. Nobody is walled out of seeing her own supporters;
+              what free samples is the DEPTH. See FanRoster.jsx. */}
+          <FanRoster
+            fans={ranked}
+            isPro={isPro}
+            onMessage={onMessageFan}
+            onUpgrade={onUpgrade}
           />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {roster.slice(0, visibleRosterCount).map((f) => (
-              <div key={`${f.platform}:${f.username}`} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10,
-                background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, flexWrap: "wrap",
-              }}>
-                <span style={{ fontSize: 11.5, color: C.muted, width: 26, flexShrink: 0 }}>#{f.rank}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 120, overflowWrap: "anywhere" }}>
-                  {f.username}
-                  {f.isTopSupporter && (
-                    <span style={{
-                      marginLeft: 8, fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em",
-                      textTransform: "uppercase", color: C.gold, padding: "2px 7px", borderRadius: 99,
-                      background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.28)",
-                      whiteSpace: "nowrap",
-                    }}>Top Supporter</span>
-                  )}
-                </span>
-                {f.platform && <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>{f.platform}</span>}
-                <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>{f.tipCount} tips</span>
-                <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>last {fmtDays(f.daysSinceLastTip)}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>{fmtUsd(f.totalUSD)}</span>
-              </div>
-            ))}
-            {roster.length === 0 && (
-              <div style={{ fontSize: 12.5, color: C.muted, padding: "10px 2px" }}>
-                No supporter matches “{fanQuery}”.
-              </div>
-            )}
-          </div>
-
-          {roster.length > visibleRosterCount && (
-            <button
-              onClick={() => setRosterPage((n) => n + 1)}
-              style={{
-                marginTop: 12, width: "100%", padding: "10px", borderRadius: 10,
-                background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
-                color: C.text, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
-              }}
-            >
-              Show {Math.min(ROSTER_PAGE_SIZE, roster.length - visibleRosterCount)} more
-            </button>
-          )}
         </div>
       )}
     </div>
