@@ -12,10 +12,7 @@ const C = {
 const NAV = [
   {
     group: null,
-    items: [
-      { id: "report",   icon: "🧾", label: "Creator Report" },
-      { id: "overview", icon: "⚡", label: "Command Center" },
-    ]
+    items: [{ id: "overview", icon: "⚡", label: "Command Center" }]
   },
   {
     group: "FANS",
@@ -42,6 +39,7 @@ const NAV = [
     items: [
       { id: "titles",    icon: "🎬", label: "Room Titles" },
       { id: "calc",      icon: "🪙", label: "Token Calc"  },
+      { id: "data",      icon: "📝", label: "Edit Data" },
       { id: "analytics", icon: "📊", label: "Analytics" },
       { id: "planner",   icon: "🗓️", label: "Stream Planner" },
       { id: "moneymap",  icon: "🗺️", label: "Money Map" },
@@ -50,15 +48,13 @@ const NAV = [
   {
     group: "SUPPORT",
     items: [
-      { id: "data",     icon: "📝", label: "Edit Data" },
-      { id: "upload",   icon: "📥", label: "Import CSV" },
-      { id: "help",     icon: "❓", label: "CSV Help" },
-      { id: "settings", icon: "⚙️", label: "Account & Billing" },
+      { id: "upload", icon: "📥", label: "Import CSV" },
+      { id: "help",   icon: "❓", label: "CSV Help" },
     ]
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, trialEligible = false }) {
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -128,8 +124,8 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <Button as="a" href={trialEligible ? "/start-trial" : "/pricing"} style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
-          {trialEligible ? "✦ Start 7-day free trial" : "✦ Upgrade to Pro"}
+        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
+          ✦ Upgrade to Pro
         </Button>
       )}
 
