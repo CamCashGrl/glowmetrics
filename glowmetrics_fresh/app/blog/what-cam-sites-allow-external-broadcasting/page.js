@@ -29,15 +29,15 @@ export const metadata = {
   alternates: { canonical: 'https://www.camcashgrl.com/blog/which-cam-sites-allow-external-broadcasting' },
   openGraph: {
     title: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
-    description: DESCRIPTION,
-    url: CANONICAL,
+    description: 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.',
+    url: 'https://www.camcashgrl.com/blog/which-cam-sites-allow-external-broadcasting',
     type: 'article',
     images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
-    description: DESCRIPTION,
+    description: 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.',
   },
 }
 
@@ -122,17 +122,17 @@ export default function Page() {
 
       <section style={{ marginTop: 38 }}>
         <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
+        <div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Is external broadcasting the same as multistreaming?</div>
-  <p style={...s.p, marginBottom: 0}>No. External broadcasting uses software such as OBS to produce/send the stream. Multistreaming means delivering that stream to multiple platforms.</p>
+  <p style={{...s.p, marginBottom: 0}}>No. External broadcasting uses software such as OBS to produce/send the stream. Multistreaming means delivering that stream to multiple platforms.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does OBS support every cam site?</div>
-  <p style={...s.p, marginBottom: 0}>No. Platform support and connection methods vary. Verify the current broadcaster documentation for each platform.</p>
+  <p style={{...s.p, marginBottom: 0}}>No. Platform support and connection methods vary. Verify the current broadcaster documentation for each platform.</p>
 </div>
-<div style={ marginBottom: 18 }>
+<div style={{ marginBottom: 18 }}>
   <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does a platform allowing OBS mean I can multistream?</div>
-  <p style={...s.p, marginBottom: 0}>No. Technical compatibility does not automatically determine whether simultaneous broadcasting is permitted.</p>
+  <p style={{...s.p, marginBottom: 0}}>No. Technical compatibility does not automatically determine whether simultaneous broadcasting is permitted.</p>
 </div>
       </section>
     </ArticleLayout>
