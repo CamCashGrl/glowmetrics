@@ -37,7 +37,8 @@ const C = {
   white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
 }
 const glassCard = {
-  background: C.card, border: `1px solid ${C.border}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 26px rgba(0,0,0,0.45)",
+  background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
 }
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })

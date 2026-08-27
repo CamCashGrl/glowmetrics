@@ -37,12 +37,22 @@ export const C = {
 
 export const GRADIENT = "linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)"
 
-/** Standard content card — solid fill, visible edge, subtle top highlight. */
+/** Standard content card.
+ *
+ *  This is the dashboard's ORIGINAL glass treatment, byte-for-byte — the one
+ *  page.js and CommandCenter.js have carried since before July. It is barely
+ *  translucent (0.75 over a #05070f page) and, critically, it keeps the
+ *  blue/pink bloom that gives a card presence against the background.
+ *
+ *  Fans.js and Performance.js had a DEGRADED copy: same fill and border, but
+ *  the bloom dropped. That, plus the 0.03-white fills in the newer components,
+ *  is what flattened the page. Use this everywhere. */
 export const panel = {
-  background: C.card,
-  border: `1px solid ${C.border}`,
+  background: "rgba(15,20,32,0.75)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backdropFilter: "blur(20px)",
   borderRadius: 18,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 26px rgba(0,0,0,0.45)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
 }
 
 /** Nested/secondary surface — a step lighter so it reads inside a panel. */

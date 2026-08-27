@@ -2,6 +2,7 @@
 import { useMemo } from "react"
 import ConfidenceBadge from "./ConfidenceBadge"
 import PlatformOpportunity from "./PlatformOpportunity"
+import PlatformROI from "./PlatformROI"
 import { fromConfidenceTier } from "../../lib/intelligence/states"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -37,6 +38,7 @@ const C = {
 }
 const glassCard = {
   background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
 }
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
@@ -310,7 +312,11 @@ export default function Performance({
         <SnapshotStat value={fanCount.toLocaleString()} label="Fans" accent={C.indigo} />
       </div>
 
-      {/* ── 2. WHAT CHANGED ────────────────────────────────────────── */}
+      {/* ── 2. WHAT'S WORKING — platform ROI cards + day-of-week heatmap.
+             Restored treatment; canonical figures. See PlatformROI.jsx. ─── */}
+      <PlatformROI analytics={analytics} />
+
+      {/* ── 3. WHAT CHANGED ────────────────────────────────────────── */}
       <div style={card()}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}><div style={sectionLabel}>What changed</div><ConfidenceBadge intelligence={intelligence} insight="growth_trend" /></div>
         {!hasChange ? (

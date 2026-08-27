@@ -729,8 +729,14 @@ export default function OnboardingPage(){
     const primary=selectedPlatforms.includes(primaryPlatform)?primaryPlatform:selectedPlatforms[0]
     track('onboarding_platforms_selected',{count:selectedPlatforms.length,primary,platforms:selectedPlatforms.join(',')})
     if(user){
+      // Two separate writes on purpose. The primary column exists today; the
+      // roster column ships with 20260827a and may not be applied yet, so its
+      // write is isolated — a missing column must never cost her the primary
+      // or block onboarding. Both are preferences, not gates.
       try{await supabase.from('profiles').upsert({id:user.id,primary_pro_platform:PLATFORMS[primary]?.label||primary},{onConflict:'id'})}
-      catch{/* selection still proceeds — this is a preference, not a gate */}
+      catch{/* preference only — onboarding proceeds */}
+      try{await supabase.from('profiles').update({streaming_platforms:selectedPlatforms.map(p=>PLATFORMS[p]?.label||p)}).eq('id',user.id)}
+      catch{/* column not migrated yet — the roster still drives this session */}
     }
     selectPlatform(primary)
   }

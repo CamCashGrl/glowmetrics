@@ -17,6 +17,7 @@ import { FREE_MAX_PLATFORMS } from "../../lib/planLimits"
 import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
+import UnimportedPlatforms from './UnimportedPlatforms'
 import PeakWindowPlan from './PeakWindowPlan'
 import { SessionsNav, SessionsOverview, LiveSessionsEmpty } from './SessionsHome'
 import { buildUpgradeContext } from '../../lib/upgradeContexts'
@@ -1476,6 +1477,9 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [upgradeModalSource, setUpgradeModalSource] = useState(null)
+  // Platforms she told onboarding she streams on. null = unknown (older
+  // account, or migration 20260827a not applied) — the UI stays silent then.
+  const [streamingPlatforms, setStreamingPlatforms] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -2023,6 +2027,16 @@ export default function Dashboard() {
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
+      // Roster of platforms she said she streams on, fetched SEPARATELY on
+      // purpose: profiles.streaming_platforms ships with migration 20260827a,
+      // and PostgREST fails the whole select on an unknown column. Isolating
+      // it means an unmigrated database costs us this one optional read
+      // instead of the entire profile.
+      supabase.from('profiles')
+        .select('streaming_platforms')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data, error }) => { if (!error && data?.streaming_platforms) setStreamingPlatforms(data.streaming_platforms) })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
@@ -3534,6 +3548,20 @@ const stopImportMessageRotation = () => {
             </div>
           )
         })()}
+
+        {/* ── PLATFORMS SHE NAMED BUT HAS NOT IMPORTED ────────────────
+            Uses the onboarding roster to separate "does not stream there"
+            from "streams there, no data yet" — the honest conversion moment.
+            Silent when the roster is unknown or fully imported. */}
+        {(activeTab === 'overview' || activeTab === 'report' || activeTab === 'platforms') && (
+          <UnimportedPlatforms
+            analytics={analytics}
+            streamingPlatforms={streamingPlatforms}
+            isPro={isPro}
+            onImport={() => handleTabChange('upload')}
+            onUpgrade={(src) => openUpgradeModal(src)}
+          />
+        )}
 
         {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
         {_isLowData && (
