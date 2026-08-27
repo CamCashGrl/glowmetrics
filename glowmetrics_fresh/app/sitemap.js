@@ -2,7 +2,7 @@ import { PRODUCTS } from '../lib/shop-products'
 
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
-  const today = '2026-08-23'
+  const today = '2026-08-27'
 
   const staticPages = [
     { url: base,                                      priority: 1.0, changeFrequency: 'weekly' },
@@ -104,6 +104,35 @@ export default function sitemap() {
     'off-site-shows-for-cam-models',
     'onlyfans-for-cam-models-after-streaming',
     'snap-shows-for-cam-models',
+    // Active-model search-intent batch, August 2026 — broadcasting & setup
+    'how-touse-myfreecams-with-obs',
+    'how-to-find-myfreecams-stream-key',
+    'what-is-mfc-share',
+    'myfreecams-tokens-explained',
+    'chaturbate-obs-stream-key-setup',
+    'what-is-rtmp-for-cam-models',
+    'what-cam-sites-allow-external-broadcasting',
+    'how-to-multistream-with-obs',
+    'obs-dropped-frames-cam-stream',
+    'what-upload-speed-for-camming',
+    '720p-vs-1080p-cam-streaming',
+
+    // Active-model search-intent batch, August 2026 — multi-platform operations
+    'cam-sites-compared-viewers-models-competition',
+    'how-to-manage-multiple-cam-chats',
+    'how-to-track-earnings-multiple-cam-sites',
+    'how-to-decide-if-a-cam-site-is-worth-your-time',
+    'how-to-test-a-new-cam-site',
+    'how-to-compare-cam-platform-payouts',
+    'cam-model-tools-for-multiple-platforms',
+    'cam-model-resource-guide-forums-tools',
+
+    // Active-model search-intent batch, August 2026 — data & show mechanics
+    'why-more-tips-doesnt-mean-more-money',
+    'how-to-find-best-camming-hours-from-your-data',
+    'how-to-organize-cam-model-regulars',
+    'how-to-make-a-cam-room-tip-menu',
+    'cam-model-income-spreadsheet-what-to-track',
   ]
 
   const guideSlugs = [

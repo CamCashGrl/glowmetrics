@@ -242,6 +242,128 @@ const posts = [
     title: 'How to Re-Engage Whales and High-Tipping Fans (And Get Them Spending Again)',
     description: "Whales don't just randomly leave. They disengage for specific reasons — and if you understand those reasons, you can bring them back.",
   },
+
+  // Active-model search-intent batch, August 2026
+  {
+    slug: 'how-touse-myfreecams-with-obs',
+    title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
+    description: 'Where the MFC Stream Key lives in ModelWeb, what goes in OBS Settings, and the starting encoder settings MFC recommends.',
+  },
+  {
+    slug: 'how-to-find-myfreecams-stream-key',
+    title: 'How to Find Your MyFreeCams Stream Key and RTMP Settings',
+    description: 'The exact ModelWeb path to your Stream Key, why it silently changes, and the order to troubleshoot an OBS connection that will not connect.',
+  },
+  {
+    slug: 'what-is-mfc-share',
+    title: 'What Is MFC Share? How MyFreeCams Share Works for Models',
+    description: 'What MFC Share actually is, where models run into it, and why it is not the same thing as OBS, RTMP or external broadcasting.',
+  },
+  {
+    slug: 'myfreecams-tokens-explained',
+    title: 'MyFreeCams Tokens Explained: Token Value, Tips and Model Earnings',
+    description: 'Why tip count and token total answer different questions, why raw token data should stay traceable, and what to record per session.',
+  },
+  {
+    slug: 'chaturbate-obs-stream-key-setup',
+    title: 'How to Use OBS With Chaturbate: Stream Key and External Broadcasting Setup',
+    description: 'What to prepare, where the stream key belongs, what to test before your first show, and when OBS is genuinely worth the complexity.',
+  },
+  {
+    slug: 'what-is-rtmp-for-cam-models',
+    title: 'What Is RTMP for Cam Models? Stream URLs, Keys and External Broadcasting',
+    description: 'What the server URL and stream key each do, where they go in OBS, and why a correct-looking setup still fails to connect.',
+  },
+  {
+    slug: 'what-cam-sites-allow-external-broadcasting',
+    title: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
+    description: 'Why OBS support and multistreaming permission are two separate questions, and the checklist to run on any platform first.',
+  },
+  {
+    slug: 'how-to-multistream-with-obs',
+    title: 'How to Multistream Cam Sites With OBS: What Models Need to Know',
+    description: 'Direct vs relay delivery, how upload bandwidth actually scales, and the order to build a multi-destination setup in.',
+  },
+  {
+    slug: 'obs-dropped-frames-cam-stream',
+    title: 'OBS Dropped Frames While Camming: Causes and Fixes',
+    description: 'How to tell network drops from encoder overload in the OBS stats panel, and the troubleshooting order that finds the cause fastest.',
+  },
+  {
+    slug: 'what-upload-speed-for-camming',
+    title: 'How Much Upload Speed Do You Need for Camming?',
+    description: 'Why upload matters more than the download number on your bill, how multistreaming changes it, and how to test under real conditions.',
+  },
+  {
+    slug: '720p-vs-1080p-cam-streaming',
+    title: '720p vs 1080p for Cam Models: Which Resolution Should You Use?',
+    description: 'What actually changes at 1080p, when each makes sense, and why your webcam’s advertised resolution is not what viewers receive.',
+  },
+  {
+    slug: 'cam-sites-compared-viewers-models-competition',
+    title: 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences',
+    description: 'Why viewer counts mislead, how to measure competition with a viewers-per-model snapshot, and what really differs between platforms.',
+  },
+  {
+    slug: 'how-to-manage-multiple-cam-chats',
+    title: 'How to Manage Multiple Cam Site Chats When You Multistream',
+    description: 'Keeping platforms identifiable, deciding what deserves immediate attention, and knowing when more destinations stop helping.',
+  },
+  {
+    slug: 'how-to-track-earnings-multiple-cam-sites',
+    title: 'How to Track Cam Model Earnings Across Multiple Cam Sites',
+    description: 'Keep the raw platform data, add time, compare like periods — and finally answer which site is actually worth your hours.',
+  },
+  {
+    slug: 'how-to-decide-if-a-cam-site-is-worth-your-time',
+    title: 'How to Decide If a Cam Site Is Worth Your Time',
+    description: 'A scorecard for evaluating a platform: hours against earnings, opportunity cost, and why one week of results proves nothing.',
+  },
+  {
+    slug: 'how-to-test-a-new-cam-site',
+    title: 'How to Test a New Cam Site Without Changing Your Whole Schedule',
+    description: 'Run a controlled trial: pick a fair test window, define success before you start, and decide on opportunity cost.',
+  },
+  {
+    slug: 'how-to-compare-cam-platform-payouts',
+    title: 'How to Compare Cam Site Payouts Without Getting Misled',
+    description: 'Why a high token value does not mean higher earnings, and how to compare what you actually keep across platforms.',
+  },
+  {
+    slug: 'cam-model-tools-for-multiple-platforms',
+    title: 'Tools for Managing Multiple Cam Sites: Streaming, Chat, Tracking and Analytics',
+    description: 'Which category of tool handles each job, why layering beats installing everything at once, and how to choose.',
+  },
+  {
+    slug: 'cam-model-resource-guide-forums-tools',
+    title: 'The Cam Model Resource Guide: Forums, Communities, Tools and Help',
+    description: 'Where working models should actually go for answers — platform docs, communities, technical help, tax resources and safety.',
+  },
+  {
+    slug: 'why-more-tips-doesnt-mean-more-money',
+    title: 'Why Getting More Tips Doesn\'t Always Mean You Made More Money',
+    description: 'Tip count and earnings are different measurements. How average tip size misleads, and the questions that produce real decisions.',
+  },
+  {
+    slug: 'how-to-find-best-camming-hours-from-your-data',
+    title: 'How to Find Your Best Camming Hours From Your Own Data',
+    description: 'Group your sessions by time window, separate a real pattern from one lucky night, and test a candidate window properly.',
+  },
+  {
+    slug: 'how-to-organize-cam-model-regulars',
+    title: 'How to Organize Cam Model Regulars and Track Your Best Supporters',
+    description: 'Which fan fields are worth keeping, how to separate observed facts from predictions, and handling the same person across platforms.',
+  },
+  {
+    slug: 'how-to-make-a-cam-room-tip-menu',
+    title: 'How to Make a Cam Room Tip Menu That Is Easy to Use',
+    description: 'Keep the structure small, make prices scannable, give clear outcomes, and track which items actually earn.',
+  },
+  {
+    slug: 'cam-model-income-spreadsheet-what-to-track',
+    title: 'What Should a Cam Model Track in an Earnings Spreadsheet?',
+    description: 'The minimum useful fields, how to calculate hourly performance without fooling yourself, and when a spreadsheet stops being the right tool.',
+  },
 ]
 
 export default function BlogPage() {

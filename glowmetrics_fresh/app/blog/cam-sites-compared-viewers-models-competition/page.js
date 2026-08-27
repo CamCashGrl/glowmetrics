@@ -1,149 +1,193 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
 
-const schema = {
-  '@context': 'https://schema.org',
-  '@type': 'Article',
-  headline: 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences',
-  description: 'A practical cam-site comparison for models covering audience size, model competition, viewer-to-model dynamics, payouts, discoverability, and platform differences.',
-  url: 'https://www.camcashgrl.com/blog/cam-sites-compared-viewers-models-competition',
-  datePublished: '2026-08-26',
-  dateModified: '2026-08-26',
-  author: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
-  publisher: { '@type': 'Organization', name: 'CamCashGrl', url: 'https://www.camcashgrl.com' },
-  mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/cam-sites-compared-viewers-models-competition' },
-}
+const SLUG = 'cam-sites-compared-viewers-models-competition'
+const TITLE = 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences'
+const DESC = 'How to compare cam sites as a working model: why viewer counts mislead, how to measure competition with a viewers-per-model snapshot, and what actually differs between the major platforms.'
 
-const faqSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: [
-    { '@type': 'Question', name: 'Which cam site has the most viewers?', acceptedAnswer: { '@type': 'Answer', text: 'There is no permanent answer because audience populations change by date, time, region, and platform. A useful comparison should use dated observations rather than one timeless ranking.' } },
-    { '@type': 'Question', name: 'Does more viewer traffic mean less competition?', acceptedAnswer: { '@type': 'Answer', text: 'Not necessarily. A site can have more viewers and also have many more models competing for those viewers.' } },
-    { '@type': 'Question', name: 'What should I compare besides viewer count?', acceptedAnswer: { '@type': 'Answer', text: 'Compare model competition, discoverability, payout economics, show format, platform rules, and your own repeated earnings per hour.' } }
-  ],
-}
-
-export const metadata = {
-  title: 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences',
-  description: 'A practical cam-site comparison for models covering audience size, model competition, viewer-to-model dynamics, payouts, discoverability, and platform differences.',
-  alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-sites-compared-viewers-models-competition' },
-  openGraph: {
-    title: 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences',
-    description: DESCRIPTION,
-    url: CANONICAL,
-    type: 'article',
-    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
+const FAQS = [
+  {
+    q: 'Which cam site has the most viewers?',
+    a: 'There is no permanent answer, because audience populations change by date, time of day, region and platform. A useful comparison uses dated observations you took yourself rather than one timeless ranking copied from an article of unknown age.',
   },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences',
-    description: DESCRIPTION,
+  {
+    q: 'Does more viewers mean more money for a model?',
+    a: 'Not necessarily. A site can have far more viewers and also far more models competing for them. What matters to your room is the ratio between audience and competition, how discoverable new rooms are, and whether your particular show converts that audience.',
   },
-}
+  {
+    q: 'What should I compare instead of viewer count?',
+    a: 'Model competition, discoverability for smaller rooms, payout economics, show format, platform rules, and above all your own repeated earnings per hour on each site. The last one outranks every published statistic.',
+  },
+]
 
-const s = {
-  p: { fontSize: '15px', lineHeight: 1.8, color: '#94a3b8', margin: '0 0 20px' },
-  h2: { fontSize: '24px', lineHeight: 1.25, color: '#f1f5f9', fontWeight: 800, margin: '38px 0 16px' },
-  h3: { fontSize: '18px', lineHeight: 1.3, color: '#e2e8f0', fontWeight: 800, margin: '28px 0 12px' },
-  ul: { color: '#94a3b8', paddingLeft: 22, lineHeight: 1.8, marginBottom: 22 },
-  li: { marginBottom: 8 },
-  box: { background: 'rgba(22,244,255,0.05)', border: '1px solid rgba(22,244,255,0.14)', borderRadius: 16, padding: '20px 22px', margin: '24px 0' },
-  cta: { background: 'linear-gradient(135deg, rgba(22,244,255,0.10), rgba(124,92,255,0.10))', border: '1px solid rgba(124,92,255,0.22)', borderRadius: 18, padding: '24px', margin: '34px 0' },
-  link: { color: '#16F4FF', textDecoration: 'none', fontWeight: 700 },
-}
+export const metadata = articleMeta({ title: TITLE, description: DESC, slug: SLUG })
+const schema = articleSchema({ title: TITLE, description: DESC, slug: SLUG, faqs: FAQS })
 
 export default function Page() {
   return (
     <ArticleLayout
       schema={schema}
-      breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Sites Compared: Viewers, Models, Competition and Platform Differences' }]}
+      breadcrumb={[{ label: 'Blog', href: '/blog' }, { label: 'Cam Sites Compared: Viewers, Models & Competition' }]}
     >
-      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: 28 }}>
-        Active-model technical guide · August 2026
+      <div style={s.meta}><span>CamCash</span><span>Updated August 2026</span><span>7 min read</span></div>
+
+      <h1 style={s.h1}>Cam Sites Compared: Viewers, Models, Competition and Platform Differences</h1>
+
+      <p style={s.intro}>
+        The biggest cam site is not automatically the best site for your business. What matters is
+        the relationship between audience, model competition, discovery, payout structure, show
+        format &mdash; and what your own room actually converts into earnings.
+      </p>
+
+      <div style={s.answer}>
+        <strong style={s.strong}>The metric most listicles miss:</strong> viewer volume matters, but
+        so does how many models are competing for that audience at the same moment. A site with
+        half the traffic and a quarter of the rooms can be the easier marketplace to be seen in.
       </div>
 
-      <h1 style={{ fontSize: 29, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2, marginBottom: 24 }}>
-        Cam Sites Compared: Viewers, Models, Competition and Platform Differences
-      </h1>
+      <h2 style={s.h2}>What to actually compare</h2>
+      <ul style={s.ul}>
+        <li style={s.li}><strong style={s.strong}>Audience:</strong> how much viewer traffic the platform can expose you to.</li>
+        <li style={s.li}><strong style={s.strong}>Model competition:</strong> how many rooms are competing for that attention.</li>
+        <li style={s.li}><strong style={s.strong}>Viewers per model:</strong> a snapshot of marketplace density &mdash; not an earnings guarantee.</li>
+        <li style={s.li}><strong style={s.strong}>Discoverability:</strong> how easily users find new or smaller rooms.</li>
+        <li style={s.li}><strong style={s.strong}>Payout economics:</strong> token value and current payment rules.</li>
+        <li style={s.li}><strong style={s.strong}>Show format:</strong> how public rooms, tips, privates, groups and clubs work.</li>
+        <li style={s.li}><strong style={s.strong}>Your own results:</strong> earnings per hour, repeat supporters, session performance.</li>
+      </ul>
 
-      
-<p style={s.p}>The biggest cam site is not automatically the best site for your business. What matters is the relationship between audience, model competition, discovery, payout structure, show format, and what your own room actually converts into earnings.</p>
+      <h2 style={s.h2}>Why raw viewer counts mislead</h2>
+      <p style={s.p}>
+        Suppose one platform has twice as many viewers but four times as many models. It has more
+        total traffic and a <em>worse</em> ratio for an individual room. Both facts are true at once,
+        and only one of them shows up in a headline.
+      </p>
+      <p style={s.p}>
+        A rough way to compare marketplace density is simply <strong style={s.strong}>viewers online
+        &divide; models online</strong>. It is not a prediction of earnings. It is a way to compare
+        two sites at the same moment, and it should always be labelled as a snapshot.
+      </p>
 
-<div style={s.box}>
-  <strong style={{color:'#f1f5f9'}}>The metric most listicles miss:</strong>
-  <span style={{color:'#94a3b8'}}> viewer volume matters, but so does how many models are competing for that audience at the same time.</span>
-</div>
+      <h2 style={s.h2}>Take the measurement yourself</h2>
+      <p style={s.p}>
+        Both numbers are usually visible on the public site. Record them yourself, at the times you
+        actually stream, across several days:
+      </p>
 
-<h2 style={s.h2}>What to compare</h2>
-<ul style={s.ul}>
-  <li style={s.li}><strong>Audience:</strong> how much viewer traffic a platform can expose you to.</li>
-  <li style={s.li}><strong>Model competition:</strong> how many rooms are competing for attention.</li>
-  <li style={s.li}><strong>Viewer/model relationship:</strong> a snapshot of marketplace density, not an earnings guarantee.</li>
-  <li style={s.li}><strong>Discoverability:</strong> how users can find new or smaller rooms.</li>
-  <li style={s.li}><strong>Payout economics:</strong> token/credit value and current payment rules.</li>
-  <li style={s.li}><strong>Show format:</strong> how public rooms, tips, private shows, groups, or clubs work.</li>
-  <li style={s.li}><strong>Your own results:</strong> earnings per hour, repeat supporters, and session performance.</li>
-</ul>
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              <th style={s.th}>Date &amp; time</th>
+              <th style={s.th}>Platform</th>
+              <th style={s.th}>Viewers</th>
+              <th style={s.th}>Models</th>
+              <th style={s.th}>Viewers / model</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style={s.td}>Tue 8 PM</td><td style={s.td}>Site A</td><td style={s.td}>&mdash;</td><td style={s.td}>&mdash;</td><td style={s.td}>&mdash;</td></tr>
+            <tr><td style={s.td}>Tue 8 PM</td><td style={s.td}>Site B</td><td style={s.td}>&mdash;</td><td style={s.td}>&mdash;</td><td style={s.td}>&mdash;</td></tr>
+            <tr><td style={s.td}>Tue 8 PM</td><td style={s.td}>Site C</td><td style={s.td}>&mdash;</td><td style={s.td}>&mdash;</td><td style={s.td}>&mdash;</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-<h2 style={s.h2}>Why raw viewer counts can mislead you</h2>
-<p style={s.p}>Suppose one platform has twice as many viewers but four times as many models. It has more total traffic, but the amount of competition facing an individual room can be very different.</p>
+      <p style={s.p}>
+        Repeat the same measurement at the same hour on several days. One reading tells you nothing;
+        five readings start to describe the marketplace you are actually competing in.
+      </p>
 
-<p style={s.p}>That is why this article should use dated observations and clearly label live snapshots versus estimates. Platform populations change constantly.</p>
+      <h2 style={s.h2}>Timing changes everything</h2>
+      <p style={s.p}>
+        The same site looks like a different business on a weekday morning, a Friday night, a
+        weekend afternoon and a holiday. A comparison taken once and presented as a permanent
+        ranking is misleading by construction &mdash; which is why most &ldquo;biggest cam site&rdquo;
+        articles age badly within months.
+      </p>
 
-<h2 style={s.h2}>How to build a useful comparison</h2>
-<p style={s.p}>For every platform you compare, record the date and time, viewers online if publicly observable, models online if publicly observable, and the source. Repeat at different times instead of treating one snapshot as the permanent size of the marketplace.</p>
+      <h2 style={s.h2}>Competition is not automatically bad</h2>
+      <p style={s.p}>
+        A large model population often comes with an established audience, heavy traffic, mature
+        discovery systems and more potential buyers. The goal is not to find the site with the
+        fewest models. It is to understand the trade-off you are accepting.
+      </p>
 
-<h2 style={s.h2}>What makes a platform different?</h2>
-<h3 style={s.h3}>Chaturbate</h3>
-<p style={s.p}>A large public-room ecosystem with token-based interactions and a broad app/bot ecosystem. The useful model question is not simply how large it is, but how your own room performs within it.</p>
+      <h2 style={s.h2}>What makes the platforms different</h2>
 
-<h3 style={s.h3}>MyFreeCams</h3>
-<p style={s.p}>MFC has its own model/member ecosystem, broadcasting workflow, and distinctive features. It also supports external broadcasting through OBS and other tools.</p>
+      <h3 style={s.h3}>Chaturbate</h3>
+      <p style={s.p}>
+        A large public-room ecosystem with token-based interactions and a broad app and bot
+        ecosystem. The useful question is not how large it is, but how your own room performs
+        inside it.
+      </p>
 
-<h3 style={s.h3}>BongaCams</h3>
-<p style={s.p}>BongaCams has its own model ecosystem, room discovery, token economy, and platform-specific scoring/visibility mechanics. Those should be evaluated with current platform documentation when making a live comparison.</p>
+      <h3 style={s.h3}>MyFreeCams</h3>
+      <p style={s.p}>
+        MFC has its own model and member ecosystem, its own terminology, and a distinct
+        broadcasting workflow &mdash; including{' '}
+        <a href="/blog/how-touse-myfreecams-with-obs" style={s.link}>external broadcasting through
+        OBS</a>. Do not assume another site&rsquo;s workflow transfers.
+      </p>
 
-<h3 style={s.h3}>Stripchat</h3>
-<p style={s.p}>Stripchat has its own audience, discovery, room, and monetization ecosystem. Compare its current rules and marketplace observations rather than assuming another site's behavior transfers directly.</p>
+      <h3 style={s.h3}>BongaCams</h3>
+      <p style={s.p}>
+        BongaCams has its own room discovery, token economy and platform-specific scoring and
+        visibility mechanics. Those are worth reading directly rather than inferring.
+      </p>
 
-<h2 style={s.h2}>The final comparison should be your own</h2>
-<p style={s.p}>Market-level data tells you what the platform looks like. Your own earnings history tells you what happens when <em>you</em> stream there.</p>
+      <h3 style={s.h3}>Stripchat</h3>
+      <p style={s.p}>
+        Stripchat has its own audience, discovery and monetization structure. As with every
+        platform, compare the interactions you actually receive rather than the reputation.
+      </p>
 
-<p style={s.p}><a href="/blog/best-cam-sites-for-models" style={s.link}>See the broader best-cam-sites guide</a>, then use <a href="/guides/cam-model-analytics" style={s.link}>CamCashGrl analytics</a> to compare your actual performance across platforms.</p>
+      <h2 style={s.h2}>The final comparison should be your own</h2>
+      <p style={s.p}>
+        Market-level data tells you what a platform looks like. Your own earnings history tells you
+        what happens when <em>you</em> stream there &mdash; and a site with fewer viewers can still be
+        the more profitable one if your room converts better.
+      </p>
+      <p style={s.p}>
+        Read the broader{' '}
+        <a href="/blog/best-cam-sites-for-models" style={s.link}>best cam sites for models</a> guide,
+        then run a controlled trial using{' '}
+        <a href="/blog/how-to-test-a-new-cam-site" style={s.link}>how to test a new cam site</a>{' '}
+        before moving any real part of your schedule.
+      </p>
 
-<p style={s.p}><strong>Data note:</strong> viewer/model counts, payout rules, platform features, and broadcasting policies change. Add a "last verified" date and current first-party sources before publishing specific numbers.</p>
-
+      <div style={s.note}>
+        Viewer and model counts, payout rules, features and broadcasting policies all change. Treat
+        any specific figure as a dated observation and re-check it against the platform before
+        making a decision on it.
+      </div>
 
       <div style={s.cta}>
-        <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#16F4FF', marginBottom: 8 }}>
-          CamCashGrl
-        </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 8 }}>
-          Turn your own stream history into useful evidence.
-        </div>
-        <p style={{ ...s.p, marginBottom: 16 }}>
-          Track earnings, sessions, fans, platforms, and your personal peak streaming patterns from your own data.
+        <div style={s.ctaTitle}>Compare platforms with your own numbers</div>
+        <p style={s.ctaText}>
+          Marketplace snapshots describe the site. Your session history describes your business.
+          CamCash breaks earnings down by platform, hour and session so you can see where your
+          time actually pays.
         </p>
-        <a href="/landing" style={{ display: 'inline-flex', padding: '12px 20px', borderRadius: 12, background: 'linear-gradient(90deg, #16F4FF, #7C5CFF, #FF2BAE)', color: '#fff', textDecoration: 'none', fontWeight: 800 }}>
-          Analyze My Earnings Free →
-        </a>
+        <a href="/landing" style={s.ctaBtn}>Compare My Platforms &rarr;</a>
       </div>
 
-      <section style={{ marginTop: 38 }}>
-        <h2 style={s.h2}>Frequently Asked Questions</h2>
-        <div style={ marginBottom: 18 }>
-  <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Which cam site has the most viewers?</div>
-  <p style={...s.p, marginBottom: 0}>There is no permanent answer because audience populations change by date, time, region, and platform. A useful comparison should use dated observations rather than one timeless ranking.</p>
-</div>
-<div style={ marginBottom: 18 }>
-  <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>Does more viewer traffic mean less competition?</div>
-  <p style={...s.p, marginBottom: 0}>Not necessarily. A site can have more viewers and also have many more models competing for those viewers.</p>
-</div>
-<div style={ marginBottom: 18 }>
-  <div style={{ fontWeight: 800, color: '#e2e8f0', marginBottom: 7 }}>What should I compare besides viewer count?</div>
-  <p style={...s.p, marginBottom: 0}>Compare model competition, discoverability, payout economics, show format, platform rules, and your own repeated earnings per hour.</p>
-</div>
-      </section>
+      <div style={s.faq}>
+        <h2 style={{ ...s.h2, marginTop: 0 }}>Frequently asked questions</h2>
+        {FAQS.map(f => (
+          <div key={f.q} style={s.faqItem}>
+            <div style={s.faqQ}>{f.q}</div>
+            <p style={{ ...s.faqA, marginBottom: 0 }}>{f.a}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={s.related}>
+        <div style={s.relatedTitle}>Related reading</div>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-decide-if-a-cam-site-is-worth-your-time" style={s.link}>&rarr; How to decide if a cam site is worth your time</a></p>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-compare-cam-platform-payouts" style={s.link}>&rarr; How to compare cam site payouts</a></p>
+        <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/cam-model-analytics" style={s.link}>&rarr; Cam model analytics guide</a></p>
+      </div>
     </ArticleLayout>
   )
 }

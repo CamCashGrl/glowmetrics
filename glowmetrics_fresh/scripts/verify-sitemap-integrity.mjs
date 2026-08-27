@@ -4,10 +4,10 @@
 // slugs that shouldn't be listed at all (a sitemap should only list final
 // canonical destinations). Run this whenever blog/guide content changes.
 //
-// Uses Node's dynamic import() directly against the real app/sitemap.js
-// (unlike most of this repo's other verify-*.mjs scripts, sitemap.js has
-// no JSX/analytics-engine CJS/ESM boundary issue, so it can be imported
-// directly rather than mirrored).
+// Imports the real app/sitemap.js rather than mirroring it. sitemap.js has
+// no JSX or CJS/ESM boundary issue, but it does use Next's extensionless
+// import resolution, which plain Node ESM does not do — so the source is
+// copied to a temp file with those specifiers resolved before importing.
 
 import { readdirSync, statSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -23,7 +23,31 @@ function dirSlugs(relDir) {
     .filter(name => name !== '[slug]')
 }
 
-const sitemapModule = await import(path.join(root, 'app', 'sitemap.js'))
+// Next resolves extensionless relative imports; plain Node ESM does not.
+// Copy sitemap.js to a temp file with '.js' appended to those specifiers so
+// this script can import the real file instead of a drifting mirror.
+const sitemapPath = await (async () => {
+  const fs = await import('fs')
+  const os = await import('os')
+  const srcPath = path.join(root, 'app', 'sitemap.js')
+  const src = fs.readFileSync(srcPath, 'utf8')
+  const resolved = src.replace(
+    /(from\s+['"])(\.[^'"]*?)(['"])/g,
+    (match, pre, spec, post) => (path.extname(spec) ? match : `${pre}${spec}.js${post}`),
+  )
+  if (resolved === src) return srcPath
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sitemap-verify-'))
+  const out = path.join(tmp, 'sitemap.mjs')
+  // Relative specifiers still have to resolve against app/, so rewrite them
+  // to absolute paths rooted at the real file's directory.
+  fs.writeFileSync(out, resolved.replace(
+    /(from\s+['"])(\.[^'"]*)(['"])/g,
+    (_m, pre, spec, post) => `${pre}${path.resolve(path.dirname(srcPath), spec)}${post}`,
+  ))
+  return out
+})()
+
+const sitemapModule = await import(sitemapPath)
 const entries = sitemapModule.default()
 const urls = entries.map(e => e.url)
 
