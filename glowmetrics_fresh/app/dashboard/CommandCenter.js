@@ -95,6 +95,29 @@ const label = {
   textTransform: "uppercase", color: C.muted,
 }
 
+/**
+ * A zone divider. The four-zone hierarchy has to be VISIBLE, not just true in
+ * the source order — this is what tells a creator at a glance that she has
+ * passed from "what to do" into "why", and then into "the raw numbers".
+ * Deliberately understated: a hairline rule and a small label, never a card.
+ */
+function ZoneRule({ label, quiet = false }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: quiet ? 10 : 6 }}>
+      <span style={{
+        fontSize: 10.5, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase",
+        color: quiet ? "#5E647C" : "#8D93AA", whiteSpace: "nowrap",
+      }}>{label}</span>
+      <span style={{
+        flex: 1, height: 1,
+        background: quiet
+          ? "rgba(255,255,255,0.06)"
+          : "linear-gradient(90deg, rgba(22,244,255,0.22), rgba(255,255,255,0.04) 60%, transparent)",
+      }} />
+    </div>
+  )
+}
+
 function BrandButton({ children, onClick, style }) {
   return (
     <button
@@ -323,7 +346,12 @@ export default function CommandCenter({
           and says so plainly when nothing actually moved. */}
       <WhatChanged diff={changedSinceLastVisit} />
 
-      {/* ══ ZONE 3 — SUPPORTING EVIDENCE ═════════════════════════════ */}
+      {/* ══ ZONE 3 — SUPPORTING EVIDENCE ═════════════════════════════
+          Everything from here down is deliberately quieter than the two zones
+          above: smaller label, muted rule, no gradient edge. A creator who
+          reads only the first screen has already got the answer; this is what
+          she looks at when she wants to check the working. */}
+      <ZoneRule label="The evidence behind it" />
       {/* ── HERO: YOUR NEXT BEST MOVE ──────────────────────────────── */}
       <div style={{
         background: hasWindow ? HERO_GRADIENT : "rgba(15,20,32,0.75)",
@@ -492,6 +520,11 @@ export default function CommandCenter({
       {/* Chart moved into the hero (above). The standalone "Why this is your
           best move" card was removed: it duplicated the same distribution in a
           second card while the hero sat half-empty. */}
+
+      {/* ══ ZONE 4 — DEEPER ══════════════════════════════════════════
+          Totals and the fan list. Factual, unbadged, and last — the detail
+          tabs remain the real home for anything beyond this. */}
+      <ZoneRule label="Your numbers" quiet />
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>

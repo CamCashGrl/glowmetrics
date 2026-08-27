@@ -27,6 +27,9 @@ const REPORT = strip(read('app/dashboard/CreatorReport.js'))
 const NARR = strip(read('app/dashboard/ReportNarrative.jsx'))
 const DISC = strip(read('lib/reportDiscoveries.js'))
 const ONB = strip(read('app/onboarding/page.js'))
+// The aha markup was extracted to its own component so it renders without a
+// Supabase client and can be verified against real output, not source text.
+const AHA = strip(read('app/onboarding/OnboardingAha.jsx'))
 const IMP = strip(read('app/dashboard/ImportSuccess.jsx'))
 const PAGE = strip(read('app/dashboard/page.js'))
 const INTEL_ROUTE = strip(read('app/api/intelligence/route.js'))
@@ -92,11 +95,14 @@ check('no local confidence math returned', /calculateConfidence\(/.test(REPORT),
 
 console.log('\nE. ONBOARDING — the first aha is canonical')
 check('it reads the intelligence route', /fetch\('\/api\/intelligence'/.test(ONB), true)
-check('it renders the canonical discovery', /aha\.title/.test(ONB) && /aha\.evidence/.test(ONB), true)
-check('it claims only when the ladder allows', /aha&&aha\.claimable/.test(ONB), true)
-check('below the floor it names the missing evidence', /aha\.nextMilestone/.test(ONB), true)
-check('it shows the fan connection when there is one', /ahaFans>0/.test(ONB), true)
-check('it gives one next move', /Your next move/.test(ONB), true)
+check('the aha is a component, mounted by onboarding', /<OnboardingAha/.test(ONB), true)
+check('it leads with the actionable discovery, not merely the strongest',
+  /data\?\.primaryDiscovery/.test(ONB), true)
+check('it renders the canonical discovery', /discovery\.title/.test(AHA) && /discovery\.evidence/.test(AHA), true)
+check('it claims only when the ladder allows', /!discovery \|\| !discovery\.claimable/.test(AHA), true)
+check('below the floor it names the missing evidence', /discovery\.nextMilestone/.test(AHA), true)
+check('it shows the fan connection when there is one', /fanCount > 0/.test(AHA), true)
+check('it gives one next move', /Your next move/.test(AHA), true)
 check('the unconfirmed preview hour is gone',
   /This import shows an early signal around/.test(ONB), false)
 check('no staged fake progress', /(setTimeout\(\(\)=>setAha)/.test(ONB), false)

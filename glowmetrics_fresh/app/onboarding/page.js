@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import OnboardingAha from './OnboardingAha'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
@@ -674,7 +675,10 @@ export default function OnboardingPage(){
       fetch('/api/intelligence',{credentials:'include'})
         .then(r=>r.ok?r.json():null)
         .then(data=>{
-          setAha(data?.discoveries?.[0]||null)
+          // primaryDiscovery, not discoveries[0]: the strongest finding is often
+          // the hourly rate, which has no action, and an aha with no next move
+          // is not an aha.
+          setAha(data?.primaryDiscovery||null)
           setAhaFans(data?.fanOverlap?.count||0)
           setAhaTopSupporters(data?.fanOverlap?.topSupporterCount||0)
         })
@@ -1141,63 +1145,16 @@ export default function OnboardingPage(){
               )}
 
               {/* ══ FIRST AHA ═════════════════════════════════════════════
-                  This used to render preview.bestHour — the single highest
-                  token-sum hour in the rows just parsed, with NO minimum sample
-                  and no confidence tier. On a small first import that is one or
-                  two rows' worth of signal presented as a finding.
-
-                  It now reads the canonical intelligence layer, the same one the
-                  dashboard reads, so onboarding can never claim a pattern the
-                  engine has not confirmed. When nothing is claimable yet it says
-                  so and names the evidence that is missing. */}
-              {ahaLoading&&(
-                <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',padding:'16px 15px',marginBottom:14,textAlign:'left',fontSize:12,color:'rgba(148,163,184,0.8)'}}>
-                  Reading your history…
-                </div>
-              )}
-
-              {!ahaLoading&&aha&&aha.claimable&&(
-                <div style={{borderRadius:16,border:'1px solid rgba(124,92,255,0.28)',background:'linear-gradient(140deg,rgba(124,92,255,0.10),rgba(33,230,243,0.05))',padding:'17px 17px',marginBottom:14,textAlign:'left'}}>
-                  <div style={{fontSize:10,fontWeight:800,color:CYAN,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:7}}>{aha.eyebrow}</div>
-                  <div style={{fontSize:21,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.02em',lineHeight:1.15,marginBottom:11}}>{aha.title}</div>
-                  <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:11}}>
-                    {(aha.evidence||[]).slice(0,3).map(e=>(
-                      <div key={e.label}>
-                        <div style={{fontSize:14,fontWeight:900,color:CYAN}}>{e.value}</div>
-                        <div style={{fontSize:9.5,color:'rgba(148,163,184,0.7)',marginTop:2}}>{e.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{fontSize:12.5,color:'rgba(203,213,225,0.88)',lineHeight:1.65}}>{aha.meaning}</div>
-                  {ahaFans>0&&(
-                    <div style={{marginTop:11,paddingTop:11,borderTop:'1px solid rgba(255,255,255,0.07)',fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.6}}>
-                      <strong style={{color:PINK}}>{ahaFans} repeat fan{ahaFans===1?'':'s'}</strong> tipped during it{ahaTopSupporters>0?<> — {ahaTopSupporters} {ahaTopSupporters===1?'is':'are'} among your Top Supporters</>:null}.
-                    </div>
-                  )}
-                  {aha.action&&(
-                    <div style={{marginTop:11,fontSize:12,color:'#fff',lineHeight:1.55}}>
-                      <strong style={{color:'#A78BFA'}}>Your next move · </strong>{aha.action.label}.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!ahaLoading&&aha&&!aha.claimable&&(
-                <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.09)',background:'rgba(255,255,255,0.03)',padding:'15px 15px',marginBottom:14,textAlign:'left'}}>
-                  <div style={{fontSize:10,fontWeight:800,color:CYAN,textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:6}}>Still calibrating</div>
-                  <div style={{fontSize:12.5,color:'rgba(203,213,225,0.85)',lineHeight:1.65}}>{aha.meaning}</div>
-                  {aha.nextMilestone&&(<div style={{marginTop:8,fontSize:12,color:CYAN}}>Next: {aha.nextMilestone}.</div>)}
-                </div>
-              )}
-
-              {!ahaLoading&&!aha&&(
-                <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.09)',background:'rgba(255,255,255,0.03)',padding:'15px 15px',marginBottom:14,textAlign:'left'}}>
-                  <div style={{fontSize:12.5,color:'rgba(203,213,225,0.85)',lineHeight:1.65}}>
-                    Your data is in. No pattern has enough evidence behind it yet — import more of your
-                    history and CamCash will tell you the moment one does.
-                  </div>
-                </div>
-              )}
+                  Extracted to ./OnboardingAha so it renders without a Supabase
+                  client and can be verified in the render suite. It reads the
+                  canonical intelligence layer and states a pattern only when
+                  the ladder says it is claimable. */}
+              <OnboardingAha
+                discovery={aha}
+                fanCount={ahaFans}
+                topSupporters={ahaTopSupporters}
+                loading={ahaLoading}
+              />
 
               <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',padding:'12px 14px',marginBottom:16,textAlign:'left',display:'flex',alignItems:'flex-start',gap:10}}>
                 <div style={{fontSize:18,flexShrink:0}}>📧</div>

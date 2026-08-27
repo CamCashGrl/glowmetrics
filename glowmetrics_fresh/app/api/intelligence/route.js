@@ -18,7 +18,7 @@
 
 import { NextResponse } from 'next/server'
 import { resolvePlatformEntitlement, filterEntitledRows } from '../../../lib/platformEntitlement'
-import { buildReportDiscoveries } from '../../../lib/reportDiscoveries'
+import { buildReportDiscoveries, primaryMove } from '../../../lib/reportDiscoveries'
 import { createSupabaseRouteClient } from '../../../lib/supabase-server'
 import { isProPlan } from '../../../lib/plan'
 import { resolveCreatorTimezone } from '../../../lib/timezone'
@@ -56,6 +56,7 @@ async function build(supabase, user) {
   // already had as newly unlocked.
   const diff = baseline ? diffSnapshots(baseline, current) : null
 
+  const reportDiscoveries = buildReportDiscoveries({ analytics, intelligence })
   const milestones = evaluateMilestones(intelligence)
 
   return {
@@ -80,7 +81,12 @@ async function build(supabase, user) {
       /** The ordered canonical discoveries, so onboarding and any other
        *  surface can render the creator's strongest finding without a second
        *  analytics path. Same mapper the Creator Report and Command Center use. */
-      discoveries: buildReportDiscoveries({ analytics, intelligence }),
+      discoveries: reportDiscoveries,
+      /** The one a surface should lead with: the strongest discovery that
+       *  actually carries an action. A "next move" with nothing to do is not a
+       *  move, and the strongest finding is often the hourly rate, which has
+       *  none. Computed once here so onboarding and the dashboard agree. */
+      primaryDiscovery: primaryMove(reportDiscoveries),
       /** Counts only — used by onboarding's first-aha fan line. */
       fanOverlap: analytics.bestWindowFanOverlap
         ? {

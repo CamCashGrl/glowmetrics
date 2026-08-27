@@ -12,6 +12,7 @@ import ContextualUpgradeModal from '../../app/dashboard/ContextualUpgradeModal'
 import PeakWindowPlan from '../../app/dashboard/PeakWindowPlan'
 import PlatformOpportunity from '../../app/dashboard/PlatformOpportunity'
 import NextBestMove from '../../app/dashboard/NextBestMove'
+import OnboardingAha from '../../app/onboarding/OnboardingAha'
 import WhatChanged from '../../app/dashboard/WhatChanged'
 import { buildReportDiscoveries, buildReportFacts, buildReportActions, primaryMove } from '../../lib/reportDiscoveries'
 import { resolvePlatformEntitlement, filterEntitledRows } from '../../lib/platformEntitlement'
@@ -420,6 +421,73 @@ check('window start is latest minus 30 days',
   ent.secondaryWindowStart.toISOString().slice(0, 10), '2026-01-13')
 const freeEnt = resolvePlatformEntitlement({ profile: { plan: 'free' }, rows: entRows })
 check('a free creator loses nothing', filterEntitledRows(freeEnt, entRows).length, 53)
+
+console.log('\nK. VISUAL HIERARCHY + ONBOARDING AHA — rendered')
+const ccHtml = plainer(renderToStaticMarkup(
+  <CommandCenter analytics={analytics} intelligence={intelligence} isPro={false}
+                 nowActions={[]} onUpgrade={() => {}} onImport={() => {}}
+                 changedSinceLastVisit={{ improved: [{ id: 'peak_window', label: 'Peak earning window', newlyClaimable: true, isDiscovery: true }], evidenceDelta: { sessionsAnalyzed: 9 }, pctDelta: 4 }} />))
+
+// The four zones must be visibly ordered, not merely present.
+const iMove = ccHtml.indexOf('Your next best move')
+const iChanged = ccHtml.indexOf('What changed since you last checked')
+const iEvidence = ccHtml.indexOf('The evidence behind it')
+const iNumbers = ccHtml.indexOf('Your numbers')
+check('zone 1 (next best move) renders', iMove > -1, true)
+check('zone 2 (what changed) renders', iChanged > -1, true)
+check('zone 3 (evidence) renders a divider', iEvidence > -1, true)
+check('zone 4 (numbers) renders a divider', iNumbers > -1, true)
+check('the four zones appear in hierarchy order',
+  iMove < iChanged && iChanged < iEvidence && iEvidence < iNumbers, true)
+check('the primary zone carries the largest type in the page',
+  /font-size:30px[^"]*font-weight:850/.test(ccHtml) || /font-size:30px/.test(ccHtml), true)
+check('zone labels are small and quiet by comparison',
+  /font-size:10.5px[^"]*text-transform:uppercase/.test(ccHtml), true)
+check('the raw totals still render (nothing was removed)',
+  ccHtml.includes('Total earnings') && ccHtml.includes('Total hours'), true)
+check('and are still unbadged',
+  ccHtml.slice(iNumbers).includes('Supported') || !ccHtml.slice(iNumbers).includes('Confidence'), true)
+
+// Creator Report visual distinction: a document, not the dashboard's cards.
+const rep = plainer(renderToStaticMarkup(
+  <CreatorReport analytics={analytics} tips={tips} intelligence={intelligence} isPro={false} timezone="UTC" onUpgrade={() => {}} firstName="Daphne" />))
+check('the report opens with a report identity, not a dashboard card',
+  rep.indexOf('CamCash Creator Report') < rep.indexOf('What we learned'), true)
+check('its headline type is larger than any dashboard card headline',
+  /font-size:34px/.test(rep), true)
+check('the retired cards are gone from the output',
+  /Confidence:\s*<!-- -->|Your report is calibrating/.test(rep), false)
+check('discoveries are numbered like a document', /01<\/span>/.test(rep) || />01</.test(rep), true)
+
+console.log('\nL. ONBOARDING COMPLETION — the first aha, rendered')
+// The surface leads with primaryMove(), not the first claimable discovery —
+// the strongest finding is often the hourly rate, which carries no action.
+const claimed = primaryMove(discoveries)
+const ahaLoad = plainer(renderToStaticMarkup(<OnboardingAha loading />))
+const ahaFound = plainer(renderToStaticMarkup(
+  <OnboardingAha discovery={claimed} fanCount={5} topSupporters={3} />))
+const ahaWeak = plainer(renderToStaticMarkup(
+  <OnboardingAha discovery={{ claimable: false, meaning: 'Two sessions so far.', nextMilestone: '2 more sessions in this window' }} />))
+const ahaNone = plainer(renderToStaticMarkup(<OnboardingAha discovery={null} />))
+
+check('loading says what it is doing', /Reading your history/.test(ahaLoad), true)
+check('a real finding is named', claimed ? ahaFound.includes(claimed.title) : true, true)
+check('its evidence is shown', claimed ? ahaFound.includes(claimed.evidence[0].value) : true, true)
+check('its meaning is shown', claimed ? ahaFound.includes(claimed.meaning.slice(0, 40)) : true, true)
+check('the fan connection appears when there is one',
+  /5 repeat fans<\/strong> tipped during it/.test(ahaFound), true)
+check('Top Supporters are named separately', /3 are among your Top Supporters/.test(ahaFound), true)
+check('one next move is offered', /Your next move/.test(ahaFound), true)
+check('below the floor it does NOT claim a pattern',
+  /Still calibrating/.test(ahaWeak) && !/Your next move/.test(ahaWeak), true)
+check('and names the missing evidence', /2 more sessions in this window/.test(ahaWeak), true)
+check('no data at all is stated honestly',
+  /No pattern has enough evidence behind it yet/.test(ahaNone), true)
+check('no generic success screen or feature list',
+  /(Upload successful|Success!|Here is everything you can do)/i.test(ahaFound + ahaWeak + ahaNone), false)
+for (const bad of ['likely to tip', 'will earn', 'guaranteed', 'projected']) {
+  check(`the aha never says "${bad}"`, (ahaFound + ahaWeak + ahaNone).toLowerCase().includes(bad), false)
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

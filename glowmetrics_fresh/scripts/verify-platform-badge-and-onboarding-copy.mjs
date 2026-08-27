@@ -72,9 +72,11 @@ function toLocalDow(dateStr, tz) {
   check('onboarding reads the canonical intelligence layer, not a local preview',
     src.includes("fetch('/api/intelligence'") && src.includes('setAha('))
   check('it only states a finding when the ladder says it is claimable',
-    src.includes('aha&&aha.claimable'))
+    src.includes('<OnboardingAha'))
+  // The aha markup now lives in its own renderable component.
+  const aha = fs.readFileSync(new URL('../app/onboarding/OnboardingAha.jsx', import.meta.url), 'utf8')
   check('below the floor it names the missing evidence instead of claiming',
-    src.includes('Still calibrating') && src.includes('aha.nextMilestone'))
+    aha.includes('Still calibrating') && aha.includes('discovery.nextMilestone'))
   check('the unconfirmed preview hour is no longer presented as an insight',
     !src.includes('This import shows an early signal around'))
 }
