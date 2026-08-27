@@ -11,6 +11,29 @@ function getSupabaseAdmin() {
   )
 }
 
+// Server-side funnel events. The client can only track up to the moment it
+// hands the user to Stripe — everything that decides whether a trial actually
+// exists (card accepted, trial opened, converted, canceled) happens on
+// Stripe's side and comes back only through this webhook. Writing those into
+// analytics_events is what makes the trial funnel countable end to end
+// instead of stopping at "they clicked".
+//
+// Fire-and-forget on purpose: analytics must never fail a webhook. A thrown
+// insert here would return 500 to Stripe, which would retry the event and
+// re-run the profile write above it.
+async function logEvent(supabase, userId, eventName, properties = {}) {
+  try {
+    await supabase.from('analytics_events').insert({
+      user_id: userId ?? null,
+      event_name: eventName,
+      properties,
+      url: 'stripe:webhook',
+    })
+  } catch (e) {
+    console.error(`Analytics insert failed for ${eventName}:`, e.message)
+  }
+}
+
 async function getUserByEmail(supabase, email) {
   const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 })
   if (error) return null
@@ -178,6 +201,16 @@ export async function POST(request) {
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
+        await logEvent(
+          supabase,
+          userId,
+          sub.status === 'trialing' ? 'trial_started' : 'subscription_started',
+          {
+            plan_type: sub.metadata?.plan_type || null,
+            status: sub.status,
+            trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+          }
+        )
         const email = await getEmailFromCustomer(sub.customer) || userId
         await sendResendNotification(
           sub.status === 'trialing'
@@ -201,6 +234,15 @@ export async function POST(request) {
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
         }
+        // A cancellation during the trial and one after a paid month are very
+        // different signals, so they are separate events rather than one
+        // "canceled" with a flag to remember to filter on.
+        await logEvent(
+          supabase,
+          userId,
+          sub.status === 'trialing' ? 'trial_canceled' : 'subscription_canceled',
+          { plan_type: sub.metadata?.plan_type || null, status: sub.status }
+        )
         const email = await getEmailFromCustomer(sub.customer) || userId
         await sendResendNotification(
           `❌ CamCash Cancellation — ${email} cancelled their subscription`,
@@ -224,6 +266,20 @@ export async function POST(request) {
         )
         if (!ok) {
           return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+        }
+        // previous_attributes is the only thing that distinguishes a trial
+        // converting to paid from an ordinary renewal — both arrive as an
+        // `updated` event with status 'active'.
+        const wasTrialing = event.data.previous_attributes?.status === 'trialing'
+        if (plan === 'pro' && sub.status === 'active' && wasTrialing) {
+          await logEvent(supabase, userId, 'trial_converted', {
+            plan_type: sub.metadata?.plan_type || null,
+          })
+        } else if (plan === 'free') {
+          await logEvent(supabase, userId, wasTrialing ? 'trial_canceled' : 'subscription_canceled', {
+            plan_type: sub.metadata?.plan_type || null,
+            status: sub.status,
+          })
         }
         const email = await getEmailFromCustomer(sub.customer) || userId
         if (plan === 'pro') {
@@ -251,6 +307,14 @@ export async function POST(request) {
         // Stripe fires this three days out. Notification only — the trial is
         // still active, so access is untouched here.
         const sub = event.data.object
+        const userId = await resolveUserId(supabase, {
+          metadataUserId: sub.metadata?.userId,
+          customerId: sub.customer,
+        })
+        await logEvent(supabase, userId, 'trial_will_end', {
+          plan_type: sub.metadata?.plan_type || null,
+          trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+        })
         const email = await getEmailFromCustomer(sub.customer) || sub.customer
         await sendResendNotification(
           `⏳ CamCash Trial Ending — ${email}`,
