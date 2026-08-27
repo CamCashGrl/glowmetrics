@@ -6,6 +6,7 @@ import Fans from '../../app/dashboard/Fans'
 import StreamPlanner from '../../app/dashboard/StreamPlanner'
 import AnalyticsCharts from '../../app/dashboard/AnalyticsCharts'
 import CreatorReport from '../../app/dashboard/CreatorReport'
+import { lockedCapabilities } from '../../lib/unlockProgress'
 import ConfidenceBadge from '../../app/dashboard/ConfidenceBadge'
 import WindowFanOverlap from '../../app/dashboard/WindowFanOverlap'
 import ContextualUpgradeModal from '../../app/dashboard/ContextualUpgradeModal'
@@ -122,7 +123,11 @@ check('strong state does NOT nag about missing evidence',
 
 console.log('\nE. Canonical vocabulary actually reaches the surfaces')
 const CANON = ['Calibrating', 'Early signal', 'Developing', 'Supported', 'High confidence', 'Established']
-for (const name of ['CommandCenter', 'Performance', 'CreatorReport']) {
+// Confidence words belong beside FINDINGS, which now live only in the
+// Command Center and Performance. The report tracks the build, so it carries
+// progress instead — asserting it has NO confidence badge is the stronger
+// check, because it proves the separation rather than mere presence.
+for (const name of ['CommandCenter', 'Performance']) {
   check(`${name} prints a canonical confidence word`, CANON.some(w => markup[name].includes(w)), true)
 }
 const RETIRED_WORDS = ['Strong pattern', 'Supported pattern', 'Building Pattern', 'Pattern emerging']
@@ -365,7 +370,8 @@ check('newly-claimable is stated as such', /now supported by enough evidence/.te
 check('evidence deltas are shown', /\+14/.test(wcBusy) && /sessions analysed/.test(wcBusy), true)
 check('calibration movement is shown', /\+7 calibration/.test(wcBusy), true)
 
-// ── Creator Report: a narrative, not a card grid ─────────────────────────
+// ── Creator Report: the build tracker ────────────────────────────────────
+const lockedCaps = lockedCapabilities(intelligence)
 const reportFree = plainer(renderToStaticMarkup(
   <CreatorReport analytics={analytics} tips={tips} intelligence={intelligence} isPro={false} timezone="UTC" onUpgrade={() => {}} firstName="Daphne" />))
 const reportPro = plainer(renderToStaticMarkup(
@@ -375,22 +381,24 @@ check('it states its source', /Built entirely from the data you have imported/.t
 check('it shows the real date range',
   reportFree.includes(new Date(facts.from).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })), true)
 check('it shows the real tip count', reportFree.includes(facts.tips.toLocaleString('en-US')), true)
-check('it has a "what we learned" section', /What we learned/.test(reportFree), true)
-check('every discovery is narrated',
-  discoveries.every(d => reportFree.includes(d.title)), true)
-check('each narrated discovery carries its meaning',
-  discoveries.every(d => reportFree.includes(d.meaning.slice(0, 40))), true)
-check('claimable discoveries say what to do with them',
-  actions.length === 0 || /What to do with it/.test(reportFree), true)
-check('there is a single actions section', (reportFree.match(/What to do next/g) || []).length <= 1, true)
-check('free sees ONE Pro section', (reportFree.match(/What Pro helps you do with these/g) || []).length, 1)
-check('pro sees none', (reportPro.match(/What Pro helps you do with these/g) || []).length, 0)
-check('the supporting detail is demoted below it',
-  reportFree.indexOf('What we learned') < reportFree.indexOf('The numbers behind it'), true)
+// The report is now the BUILD tracker, not the findings page: insights belong
+// to the Command Center. These guards replace the old narrative ones and are
+// strictly stronger — they assert the separation itself, not just presence.
+check('it tracks what CamCash still needs', /What CamCash still needs/.test(reportFree), true)
+check('it does NOT narrate findings — those live in the Command Center',
+  /What we learned/.test(reportFree), false)
+check('every locked capability names what it unlocks',
+  lockedCaps.every(c => reportFree.includes(c.title)), true)
+check('every locked capability shows its progress',
+  lockedCaps.every(c => c.label == null || reportFree.includes(c.label)), true)
+check('an unlocked capability is absent from the report',
+  lockedCaps.every(c => c.state !== 'SUPPORTED' && c.state !== 'HIGH_CONFIDENCE' && c.state !== 'ESTABLISHED'), true)
+check('it shows per-platform import progress', /Data by platform/.test(reportFree), true)
+check('pro sees the same build tracker', /What CamCash still needs/.test(reportPro), true)
 const reportEmpty = plainer(renderToStaticMarkup(
   <CreatorReport analytics={emptyAnalytics} tips={[]} intelligence={emptyIntel} isPro={false} timezone="UTC" onUpgrade={() => {}} />))
-check('a low-data creator gets an honest report',
-  /No pattern has enough evidence behind it yet/.test(reportEmpty), true)
+check('a low-data creator is told what is still being built',
+  /Still building your dashboard/.test(reportEmpty), true)
 check('and is never shown a fabricated finding',
   /strongest observed/.test(reportEmpty), false)
 
@@ -452,12 +460,14 @@ check('and are still unbadged',
 const rep = plainer(renderToStaticMarkup(
   <CreatorReport analytics={analytics} tips={tips} intelligence={intelligence} isPro={false} timezone="UTC" onUpgrade={() => {}} firstName="Daphne" />))
 check('the report opens with a report identity, not a dashboard card',
-  rep.indexOf('CamCash Creator Report') < rep.indexOf('What we learned'), true)
+  rep.indexOf('CamCash Creator Report') < rep.indexOf('What CamCash still needs'), true)
 check('its headline type is larger than any dashboard card headline',
   /font-size:34px/.test(rep), true)
 check('the retired cards are gone from the output',
   /Confidence:\s*<!-- -->|Your report is calibrating/.test(rep), false)
-check('discoveries are numbered like a document', /01<\/span>/.test(rep) || />01</.test(rep), true)
+// Discoveries moved to the Command Center, so the report must no longer
+// enumerate findings at all.
+check('the report does not enumerate findings', /What we learned/.test(rep), false)
 
 console.log('\nL. ONBOARDING COMPLETION — the first aha, rendered')
 // The surface leads with primaryMove(), not the first claimable discovery —

@@ -18,6 +18,9 @@ import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
 import UnimportedPlatforms from './UnimportedPlatforms'
+import ConversionLoop from './ConversionLoop'
+import { conversionPrompts } from '../../lib/conversionLoop'
+import { newlyUnlocked } from '../../lib/unlockProgress'
 import FreeTierNotice from './FreeTierNotice'
 import PeakWindowPlan from './PeakWindowPlan'
 import { SessionsNav, SessionsOverview, LiveSessionsEmpty } from './SessionsHome'
@@ -3561,6 +3564,19 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
+        {/* ── COMMAND CENTER LIVE BAND ────────────────────────────────
+            Every actionable insight belongs to the Command Center, and that
+            includes the moment something unlocks. When nothing has just
+            unlocked, one rotating conversion prompt — each conditional on
+            something already true in her data. See lib/conversionLoop.js. */}
+        {activeTab === 'overview' && (
+          <ConversionLoop
+            prompts={conversionPrompts({ analytics, intelligence, isPro })}
+            unlocked={newlyUnlocked(changedSinceLastVisit)}
+            onUpgrade={(src) => openUpgradeModal(src)}
+          />
+        )}
+
         {/* One dismissible line telling a free creator what she has, in her
             own numbers. Not a wall — she can close it and it stays closed. */}
         <FreeTierNotice
@@ -3598,7 +3614,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} primaryPlatform={profile?.primary_pro_platform || null} />
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} primaryPlatform={profile?.primary_pro_platform || null} streamingPlatforms={streamingPlatforms} />
           </div>
         )}
 

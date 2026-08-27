@@ -2,11 +2,13 @@
 
 import { useEffect } from "react"
 import { badgeFor } from "../../lib/intelligence/states"
-import { buildReportDiscoveries, buildReportFacts, buildReportActions } from "../../lib/reportDiscoveries"
+import { buildReportFacts } from "../../lib/reportDiscoveries"
 import {
-  ReportHeader, ReportDiscovery, ReportActions, ReportPro, ReportEmpty, SectionTitle,
+  ReportHeader, SectionTitle,
 } from "./ReportNarrative"
 import PlatformDataCards from "./PlatformDataCards"
+import UnlockProgress from "./UnlockProgress"
+import { lockedCapabilities, platformProgress } from "../../lib/unlockProgress"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
 import { resolveCurrentMonthGrowth } from "../../lib/analytics"
@@ -959,8 +961,17 @@ export default function CreatorReport({
   // Stated preference (profiles.primary_pro_platform) — marks her main
   // platform in the per-platform cards. Never used to rank anything.
   primaryPlatform = null,
+  // Roster she named in onboarding, so the report can show a platform she
+  // streams on but has never imported. null = unknown.
+  streamingPlatforms = null,
 }) {
   const safeAnalytics = analytics || {}
+
+  // The report's subject matter: what is still locked, and what has landed
+  // per platform. Both READ from lib/unlockProgress.js, which reads the
+  // engine's own nextMilestone — no requirement is defined here.
+  const lockedCaps = lockedCapabilities(intelligence)
+  const platformRows = platformProgress(safeAnalytics, streamingPlatforms)
 
   // ----------------------------------------------------------
   // EXISTING ANALYTICS — READ ONLY
@@ -1201,11 +1212,11 @@ export default function CreatorReport({
       : 0
 
   // ── THE REPORT'S OWN DATA ─────────────────────────────────
+  // Findings moved to the Command Center — see lib/unlockProgress.js for
+  // what this page tracks instead. Kept only for the header's fact line.
   // Read, ordered and gated by lib/reportDiscoveries.js. No metric, threshold
   // or confidence is computed in this component.
-  const reportDiscoveries = buildReportDiscoveries({ analytics: safeAnalytics, intelligence })
   const reportFacts = buildReportFacts({ analytics: safeAnalytics, tips })
-  const reportActions = buildReportActions(reportDiscoveries)
 
   // ----------------------------------------------------------
   // TRACKING
@@ -1285,29 +1296,24 @@ export default function CreatorReport({
           used to open this page now sit BELOW it as supporting reference. */}
       <ReportHeader facts={reportFacts} calibration={intelligence?.calibration} firstName={firstName} />
 
-      <SectionTitle>What we learned</SectionTitle>
-      {reportDiscoveries.length > 0 ? (
-        reportDiscoveries.map((d, i) => (
-          <ReportDiscovery key={d.id} discovery={d} index={i} intelligence={intelligence} />
-        ))
-      ) : (
-        <ReportEmpty facts={reportFacts} nextEvidence={nextEvidence} onImport={handleImport} />
-      )}
-
-      {/* WHAT CAMCASH HAD TO WORK WITH — one card per platform she streams
-          on, so a thin conclusion and a well-evidenced one no longer look
-          identical. Canonical fields only; see PlatformDataCards.jsx. */}
-      <SectionTitle>Your platforms</SectionTitle>
-      <PlatformDataCards analytics={safeAnalytics} primaryPlatform={primaryPlatform} />
-
-      <ReportActions
-        actions={reportActions}
+      {/* ══ WHAT THIS PAGE IS ═══════════════════════════════════════
+          The Creator Report tracks the BUILD, not the findings. Every
+          actionable insight lives in the Command Center; what lives here is
+          how much data CamCash still needs and how close each locked
+          capability is. Rows disappear as they unlock, and the unlock is
+          announced in the Command Center. See lib/unlockProgress.js. */}
+      <SectionTitle>What CamCash still needs</SectionTitle>
+      <UnlockProgress
+        locked={lockedCaps}
+        platforms={platformRows}
         isPro={isPro}
-        onAction={(a) => handleUpgrade(a.source)}
-        onUpgrade={(source) => handleUpgrade(source)}
+        onImport={handleImport}
       />
 
-      {!isPro && <ReportPro actions={reportActions} onUpgrade={(source) => handleUpgrade(source)} />}
+      {/* A snapshot of the schedule the data supports so far. Free sees the
+          shape; Pro opens the full planner. */}
+      <SectionTitle>Your streaming snapshot</SectionTitle>
+      <PlatformDataCards analytics={safeAnalytics} primaryPlatform={primaryPlatform} />
 
       {/* ══ SUPPORTING DETAIL ════════════════════════════════════════
           Everything below is the same reference material as before, kept

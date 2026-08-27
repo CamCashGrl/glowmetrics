@@ -51,7 +51,18 @@ function nextStep(observations, required, unit) {
   if (required == null) return null
   const remaining = Math.max(0, required - observations)
   if (remaining <= 0) return null
-  return { remaining, unit, label: `${remaining} more ${unit}` }
+  // `have`/`need`/`pct` are ADDITIVE — they expose the same two numbers the
+  // remaining count is already derived from, so the Creator Report can draw an
+  // honest progress bar instead of inventing a denominator. No threshold is
+  // introduced or changed here: `required` is the caller's existing one.
+  return {
+    remaining,
+    unit,
+    label: `${remaining} more ${unit}`,
+    have: observations,
+    need: required,
+    pct: required > 0 ? Math.min(100, Math.round((observations / required) * 100)) : 0,
+  }
 }
 
 /**

@@ -32,6 +32,8 @@ const ONB = strip(read('app/onboarding/page.js'))
 const AHA = strip(read('app/onboarding/OnboardingAha.jsx'))
 const IMP = strip(read('app/dashboard/ImportSuccess.jsx'))
 const PAGE = strip(read('app/dashboard/page.js'))
+const UNLOCK = strip(read('lib/unlockProgress.js'))
+const LOOP = strip(read('lib/conversionLoop.js'))
 const INTEL_ROUTE = strip(read('app/api/intelligence/route.js'))
 const INSIGHTS_ROUTE = strip(read('app/api/insights/route.js'))
 const ENT = strip(read('lib/platformEntitlement.js'))
@@ -73,25 +75,36 @@ check('it runs once per visit', /seenBaselineRef\.current = true/.test(PAGE), tr
 check('no new table or column is introduced',
   /(CREATE TABLE|ADD COLUMN)/i.test(PAGE + INTEL_ROUTE), false)
 
-console.log('\nD. CREATOR REPORT — a generated narrative')
-check('it uses the canonical mapper', /buildReportDiscoveries\(/.test(REPORT), true)
+console.log('\nD. CREATOR REPORT — the build tracker, not the findings page')
+// The report's job changed: insights belong to the Command Center, and this
+// page tracks what CamCash still needs. These guards assert that SEPARATION,
+// which is a stronger property than the old "does it narrate discoveries".
+check('it uses the canonical unlock model', /lockedCapabilities\(/.test(REPORT), true)
+check('it reads per-platform progress canonically', /platformProgress\(/.test(REPORT), true)
 check('a header names the data range', /<ReportHeader/.test(REPORT), true)
 check('the header states the source', /Built entirely from the data you have imported/.test(NARR), true)
-check('discoveries render strongest-first from the mapper',
-  /reportDiscoveries\.map\(\(d, i\)/.test(REPORT), true)
-for (const beat of ['evidence', 'meaning', 'What to do with it']) {
-  check(`each discovery carries "${beat}"`, NARR.includes(beat), true)
-}
-check('one action section, not a CTA per card', (REPORT.match(/<ReportActions/g) || []).length, 1)
-check('ONE Pro section for the whole report', (REPORT.match(/<ReportPro/g) || []).length, 1)
-check('the Pro section is free-only', /!isPro && <ReportPro/.test(REPORT), true)
-check('actions come only from claimable discoveries',
-  /discoveries\.filter\(d => d\.claimable && d\.action\)/.test(DISC), true)
-check('a low-data creator gets an honest report, not an empty one',
-  /<ReportEmpty/.test(REPORT) && /No pattern has enough evidence behind it yet/.test(NARR), true)
+check('it renders the progress tracker', /<UnlockProgress/.test(REPORT), true)
+check('it no longer narrates discoveries', /<ReportDiscovery/.test(REPORT), false)
+check('it no longer carries its own actions section', /<ReportActions/.test(REPORT), false)
+check('it no longer carries a Pro pitch section', /<ReportPro/.test(REPORT), false)
+check('it defines no requirement of its own — every number is read',
+  /need:\s*\d|required\s*=\s*\d/.test(UNLOCK), false)
+check('a locked capability drops out at the claimable floor',
+  /rank\(insight\.state\) >= rank\(CLAIMABLE_FLOOR\)/.test(UNLOCK), true)
 check('the detail sections are demoted, not deleted', /The numbers behind it/.test(REPORT), true)
-check('every CTA keeps its own discovery source', /handleUpgrade\(a\.source\)/.test(REPORT), true)
 check('no local confidence math returned', /calculateConfidence\(/.test(REPORT), false)
+
+console.log('\nD2. COMMAND CENTER — where the insights and the unlocks live')
+check('the conversion loop is mounted there', /<ConversionLoop/.test(PAGE), true)
+check('unlocks are announced there, from the canonical diff',
+  /newlyUnlocked\(changedSinceLastVisit\)/.test(PAGE), true)
+check('an unlock is the engine\'s own isDiscovery, not a local rule',
+  /p\.isDiscovery/.test(UNLOCK), true)
+check('every rotating prompt is conditional, never unconditional',
+  /if \(isPro\) return \[\]/.test(LOOP), true)
+for (const bad of ['guaranteed', 'projected', 'you will earn', 'expected to earn']) {
+  check(`the loop never says "${bad}"`, LOOP.toLowerCase().includes(bad), false)
+}
 
 console.log('\nE. ONBOARDING — the first aha is canonical')
 check('it reads the intelligence route', /fetch\('\/api\/intelligence'/.test(ONB), true)
