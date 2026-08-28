@@ -1,129 +1,670 @@
 "use client"
-// A visible, dismissible "what to do next" checklist for new accounts —
-// distinct from DashboardProgressCard (which tracks raw data VOLUME toward
-// full-confidence insights). This tracks discrete ACTIONS: have you actually
-// looked at the report, your fans, Live Mode? Completing it should feel like
-// progress, not just quietly stop mattering once there's enough data.
-import { useEffect, useState } from 'react'
+import { useMemo } from "react"
 
+// ═══════════════════════════════════════════════════════════════════════════
+// COMMAND CENTER
+//
+// Replaces the Overview tab's former eight stacked sections (KPI wall first,
+// insight last) with the hierarchy from the supplied reference:
+//
+//   DISCOVER    -> "Your next best move" hero: the conclusion, up top
+//   EXPLAIN     -> "Why this is your best move": the evidence behind it
+//   OPPORTUNITY -> what the gap is worth, only as far as the data supports
+//   ACTION      -> one primary CTA
+//   MEASURE     -> totals and fans, demoted BELOW the insight
+//
+// EVERY number rendered here is read from the frozen analytics layer. This
+// file performs no aggregation of its own — no reduces over tips or sessions,
+// no re-derived hours, rates, windows, or percentages. If a figure is not
+// already on `analytics`, it is not shown. That is deliberate: the audit that
+// preceded this redesign existed precisely because UI components were
+// recomputing metrics locally and disagreeing with one another.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Palette is the dashboard's OWN token set (app/dashboard/page.js's `C`) plus
+// the CamCash brand gradient — not a new scheme. The Command Center has to sit
+// inside the same shell as every other tab, so it inherits rather than
+// redefines. Cyan carries facts/primary actions, purple + pink mark Pro,
+// green marks positive movement, gold marks confidence/sample.
 const C = {
-  cyan: '#22D3EE', pink: '#EC4899', purple: '#a855f7', green: '#10B981',
-  white: '#F1F5F9', muted: '#94A3B8', gold: '#F59E0B',
+  bg:      "#05070f",
+  card:    "#121826",
+  card2:   "#161e2e",
+  border:  "#1e2d45",
+  border2: "#2a3f5f",
+  indigo:  "#7C5CFF",
+  cyan:    "#22D3EE",
+  pink:    "#EC4899",
+  gold:    "#F59E0B",
+  blue:    "#60A5FA",
+  green:   "#10B981",
+  red:     "#F87171",
+  white:   "#F1F5F9",
+  text:    "#94A3B8",
+  muted:   "#475569",
 }
-const GRAD = 'linear-gradient(90deg,#22D3EE,#a855f7,#EC4899)'
-const DISMISS_KEY = 'camcash_checklist_dismissed'
 
-export default function OnboardingChecklist({ tips = [], isPro = false, visitedTabs = [], onNavigate, onUpgrade }) {
-  const [dismissed, setDismissed] = useState(true) // default true until localStorage read, avoids a flash on load
-  const [hydrated, setHydrated] = useState(false)
+// Same glass treatment the rest of the dashboard uses.
+const glassCard = {
+  background: "rgba(15,20,32,0.75)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+}
 
-  useEffect(() => {
-    try { setDismissed(localStorage.getItem(DISMISS_KEY) === '1') } catch (_) {}
-    setHydrated(true)
-  }, [])
+// The CamCash brand gradient (branding spec): cyan -> purple -> pink.
+const CTA_GRADIENT  = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
+const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
 
-  const items = [
-    { id: 'account', label: 'Create your account', done: true, tab: null },
-    { id: 'upload',  label: 'Import your first tips', done: tips.length > 0, tab: 'upload' },
-    { id: 'report',  label: 'Check your Creator Report', done: visitedTabs.includes('report'), tab: 'report' },
-    { id: 'whales',  label: 'See your Top Fans', done: visitedTabs.includes('whales'), tab: 'whales' },
-    { id: 'live',    label: 'Try Live Mode', done: visitedTabs.includes('live'), tab: 'live' },
-  ]
-  const doneCount = items.filter(i => i.done).length
-  const pct = Math.round((doneCount / items.length) * 100)
-  const allDone = doneCount === items.length
+const fmtUsd  = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const fmtUsd0 = (n) => {
+  const v = Number(n || 0)
+  // Round to whole dollars only when that does not collapse a real value to
+  // "$0" — a $0.32 lifetime fan rendering as "$0 lifetime" reads as a bug.
+  return v > 0 && v < 10 ? `$${v.toFixed(2)}` : `$${Math.round(v).toLocaleString("en-US")}`
+}
+// Hours: 1 decimal below 10h so a sparse account never shows "0h" beside a
+// per-hour rate, which reads as a contradiction.
+const fmtHours = (h) => (h > 0 && h < 10 ? `${h.toFixed(1)}h` : `${Math.round(h)}h`)
+const fmtHour = (h) => {
+  const n = ((h % 24) + 24) % 24
+  return n === 0 ? "12:00 AM" : n < 12 ? `${n}:00 AM` : n === 12 ? "12:00 PM" : `${n - 12}:00 PM`
+}
+// bestWindow is an hour bucket; a creator plans a stream, not a minute.
+const fmtWindow = (h) => `${fmtHour(h)} – ${fmtHour(h + 2)}`
 
-  const dismiss = () => {
-    setDismissed(true)
-    try { localStorage.setItem(DISMISS_KEY, '1') } catch (_) {}
-  }
-  const reopen = () => {
-    setDismissed(false)
-    try { localStorage.removeItem(DISMISS_KEY) } catch (_) {}
-  }
+// Confidence vocabulary comes from the canonical tier, never invented.
+// bestTimes.js: <2 insufficient, 2–3 promising, 4–5 supported, 6+ high.
+const TIER_COPY = {
+  high:      "Strong pattern",
+  supported: "Supported pattern",
+  promising: "Pattern emerging",
+}
 
-  if (!hydrated) return null
+const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
 
-  // Collapsed pill — always available to bring the checklist back, so
-  // dismissing it doesn't mean losing it forever.
-  if (dismissed) {
-    return (
-      <button onClick={reopen} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '8px 14px', borderRadius: 100, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-        <span style={{ width: 14, height: 14, borderRadius: '50%', background: allDone ? C.green : 'transparent', border: allDone ? 'none' : `2px solid ${C.cyan}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#06101A', fontWeight: 900 }}>
-          {allDone ? '✓' : ''}
-        </span>
-        {allDone ? 'Getting started — complete' : `Getting started — ${doneCount}/${items.length}`}
-      </button>
-    )
-  }
+const label = {
+  fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
+  textTransform: "uppercase", color: C.muted,
+}
 
+function BrandButton({ children, onClick, style }) {
   return (
-    <div className={!allDone ? 'ob-checklist-glow' : ''} style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(12,16,34,0.7)', backdropFilter: 'blur(20px)', padding: '14px 18px', marginBottom: 18, position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: GRAD, opacity: 0.85 }} />
-      <button onClick={dismiss} aria-label="Dismiss checklist" style={{ position: 'absolute', top: 12, right: 14, background: 'transparent', border: 'none', color: C.muted, fontSize: 14, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+    <button
+      onClick={onClick}
+      style={{
+        background: CTA_GRADIENT, border: "none", borderRadius: 10,
+        padding: "11px 20px", fontSize: 14, fontWeight: 700, color: C.white,
+        cursor: "pointer", whiteSpace: "nowrap",
+        boxShadow: "0 4px 18px rgba(124,92,255,0.30)",
+        transition: "transform 0.15s, box-shadow 0.15s",
+        ...style,
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(124,92,255,0.45)" }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 18px rgba(124,92,255,0.30)" }}
+    >{children}</button>
+  )
+}
 
-      {allDone ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 20 }}>🎉</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 1 }}>You're all set up!</div>
-            <div style={{ fontSize: 11, color: C.muted }}>You've explored everything CamCash has to offer on the free plan.</div>
+function GhostButton({ children, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      background: "transparent", border: `1px solid ${C.border}`, borderRadius: 9,
+      padding: "9px 15px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer", whiteSpace: "nowrap",
+    }}>{children}</button>
+  )
+}
+
+// One measured fact. Never a claim without a number behind it.
+function Chip({ icon, title, value, sub, accent = C.pink }) {
+  return (
+    <div style={card({ padding: "18px 20px", display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 })}>
+      <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{title}</div>
+        {/* wraps rather than truncating — at 2-up on a 390px screen these
+            were clipping to "8:00 AM - 1..." and "4 high-valu..." */}
+        <div style={{ fontSize: 17, fontWeight: 800, color: accent, marginTop: 5, lineHeight: 1.3 }}>{value}</div>
+        {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 5, lineHeight: 1.45 }}>{sub}</div>}
+      </div>
+    </div>
+  )
+}
+
+function Stat({ value, label: l, delta, accent = C.white }) {
+  return (
+    <div style={card({ padding: "18px 16px" })}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
+        {delta != null && (
+          <span style={{ fontSize: 11, fontWeight: 700, color: delta >= 0 ? C.green : "#F87171" }}>
+            {delta >= 0 ? "+" : ""}{delta}%
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Proof beside the recommendation: the recommended window's median $/hr
+// against the platform's typical hour.
+//
+// This replaced a 24-bar hour-of-day chart. That chart could not be made
+// honest on real data: scoped to the recommended day, the production CSV has
+// eight Wednesday buckets, and hour 6 shows $42.09/hr from ONE session —
+// exactly the "one good night" the engine's confidence tiers exist to
+// discount. Drawn at true height it dwarfed the $9.52/hr recommendation
+// (4 sessions), so the chart visibly argued against the headline above it.
+// Restricting the chart to buckets meeting the same 4-session bar left a
+// single bar, which read as broken. A 24-bar distribution implies a precision
+// this data does not have; a two-value comparison states exactly what the
+// recommendation rests on.
+function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, hourLabel }) {
+  const max = Math.max(windowRate, baselineRate, 0.01)
+  const Bar = ({ v, title, sub, gradient }) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+        <span style={{ fontSize: 14, color: gradient ? C.white : C.text, fontWeight: gradient ? 700 : 500, minWidth: 0 }}>{title}</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: gradient ? C.cyan : C.text, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{fmtUsd(v)}/hr</span>
+      </div>
+      <div style={{ height: 18, borderRadius: 9, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+        <div style={{
+          width: `${Math.max((v / max) * 100, 4)}%`, height: "100%", borderRadius: 9,
+          background: gradient ? CTA_GRADIENT : "rgba(148,163,184,0.35)",
+          boxShadow: gradient ? "0 0 14px rgba(34,211,238,0.35)" : "none",
+        }} />
+      </div>
+      {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 7 }}>{sub}</div>}
+    </div>
+  )
+  return (
+    <div>
+      <div style={{ ...label, fontSize: 12, marginBottom: 16 }}>Why this window</div>
+      <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} qualifying session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
+      <Bar v={baselineRate} title="Your typical hour" sub="median across every qualifying session" />
+    </div>
+  )
+}
+
+
+function getCommandCenterInsightCandidates({ analytics = {}, isLive = false, liveState = {} }) {
+  const candidates = [];
+
+  const add = (item) => {
+    if (item?.title && item?.description) candidates.push(item);
+  };
+
+  // 1) Live context
+  if (isLive) {
+    const liveTop = liveState?.topPlatform;
+    if (liveTop?.name && Number(liveTop?.multiple) >= 1.5) {
+      add({
+        id: "live-platform",
+        tone: "cyan",
+        label: "RIGHT NOW",
+        title: `${liveTop.name} is stronger right now`,
+        description: `Your current-hour performance is ${Number(liveTop.multiple).toFixed(1)}× your comparison platform.`,
+        action: "Open Live Mode",
+      });
+    }
+
+    const velocity = liveState?.velocity || liveState?.sessionVelocity;
+    if (velocity === "growing") {
+      add({
+        id: "live-growing",
+        tone: "pink",
+        label: "LIVE MOMENTUM",
+        title: "Your room is building momentum",
+        description: "Your current pace is improving compared with earlier in this session.",
+        action: "View Live Stats",
+      });
+    } else if (velocity === "dying") {
+      add({
+        id: "live-slowing",
+        tone: "purple",
+        label: "LIVE MOMENTUM",
+        title: "Your room is starting to slow",
+        description: "Your current pace has softened compared with earlier in this session.",
+        action: "View Live Stats",
+      });
+    }
+  }
+
+  // 2) Best window / timing
+  if (analytics?.minutesUntilBestWindow != null) {
+    const minutes = Math.round(Number(analytics.minutesUntilBestWindow));
+    if (minutes <= 180) {
+      add({
+        id: "best-window",
+        tone: "multi",
+        label: minutes <= 0 ? "RIGHT NOW" : "UP NEXT",
+        title: minutes <= 0 ? "You're in your strongest window" : "Your strongest window is approaching",
+        description: analytics.bestWindow
+          ? `${analytics.bestWindowDay ? `${analytics.bestWindowDay} · ` : ""}${analytics.bestWindow}${analytics.bestWindowRate ? ` · $${Number(analytics.bestWindowRate).toFixed(0)}/hr typical` : ""}`
+          : "Your historical data points to a stronger earning period soon.",
+        metric: analytics.bestWindowRate ? `$${Number(analytics.bestWindowRate).toFixed(0)}/hr` : null,
+        action: "Plan Your Stream",
+      });
+    }
+  }
+
+  // 3) Daily pace
+  if (analytics?.todayPacingPct != null) {
+    const pace = Number(analytics.todayPacingPct);
+    if (pace >= 115) {
+      add({
+        id: "pace-up",
+        tone: "pink",
+        label: "TODAY",
+        title: "You're ahead of your usual pace",
+        description: `You're running at ${Math.round(pace)}% of your typical daily pace.`,
+        metric: `${Math.round(pace)}%`,
+        action: "See Today's Pace",
+      });
+    } else if (pace <= 70) {
+      add({
+        id: "pace-down",
+        tone: "purple",
+        label: "TODAY",
+        title: "Today is running slower than usual",
+        description: `You're at ${Math.round(pace)}% of your typical daily pace.`,
+        metric: `${Math.round(pace)}%`,
+        action: "See Today's Pace",
+      });
+    }
+  }
+
+  // 4) Fan recovery / high-value fans
+  const priorityFans = analytics?.priorityFans || analytics?.fanRecovery?.priorityFans;
+  if (Array.isArray(priorityFans) && priorityFans.length) {
+    add({
+      id: "fan-recovery",
+      tone: "pink",
+      label: "FAN OPPORTUNITY",
+      title: `${priorityFans.length} high-value fan${priorityFans.length === 1 ? "" : "s"} are worth checking`,
+      description: "These supporters are outside their usual tipping cycle.",
+      action: "View Fans",
+    });
+  }
+
+  // 5) Returning fan multiplier
+  const returningMultiplier =
+    analytics?.returningFanMultiplier ??
+    analytics?.fanEconomy?.returningFanMultiplier ??
+    analytics?.retention?.returningFanMultiplier;
+  if (returningMultiplier != null && Number(returningMultiplier) >= 1.25) {
+    add({
+      id: "returning-value",
+      tone: "purple",
+      label: "FAN PATTERN",
+      title: "Your returning fans are worth more",
+      description: `Returning fans spend ${Number(returningMultiplier).toFixed(1)}× more than one-time tippers.`,
+      metric: `${Number(returningMultiplier).toFixed(1)}×`,
+      action: "View Fan Report",
+    });
+  }
+
+  // 6) Momentum
+  const momentum = analytics?.momentum?.label || analytics?.momentumLabel || analytics?.weeklyMomentum?.label;
+  if (momentum && /surging|growing|declining/i.test(momentum)) {
+    const positive = /surging|growing/i.test(momentum);
+    add({
+      id: "momentum",
+      tone: positive ? "pink" : "purple",
+      label: "THIS WEEK",
+      title: positive ? "You're having a strong week" : "Your week has slowed",
+      description:
+        analytics?.weekOverWeekPct != null
+          ? `${analytics.weekOverWeekPct >= 0 ? "You're up" : "You're down"} ${Math.abs(Math.round(analytics.weekOverWeekPct))}% compared with the previous period.`
+          : "Your recent earning pace has changed meaningfully.",
+      metric: analytics?.weekOverWeekPct != null
+        ? `${analytics.weekOverWeekPct >= 0 ? "+" : ""}${Math.round(analytics.weekOverWeekPct)}%`
+        : null,
+      action: "View Creator Report",
+    });
+  }
+
+  // 7) Session pattern
+  const sessionLift =
+    analytics?.longVsShortLiftPct ??
+    analytics?.sessionOptimization?.liftPct ??
+    analytics?.sessionOptimization?.improvementPct;
+  if (sessionLift != null && Number(sessionLift) >= 20) {
+    add({
+      id: "session-pattern",
+      tone: "cyan",
+      label: "SESSION PATTERN",
+      title: "Longer streams are paying off",
+      description: `Your longer qualifying sessions are earning about ${Math.round(sessionLift)}% more.`,
+      metric: `+${Math.round(sessionLift)}%`,
+      action: "View Sessions",
+    });
+  }
+
+  // 8) Best day fallback
+  if (!candidates.length && analytics?.bestDay) {
+    add({
+      id: "best-day",
+      tone: "multi",
+      label: "PATTERN",
+      title: `${analytics.bestDay} is your strongest day`,
+      description: "Your historical data shows a stronger earning pattern on this day.",
+      action: "View Creator Report",
+    });
+  }
+
+  return candidates;
+}
+
+export default function CommandCenter({
+  analytics,
+  isPro = false,
+  firstName = null,
+  onPlanStream,
+  onViewFans,
+  onSeePerformance,
+  onUpgrade,
+  // Relocated from the old Overview's "Make Money Right Now" section. The
+  // merge (go-live signal + nextMoves + realTimeAlerts, capped at 3) happens
+  // in the dashboard where those sources already live; this component only
+  // renders the prepared list. Same rule as every other value here: nothing
+  // is computed locally.
+  nowActions = [],
+  onMessageFan,
+}) {
+  // ── All values READ from the frozen layer. No local aggregation. ──
+  const bestWindow   = analytics?.canonicalBestTimes?.bestWindow || null
+  const earlySignal  = analytics?.canonicalBestTimes?.earlySignal || null
+  const grid         = analytics?.canonicalBestTimes?.grid || []
+  const overlap      = analytics?.bestWindowFanOverlap || null
+  const hourlyRate   = analytics?.estimatedHourlyRate ?? 0
+  const totalUSD     = analytics?.totalUSD ?? 0
+  const fanCount     = analytics?.uniqueFanCount ?? 0
+  const sessionCount = analytics?.meaningfulSessionCount ?? 0
+  const streamHours  = (analytics?.totalStreamMinutes ?? 0) / 60
+  const momentum     = analytics?.momentum || null
+  const missedByPlat = analytics?.missedRevenue?.cumulative_by_platform || {}
+  const whales       = analytics?.whales || []
+  const platforms    = analytics?.platforms || []
+
+  // Platform with the largest measured best-window rate gap — same ranking
+  // the Missed Revenue card uses.
+  const topGap = useMemo(() => {
+    const e = Object.entries(missedByPlat)
+    if (!e.length) return null
+    const [platform, m] = e.sort((a, b) => b[1].rateGapUsdPerHour - a[1].rateGapUsdPerHour)[0]
+    return { platform, ...m }
+  }, [missedByPlat])
+
+  const topPlatform = useMemo(
+    () => [...platforms].sort((a, b) => (b.usdPerHour || 0) - (a.usdPerHour || 0))[0] || null,
+    [platforms]
+  )
+
+  // Fans inside their typical return window. Uses the canonical
+  // expectedNextTip string; no probability percentage is invented, and only
+  // fans with >=3 tips (enough history for churnRisk to be meaningful).
+  const returningSoon = useMemo(
+    () => whales
+      .filter(w => w.tipCount >= 3 && (w.expectedNextTip === "Overdue" || w.expectedNextTip === "Tomorrow" || /^In [1-3] days?$/.test(w.expectedNextTip || "")))
+      .sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 3),
+    [whales]
+  )
+
+  const baseline = topGap?.overallMedianUsdPerHour ?? null
+  const pctAbove = (bestWindow && baseline > 0)
+    ? Math.round(((bestWindow.medianUsdPerHour - baseline) / baseline) * 100) : null
+  // Opportunity is quoted for the WINDOW WE RECOMMEND (a 2-hour bucket, the
+  // same span fmtWindow renders), not the account's average session length.
+  // Quoting a 1.1-hour basis under a "go live 8-10 AM" headline understated
+  // the very thing the CTA asks for.
+  const WINDOW_HOURS = 2
+  const oppLow  = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS : null
+  const oppHigh = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS * 1.5 : null
+
+  const hasWindow = !!bestWindow
+  const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
+
+  // Hourly distribution for the evidence bar chart — read straight off the
+  // canonical grid, summed per local hour. Presentational shaping of an
+  // existing canonical array, not a new metric.
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+
+      {/* ── HEADER ─────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 27, fontWeight: 800, color: C.white, letterSpacing: "-0.025em" }}>👋 {greeting}</div>
+          <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
+            {hasWindow ? "Here's how to make more money today." : "Here's what your data says so far."}
           </div>
         </div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 10, paddingRight: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: C.white, textTransform: 'uppercase', letterSpacing: 0.5 }}>Getting started</div>
-            <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{doneCount} of {items.length} complete</div>
+      </div>
+
+      {/* ── HERO: YOUR NEXT BEST MOVE ──────────────────────────────── */}
+      <div style={{
+        background: hasWindow ? HERO_GRADIENT : "rgba(15,20,32,0.75)",
+        backdropFilter: "blur(20px)",
+        border: hasWindow ? "1px solid rgba(34,211,238,0.28)" : `1px solid ${C.border}`,
+        borderRadius: 22, padding: 38, position: "relative", overflow: "hidden",
+      }}>
+        {hasWindow && <div style={{ position: "absolute", right: -70, top: -70, width: 300, height: 300, borderRadius: "50%", background: "rgba(34,211,238,0.12)", filter: "blur(80px)", pointerEvents: "none" }} />}
+        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 420px", minWidth: 0 }}>
+            <div style={{ ...label, fontSize: 12, color: hasWindow ? C.cyan : C.muted, marginBottom: 14 }}>Your next best move</div>
+
+            {hasWindow ? (
+              <>
+                <div style={{ fontSize: 38, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.12 }}>
+                  Go live {fmtWindow(bestWindow.localHour)}
+                  {bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
+                </div>
+                {/* Confidence + sample sit directly under the recommendation
+                    instead of being buried in a chip further down the page. */}
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "5px 12px", borderRadius: 20 }}>
+                    {TIER_COPY[bestWindow.tier] || "Pattern"}
+                  </span>
+                  <span style={{ fontSize: 13, color: C.text }}>
+                    based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} qualifying session{bestWindow.sessionCount === 1 ? "" : "s"}</strong> in this window
+                  </span>
+                </div>
+                <div style={{ fontSize: 16, color: C.text, marginTop: 16, lineHeight: 1.62, maxWidth: 500 }}>
+                  {bestWindow.localDay}s are your highest-earning window. You average{" "}
+                  <strong style={{ color: C.cyan }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</strong> here
+                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical hour</>}.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
+                  {earlySignal ? "A pattern is starting to form" : "Not enough history for a reliable window yet"}
+                </div>
+                <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 480 }}>
+                  {earlySignal
+                    ? <>{earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is your strongest so far, but only {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} back it up. A few more streams will confirm or replace it.</>
+                    : <>CamCash needs a handful of qualifying sessions before it can tell a real earning window apart from one good night. Keep importing and this fills in.</>}
+                </div>
+              </>
+            )}
+
+            <div style={{ marginTop: 26 }}>
+              <BrandButton onClick={onPlanStream} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
+            </div>
           </div>
-          <div style={{ height: 4, borderRadius: 100, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', marginBottom: 12 }}>
-            <div className="ob-progress-fill" style={{ height: '100%', width: `${pct}%`, background: GRAD, borderRadius: 100 }} />
+
+          {/* RIGHT: opportunity + the chart that proves it. The reference
+              puts the earnings-per-hour distribution here; leaving this half
+              empty was the single largest visual defect in the first pass. */}
+          {hasWindow && (
+            <div style={{ flex: "1 1 340px", minWidth: 280 }}>
+              {topGap && (
+                <div style={{ textAlign: "right", marginBottom: 16 }}>
+                  <div style={{ ...label, color: C.muted }}>Estimated opportunity</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: C.green, letterSpacing: "-0.03em", marginTop: 6 }}>
+                    +{fmtUsd0(oppLow)} – {fmtUsd0(oppHigh)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
+                    if you stream the full 2-hour window, at the {fmtUsd(topGap.rateGapUsdPerHour)}/hr gap
+                  </div>
+                </div>
+              )}
+              {baseline != null && (
+                <WindowProof
+                  windowRate={bestWindow.medianUsdPerHour}
+                  baselineRate={baseline}
+                  sessions={bestWindow.sessionCount}
+                  tierLabel={TIER_COPY[bestWindow.tier] || "Pattern"}
+                  dayLabel={bestWindow.localDay}
+                  hourLabel={fmtWindow(bestWindow.localHour)}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
+      {hasWindow && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(158px, 1fr))", gap: 11 }}>
+          <Chip icon="🕐" title="Best window" value={fmtWindow(bestWindow.localHour)} sub={`${bestWindow.localDay}s · ${TIER_COPY[bestWindow.tier] || "Pattern"}`} />
+          <Chip icon="👥" title={overlap?.count ? "Fans active in it" : "Fan overlap"}
+                value={overlap?.count ? `${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"}` : "None yet"}
+                sub={overlap?.count ? `${fmtUsd0(overlap.totalUSD)} lifetime combined` : "No repeat fans in this window"}
+                accent={overlap?.count ? C.indigo : C.muted} />
+          {topPlatform && (
+            <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${fmtHours(topPlatform.hours || 0)}`} accent={C.cyan} />
+          )}
+          <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} sub={TIER_COPY[bestWindow.tier] || "Pattern"} accent={C.gold} />
+        </div>
+      )}
+
+      {/* ── RIGHT NOW ──────────────────────────────────────────────
+          The hero says what to do next; this says what is worth doing in
+          the next few minutes. Time-sensitive and capped at three, so it
+          stays an action list rather than the alert wall it replaced. */}
+      {nowActions.length > 0 && (
+        <div style={card({ padding: 20 })}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+            <span style={{ fontSize: 17 }}>⚡</span>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Right now</div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {items.map(item => (
-              <div key={item.id}
-                onClick={() => !item.done && item.tab && onNavigate?.(item.tab)}
-                style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: !item.done && item.tab ? 'pointer' : 'default' }}>
-                <span className={!item.done ? 'ob-todo-dot' : ''} style={{ width: 16, height: 16, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, background: item.done ? C.green : 'rgba(34,211,238,0.08)', border: item.done ? 'none' : '1px solid rgba(34,211,238,0.4)', color: '#06101A' }}>
-                  {item.done ? '✓' : ''}
-                </span>
-                <span style={{ fontSize: 12.5, fontWeight: item.done ? 500 : 600, color: item.done ? C.muted : C.white, opacity: item.done ? 0.7 : 1, textDecoration: item.done ? 'line-through' : 'none' }}>{item.label}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {nowActions.map((a, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
+                padding: "14px 15px", borderRadius: 12,
+                background: i === 0 ? `${a.color}18` : `${a.color}0d`,
+                border: `1px solid ${i === 0 ? a.color + "50" : a.color + "28"}`,
+              }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 19, flexShrink: 0 }}>{a.icon}</span>
+                  <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55, minWidth: 0, overflowWrap: "anywhere" }}>{a.text}</div>
+                </div>
+                {a.cta && a.username && (
+                  <button onClick={() => onMessageFan?.(a.username)}
+                    aria-label={`Message ${a.username}`} title="Message fan"
+                    style={{ flexShrink: 0, padding: "7px 12px", borderRadius: 9, background: "rgba(236,72,153,0.14)", border: "1px solid rgba(236,72,153,0.3)", color: C.pink, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                    Message
+                  </button>
+                )}
               </div>
             ))}
           </div>
-        </>
-      )}
-
-      {!isPro && (
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: C.muted }}>✦ Bonus: explore Creator Pro when you're ready for more platforms and deeper insights.</span>
-          <button onClick={onUpgrade} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.1)', color: C.purple, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>See Creator Pro</button>
         </div>
       )}
 
-      <style jsx>{`
-        @keyframes obProgressGrow { from { width: 0; } }
-        @keyframes obProgressShimmer {
-          0%, 100% { box-shadow: 0 0 6px rgba(34,211,238,0.35), 0 0 3px rgba(236,72,153,0.25); }
-          50% { box-shadow: 0 0 14px rgba(34,211,238,0.65), 0 0 8px rgba(236,72,153,0.45); }
-        }
-        .ob-progress-fill { animation: obProgressGrow 0.6s ease-out, obProgressShimmer 3s ease-in-out 0.6s infinite; }
-        @keyframes obAmbientGlow {
-          0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 rgba(34,211,238,0); }
-          50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 0 22px rgba(34,211,238,0.16), 0 0 14px rgba(168,85,247,0.1); }
-        }
-        .ob-checklist-glow { animation: obAmbientGlow 3.6s ease-in-out infinite; }
-        @keyframes obTodoPulse {
-          0%, 100% { box-shadow: 0 0 0 rgba(34,211,238,0); }
-          50% { box-shadow: 0 0 8px rgba(34,211,238,0.55), 0 0 3px rgba(34,211,238,0.4); }
-        }
-        .ob-todo-dot { animation: obTodoPulse 2.6s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) {
-          .ob-progress-fill { animation: none; }
-          .ob-checklist-glow { animation: none; }
-          .ob-todo-dot { animation: none; }
-        }
-      `}</style>
+      {/* Chart moved into the hero (above). The standalone "Why this is your
+          best move" card was removed: it duplicated the same distribution in a
+          second card while the hero sat half-empty. */}
+
+      {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
+        <div style={card({ padding: 20 })}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
+          </div>
+          {returningSoon.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {returningSoon.map((w, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 13, padding: "14px 15px", borderRadius: 12, background: C.card2, border: `1px solid ${C.border}` }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg,#22D3EE,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: C.white, flexShrink: 0 }}>
+                    {w.username.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: C.white, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.username}</div>
+                    <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.45 }}>
+                      {fmtUsd0(w.totalUSD)} lifetime · {w.tipCount} tips · usually every ~{Math.round(w.avgDaysBetweenTips)}d
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, padding: "6px 11px", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0,
+                    background: w.expectedNextTip === "Overdue" ? "rgba(236,72,153,0.14)" : "rgba(16,185,129,0.13)",
+                    color: w.expectedNextTip === "Overdue" ? C.pink : C.green }}>
+                    {w.expectedNextTip}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.65 }}>
+              No supporters are inside their typical return window right now. This fills in as your fans build a repeat pattern — it needs at least 3 tips from someone before it will make a call.
+            </div>
+          )}
+          <div style={{ marginTop: 14 }}><GhostButton onClick={onViewFans}>See all fans →</GhostButton></div>
+        </div>
+
+        <div style={card({ padding: 20 })}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 10 }}>
+            <Stat value={fmtUsd(totalUSD)} label="Total earnings" accent={C.white} />
+            <Stat value={`${fmtUsd(hourlyRate)}`} label="Per hour" accent={C.green} />
+            <Stat value={fmtHours(streamHours)} label="Total hours" accent={C.white} />
+            <Stat value={sessionCount.toLocaleString()} label="Sessions" accent={C.white} />
+            <Stat value={fanCount.toLocaleString()} label="Fans" accent={C.indigo} />
+            {momentum && momentum.label !== "No data" && (
+              <Stat value={fmtUsd0(momentum.last30USD)} label="Last 30 days" delta={Math.round(momentum.pct)} accent={C.white} />
+            )}
+          </div>
+          <div style={{ marginTop: 14 }}><GhostButton onClick={onSeePerformance}>View full performance →</GhostButton></div>
+        </div>
+      </div>
+
+      {/* ── PRO STRATEGY FOOTER ────────────────────────────────────────
+          One contextual upsell, not a paywall on every section. Only
+          rendered when there is a real, personalized thing being held back. */}
+      {!isPro && hasWindow && (
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 22, flexWrap: "wrap",
+          padding: "24px 26px", borderRadius: 18,
+          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
+          border: "1px solid rgba(124,92,255,0.26)",
+        }}>
+          <div style={{ minWidth: 280, flex: 1 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: "-0.015em" }}>
+              You found the window. Pro builds the week around it.
+            </div>
+            <div style={{ fontSize: 14, color: C.text, marginTop: 8, lineHeight: 1.65 }}>
+              You already know <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtWindow(bestWindow.localHour)}</strong> is where you earn most
+              {topGap ? <> and that the gap there is worth <strong style={{ color: C.green }}>{fmtUsd(topGap.rateGapUsdPerHour)}/hr</strong></> : null}.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 13 }}>
+              {[
+                `Every ranked window for the week, not just the top one`,
+                topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
+                overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
+                `A forecast you can hold next week's schedule against`,
+              ].map((line, i) => (
+                <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
+                  <span style={{ color: C.indigo, fontWeight: 800, flexShrink: 0 }}>→</span>
+                  <span>{line}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <BrandButton onClick={() => onUpgrade?.("command_center_strategy")} style={{ padding: "14px 26px", fontSize: 15.5, borderRadius: 12, flexShrink: 0 }}>Build My Strategy →</BrandButton>
+        </div>
+      )}
     </div>
   )
 }
