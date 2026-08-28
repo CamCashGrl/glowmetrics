@@ -1,5 +1,5 @@
 "use client"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -79,6 +79,153 @@ const TIER_COPY = {
   high:      "Strong pattern",
   supported: "Supported pattern",
   promising: "Pattern emerging",
+}
+
+const INSIGHT_ACCENTS = [
+  { key: "pink", color: "#FF2DAA" },
+  { key: "purple", color: "#A855F7" },
+  { key: "cyan", color: "#22E6FF" },
+  { key: "blue", color: "#4D7CFF" },
+]
+
+function safeNumber(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function buildSurfacedInsights(analytics) {
+  if (!analytics) return []
+  const out = []
+  const push = (item) => { if (item?.title && item?.description) out.push(item) }
+
+  const rvn = analytics.returningVsNew
+  if (rvn?.multiplier && rvn.returningCount > 0 && rvn.newCount > 0) {
+    push({
+      type: "retention",
+      accent: "pink",
+      label: "FAN PATTERN",
+      title: "Your returning fans are worth more",
+      description: `Returning fans spend ${rvn.multiplier}× more on average than one-time tippers.`,
+      metric: `${rvn.multiplier}×`,
+      metricLabel: "returning-fan spend",
+      priority: 4,
+    })
+  }
+
+  const dep = analytics.topFanDependency
+  if (dep?.top3Pct >= 50) {
+    push({
+      type: "concentration",
+      accent: "purple",
+      label: "FAN ECONOMY",
+      title: "A small group of fans drives a big share of revenue",
+      description: `Your top 3 supporters currently account for ${dep.top3Pct}% of your total earnings.`,
+      metric: `${dep.top3Pct}%`,
+      metricLabel: "from your top 3 fans",
+      priority: 5,
+    })
+  }
+
+  const momentum = analytics.momentum
+  if (momentum && momentum.label && momentum.label !== "No data" && Math.abs(Number(momentum.pct || 0)) >= 10) {
+    const positive = Number(momentum.pct) >= 0
+    push({
+      type: "momentum",
+      accent: positive ? "cyan" : "blue",
+      label: "PERFORMANCE",
+      title: positive ? "You're gaining momentum" : "Your recent pace has cooled",
+      description: positive
+        ? `Your last 30 days are ${Math.abs(Math.round(momentum.pct))}% ahead of the previous 30 days.`
+        : `Your last 30 days are ${Math.abs(Math.round(momentum.pct))}% below the previous 30 days.`,
+      metric: `${positive ? "+" : "−"}${Math.abs(Math.round(momentum.pct))}%`,
+      metricLabel: "vs previous 30 days",
+      priority: 6,
+    })
+  }
+
+  const durationInsight = (analytics.insights || []).find(i => i?.type === "duration")
+  if (durationInsight) {
+    const match = String(durationInsight.text || "").match(/Streams over 60 min earn (\d+)% more/)
+    const uplift = match ? Number(match[1]) : null
+    push({
+      type: "duration",
+      accent: "purple",
+      label: "SESSION PATTERN",
+      title: "Longer streams are outperforming",
+      description: uplift
+        ? `Your 60+ minute sessions are earning ${uplift}% more than your shorter sessions.`
+        : "Your existing session analysis shows a meaningful difference by stream length.",
+      metric: uplift ? `+${uplift}%` : "60+ min",
+      metricLabel: uplift ? "vs shorter sessions" : "stronger session pattern",
+      priority: 7,
+    })
+  }
+
+  const loss = (analytics.lossAlerts || []).find(a => ["tip_drop", "fan_churn", "streak_broken", "peak_missed"].includes(a?.type))
+  if (loss) {
+    if (loss.type === "tip_drop") {
+      const m = String(loss.message || "").match(/dropped (\d+)%/)
+      push({
+        type: "warning",
+        accent: "pink",
+        label: "NEEDS ATTENTION",
+        title: "Your average tip size is slipping",
+        description: m ? `Your average tip is down ${m[1]}% compared with the prior week.` : "Your recent average tip size is below the previous week's level.",
+        metric: m ? `−${m[1]}%` : "—",
+        metricLabel: "week over week",
+        priority: 1,
+      })
+    } else if (loss.type === "fan_churn") {
+      push({
+        type: "fan",
+        accent: "pink",
+        label: "FAN ALERT",
+        title: "A high-value supporter has gone quiet",
+        description: "One of your higher-value supporters is outside their normal tipping cycle.",
+        metric: "1",
+        metricLabel: "fan needs attention",
+        priority: 2,
+      })
+    } else if (loss.type === "peak_missed") {
+      push({
+        type: "timing",
+        accent: "purple",
+        label: "TIMING",
+        title: "You've missed your strongest window",
+        description: "Your recent streaming history hasn't hit your strongest window consistently.",
+        metric: "3 days",
+        metricLabel: "recent window",
+        priority: 3,
+      })
+    } else if (loss.type === "streak_broken") {
+      push({
+        type: "momentum",
+        accent: "blue",
+        label: "CONSISTENCY",
+        title: "Your streaming streak broke",
+        description: "A gap has opened in your recent streaming pattern.",
+        metric: "Reset",
+        metricLabel: "your streak",
+        priority: 8,
+      })
+    }
+  }
+
+  const bestDay = analytics.bestDay
+  if (bestDay?.day && safeNumber(bestDay.avg) > 0) {
+    push({
+      type: "timing",
+      accent: "cyan",
+      label: "DAY PATTERN",
+      title: `${bestDay.day} is your strongest earning day`,
+      description: `Your median earnings on ${bestDay.day}s are ${fmtUsd(bestDay.avg)} when you stream.`,
+      metric: fmtUsd(bestDay.avg),
+      metricLabel: `median ${bestDay.day} earnings`,
+      priority: 9,
+    })
+  }
+
+  return out.sort((a, b) => (a.priority || 99) - (b.priority || 99)).slice(0, 7)
 }
 
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
@@ -256,6 +403,26 @@ export default function CommandCenter({
   const hasWindow = !!bestWindow
   const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
 
+  const surfacedInsights = useMemo(() => buildSurfacedInsights(analytics), [analytics])
+  const [insightIndex, setInsightIndex] = useState(0)
+  const [insightFading, setInsightFading] = useState(false)
+
+  useEffect(() => {
+    if (surfacedInsights.length <= 1) return undefined
+    const timer = setInterval(() => {
+      setInsightFading(true)
+      setTimeout(() => {
+        setInsightIndex((i) => (i + 1) % surfacedInsights.length)
+        setInsightFading(false)
+      }, 280)
+    }, 9000)
+    return () => clearInterval(timer)
+  }, [surfacedInsights.length])
+
+  const activeSurfacedInsight = surfacedInsights.length
+    ? surfacedInsights[insightIndex % surfacedInsights.length]
+    : null
+
   // Hourly distribution for the evidence bar chart — read straight off the
   // canonical grid, summed per local hour. Presentational shaping of an
   // existing canonical array, not a new metric.
@@ -354,6 +521,55 @@ export default function CommandCenter({
           )}
         </div>
       </div>
+
+      {/* ── CAMCASH NOTICED: SURFACED ENGINE INSIGHT ─────────────────── */}
+      {activeSurfacedInsight && (
+        <div
+          style={{
+            position: "relative", overflow: "hidden", borderRadius: 18,
+            padding: "19px 21px",
+            background: "rgba(9,10,24,0.64)",
+            backdropFilter: "blur(20px)",
+            border: `1px solid ${INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7"}45`,
+            boxShadow: `0 0 35px ${INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7"}12`,
+            transition: "opacity 280ms ease, transform 280ms ease, border-color 350ms ease",
+            opacity: insightFading ? 0 : 1,
+            transform: insightFading ? "translateY(4px)" : "translateY(0)",
+          }}
+        >
+          <div style={{ position: "absolute", inset: -35, pointerEvents: "none", filter: "blur(35px)", opacity: .65,
+            background: `radial-gradient(circle at 12% 40%, ${INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7"}18, transparent 38%), radial-gradient(circle at 88% 20%, rgba(34,230,255,.10), transparent 35%)`
+          }} />
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0, flex: 1 }}>
+              <div style={{ width: 35, height: 35, borderRadius: 10, display: "grid", placeItems: "center",
+                color: INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7",
+                background: `${INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7"}0e`,
+                border: `1px solid ${INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7"}30`,
+                flexShrink: 0
+              }}>
+                ✦
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...label, color: INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7" }}>CamCash noticed · {activeSurfacedInsight.label}</div>
+                <div style={{ fontSize: 16.5, fontWeight: 800, color: C.white, marginTop: 7 }}>{activeSurfacedInsight.title}</div>
+                <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginTop: 4 }}>{activeSurfacedInsight.description}</div>
+              </div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 25, fontWeight: 850, color: C.white, letterSpacing: "-0.03em" }}>{activeSurfacedInsight.metric}</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{activeSurfacedInsight.metricLabel}</div>
+            </div>
+          </div>
+          {surfacedInsights.length > 1 && (
+            <div style={{ position: "relative", display: "flex", gap: 5, marginTop: 13 }}>
+              {surfacedInsights.map((_, i) => (
+                <span key={i} style={{ width: i === insightIndex ? 17 : 5, height: 4, borderRadius: 10, background: i === insightIndex ? (INSIGHT_ACCENTS.find(x => x.key === activeSurfacedInsight.accent)?.color || "#A855F7") : "rgba(255,255,255,.12)", transition: "width 280ms ease, background 280ms ease" }} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
       {hasWindow && (
