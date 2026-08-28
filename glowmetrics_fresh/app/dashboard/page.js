@@ -3918,6 +3918,495 @@ const stopImportMessageRotation = () => {
               onUpgrade={() => openUpgradeModal('default')}
             />
 
+            {/* ══ RESTORED COMMAND CENTER ZONES ═══════════════════════
+                Sections 1, 4, 5 and 6 of the mid-August dashboard: the Money
+                Snapshot KPI wall, the Tokens-vs-Hours and Monthly Growth
+                charts, Your Top Earners, You're Losing Money, and Smart
+                Insights.
+
+                None of this was retired on purpose. Commit d4606c0 — titled
+                "Fix three data defects" — refactored 2,497 lines out of this
+                file and dropped these zones on the way past; CommandCenter.js
+                was written to "replace sections 1-3" but only ever covered a
+                fraction of what they showed. Six of the seven original zones
+                were rendering nowhere at all.
+
+                Restored verbatim. Every block is self-contained: each defines
+                its own locals (cardDefs, allAlerts, atRisk, missedEntries,
+                thisMonthEntry, milestones, sessionsLast30 and the rest) and
+                reads only analytics, whales, lossAlerts and missedRevenue,
+                all of which still exist unchanged.
+
+                Sections 2 and 3 are deliberately NOT restored here: section 2
+                ("Make Money Right Now") already feeds CommandCenter's
+                nowActions, and section 3 ("What's Working") is back as
+                PlatformROI above. Restoring them would double them up. ═══ */}
+
+            {/* ═══════════════════════════════════════
+                1. MONEY SNAPSHOT
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // ── empty state — show null; DashboardProgressCard above covers zero-data ──
+              if (tips.length === 0) return null
+
+              // Canonical local-calendar-month boundaries + revenue/growth — read
+              // from analytics.monthlyData (lib/analytics.js) rather than
+              // recomputing with UTC month math. See _momMonthly above.
+              const thisMonthEntry = _momThisMonth
+              const prevMonthEntry = _momPrevMonth
+              const thisMonthStart = thisMonthEntry ? new Date(`${thisMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+              const prevMonthStart = prevMonthEntry ? new Date(`${prevMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1))
+              const thisMonthRev = thisMonthEntry?.usd ?? 0
+              const prevMonthRev = prevMonthEntry?.usd ?? 0
+              const growthPct = thisMonthEntry?.growthPct ?? null
+              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+              const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
+              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
+              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
+
+              // ── Per-card month-over-month trend ──
+              // Meaningful sessions only (analytics.meaningfulSessions), matching the
+              // valid-session rule used everywhere else — never the raw session list.
+              const meaningfulSessions = analytics?.meaningfulSessions || []
+              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
+              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
+                ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
+
+              const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce((s,x) => s+(x.totalUSD||0),0) / meaningfulSessions.length : 0
+              const tmAvgSession = thisMonthMeaningful.length ? thisMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthMeaningful.length : null
+              const pmAvgSession = prevMonthMeaningful.length ? prevMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthMeaningful.length : null
+              const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
+                ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
+
+              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
+              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
+
+              // trend badge renderer
+              const TrendBadge = ({ pct }) => {
+                if (pct === null || isNaN(pct)) return null
+                const up = pct >= 0
+                return <span style={{ fontSize:10, fontWeight:700, color: up ? '#10B981' : '#f87171', marginLeft:6 }}>{up ? '↑' : '↓'}{Math.abs(pct)}%</span>
+              }
+
+              // Card row intentionally shows different metrics than the sticky command
+              // bar above (which already covers Total Earned / Estimated $/Hour) —
+              // these four add depth instead of repeating the same headline numbers.
+              const cardDefs = [
+                { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
+                  value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
+                  icon:'💰', isHero:true },
+                { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
+                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
+                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
+                  icon:'🎯' },
+                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
+                  value: whales.length > 0 ? whales.length.toLocaleString() : '—',
+                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
+                  icon:'👥' },
+                { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
+                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
+                  sub: meaningfulSessions.length > 0
+                    ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
+                    : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
+                  icon:'🎥' }
+              ]
+
+              // Earnings velocity per platform for velocity strip
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
+              return (
+                <>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 14 }}>
+                    {cardDefs.map((s, i) => (
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 16, padding: "13px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default', display:'flex', flexDirection:'column' }}>
+                        {/* accent top bar */}
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'16px 16px 0 0' }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>{s.label}</span>
+                          <span style={{ fontSize: 18, opacity: 0.75 }}>{s.icon}</span>
+                        </div>
+                        <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
+                          {s.value}<TrendBadge pct={s.trend} />
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* section divider */}
+                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:14 }} />
+                </>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                TOKENS VS HOURS ONLINE + MONTHLY GROWTH
+            ═══════════════════════════════════════ */}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} />}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                4. YOUR TOP EARNERS
+                A. Likely Online Now  B. Milestones  C. At Risk
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const currentUTCHourTE = new Date().getUTCHours()
+              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+
+              const likelyOnline = whales
+                .filter(w => w.tipCount >= 3)
+                .map(w => {
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const hourCounts = {}
+                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
+                  if (!sorted.length) return null
+                  const peakHour = parseInt(sorted[0][0])
+                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
+                  // peakFraction: share of this fan's tips that fall at their peak hour
+                  const peakFraction = sorted[0][1] / fanTips.length
+                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
+                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
+                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
+                  return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
+                })
+                .filter(Boolean)
+                .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
+                .sort((a,b) => b.totalUSD - a.totalUSD)
+                .slice(0, 3)
+
+              // Deduplicate: a fan should only appear in one category (highest priority wins)
+              // Priority: Likely Online > Close to Milestone > At Risk
+              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
+
+              const milestones = (whatsNextAlerts || [])
+                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
+                .slice(0, 3)
+              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
+
+              const atRisk = reengageList
+                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
+                .slice(0, 3)
+
+              const hasAny = likelyOnline.length || milestones.length || atRisk.length
+              if (!hasAny) return null
+
+              const fanCard = (w, opts = {}) => (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
+                      {opts.sub ? ` · ${opts.sub}` : ''}
+                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
+                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
+                      {` · ${w.platform}`}
+                    </div>
+                    </div>
+                  </div>
+                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
+                  {opts.action && (
+                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
+                      {opts.btnLabel || "💌"}
+                    </button>
+                  )}
+                </div>
+              )
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
+                    </div>
+                  </div>
+
+                  {/* A. Likely Online Now */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                        Likely Online Now
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {likelyOnline.map((w, i) => fanCard(w, {
+                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
+                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
+                          sub: `peaks at ${w.peakLabel}`,
+                          badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: "none", pulseBtn: true
+                        }))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B. Close to Milestone */}
+                  {milestones.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {milestones.map((a, i) => {
+                          const w = a.whale
+                          if (!w) return null
+                          return fanCard(w, {
+                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
+                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
+                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
+                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
+                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
+                          })
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* C. At Risk — Re-engage */}
+                  {atRisk.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
+                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
+                          avatarBg: `${urgency}20`, avatarColor: urgency,
+                          sub: `${days}d since last tip`,
+                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
+                          btnLabel: "💌"
+                        }))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // Only show a fan re-engagement warning if the model has actually
+              // been online enough for the fan to have had a realistic chance to tip.
+              // Rule: model must have ≥3 sessions in the last N days, where N = fan's
+              // average tipping frequency. No-shows aren't "at risk" — we just weren't live.
+              const hasStreamedEnough = (whale) => {
+                if (!whale?.avgDaysBetweenTips) return true
+                const windowDays = Math.max(7, Math.round(whale.avgDaysBetweenTips))
+                const cutoff = Date.now() - windowDays * 86400000
+                const sessionsInWindow = sessions.filter(s => new Date(s.startTime).getTime() >= cutoff).length
+                return sessionsInWindow >= 3
+              }
+              const allAlerts = [
+                ...(lossAlerts || []).filter(a =>
+                  (a.type === 'fan_churn') ? hasStreamedEnough(a.whale) : true
+                ),
+                ...(alerts || []).filter(a =>
+                  (a.type === 'churn_risk') ? hasStreamedEnough(a.whale) : true
+                ).slice(0, 3)
+              ].slice(0, 6)
+              const missedEntries = Object.entries(missedRevenueByPlat)
+                .filter(([,m]) => m.missedRevenue > 5)
+                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
+              if (!allAlerts.length && !missedEntries.length) return null
+              const peakHourLabel = canonicalPeakLabel
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(251,146,60,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚨</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>You're Losing Money</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Inactivity, cold fans, missed windows</div>
+                    </div>
+                  </div>
+
+                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
+                  {missedEntries.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
+                      {missedEntries.map(([plat, m], i) => (
+                        <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {peakHourLabel} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted }}>
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {peakHourLabel} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Stream at {peakHourLabel}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {allAlerts.map((a, i) => (
+                      <div key={i} className={`alert-enter alert-pulse-${a.severity === "critical" ? "critical" : "warning"} alert-row`} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}`, animationDelay: `${i * 50}ms` }}>
+                        <div style={{ fontSize: 13, color: C.white, marginBottom: 3 }}>{a.icon} {a.message}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>👉 {a.action}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+
+            {/* ═══════════════════════════════════════
+                6. SMART INSIGHTS — scannable, lower priority
+            ═══════════════════════════════════════ */}
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
+                </div>
+
+                {(() => {
+                  // Build insights from data already in scope — no API call needed
+                  const _ins = []
+
+                  // 1. Peak hour insight
+                  if (canonicalPeakLabel) {
+                    const _pPlat = dailyBrief?.displayPlat || 'your top platform'
+                    const _pAvg = dailyBrief?.displayAvg
+                    _ins.push({
+                      title: `Your peak window is ${canonicalPeakLabel} on ${_pPlat}`,
+                      body: _pAvg > 0
+                        ? `Sessions at this hour average $${_pAvg.toFixed(0)} — ${Math.round(_pAvg / Math.max(avgPerHour, 0.01) * 10) / 10}x your overall rate. Go live during this window to maximise earnings.`
+                        : `This is when your fans are most active. Streaming at this time consistently will grow your peak-hour session count.`,
+                      action: `Schedule your next stream around ${canonicalPeakLabel}`
+                    })
+                  }
+
+                  // 2. Best platform insight
+                  const _topPlatEntry = Object.entries(platformVelocity || {}).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1])[0]
+                  if (_topPlatEntry) {
+                    const [_tp, _tv] = _topPlatEntry
+                    const _tpLabel = _tp.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'Chaturbate')
+                    _ins.push({
+                      title: `${_tpLabel} is your highest-ROI platform at $${_tv.toFixed(2)}/hr`,
+                      body: Object.keys(platformVelocity).length > 1
+                        ? `Focus your high-effort streams here. Lower-ROI platforms can fill off-peak slots, but ${_tpLabel} should get your peak-hour time.`
+                        : `Your sessions here average $${_tv.toFixed(2)}/hr. Consistent streaming builds compounding fan loyalty — each session raises your baseline.`,
+                      action: `Prioritise ${_tpLabel} for peak-hour streams`
+                    })
+                  }
+
+                  // 3. Session average vs top fan contribution
+                  const _topWhale = whales?.[0]
+                  if (_topWhale && _topWhale.totalUSD > 0) {
+                    const _pct = totalRevenue > 0 ? Math.round((_topWhale.totalUSD / totalRevenue) * 100) : 0
+                    _ins.push({
+                      title: `${_topWhale.username} accounts for ${_pct}% of your lifetime revenue`,
+                      body: _pct >= 30
+                        ? `High fan concentration is a risk — if they churn your earnings drop sharply. Nurture 2–3 backup whales to reduce dependency.`
+                        : `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
+                      action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
+                    })
+                  } else if (avgPerHour > 0) {
+                    // Fallback: session avg insight
+                    const _sessAvg = sessions.length > 0 ? totalRevenue / sessions.length : 0
+                    _ins.push({
+                      title: `You average $${_sessAvg.toFixed(0)} per session at $${avgPerHour.toFixed(2)}/hr`,
+                      body: `Sessions over 60 minutes earn disproportionately more — longer streams let tipping patterns compound. Aim for at least one 90-min session per week.`,
+                      action: `Try a 90-min stream at your peak hour`
+                    })
+                  }
+
+                  if (_ins.length === 0) return (
+                    <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Upload more session data to generate personalised insights.</div>
+                  )
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {_ins.map((ins, i) => (
+                        <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
+                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>{ins.body}</div>
+                          <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+
+            {/* Dependency risk + pre-tip behavior — kept, moved lower */}
+            {dependencyRisk && dependencyRisk.level !== 'low' && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: dependencyRisk.level === 'high' ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    {dependencyRisk.level === 'high' ? '🚨' : '⚠️'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Revenue Dependency Risk — {dependencyRisk.level === 'high' ? 'High' : 'Medium'}</div>
+                    <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>{dependencyRisk.message}</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {[
+                        { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
+                        { label: "Top 3 fans", value: `${dependencyRisk.top3Pct}%` },
+                        { label: "Top 5 fans", value: `${dependencyRisk.top5Pct}%` },
+                        { label: "Loss if #1 leaves", value: `$${dependencyRisk.lossIfTopFanLeaves}` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {preTipBehavior && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 20 }}>🧠</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
+                  </div>
+                  {preTipBehavior.peakTippingWindow && (
+                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
+                  💡 {preTipBehavior.recommendation}
+                </div>
+                {preTipBehavior.clusteringDetected && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
+                    🔥 Tip clustering detected — fans tip in bursts. Acknowledge tips publicly to trigger more.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ═══════════════════════════════════════════════════════
                 COMMAND CENTER — DISCOVER -> EXPLAIN -> OPPORTUNITY ->
                 ACTION -> MEASURE. Replaces the former sections 1-3
