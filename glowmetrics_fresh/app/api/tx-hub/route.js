@@ -156,5 +156,9 @@ export async function GET(req) {
     calendar: isPro ? computeCalendar(filteredCurrent, tz) : [],
   }
 
-  return NextResponse.json(payload)
+  // Private, short-lived cache — lets rapid UI interactions (e.g. re-opening
+  // a drawer, a quick tab switch) reuse the last response instead of
+  // re-querying, without risking staleness beyond a few seconds. `private`
+  // keeps this out of any shared/CDN cache since the payload is per-user.
+  return NextResponse.json(payload, { headers: { 'Cache-Control': 'private, max-age=15' } })
 }

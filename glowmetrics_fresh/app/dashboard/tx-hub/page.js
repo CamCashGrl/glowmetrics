@@ -1,21 +1,29 @@
 "use client"
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { supabase } from '../../../lib/supabase'
 import Sidebar from '../Sidebar'
-import { C } from './theme'
+import { C, card } from './theme'
 import { presetToRange, todayIso, daysAgoIso } from './lib/format'
 import TxHeader from './components/TxHeader'
 import KpiCards from './components/KpiCards'
-import EarningsChart from './components/EarningsChart'
 import TransactionTable from './components/TransactionTable'
-import FilterDrawer from './components/FilterDrawer'
-import TransactionDrawer from './components/TransactionDrawer'
 import PlatformBreakdown from './components/PlatformBreakdown'
 import TopFans from './components/TopFans'
-import EarningsDonut from './components/EarningsDonut'
-import EarningsCalendar from './components/EarningsCalendar'
 import EmptyState from './components/EmptyState'
+
+// recharts (EarningsChart + EarningsDonut) is the single heaviest dependency
+// this page pulls in — code-split both so it's fetched/parsed only once the
+// rest of the page (KPIs, table) is already interactive, instead of blocking
+// first paint on it. Drawers are split too since most loads never open one.
+const chartSkeleton = <div style={{ ...card({ padding: 0 }), height: 320, marginBottom: 20 }} />
+const panelSkeleton = <div style={{ ...card({ padding: 0 }), height: 260 }} />
+const EarningsChart = dynamic(() => import('./components/EarningsChart'), { loading: () => chartSkeleton })
+const EarningsDonut = dynamic(() => import('./components/EarningsDonut'), { loading: () => panelSkeleton })
+const EarningsCalendar = dynamic(() => import('./components/EarningsCalendar'), { loading: () => panelSkeleton })
+const FilterDrawer = dynamic(() => import('./components/FilterDrawer'), { ssr: false })
+const TransactionDrawer = dynamic(() => import('./components/TransactionDrawer'), { ssr: false })
 
 const PAGE_SIZE = 25
 
