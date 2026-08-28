@@ -18,6 +18,7 @@ import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
 import UnimportedPlatforms from './UnimportedPlatforms'
+import CreatorReportView from '../../components/creator-report/CreatorReportView'
 import PlatformROI from './PlatformROI'
 import ConversionLoop from './ConversionLoop'
 import { conversionPrompts } from '../../lib/conversionLoop'
@@ -3892,6 +3893,21 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+            {/* The reflective report: performance over a period, the patterns
+                behind it, and what they mean. Distinct from the Command
+                Center, which answers "what should I do now?" — same engine,
+                different question. CreatorReportView computes nothing; see
+                lib/creatorReportData.js. */}
+            <CreatorReportView
+              tips={tips}
+              analytics={analytics}
+              runEngine={runEngine}
+              timezone={creatorTz}
+              updatedLabel={lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null}
+              onAction={(tab) => handleTabChange(tab)}
+            />
+
+            {/* Build progress stays below it — what CamCash still needs. */}
             <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} primaryPlatform={profile?.primary_pro_platform || null} streamingPlatforms={streamingPlatforms} />
           </div>
         )}

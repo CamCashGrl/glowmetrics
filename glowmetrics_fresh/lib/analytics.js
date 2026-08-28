@@ -705,7 +705,14 @@ export function generateLossAlerts(tips, sessions, whales, bestHour, tz = 'UTC')
   return alerts
 }
 
-export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, precomputedWhales = null) {
+/**
+ * @param {Object} [out] - optional side-channel. Two of the sentences below
+ *   are built from numbers the Creator Report needs as DATA (the returning-fan
+ *   multiplier and week-over-week momentum). Rather than recompute them there
+ *   or parse them back out of the copy, they are written here into `out`, so
+ *   the sentence and the structured value can never disagree.
+ */
+export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, precomputedWhales = null, out = {}) {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
@@ -777,8 +784,13 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     const oneTimeKeys = Object.keys(fanTipCounts).filter(k => fanTipCounts[k] === 1)
     const avgReturning = returningKeys.length ? returningKeys.reduce((s, k) => s + fanTipUSD[k], 0) / returningKeys.length : 0
     const avgOneTime = oneTimeKeys.length ? oneTimeKeys.reduce((s, k) => s + fanTipUSD[k], 0) / oneTimeKeys.length : 0
-    const multiplierText = avgOneTime > 0 && avgReturning > 0 ? `${(avgReturning / avgOneTime).toFixed(1)}x more` : 'significantly more'
+    const multiplier = avgOneTime > 0 && avgReturning > 0 ? parseFloat((avgReturning / avgOneTime).toFixed(1)) : null
+    const multiplierText = multiplier ? `${multiplier}x more` : 'significantly more'
     const fmtAmt = (v) => v < 1 ? `$${v.toFixed(2)}` : `$${v.toFixed(0)}`
+    // NOTE: no structured fan-economy object is emitted here. aggregateRows()
+    // already exports returningVsNew with exactly these figures
+    // (returningPct, avgReturnSpend, avgNewSpend, multiplier), and a second
+    // one would be a second definition of the returning-fan multiplier.
     insights.push({ icon: '🔁', text: `${pct}% of your fans are returning tippers — loyalty is your strongest asset. Returning fans spend ${multiplierText} on average than first-timers (${fmtAmt(avgReturning)} vs ${fmtAmt(avgOneTime)})`, type: 'retention', priority: 3 })
   }
 
@@ -788,6 +800,16 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     const thisRev = thisWeek.reduce((s, t) => s + t.usd, 0)
     const lastRev = lastWeek.reduce((s, t) => s + t.usd, 0)
     const change = Math.round(((thisRev - lastRev) / lastRev) * 100)
+    // Structured alongside the sentence so the Creator Report can read the
+    // week-over-week movement as data instead of parsing the copy.
+    // `meaningful` mirrors the existing >= 10% gate rather than adding one.
+    out.weeklyMomentum = {
+      thisWeekUSD: parseFloat(thisRev.toFixed(2)),
+      lastWeekUSD: parseFloat(lastRev.toFixed(2)),
+      changePct: change,
+      direction: change >= 10 ? 'up' : change <= -10 ? 'down' : 'steady',
+      meaningful: Math.abs(change) >= 10,
+    }
     if (Math.abs(change) >= 10) {
       insights.push({ icon: change >= 0 ? '📈' : '📉', text: change >= 0 ? `You're up ${change}% this week vs last week ($${thisRev.toFixed(0)} vs $${lastRev.toFixed(0)}) — keep the momentum going` : `You're down ${Math.abs(change)}% this week vs last ($${thisRev.toFixed(0)} vs $${lastRev.toFixed(0)}) — increase stream frequency to recover`, type: 'momentum', priority: 2 })
     }
@@ -1017,7 +1039,8 @@ export function aggregateRows(tips, tz = null) {
   const { bestDay, worstDay, bestHour, earlySignalHour } = computeBestTimes(tips, userTz)
 
   const whales      = identifyWhales(tips, userTz)
-  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
+  const insightExtras = {}
+  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales, insightExtras)
   const predictions = predictRevenue(tips, meaningfulSessions, userTz)
   const whaleAlerts = generateWhaleAlerts(whales)
   const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour, userTz)
@@ -1692,6 +1715,10 @@ export function aggregateRows(tips, tz = null) {
     // (that heatmap reads platformTimes[platform].hours); it was a dead
     // key with a misleading pointer.
     meaningfulSessions, allValidSessions, sessionPerformance, latestPlatformDelta,
+    // Structured companion to the week-over-week insight sentence — see
+    // generateInsights(). Fan economy is NOT duplicated here: returningVsNew
+    // above already carries the returning multiplier and spend figures.
+    weeklyMomentum: insightExtras.weeklyMomentum || null,
     bestPlatformByRate, rankablePlatformCount: rankablePlatforms.length,
     // 2C-6: the rankable set itself, highest median rate first. This is the
     // SAME array bestPlatformByRate is picked from — exported so a surface can
