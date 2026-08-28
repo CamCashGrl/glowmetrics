@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import Button from "../../components/ui/Button"
 
 const C = {
@@ -16,6 +17,10 @@ const NAV = [
       { id: "report",   icon: "🧾", label: "Creator Report" },
       { id: "overview", icon: "⚡", label: "Command Center" },
     ]
+  },
+  {
+    group: "TRANSACTIONS",
+    items: [{ id: "tx-hub", icon: "💳", label: "TX Hub", href: "/dashboard/tx-hub" }]
   },
   {
     group: "FANS",
@@ -61,9 +66,10 @@ const NAV = [
 export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, trialEligible = false }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const pathname = usePathname()
 
   const renderItem = (id, icon, label, href) => {
-    const isActive  = !href && activeTab === id
+    const isActive  = href ? pathname === href : activeTab === id
     const isHovered = hoveredId === id
     const Comp = href ? "a" : "button"
     return (
