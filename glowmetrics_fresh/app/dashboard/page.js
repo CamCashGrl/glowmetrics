@@ -1416,6 +1416,14 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
 }
 
 export default function Dashboard() {
+  const commandCenterInsightContext = {
+    analytics,
+    nowActions,
+    isLive: Boolean(liveActive),
+    isPro: Boolean(isPro),
+  };
+
+
   const router = useRouter()
   // Open directly to a specific tab when ?tab=X is in the URL
   const initialTab = typeof window !== 'undefined'
