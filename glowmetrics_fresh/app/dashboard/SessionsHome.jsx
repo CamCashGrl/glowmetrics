@@ -42,12 +42,22 @@ export function SessionsNav({ active, onChange, counts = {} }) {
             key={v.id}
             onClick={() => onChange(v.id)}
             aria-current={on ? 'page' : undefined}
+            // The active tab carries the CamCash gradient rather than a 10%
+            // cyan tint; the inactive ones are dark glass rather than
+            // transparent. The flat transparent-pill row this replaces was
+            // borrowed from the Room Title generator and never belonged on a
+            // primary dashboard destination.
             style={{
-              flexShrink: 0, padding: '9px 15px', borderRadius: 100, cursor: 'pointer',
-              fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
-              background: on ? 'rgba(34,211,238,0.10)' : 'transparent',
-              border: `1px solid ${on ? 'rgba(34,211,238,0.45)' : C.border}`,
-              color: on ? C.cyan : C.text,
+              flexShrink: 0, padding: '10px 17px', borderRadius: 100, cursor: 'pointer',
+              fontSize: 12.5, fontWeight: 800, whiteSpace: 'nowrap',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              background: on ? GRADIENT : 'rgba(15,20,32,0.75)',
+              backdropFilter: on ? 'none' : 'blur(20px)',
+              border: on ? '1px solid transparent' : `1px solid ${C.border2}`,
+              color: on ? '#06101A' : C.text,
+              boxShadow: on
+                ? '0 0 22px rgba(34,211,238,0.26), 0 0 34px rgba(236,72,153,0.18), 0 8px 20px rgba(0,0,0,0.4)'
+                : 'none',
             }}
           >
             {v.label}

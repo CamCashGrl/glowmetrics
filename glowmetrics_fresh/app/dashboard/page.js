@@ -3321,6 +3321,17 @@ const stopImportMessageRotation = () => {
         .card-glow-violet:hover{ box-shadow: 0 0 38px rgba(167,139,250,0.28),0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
         .card-glow-gold:hover  { box-shadow: 0 0 38px rgba(251,191,36,0.26), 0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
         .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        /* The stat cards already carry the glass treatment via glassCard; what
+           they lost was the lift-and-glow on hover, which is what made them
+           read as objects rather than painted rectangles. Hover/focus only —
+           a continuous animation on a row of cards is not free. */
+        .stat-card:hover, .stat-card:focus-within {
+          transform: translateY(-2px);
+          box-shadow: 0 0 26px rgba(34,211,238,0.20), 0 0 46px rgba(236,72,153,0.12), 0 12px 30px rgba(0,0,0,0.5);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .stat-card:hover, .stat-card:focus-within { transform: none; }
+        }
         @keyframes cmd-pulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
 
         /* You're in your peak window right now — a slow green breath around
