@@ -18,6 +18,7 @@ import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
 import ContextualUpgradeModal from './ContextualUpgradeModal'
 import UnimportedPlatforms from './UnimportedPlatforms'
+import PlatformROI from './PlatformROI'
 import ConversionLoop from './ConversionLoop'
 import { conversionPrompts } from '../../lib/conversionLoop'
 import { newlyUnlocked } from '../../lib/unlockProgress'
@@ -1612,6 +1613,12 @@ export default function Dashboard() {
   const realtimeChannelRef = useRef(null)
   const liveTipsChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
+  // Separate from refreshTimerRef: that one re-runs the engine on cached tips,
+  // this one refetches from the database. Two different jobs, two timers.
+  const dbRefreshTimerRef = useRef(null)
+  // The interval closes over its first render, so it cannot read isRefreshing
+  // directly — this mirror lets it skip a tick while a reload is in flight.
+  const isRefreshingRef = useRef(false)
   const liveTickerRef = useRef(null)
   const derivedCacheRef = useRef({}) // see memoOn() — caches expensive per-render recomputation below
   // Fingerprint (row count + last row id) of the tips array as of the last runEngine()
@@ -2195,11 +2202,33 @@ export default function Dashboard() {
       const minuteTimer = setInterval(() => {
         setMinuteTick(t => t + 1)
       }, 60000)
+
+      // ── PERIODIC SILENT RELOAD ────────────────────────────────────────
+      // The 30s timer above re-runs the analytics engine on the tips already
+      // in memory; it never talks to the database. So a dashboard left open
+      // went stale — tips imported from the extension, another tab or another
+      // device simply never appeared, and because loadData() was never called
+      // the "Refreshing..." indicator never showed either.
+      //
+      // This actually refetches, every 3 minutes, in silent mode: the screen
+      // stays mounted, isRefreshing drives the indicator in the command bar,
+      // and lastRefreshed updates so "Updated HH:MM" means something.
+      //
+      // Skipped while the tab is hidden — a backgrounded dashboard polling the
+      // database forever is waste, and the focus handler already covers the
+      // return. Skipped while a reload is in flight so slow responses cannot
+      // stack up.
+      dbRefreshTimerRef.current = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return
+        if (isRefreshingRef.current) return
+        loadData(user.id, false, { silent: true })
+      }, 180000)
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
       if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+      if (dbRefreshTimerRef.current) clearInterval(dbRefreshTimerRef.current)
       if (tipFlushTimerRef.current) clearTimeout(tipFlushTimerRef.current)
       // minuteTimer cleared inline
     }
@@ -2295,7 +2324,7 @@ export default function Dashboard() {
     // `silent` keeps the current screen mounted (e.g. after a CSV upload) instead of
     // replacing the whole dashboard with the full-page spinner, so the just-shown
     // success/error confirmation stays visible while data refreshes in the background.
-    if (silent) setIsRefreshing(true)
+    if (silent) { setIsRefreshing(true); isRefreshingRef.current = true }
     else setLoading(true)
     try {
       // Canonical timezone contract (canonical-analytics-rules.md): the
@@ -2392,7 +2421,7 @@ export default function Dashboard() {
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
     } finally {
-      if (silent) setIsRefreshing(false)
+      if (silent) { setIsRefreshing(false); isRefreshingRef.current = false }
       else setLoading(false)
     }
   }
@@ -3584,6 +3613,244 @@ const stopImportMessageRotation = () => {
           fanCount={analytics?.uniqueFanCount ?? 0}
           onUpgrade={(src) => openUpgradeModal(src)}
         />
+
+        {/* ══ DAILY BRIEF ═════════════════════════════════════════════
+            Restored. buildDailyBrief() never stopped computing any of this —
+            atPeak, the re-engage list, likelyOnline, the peak-window figures —
+            but the card that rendered it was deleted, so the whole thing was
+            being computed and thrown away every render.
+
+            This is the card that turns GREEN and reads "Peak Window LIVE — Go
+            Live Now" while she is inside her window, and it is the "what's
+            next" surface: several topical blocks rather than one line.
+            Restored verbatim from the mid-August dashboard; every identifier
+            it needs (canonicalPeakLabel, engineInsights, getModuleLockState,
+            handleTabChange, setMessageTarget) still exists unchanged. ═══ */}
+        {/* ═══════════════════════════════════════════════════════
+            DAILY BRIEF — always visible, above all tabs
+            Refreshes based on UTC time + your real session data
+        ═══════════════════════════════════════════════════════ */}
+        {activeTab === 'overview' && dailyBrief && (() => {
+          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
+            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
+            reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
+          const bhLabel = canonicalPeakLabel || _bhLabel
+          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
+          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
+          // bestHour/platformBestTimes use internally (lib/analytics.js).
+          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
+          return (
+            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
+
+              {/* Header bar */}
+              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
+                    {atPeak ? '🟢' : '📋'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {atPeak
+                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
+                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
+                  }
+                </div>
+              </div>
+
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
+                {bhLabel && (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
+                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {`Since it's ${todayName}`}
+                        {isBestDay ? ` (your highest-earning day)` : ``}
+                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
+                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
+                        {`. Stream `}
+                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
+                        {` to earn `}
+                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
+                        {` — longer sessions earn `}
+                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
+                        {` on average.`}
+                      </div>
+                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
+                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
+                        </div>
+                      )}
+                      {atPeak && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
+                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ROW 1 — Today / Peak Window / Best Platform */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
+                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
+                      {(() => {
+                        const _bdA = bestDay?.avg || sessionAvg
+                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
+                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
+                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
+                      })()}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
+                    {bestTimeLock.locked ? (
+                      analytics?.canonicalBestTimes?.earlySignal ? (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(analytics.canonicalBestTimes.earlySignal.localHour)}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>
+                            Early signal · ~${analytics.canonicalBestTimes.earlySignal.medianUsdPerHour.toFixed(0)} avg so far
+                          </div>
+                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.3)', background: 'rgba(124,92,255,0.08)', color: C.indigo, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Add data to confirm</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
+                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
+                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
+                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
+                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>{(!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}</div>
+                  </div>
+
+                  {bhLabel && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                    </div>
+                  )}
+                </div>
+
+                {/* ROW 2 — Likely Online + Re-engage */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+                  {/* Likely Online */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
+                        Likely Online Right Now
+                      </div>
+                      {likelyOnline.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Re-engage */}
+                  {!atPeak && reengageFans.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        ⚠️ Re-engage Today
+                      </div>
+                      {reengageFans.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* If neither list has data */}
+                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
+                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
+                      No fan alerts right now — check back after more sessions.
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ══ MONEY MAP + CROSS-PLATFORM, ON THE COMMAND CENTER ═══════
+            Both used to sit here and were moved out during the redesign. They
+            are insights, so by the split we agreed they belong on the Command
+            Center, not buried in their own tabs.
+
+            MoneyMap already handles its own free/Pro depth internally, so the
+            free creator gets the preview grid here and the full one behind
+            Pro — no second gate is introduced. PlatformROI is the restored
+            "What's Working" treatment reading canonical fields only. ═══ */}
+        {activeTab === 'overview' && (
+          <>
+            <PlatformROI analytics={analytics} />
+            <div style={{ marginTop: 16 }}>
+              <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} onUpgrade={(src) => openUpgradeModal(src)} />
+            </div>
+          </>
+        )}
 
         {/* ── PLATFORMS SHE NAMED BUT HAS NOT IMPORTED ────────────────
             Uses the onboarding roster to separate "does not stream there"
