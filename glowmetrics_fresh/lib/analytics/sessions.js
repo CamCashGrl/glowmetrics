@@ -39,6 +39,29 @@ export function detectSessions(tips) {
   return sessions
 }
 
+/**
+ * Session-quality classification — the canonical "meaningful vs low-signal
+ * vs invalid" rule, per canonical-analytics-rules.md's Platform $/hr
+ * determination. Previously a closure local to lib/analytics.js's
+ * aggregateRows() only; extracted here (same module as detectSessions(), its
+ * natural home) so any consumer computing its own session population — e.g.
+ * app/dashboard/StreamPlanner.js after migrating off groupIntoSessions() —
+ * applies the exact same thresholds instead of redefining them.
+ */
+export function classifySession(s) {
+  const mins = s.durationMinutes || 0
+  const usd  = s.totalUSD || 0
+  if (mins < 2 && usd === 0) return 'invalid'
+  if (mins < 15 && usd < 10) return 'low_signal'
+  return 'meaningful'
+}
+
+/** detectSessions() + the canonical meaningful-only filter, in one call —
+ * the population every rate/best-time calculation should use. */
+export function detectMeaningfulSessions(tips) {
+  return detectSessions(tips).filter(s => classifySession(s) === 'meaningful')
+}
+
 function finalizeSession(s) {
   const durationMs = s.endTime - s.startTime
   const rawMinutes = Math.round(durationMs / 60000)

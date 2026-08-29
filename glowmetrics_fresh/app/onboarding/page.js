@@ -49,13 +49,33 @@ const BC_PAID_TYPES=['Private Chat','Full-Private Chat','Group Chat','Spy Mode']
 // ── Parsers ────────────────────────────────────────────────────
 function tryParseDate(str){
   if(!str)return null;const s=str.trim()
-  const cbMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
+  const cbMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(cbMatch){const[,mon,day,year,hr,min,ampm]=cbMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const bcMatch=s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/)
   if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return d}
-  const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
+  // Ordinal suffix optional, matching the Chaturbate branch above — MFC
+  // renders both "Aug 1, 2026" and "Aug 1st, 2026" depending on the view,
+  // and the required-suffix version silently fell through to `new Date(s)`.
+  const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
+}
+
+// A column is only safe to treat as a token/usd number if it is numeric in
+// its ENTIRETY (after stripping $, commas, whitespace) — parseFloat() alone
+// parses a leading numeric prefix and ignores the rest (parseFloat('21yeacock')
+// === 21, parseFloat('93marian') === 93), which silently misclassifies a
+// numeric-leading username as a token/usd value instead of the username. That
+// shifts every later column in the row (the real username is lost, the
+// transaction-type column — e.g. "Tips" — gets used as the username instead,
+// and tokens/usd end up swapped), collapsing every affected fan into one fake
+// bucket and inflating totals. Confirmed against a real 1912-row BongaCams
+// export: 4 numeric-leading usernames ("21yeacock", "93marian", "85hn5n",
+// "141414av2") all collapsed into a single fake "Tips" fan, undercounting
+// unique fans (315 vs the real 318) and overstating total revenue by ~$78
+// (their real token counts were misassigned into the usd field).
+function isFullyNumeric(str){
+  return /^-?\d+(\.\d+)?$/.test((str||'').replace(/[$,\s]/g,'').trim())
 }
 
 // Detects if a BongaCams tab-separated row is a paid chat session
@@ -89,11 +109,11 @@ function parseBCPaidSessions(rawText){
       // separators like BongaCams' "1 507") before parsing — parseFloat
       // otherwise stops at the first non-numeric character and silently
       // truncates e.g. "1 507" tokens down to 1.
-      const n=parseFloat(col.replace(/[$,\s]/g,''))
+      const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,\s]/g,'')):NaN
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n<100000&&tokens===0)tokens=Math.round(n)
         else if(n<50000&&usd===0)usd=n
-      } else if(col.length>1&&col.length<=50&&isNaN(parseFloat(col))&&!username){
+      } else if(col.length>1&&col.length<=50&&!isFullyNumeric(col)&&!username){
         username=col
       }
     }
@@ -107,9 +127,16 @@ function parseRows(rawText,platformId){
   const rate=TOKEN_RATES[platformId]||0.05
   const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
   const rows=[];let skipped=0
-  const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
+  const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
   const tipFromRe=/^Tip From:\s*(.+)/i
-  const tokensLineRe=/^(\d+)\s+(\d+)$/
+  // Two numbers ("tokens  running_balance"), each allowing a thousands-comma
+  // (e.g. "500  12,345") — same bug class already fixed for BongaCams
+  // (scripts/verify-bongacams-tokens-thousands-separator.mjs). Kept in
+  // lockstep with lib/analytics.js's CB_TOKENS_LINE_RE/CB_TOKENS_SINGLE_RE
+  // (the server-side parser /api/upload actually uses) so this preview
+  // never shows a row count the real import can't reproduce.
+  const tokensLineRe=/^([\d,]+)\s+([\d,]+)$/
+  const tokensSingleRe=/^([\d,]+)$/
   const isMultiLine=lines.some(l=>tipFromRe.test(l))
   if(isMultiLine){
     let i=0
@@ -118,9 +145,16 @@ function parseRows(rawText,platformId){
       if(dateMatch){
         const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||'';const tipMatch=actionLine.match(tipFromRe)
         if(ts&&tipMatch){
-          const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note='';let tMatch=tokensLine.match(tokensLineRe)
-          if(!tMatch&&lines[i+3]){note=tokensLine;tokensLine=lines[i+3]||'';tMatch=tokensLine.match(tokensLineRe)}
-          if(tMatch){const tokens=parseInt(tMatch[1],10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+          const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note=''
+          let tMatch=tokensLine.match(tokensLineRe)
+          let singleMatch=!tMatch?tokensLine.match(tokensSingleRe):null
+          if(!tMatch&&!singleMatch&&lines[i+3]){
+            note=tokensLine;tokensLine=lines[i+3]||''
+            tMatch=tokensLine.match(tokensLineRe)
+            singleMatch=!tMatch?tokensLine.match(tokensSingleRe):null
+          }
+          const tokensRaw=tMatch?tMatch[1]:(singleMatch?singleMatch[1]:null)
+          if(tokensRaw){const tokens=parseInt(tokensRaw.replace(/,/g,''),10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
         }
         i++
       }else i++
@@ -143,7 +177,7 @@ function parseRows(rawText,platformId){
     const rest=cols.filter((_,i)=>i!==tsIdx)
     let tokens=null,usd=null,username=null,note=''
     for(const col of rest){
-      const n=parseFloat(col.replace(/[$,]/g,''))
+      const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,]/g,'')):NaN
       if(!isNaN(n)&&n>0){
         if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
         else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
@@ -154,7 +188,7 @@ function parseRows(rawText,platformId){
         // estimate. Once tokens is known and usd isn't, treat the next
         // positive number as the real payout regardless of its integer-ness.
         else if(tokens!==null&&usd===null)usd=n
-      }else if(col.length>0&&isNaN(parseFloat(col))){
+      }else if(col.length>0&&!isFullyNumeric(col)){
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
       }
@@ -215,6 +249,62 @@ function buildPreview(rawText,platformId,platformLabel){
     bestHour:bestHour?fmtHour(bestHour[0]):null,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
   }
+}
+
+// Zero-rows diagnostic — replaces the old one-size-fits-all "we couldn't
+// find any tip rows" message with a specific reason, based on exactly how
+// far the parse got. Chaturbate's multi-line format was 49 of 56
+// onboarding_paste_parse_failed events (by far the dominant one), so it
+// gets the most granular checks; the columnar platforms get a simpler
+// but still specific check.
+// Structural fingerprint of a failed paste — the missing half of the failure
+// telemetry. onboarding_paste_parse_failed has fired for 8 separate users and
+// every event recorded only WHICH platform failed, never WHAT shape the text
+// was, so each failure had to be guessed at instead of fixed. (The Chaturbate
+// fix in #411 only happened because a real sample turned up separately.)
+//
+// Deliberately privacy-preserving: every digit becomes 9 and every letter
+// becomes a, so "Aug 11, 2026, 07:04 AM" -> "aaa 99, 9999, 99:99 aa" and
+// "Tip From: sexyguy99" -> "aaa aaaa: aaaaaaa99". Usernames, token amounts,
+// dollar figures and notes cannot be reconstructed from this — only the
+// layout, which is the only part we need to write a parser against.
+function fingerprintPaste(rawText){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  const shape=l=>l.replace(/[0-9]/g,'9').replace(/[A-Za-z]/g,'a').slice(0,60)
+  const counts=new Map()
+  for(const l of lines.slice(0,80)){
+    const sh=shape(l)
+    counts.set(sh,(counts.get(sh)||0)+1)
+  }
+  const top=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+  return {
+    line_count:lines.length,
+    distinct_shapes:counts.size,
+    has_tabs:rawText.includes('\t'),
+    has_commas:rawText.includes(','),
+    top_shapes:top.map(([sh,n])=>`${n}x ${sh}`),
+  }
+}
+
+function diagnosePasteFailure(rawText,platformId){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  if(!lines.length)return 'Paste your tip history above first.'
+  if(platformId==='chaturbate'){
+    const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
+    const tipFromRe=/^Tip From:\s*(.+)/i
+    const hasDateLines=lines.some(l=>dateLineRe.test(l))
+    const hasTipFromLines=lines.some(l=>tipFromRe.test(l))
+    if(!hasDateLines&&!hasTipFromLines)return "We couldn't recognize this as Chaturbate's Token Stats format. Go to your profile → Token Stats tab, select All Time, then copy the whole table (dates, \"Tip From:\" lines, and token amounts together)."
+    if(hasDateLines&&!hasTipFromLines)return 'We found dates but no "Tip From:" lines. Make sure you copied the full table, not just the date column.'
+    if(!hasDateLines&&hasTipFromLines)return "We found tip lines but couldn't read the dates next to them. Make sure each tip's date/time line is included above its \"Tip From:\" line."
+    return "We found tips and dates but couldn't read the token amounts. Make sure the token number (and running balance, if shown) directly follows each \"Tip From:\" line, unedited."
+  }
+  // Columnar platforms (BongaCams, MyFreeCams, generic CSV) — at least one
+  // recognizable date/timestamp is the minimum bar; below that, nothing
+  // else in the row can be trusted either.
+  const hasAnyDateLike=lines.some(l=>tryParseDate(l.split(/\t|,/)[0]||l))
+  if(!hasAnyDateLike)return "We couldn't find any recognizable dates in what you pasted. Make sure each row includes its date/time, and that rows are separated by line breaks the way they appear on the page."
+  return "We found rows but couldn't read the token/dollar amounts. Make sure you copied the full table, including the amount columns, without extra edits."
 }
 
 // ── Ambient particle canvas ────────────────────────────────────
@@ -321,7 +411,7 @@ function ProUpsellModal({platform,onSkip}){
           </div>
         </div>
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
-          ✅ <span style={{color:'#fff'}}>Free tier always exists</span> — your current platform stays free forever.
+          ✅ <span style={{color:'#fff'}}>Nothing is locked during your trial</span> — every platform and every insight is included for 7 days.
         </div>
         <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — continue with one platform</button></div>
       </div>
@@ -553,6 +643,10 @@ export default function OnboardingPage(){
       if(data?.onboarding_complete){router.replace('/dashboard');return}
       const{data:profile}=await supabase.from('profiles').select('plan, plan_expires_at').eq('id',user.id).single()
       setUserPlan(isProPlan(profile)?'pro':'free')
+      // Onboarding always hands off to the dashboard. The trial is an OFFER
+      // presented once the creator has seen real value, never a gate standing
+      // between them and their own data — see /start-trial, which is reachable
+      // but never forced.
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -562,6 +656,10 @@ export default function OnboardingPage(){
   useEffect(()=>{
     if(!user)return
     track('onboarding_step_viewed',{step,platform:platformId})
+    // Named distinctly from the generic step_viewed event so the funnel's
+    // "first useful insight" step is directly queryable, per the funnel
+    // instrumentation checklist, without filtering step_viewed by 'done'.
+    if(step==='done')track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
   },[step,user])
 
   async function markDone(){
@@ -606,8 +704,9 @@ export default function OnboardingPage(){
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
     const p=buildPreview(pasteText,platformId,platform.label)
     if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
-      setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.")
-      track('onboarding_paste_parse_failed',{platform:platformId})
+      const reason=diagnosePasteFailure(pasteText,platformId)
+      setParseError(reason)
+      track('onboarding_paste_parse_failed',{platform:platformId,reason,...fingerprintPaste(pasteText)})
       return
     }
     setPreview(p)
@@ -617,6 +716,7 @@ export default function OnboardingPage(){
   async function handleImport(previewArg){
     const p=previewArg||preview
     if(!user)return
+    track('import_started',{platform:platformId,source:'paste',rows:p?.tipsDetected??0})
     setImportError('');setUpgradeBlocked(null);setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()
@@ -683,6 +783,7 @@ export default function OnboardingPage(){
 
   async function handleCsvUpload(file){
     if(!file||!user)return
+    track('import_started',{platform:platformId,source:'csv'})
     setCsvUploading(true);setCsvError('');setStep('loading');setLoadingProgress(0)
     try{
       const{data:{session}}=await supabase.auth.getSession()
@@ -1023,7 +1124,17 @@ export default function OnboardingPage(){
                 <div>
                   <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
                   {preview?.bestHour?(
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    // preview.bestHour is the single hour with the highest total
+                    // token sum across the just-parsed rows (buildPreview() above)
+                    // — no minimum-sample or confidence-tier requirement, unlike
+                    // the dashboard's canonical bestWindow (session-based, median,
+                    // requires 4+ sessions before it's shown as "your best time" at
+                    // all). This preview can legitimately be one or two rows'
+                    // worth of signal. "Your sweet spot" overstated that as a
+                    // settled fact; framing it as an early read from this import
+                    // — confirmed or revised once the dashboard has full session
+                    // data — matches what this number actually is.
+                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>This import shows an early signal around <strong style={{color:PINK}}>{preview.bestHour}</strong> — your dashboard will confirm this once it has more sessions to work with.</p>
                   ):(
                     <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
                   )}

@@ -130,7 +130,7 @@ function AuthPanel({
           }}>$</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "white", letterSpacing: -0.3 }}>CamCash™</div>
           <div style={{ fontSize: 12, color: T.textFaint, marginTop: 3 }}>
-            {isSignUp ? "No credit card required" : "Welcome back 💋"}
+            {isSignUp ? "Starts with a 7-day free trial" : "Welcome back 💋"}
           </div>
           {pendingPlan && (
             <div style={{ fontSize: 12, color: T.cyanSoft, marginTop: 8 }}>
@@ -201,7 +201,7 @@ function AuthPanel({
 
         {isSignUp && (
           <p style={{ fontSize: 11, color: T.textFaint, textAlign: "center", marginTop: 12, marginBottom: 0 }}>
-            No credit card · Cancel anytime
+            7-day free trial · Cancel anytime
           </p>
         )}
       </div>
@@ -758,7 +758,16 @@ export default function LandingPage() {
 
   useEffect(() => {
     const plan = new URLSearchParams(window.location.search).get('plan')
-    if (plan) { setPendingPlan(plan); setIsSignUp(true) }
+    if (plan) {
+      // Signed-out purchase intent. Previously this arrival was completely
+      // silent: the visitor was shown a signup form and, if they left without
+      // completing it, no record survived that they had tried to buy at all.
+      // captureAttribution() does not fill the gap either — it stores
+      // window.location.pathname, so ?plan= is discarded before it is saved.
+      track('checkout_intent_signed_out', { plan_type: plan, source: 'landing_plan_link' })
+      setPendingPlan(plan)
+      setIsSignUp(true)
+    }
   }, [])
 
   useEffect(() => {
@@ -777,6 +786,12 @@ export default function LandingPage() {
 
   useEffect(() => { captureAttribution() }, [])
 
+  // Never fail silently. The previous version swallowed every error and
+  // returned false, so a creator who clicked through a ?plan= link into a
+  // broken checkout was left on the landing page with nothing happening and
+  // no way to know why — which is exactly what happened to the only user who
+  // has ever attempted to subscribe. Any failure now says so and routes to
+  // /pricing, where they can still buy.
   const goToCheckout = async (planType) => {
     try {
       const res = await fetch('/api/stripe/checkout', {
@@ -784,9 +799,16 @@ export default function LandingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan_type: planType }),
       })
-      const data = await res.json()
-      if (data.url) { window.location.href = data.url; return true }
-    } catch {}
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.url) { window.location.href = data.url; return true }
+      track('checkout_failed', { plan_type: planType, status: res.status, reason: data.error || 'no_url' })
+      setAuthError(data.error || 'We could not open checkout just now. Taking you to the pricing page.')
+      setTimeout(() => { window.location.href = '/pricing' }, 2200)
+    } catch (e) {
+      track('checkout_failed', { plan_type: planType, reason: 'network' })
+      setAuthError('We could not reach checkout. Taking you to the pricing page.')
+      setTimeout(() => { window.location.href = '/pricing' }, 2200)
+    }
     return false
   }
 
@@ -807,11 +829,11 @@ export default function LandingPage() {
         body: JSON.stringify({ email }),
       })
       const captchaData = await captchaRes.json()
-      if (!captchaData.ok) { setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
+      if (!captchaData.ok) { track('signup_captcha_failed'); setAuthError(captchaData.error || 'Security check failed.'); setAuthLoading(false); return }
       let attribution = null
       try { attribution = JSON.parse(localStorage.getItem('camcash_attribution') || 'null') } catch {}
       const { error } = await supabase.auth.signUp({ email, password })
-      if (error) { setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
+      if (error) { track('signup_auth_error', { reason: error.message }); setAuthError(friendlyAuthError(error.message)); setAuthLoading(false) }
       else {
         if (typeof twq === 'function') twq('event', 'tw-rc0w2-rcj9h', {})
         fetch('/api/admin/notify-signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, source: 'landing' }) }).catch(() => {})
@@ -886,7 +908,7 @@ export default function LandingPage() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. Premium analytics are optional and unlock deeper insights." },
+    { q: "Is CamCash free to use?", a: "CamCash starts with a 7-day free trial that unlocks the entire product on your own data. A card is required to begin the trial, nothing is charged during it, and cancelling before it ends costs you nothing. After that it is $19.99/mo or $99/yr." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
@@ -940,7 +962,7 @@ export default function LandingPage() {
               color: T.cyanSoft, marginBottom: 22,
             }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.cyan, boxShadow: "0 0 8px rgba(22,244,255,0.8)" }} />
-              Free forever tier
+              7-day free trial
             </div>
 
             <h1 style={{ fontSize: "clamp(36px,4vw,56px)", color: "white", fontWeight: 900, lineHeight: 1.08, marginBottom: 20, letterSpacing: -1.5 }}>
@@ -969,7 +991,7 @@ export default function LandingPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <div style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(22,244,255,0.08)", border: "1px solid rgba(22,244,255,0.24)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.cyanSoft }}>✓</div>
-                <span style={{ fontSize: 12.5, color: T.textMuted }}>No credit card required</span>
+                <span style={{ fontSize: 12.5, color: T.textMuted }}>7-day free trial, cancel any time</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <div style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(255,200,87,0.08)", border: "1px solid rgba(255,200,87,0.24)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.gold }}>🔒</div>
@@ -1013,10 +1035,10 @@ export default function LandingPage() {
           <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "22px 28px", margin: 0 }}>
             {[
               ["Category", "Analytics software for cam models & content creators"],
-              ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
+              ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever for 1 platform. Creator Pro unlocks multi-platform tracking for $19.99/mo or $99/yr"],
+              ["Price", "7-day free trial with everything unlocked, then $19.99/mo or $99/yr"],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
@@ -1097,7 +1119,7 @@ export default function LandingPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 20 }}>
           {[
             { num: "1", accent: T.cyan, icon: "🧩", title: "Download Extension", body: "Auto-detect tips instantly. Works without an account. Use immediately.", link: ["/extension", "Download free →"] },
-            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Premium optional" },
+            { num: "2", accent: T.purple, icon: "📊", title: "Start Your Free Trial", body: "Save your analytics, track growth, unlock AI intelligence — everything, for 7 days free.", link: null, note: "7-day free trial · cancel any time" },
             { num: "3", accent: T.pink, icon: "🚀", title: "Upgrade When You're Ready", body: "Creator Pro unlocks every platform, fan, and insight for $19.99/month.", link: ["/pricing", "See Creator Pro →"] },
           ].map(({ num, accent, icon, title, body, link, note }) => (
             <div key={title} style={{ background: `${accent}0d`, border: `1px solid ${accent}30`, borderRadius: 18, padding: "28px 24px", textAlign: "center", position: "relative" }}>
@@ -1359,7 +1381,7 @@ export default function LandingPage() {
         <div style={{ fontSize: "clamp(24px,3vw,36px)", fontWeight: 900, color: "white", marginBottom: 10, letterSpacing: -0.8 }}>
           Turn your analytics<br />into income.
         </div>
-        <div style={{ fontSize: 14, color: T.textFaint, marginBottom: 32 }}>No credit card. Takes 2 minutes.</div>
+        <div style={{ fontSize: 14, color: T.textFaint, marginBottom: 32 }}>7-day free trial. Takes 2 minutes.</div>
         <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
       </div>
 
