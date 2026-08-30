@@ -1,5 +1,6 @@
 "use client"
 import { useMemo } from "react"
+import CamCashNoticedCarousel from "./DashboardIntelligenceBlocks"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -354,6 +355,17 @@ export default function CommandCenter({
           )}
         </div>
       </div>
+
+      {/* ── CAMCASH NOTICED ────────────────────────────────────────────
+          Rotating daily-intelligence carousel, restored directly under the
+          hero. Sourced from analytics.insights (generateInsights() in
+          lib/analytics.js) with the 'time' type excluded — that's the same
+          best-window fact the hero above already leads with, so surfacing
+          it twice would just repeat the headline in a smaller box. Renders
+          its own "not enough data yet" state rather than being hidden
+          entirely, so a new creator sees the daily-brief concept exists
+          before they have enough sessions to fill it. */}
+      <CamCashNoticedCarousel analytics={analytics} onPlanStream={onPlanStream} />
 
       {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
       {hasWindow && (
