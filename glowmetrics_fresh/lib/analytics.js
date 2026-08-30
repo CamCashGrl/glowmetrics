@@ -494,10 +494,40 @@ export function identifyWhales(tips, tz = 'UTC') {
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
     const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
-    let tier = 'Regular'
-    if (percentileRank <= 0.05) tier = 'Whale'
-    else if (percentileRank <= 0.20) tier = 'Shark'
-    else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+
+    // ── CANONICAL FAN TIER — absolute thresholds, never percentile-based ──
+    // This used to rank fans against EACH OTHER (top 5% of totalUSD =
+    // "Whale"), which meant a fan with $7.80 and 2 tips could show as
+    // "Whale" on a small/low-earning account simply for being in the top
+    // 5% of that account's fans. Tier must reflect an absolute, portable
+    // standard so "Whale" means the same thing on every account. These
+    // thresholds are the single source of truth (see also the matching
+    // spec in the repo's standing instructions) — never duplicate them
+    // elsewhere; always call identifyWhales() for tier.
+    let tier = 'New'
+    if (f.totalUSD >= 100 && f.tipCount >= 10) tier = 'Whale'
+    else if (f.totalUSD >= 30 && f.tipCount >= 5) tier = 'Shark'
+    else if (f.totalUSD >= 5 && f.tipCount >= 2) tier = 'Regular'
+    // Dormant is a BEHAVIORAL/retention classification, not a spend tier —
+    // it only overlays fans who never reached (or fell out of relevance
+    // for) a real spend tier, so a genuine Whale/Shark keeps their earned
+    // badge even while inactive (their inactivity still shows up via
+    // churnRisk/trend, just without erasing what they historically were).
+    if ((tier === 'Regular' || tier === 'New') && daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) {
+      tier = 'Dormant'
+    }
+
+    // Dev-safe sanity check — impossible tier/spend combinations should
+    // never silently reach the UI. Logs only; never throws in production.
+    if (process.env.NODE_ENV !== 'production') {
+      const impossible =
+        (tier === 'Whale' && (f.totalUSD < 100 || f.tipCount < 10)) ||
+        (tier === 'Shark' && (f.totalUSD < 30 || f.tipCount < 5)) ||
+        (tier === 'Regular' && (f.totalUSD < 5 || f.tipCount < 2))
+      if (impossible) {
+        console.warn(`[identifyWhales] impossible tier assignment for ${f.username}: tier=${tier} totalUSD=${f.totalUSD} tipCount=${f.tipCount}`)
+      }
+    }
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
@@ -536,6 +566,69 @@ export function identifyWhales(tips, tz = 'UTC') {
       tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
+}
+
+// ── FAN TREND CLASSIFICATION ─────────────────────────────────────────────
+// Real, data-derived trend for a single fan (as returned by identifyWhales,
+// which already attaches `tips` — the fan's own chronological tip array).
+// Never fabricated: if there isn't enough history to compare a "recent"
+// period against a "prior" one, this says so explicitly rather than
+// guessing a direction.
+//
+//   'insufficient' — not enough tips/history to say anything
+//   'emerging'     — new fan (short history), recent activity is promising
+//   'up'           — recent $/day pace materially above this fan's own
+//                    earlier pace
+//   'down'         — recent $/day pace materially below this fan's own
+//                    earlier pace
+//   'stable'       — no meaningful change either way
+export function computeFanTrend(fan) {
+  if (!fan || !Array.isArray(fan.tips) || fan.tips.length === 0) {
+    return { trend: 'insufficient', changePct: null, label: 'Not enough data' }
+  }
+
+  const tips = [...fan.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
+  const count = tips.length
+  const firstDate = new Date(tips[0].dateRaw || tips[0].date_time)
+  const daysSinceFirst = Math.floor((Date.now() - firstDate) / 86400000)
+
+  // New / emerging: short history, but they're actively engaging right now.
+  if (count < 3) {
+    if (daysSinceFirst <= 21 && (fan.daysSinceLastTip ?? 999) <= 10) {
+      return { trend: 'emerging', changePct: null, label: 'New · Emerging' }
+    }
+    return { trend: 'insufficient', changePct: null, label: 'Not enough data' }
+  }
+
+  // Split this fan's OWN tip history into an earlier half and a recent
+  // half (by count, chronological) and compare $/day pace between them —
+  // never compared against other fans, only against their own baseline.
+  const mid = Math.floor(count / 2)
+  const earlier = tips.slice(0, mid)
+  const recent = tips.slice(mid)
+  if (earlier.length === 0 || recent.length === 0) {
+    return { trend: 'insufficient', changePct: null, label: 'Not enough data' }
+  }
+
+  const spanDays = (arr) => {
+    const start = new Date(arr[0].dateRaw || arr[0].date_time)
+    const end = new Date(arr[arr.length - 1].dateRaw || arr[arr.length - 1].date_time)
+    return Math.max((end - start) / 86400000, 1)
+  }
+  const rate = (arr) => arr.reduce((s, t) => s + (t.usd || 0), 0) / spanDays(arr)
+
+  const earlierRate = rate(earlier)
+  const recentRate = rate(recent)
+
+  if (earlierRate <= 0) {
+    return { trend: 'insufficient', changePct: null, label: 'Not enough data' }
+  }
+
+  const changePct = Math.round(((recentRate - earlierRate) / earlierRate) * 100)
+
+  if (recentRate >= earlierRate * 1.35) return { trend: 'up', changePct, label: 'Trending up' }
+  if (recentRate <= earlierRate * 0.6) return { trend: 'down', changePct, label: 'Trending down' }
+  return { trend: 'stable', changePct, label: 'Stable' }
 }
 
 function calcTipProbability(d, avg) {
@@ -648,14 +741,14 @@ export function calcPotentialEarningsRecovery(fan) {
 // classification — just aggregating what each fan was already tiered as.
 export function computeFanComposition(whales) {
   if (!whales?.length) return null
-  const counts = { Whale: 0, Shark: 0, Regular: 0, Dormant: 0 }
+  const counts = { Whale: 0, Shark: 0, Regular: 0, Dormant: 0, New: 0 }
   whales.forEach(f => { counts[f.tier] = (counts[f.tier] || 0) + 1 })
   const total = whales.length
   const pct = (n) => Math.round((n / total) * 100)
   return {
     total,
     whalePct: pct(counts.Whale), sharkPct: pct(counts.Shark),
-    regularPct: pct(counts.Regular), dormantPct: pct(counts.Dormant),
+    regularPct: pct(counts.Regular), dormantPct: pct(counts.Dormant), newPct: pct(counts.New),
   }
 }
 
@@ -999,7 +1092,8 @@ export function aggregateRows(tips, tz = null) {
       dependencyRisk: null, sessionPerformance: null, latestPlatformDelta: null,
       bestPlatformByRate: null, rankablePlatformCount: 0,
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null,
-      fanComposition: null, fanGrowthSeries: [], fanEngagementTrend: null
+      fanComposition: null, fanGrowthSeries: [], fanEngagementTrend: null,
+      hasRecentStreamingActivity: false, daysSinceLastMeaningfulSession: null
     }
   }
 
@@ -1020,6 +1114,23 @@ export function aggregateRows(tips, tz = null) {
   sessions.forEach(s => { s.sessionQuality = classifySessionQuality(s); s.sessionWeight = scoreSession(s) })
 
   const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
+
+  // ── RECENT STREAMING ACTIVITY ────────────────────────────────────────
+  // Whether the CREATOR has streamed recently enough for fan-retention
+  // signals (churnRisk, trend, "at risk") to mean anything. A fan going
+  // quiet and a creator not streaming look identical in the tip data
+  // ("nobody tipped recently") — this flag lets the UI tell them apart so
+  // it never says "your fans are churning" when the real story is "you
+  // haven't streamed." Sessions here are inferred from tip clustering
+  // (detectSessions), not real stream metadata, so "recent" is judged
+  // against the same meaningfulSessions population used everywhere else.
+  const lastMeaningfulSession = meaningfulSessions.length
+    ? meaningfulSessions.reduce((latest, s) => (new Date(s.startTime) > new Date(latest.startTime) ? s : latest))
+    : null
+  const daysSinceLastMeaningfulSession = lastMeaningfulSession
+    ? Math.floor((Date.now() - new Date(lastMeaningfulSession.startTime)) / 86400000)
+    : null
+  const hasRecentStreamingActivity = daysSinceLastMeaningfulSession != null && daysSinceLastMeaningfulSession <= 14
   const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
 
   const { bestDay, worstDay, bestHour, earlySignalHour } = computeBestTimes(tips, userTz)
@@ -1642,6 +1753,7 @@ export function aggregateRows(tips, tz = null) {
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenue, returningVsNew, topFanDependency, dependencyRisk, bestWindowFanOverlap,
     fanComposition: computeFanComposition(whales),
+    hasRecentStreamingActivity, daysSinceLastMeaningfulSession,
     fanGrowthSeries: computeFanGrowthSeries(tips, monthKeyLocal),
     fanEngagementTrend: computeFanEngagementTrend(monthlyData),
     // preTipBehavior and trueHourlyAvg intentionally removed rather than
