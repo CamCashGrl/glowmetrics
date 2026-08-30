@@ -1,6 +1,6 @@
 "use client"
 import { useEffect } from "react"
-import { calcPotentialEarningsRecovery } from "../../lib/analytics"
+import { calcPotentialEarningsRecovery, computeFanTrend } from "../../lib/analytics"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FAN PROFILE DRAWER — right-side slide-in panel, same chrome pattern as
@@ -27,19 +27,37 @@ const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
 const fmtDays = (d) => (d == null ? "—" : d === 0 ? "today" : d === 1 ? "1 day ago" : d < 30 ? `${d} days ago` : d < 365 ? `${Math.round(d / 30)} mo ago` : `${(d / 365).toFixed(1)} yr ago`)
 
 const CHURN_COLOR = { Low: C.green, Medium: C.gold, High: "#FB923C", Critical: C.red, Unknown: C.muted }
+const TREND_COLOR = { up: C.green, down: "#FB923C", stable: C.muted, emerging: C.cyan, insufficient: C.muted }
+const TREND_LABEL = { up: "↑ Trending up", down: "↓ Trending down", stable: "→ Stable", emerging: "✦ New · Emerging", insufficient: "Not enough data" }
 
 function Row({ label, value }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
       <span style={{ fontSize: 12, color: C.text }}>{label}</span>
       <span style={{ fontSize: 12.5, color: C.white, fontWeight: 700, textAlign: "right" }}>{value}</span>
     </div>
   )
 }
 
+// Compact 2-up stat pair — used for tipping-pattern figures so two related
+// numbers sit side by side instead of each eating a full-width row. Keeps
+// the drawer from turning into a long scroll of single-stat rows.
+function StatPair({ items }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", padding: "8px 0 10px" }}>
+      {items.map(({ label, value }) => (
+        <div key={label}>
+          <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: C.muted, marginBottom: 3 }}>{label}</div>
+          <div style={{ fontSize: 13, fontWeight: 750, color: C.white }}>{value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SectionLabel({ children }) {
   return (
-    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text, marginTop: 20, marginBottom: 8 }}>
+    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text, marginTop: 16, marginBottom: 6 }}>
       {children}
     </div>
   )
@@ -56,6 +74,9 @@ export default function FanProfileDrawer({ fan, isPro, onClose, onUpgrade, onMes
   if (!fan) return null
 
   const churnColor = CHURN_COLOR[fan.churnRisk?.level] || C.muted
+  const trend = computeFanTrend(fan)
+  const trendColor = TREND_COLOR[trend.trend] || C.muted
+  const trendLabel = TREND_LABEL[trend.trend] || "Not enough data"
   const isTopFan = dependencyRisk?.topFanUsername === fan.username
   // Only the actual dependency-risk top fan carries a concentration figure —
   // that stat describes ONE relationship (analytics.dependencyRisk), not
@@ -85,7 +106,13 @@ export default function FanProfileDrawer({ fan, isPro, onClose, onUpgrade, onMes
             fontSize: 22, fontWeight: 800, color: C.white,
           }}>{fan.username.slice(0, 1).toUpperCase()}</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{fan.platform}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{fan.platform} · {fan.tier}</div>
+          <div style={{
+            display: "inline-flex", marginTop: 8, padding: "3px 10px", borderRadius: 999,
+            fontSize: 10.5, fontWeight: 800, color: trendColor, background: `${trendColor}1a`, border: `1px solid ${trendColor}45`,
+          }}>
+            {trendLabel}{trend.changePct != null ? ` (${trend.changePct > 0 ? "+" : ""}${trend.changePct}%)` : ""}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 4 }}>
@@ -131,10 +158,14 @@ export default function FanProfileDrawer({ fan, isPro, onClose, onUpgrade, onMes
         ) : (
           <>
             <SectionLabel>Tipping pattern</SectionLabel>
-            <Row label="Average tip" value={fmtUsd(fan.avgTipSize)} />
-            <Row label="Biggest tip" value={fmtUsd(fan.biggestTip)} />
-            <Row label="Typical cadence" value={fan.tipCount >= 3 ? `every ~${Math.round(fan.avgDaysBetweenTips)}d` : "Not enough history"} />
-            <Row label="Typical active hours" value={fan.typicalOnlineHours} />
+            <StatPair items={[
+              { label: "Average tip", value: fmtUsd(fan.avgTipSize) },
+              { label: "Biggest tip", value: fmtUsd(fan.biggestTip) },
+            ]} />
+            <StatPair items={[
+              { label: "Typical cadence", value: fan.tipCount >= 3 ? `every ~${Math.round(fan.avgDaysBetweenTips)}d` : "Not enough history" },
+              { label: "Typical active hours", value: fan.typicalOnlineHours },
+            ]} />
             <Row label="Expected next tip" value={fan.expectedNextTip} />
 
             <SectionLabel>Engagement</SectionLabel>
@@ -163,6 +194,22 @@ export default function FanProfileDrawer({ fan, isPro, onClose, onUpgrade, onMes
             <SectionLabel>Classification</SectionLabel>
             <Row label="Tier" value={fan.tier} />
             <Row label="Spend percentile" value={`Top ${100 - fan.spendPercentile}%`} />
+
+            <SectionLabel>Recommended action</SectionLabel>
+            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+              {(() => {
+                const level = fan.churnRisk?.level
+                if (level === "Unknown") return "Not enough history yet for a recommendation."
+                if (level === "Critical" || level === "High") {
+                  return recovery
+                    ? `Consider a re-engagement message — they're overdue based on their own pattern (~${recovery.overdueDays}d past their usual ${Math.round(fan.avgDaysBetweenTips)}d cadence).`
+                    : "Consider a re-engagement message — they're overdue based on their own pattern."
+                }
+                if (trend.trend === "up") return "Keep it up — this fan's engagement is trending up right now."
+                if (level === "Medium") return "Keep this fan in your rotation — mention them if you go live soon."
+                return "This fan is active and tipping on their normal schedule — no action needed."
+              })()}
+            </div>
 
             {onMessage && (
               <button onClick={() => onMessage(fan.username)} style={{
