@@ -1,5 +1,24 @@
 "use client"
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CAMCASH NOTICED — rotating daily-intelligence carousel
+//
+// Sits directly under the Command Center's "Your next best move" hero.
+// The hero answers "what should I do right now" (best window / top
+// platform). This carousel answers "what else did CamCash notice about
+// you" — so it deliberately excludes the 'time' insight type, since that
+// is the same best-window fact the hero already leads with.
+//
+// CONTENT SOURCE: analytics.insights, produced by generateInsights() in
+// lib/analytics.js — the same engine already computing day-of-week,
+// fan/whale concentration, session-duration, retention, and week-over-week
+// momentum insights elsewhere in the app. Nothing here re-derives a metric;
+// this file only selects, labels, and rotates through what generateInsights()
+// already produced. validateInsights() (also in lib/analytics.js) has
+// already stripped anything with a $0 or a suspicious 100%-returning claim
+// before this ever sees it.
+// ═══════════════════════════════════════════════════════════════════════════
+
 import { useEffect, useMemo, useState } from "react"
 
 const C = {
@@ -21,198 +40,135 @@ const glass = {
   boxShadow: "0 0 34px rgba(59,130,246,0.12), 0 0 60px rgba(236,72,153,0.06)",
 }
 
-function fmtUsd(value) {
-  const n = Number(value || 0)
-  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
+
+// Label + accent per generateInsights() `type`. 'time' is intentionally
+// absent — filtered out below, not just unmapped, so a future insight type
+// added upstream doesn't accidentally render as "Insight" with no color.
+const TYPE_META = {
+  day:       { label: "Day pattern",        accent: C.cyan },
+  whales:    { label: "Fan insight",        accent: C.pink },
+  duration:  { label: "Session insight",    accent: C.indigo },
+  retention: { label: "Retention insight",  accent: C.green },
+  momentum:  { label: "Performance trend",  accent: C.gold },
 }
 
-function fmtHour(hour) {
-  const n = ((Number(hour) % 24) + 24) % 24
-  if (n === 0) return "12 AM"
-  if (n < 12) return `${n} AM`
-  if (n === 12) return "12 PM"
-  return `${n - 12} PM`
+// Momentum is the one type whose real-world valence flips (up vs down); its
+// icon already encodes that (📈 vs 📉), so give the down case a warmer,
+// less "everything is great" accent instead of hardcoding green for both.
+function accentFor(insight) {
+  const meta = TYPE_META[insight.type]
+  if (!meta) return C.cyan
+  if (insight.type === "momentum" && insight.icon === "📉") return C.gold
+  return meta.accent
 }
 
-function fmtWindow(hour) {
-  return `${fmtHour(hour)}–${fmtHour(Number(hour) + 2)}`
-}
+export default function CamCashNoticedCarousel({ analytics, onPlanStream }) {
+  const [index, setIndex] = useState(0)
 
-function getBestWindow(analytics, dailyBrief) {
-  const canonical = analytics?.canonicalBestTimes?.bestWindow
-  if (canonical && Number.isFinite(Number(canonical.localHour))) return canonical
-
-  const brief = dailyBrief
-  if (brief?.bh != null && Number.isFinite(Number(brief.bh))) {
-    return {
-      localHour: Number(brief.bh),
-      localDay: brief.todayName || null,
-      medianUsdPerHour: Number(brief.displayAvg || 0),
-      sessionCount: Number(brief.sessionsAtPeakCount || 0),
-      tier: null,
-    }
-  }
-  return null
-}
-
-export default function DashboardIntelligenceBlocks({
-  analytics,
-  dailyBrief,
-  whales = [],
-  onPlanStream,
-}) {
-  const [noticeIndex, setNoticeIndex] = useState(0)
-
-  const bestWindow = getBestWindow(analytics, dailyBrief)
-  const topPlatform = analytics?.bestPlatformByRate || null
-  const platformEntries = Array.isArray(analytics?.platforms) ? analytics.platforms : []
-  const topPlatformFallback = useMemo(
-    () => [...platformEntries].sort((a, b) => Number(b?.usdPerHour || 0) - Number(a?.usdPerHour || 0))[0] || null,
-    [platformEntries]
-  )
-  const chosenPlatform = topPlatform?.platform ? topPlatform : topPlatformFallback
-  const momentum = analytics?.momentum
-  const topWhale = whales?.[0] || null
-
-  const pctAbove = bestWindow && Number(bestWindow.medianUsdPerHour) > 0 && Number(analytics?.estimatedHourlyRate) > 0
-    ? Math.round(((Number(bestWindow.medianUsdPerHour) - Number(analytics.estimatedHourlyRate)) / Number(analytics.estimatedHourlyRate)) * 100)
-    : null
-
+  // Same exclusion rule stated above: drop 'time' so this never repeats the
+  // hero's "go live at X" headline. Everything else generateInsights()
+  // produced is fair game — it is already gated on real sample-size
+  // thresholds (see lib/analytics.js: >=3 long AND >=3 short sessions for
+  // duration, >10 unique fans for retention, etc.), so nothing here needs a
+  // second confidence check layered on top.
   const notices = useMemo(() => {
-    const list = []
-
-    if (bestWindow) {
-      list.push({
-        icon: "🕐",
-        title: "Your strongest stream window",
-        body: `${bestWindow.localDay ? `${bestWindow.localDay}s ` : ""}${fmtWindow(bestWindow.localHour)} is the clearest earning pattern in your data${bestWindow.sessionCount ? `, backed by ${bestWindow.sessionCount} qualifying session${bestWindow.sessionCount === 1 ? "" : "s"}` : ""}.`,
-        accent: C.cyan,
-      })
-    }
-
-    if (chosenPlatform) {
-      const rate = Number(chosenPlatform.usdPerHour ?? chosenPlatform.rate ?? 0)
-      list.push({
-        icon: "📈",
-        title: "Your highest-return platform",
-        body: `${chosenPlatform.platform} is currently your strongest measured platform${rate > 0 ? ` at ${fmtUsd(rate)}/hr` : ""}.`,
-        accent: C.indigo,
-      })
-    }
-
-    if (momentum?.label) {
-      const pct = Number(momentum.pct)
-      const pctText = Number.isFinite(pct) && pct !== 0 ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""
-      list.push({
-        icon: pct >= 0 ? "⚡" : "📉",
-        title: "Your recent momentum",
-        body: `${momentum.label}${pctText}. This is based on your recent-vs-prior revenue trend, not a guess about future earnings.`,
-        accent: pct >= 0 ? C.green : C.gold,
-      })
-    }
-
-    if (topWhale?.username && Number(topWhale.totalUSD) > 0) {
-      list.push({
-        icon: "🐳",
-        title: "A high-value fan to watch",
-        body: `${topWhale.username} has contributed ${fmtUsd(topWhale.totalUSD)} lifetime. Keep an eye on their recent activity when planning outreach.`,
-        accent: C.pink,
-      })
-    }
-
-    return list.slice(0, 4)
-  }, [bestWindow, chosenPlatform, momentum, topWhale])
+    const raw = Array.isArray(analytics?.insights) ? analytics.insights : []
+    return raw
+      .filter((i) => i?.type !== "time" && TYPE_META[i?.type])
+      .map((i) => ({ ...i, label: TYPE_META[i.type].label, accent: accentFor(i) }))
+      .slice(0, 6)
+  }, [analytics?.insights])
 
   useEffect(() => {
     if (notices.length <= 1) return undefined
     const id = window.setInterval(() => {
-      setNoticeIndex((current) => (current + 1) % notices.length)
+      setIndex((current) => (current + 1) % notices.length)
     }, 6000)
     return () => window.clearInterval(id)
   }, [notices.length])
 
   useEffect(() => {
-    if (noticeIndex >= notices.length) setNoticeIndex(0)
-  }, [noticeIndex, notices.length])
+    if (index >= notices.length) setIndex(0)
+  }, [index, notices.length])
 
-  const activeNotice = notices[noticeIndex] || null
+  const active = notices[index] || null
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 18 }}>
-      {/* YOUR NEXT BEST MOVE */}
+  // Insufficient data: never fabricate a placeholder stat. Say so plainly
+  // and point at the same action (Plan My Stream / import more) that grows
+  // the sample this card runs on.
+  if (!active) {
+    return (
       <section style={{
         ...glass,
-        position: "relative",
-        overflow: "hidden",
-        borderRadius: 20,
-        padding: "28px 30px",
-        background: bestWindow
-          ? "linear-gradient(115deg, rgba(34,211,238,0.11), rgba(124,92,255,0.10) 48%, rgba(236,72,153,0.08))"
-          : glass.background,
-        borderColor: bestWindow ? "rgba(34,211,238,0.24)" : C.border,
+        borderRadius: 16,
+        padding: "18px 20px",
+        animation: "fadeUp 220ms ease both",
       }}>
-        {bestWindow && (
-          <div style={{ position: "absolute", right: -70, top: -90, width: 260, height: 260, borderRadius: "50%", background: "rgba(34,211,238,0.12)", filter: "blur(70px)", pointerEvents: "none" }} />
-        )}
-        <div style={{ position: "relative" }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: bestWindow ? C.cyan : C.muted, marginBottom: 10 }}>
-            Your next best move
-          </div>
-
-          {bestWindow ? (
-            <>
-              <div style={{ fontSize: "clamp(28px, 4vw, 40px)", lineHeight: 1.12, fontWeight: 850, letterSpacing: "-0.035em", color: C.white }}>
-                Go live {fmtWindow(bestWindow.localHour)}{bestWindow.topPlatform ? ` on ${bestWindow.topPlatform}` : chosenPlatform?.platform ? ` on ${chosenPlatform.platform}` : ""}
-              </div>
-              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                <span style={{ padding: "5px 10px", borderRadius: 999, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.25)", color: C.gold, fontSize: 11, fontWeight: 750 }}>
-                  {bestWindow.tier === "high" ? "Strong pattern" : bestWindow.tier === "supported" ? "Supported pattern" : "Data-backed window"}
-                </span>
-                {bestWindow.sessionCount > 0 && <span style={{ color: C.text, fontSize: 12 }}>based on {bestWindow.sessionCount} qualifying sessions</span>}
-              </div>
-              <div style={{ marginTop: 13, color: C.text, fontSize: 14, lineHeight: 1.6, maxWidth: 640 }}>
-                {bestWindow.localDay ? `${bestWindow.localDay}s are` : "This is"} your clearest measured earning window.
-                {Number(bestWindow.medianUsdPerHour) > 0 && <> You average <strong style={{ color: C.cyan }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</strong> there.</>}
-                {pctAbove != null && pctAbove > 0 && <> That is <strong style={{ color: C.cyan }}>{pctAbove}% above</strong> your current overall hourly rate.</>}
-              </div>
-              {onPlanStream && (
-                <button onClick={onPlanStream} style={{ marginTop: 18, padding: "12px 20px", borderRadius: 11, border: 0, cursor: "pointer", color: C.white, fontWeight: 800, fontSize: 13, background: "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)", boxShadow: "0 5px 20px rgba(124,92,255,0.25)" }}>
-                  Plan My Stream →
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 24, lineHeight: 1.2, fontWeight: 800, color: C.white }}>Keep building your sample</div>
-              <div style={{ marginTop: 10, maxWidth: 630, color: C.text, fontSize: 13.5, lineHeight: 1.6 }}>
-                Import more session history and CamCash will turn it into a stronger, more reliable recommendation.
-              </div>
-            </>
-          )}
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: 8 }}>
+          CamCash Noticed
         </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>Still building your daily brief</div>
+        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.55, color: C.text }}>
+          A few more streams will unlock patterns beyond your best window — things like your strongest day, fan
+          retention, and session-length trends.
+        </div>
+        {onPlanStream && (
+          <button onClick={onPlanStream} style={{ marginTop: 14, padding: "10px 18px", borderRadius: 10, border: 0, cursor: "pointer", color: C.white, fontWeight: 800, fontSize: 12.5, background: CTA_GRADIENT, boxShadow: "0 5px 20px rgba(124,92,255,0.25)" }}>
+            Build Personalized Streaming Plan →
+          </button>
+        )}
       </section>
+    )
+  }
 
-      {/* CAMCASH NOTICED */}
-      {activeNotice && (
-        <section style={{
-          ...glass,
-          borderRadius: 16,
-          padding: "16px 18px",
-          borderColor: `${activeNotice.accent}45`,
-          background: "rgba(11,15,26,0.72)",
-          animation: "fadeUp 220ms ease both",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center", background: `${activeNotice.accent}18`, border: `1px solid ${activeNotice.accent}30`, fontSize: 15 }}>{activeNotice.icon}</div>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: activeNotice.accent }}>CamCash Noticed</div>
-            </div>
-            {notices.length > 1 && <div aria-label="Insight position" style={{ display: "flex", gap: 5 }}>{notices.map((_, i) => <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: i === noticeIndex ? activeNotice.accent : "rgba(255,255,255,0.16)" }} />)}</div>}
+  return (
+    <section style={{
+      ...glass,
+      borderRadius: 16,
+      padding: "16px 18px",
+      borderColor: `${active.accent}45`,
+      background: "rgba(11,15,26,0.72)",
+      animation: "fadeUp 220ms ease both",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center", background: `${active.accent}18`, border: `1px solid ${active.accent}30`, fontSize: 15, flexShrink: 0 }}>
+            {active.icon}
           </div>
-          <div style={{ marginTop: 10, fontSize: 14, fontWeight: 800, color: C.white }}>{activeNotice.title}</div>
-          <div style={{ marginTop: 5, fontSize: 12.5, lineHeight: 1.55, color: C.text }}>{activeNotice.body}</div>
-        </section>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted }}>CamCash Noticed</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", color: active.accent, marginTop: 1 }}>{active.label}</div>
+          </div>
+        </div>
+        {notices.length > 1 && (
+          <div aria-label="Insight position" style={{ display: "flex", gap: 5 }}>
+            {notices.map((n, i) => (
+              <button
+                key={i}
+                onClick={() => setIndex(i)}
+                aria-label={`Show insight ${i + 1} of ${notices.length}`}
+                style={{
+                  width: 5, height: 5, borderRadius: "50%", padding: 0, border: 0, cursor: "pointer",
+                  background: i === index ? active.accent : "rgba(255,255,255,0.16)",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 13.5, lineHeight: 1.55, color: C.white, fontWeight: 600 }}>
+        {active.text}
+      </div>
+
+      {onPlanStream && (
+        <div style={{ marginTop: 13 }}>
+          <button onClick={onPlanStream} style={{ padding: "9px 16px", borderRadius: 9, border: 0, cursor: "pointer", color: C.white, fontWeight: 800, fontSize: 12, background: CTA_GRADIENT, boxShadow: "0 4px 16px rgba(124,92,255,0.25)" }}>
+            Build Personalized Streaming Plan →
+          </button>
+        </div>
       )}
-    </div>
+    </section>
   )
 }
