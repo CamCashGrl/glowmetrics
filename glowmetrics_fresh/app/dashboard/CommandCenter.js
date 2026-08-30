@@ -1,6 +1,6 @@
 "use client"
-import { useMemo } from "react"
-import CamCashNoticedCarousel from "./DashboardIntelligenceBlocks"
+import { useEffect, useMemo, useState } from "react"
+import { toLocalDow } from "../../lib/analytics"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -73,6 +73,11 @@ const fmtHour = (h) => {
 }
 // bestWindow is an hour bucket; a creator plans a stream, not a minute.
 const fmtWindow = (h) => `${fmtHour(h)} – ${fmtHour(h + 2)}`
+
+// Same order lib/analytics/localTime.js's toLocalDow() indexes into and
+// lib/analytics/bestTimes.js's grid.localDay strings come from — has to
+// match exactly, since bestWindowToday below filters grid.localDay by name.
+const LOCAL_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 // Confidence vocabulary comes from the canonical tier, never invented.
 // bestTimes.js: <2 insufficient, 2–3 promising, 4–5 supported, 6+ high.
@@ -196,6 +201,12 @@ export default function CommandCenter({
   onViewFans,
   onSeePerformance,
   onUpgrade,
+  // Same tz resolveCreatorTimezone() already produced for this account
+  // (page.js's `creatorTz`) — needed so "today" for the Best Window Today
+  // card means the CREATOR's today, not the viewing browser's. Falls back
+  // to the browser's own tz only if the caller doesn't pass one, same
+  // fallback shape resolveCreatorTimezone() itself uses.
+  timezone = (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"),
   // Relocated from the old Overview's "Make Money Right Now" section. The
   // merge (go-live signal + nextMoves + realTimeAlerts, capped at 3) happens
   // in the dashboard where those sources already live; this component only
@@ -233,6 +244,145 @@ export default function CommandCenter({
     [platforms]
   )
 
+  // ── BEST WINDOW TODAY ────────────────────────────────────────────────
+  // "If I go live TODAY, when is historically my best time?" — narrower
+  // than the hero's `bestWindow` (that one ranks EVERY day+hour bucket
+  // together and can recommend a day the creator isn't streaming today).
+  // This filters the same canonical grid down to today's day-of-week first,
+  // then applies the exact same eligibility + tie-break rule bestWindow
+  // itself uses (median desc, then session count, then most recently
+  // active) — same rule, narrower input, not a new ranking method.
+  // Recomputes on every render (no memo dep on a stored "today"), so it
+  // moves to the next day's data automatically at local midnight, per the
+  // "must update automatically based on the current day" requirement.
+  const todayLocalDay = LOCAL_DAY_NAMES[toLocalDow(new Date().toISOString(), timezone)]
+  const bestWindowToday = useMemo(() => {
+    const eligible = grid.filter(g => g.localDay === todayLocalDay && (g.tier === "supported" || g.tier === "high"))
+    if (!eligible.length) return null
+    return [...eligible].sort((a, b) =>
+      b.medianUsdPerHour - a.medianUsdPerHour ||
+      b.sessionCount - a.sessionCount ||
+      new Date(b.lastActiveAt) - new Date(a.lastActiveAt)
+    )[0]
+  }, [grid, todayLocalDay])
+
+  // ── DAY PATTERN (for the "CamCash Noticed" strip below) ─────────────
+  // A presentational reshaping of the canonical grid — grouping its
+  // (day, hour) buckets by day and taking a per-session average — not a
+  // new metric. Restricted to 'supported'/'high' tier buckets, same
+  // confidence bar bestWindow itself requires, so a single lucky hour on a
+  // low-traffic day can't win. This is a DIFFERENT figure than bestWindow
+  // (which ranks day+hour together, not day alone), so on some accounts
+  // the strongest single window and the strongest single day won't match —
+  // that is expected, not a bug.
+  const dayPattern = useMemo(() => {
+    const byDay = {}
+    for (const g of grid) {
+      if (g.tier !== "supported" && g.tier !== "high") continue
+      if (!byDay[g.localDay]) byDay[g.localDay] = { totalUsd: 0, sessionCount: 0 }
+      byDay[g.localDay].totalUsd += g.totalUsd
+      byDay[g.localDay].sessionCount += g.sessionCount
+    }
+    const entries = Object.entries(byDay).filter(([, d]) => d.sessionCount > 0)
+    if (!entries.length) return null
+    const [localDay, d] = entries.sort((a, b) => (b[1].totalUsd / b[1].sessionCount) - (a[1].totalUsd / a[1].sessionCount))[0]
+    return { localDay, avgPerSession: d.totalUsd / d.sessionCount, sessionCount: d.sessionCount }
+  }, [grid])
+
+  // ── CAMCASH NOTICED ───────────────────────────────────────────────
+  // A small rotating set of secondary, personalized findings — distinct
+  // from the hero's single headline recommendation. Every entry reads an
+  // already-canonical figure (the day-pattern reshape above, the platform
+  // rate already computed for the evidence chips, momentum, or the top
+  // fan's lifetime total); nothing here is invented. Entries that have no
+  // supporting data simply don't get added, so a sparse account may show
+  // one notice or none rather than a placeholder.
+  const notices = useMemo(() => {
+    const list = []
+    if (dayPattern) {
+      list.push({
+        kicker: "Day pattern",
+        title: `${dayPattern.localDay} is your strongest earning day`,
+        body: `Your average earnings per session on ${dayPattern.localDay}s are ${fmtUsd(dayPattern.avgPerSession)} when you stream.`,
+        metricValue: fmtUsd(dayPattern.avgPerSession),
+        metricLabel: `Average ${dayPattern.localDay} earnings`,
+        accent: C.cyan,
+      })
+    }
+    if (topPlatform?.platform) {
+      list.push({
+        kicker: "Platform pattern",
+        title: `${topPlatform.platform} is your highest-return platform`,
+        body: `You earn ${fmtUsd(topPlatform.usdPerHour)}/hr there across ${topPlatform.sessions} session${topPlatform.sessions === 1 ? "" : "s"}.`,
+        metricValue: `${fmtUsd(topPlatform.usdPerHour)}/hr`,
+        metricLabel: `${topPlatform.platform} rate`,
+        accent: C.indigo,
+      })
+    }
+    // Warns when the account's single best window (not just today's) has
+    // gone quiet — reads bestWindow.lastActiveAt, the same canonical field
+    // generateLossAlerts()'s 'peak_missed' alert already keys off of for the
+    // exact same reason, just surfaced here too since a creator may not have
+    // that alert visible in this tab.
+    if (bestWindow?.lastActiveAt) {
+      const daysSince = Math.floor((Date.now() - new Date(bestWindow.lastActiveAt).getTime()) / 86400000)
+      if (daysSince >= 10) {
+        list.push({
+          kicker: "Missed window",
+          title: `You haven't streamed ${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)} in a while`,
+          body: `Your strongest earning window — last streamed ${daysSince} days ago.`,
+          metricValue: `${daysSince}d`,
+          metricLabel: "Since last streamed here",
+          accent: C.gold,
+        })
+      }
+    }
+    if (momentum?.label && momentum.label !== "No data") {
+      const pct = Math.round(momentum.pct)
+      list.push({
+        kicker: "Momentum",
+        title: momentum.label,
+        body: `Last 30 days: ${fmtUsd0(momentum.last30USD)}${Number.isFinite(pct) ? ` (${pct >= 0 ? "+" : ""}${pct}% vs the 30 days before)` : ""}.`,
+        metricValue: fmtUsd0(momentum.last30USD),
+        metricLabel: "Last 30 days",
+        accent: pct >= 0 ? C.green : C.gold,
+      })
+    }
+    // Reuses bestWindowFanOverlap — already computed for the Fans tab's
+    // "who shows up in your best window" section, not re-derived here.
+    if (bestWindow && overlap?.count > 0) {
+      list.push({
+        kicker: "Fan pattern",
+        title: "Your highest-value fans show up during your best window",
+        body: `${overlap.count} of your top supporters tip during ${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)} — ${fmtUsd0(overlap.totalUSD)} in combined lifetime value.`,
+        metricValue: fmtUsd0(overlap.totalUSD),
+        metricLabel: "From fans in this window",
+        accent: C.pink,
+      })
+    }
+    const topWhale = whales?.[0]
+    if (topWhale?.username && topWhale.totalUSD > 0) {
+      list.push({
+        kicker: "Fan pattern",
+        title: `${topWhale.username} is your top lifetime supporter`,
+        body: `${topWhale.username} has contributed ${fmtUsd0(topWhale.totalUSD)} lifetime across ${topWhale.tipCount} tip${topWhale.tipCount === 1 ? "" : "s"}.`,
+        metricValue: fmtUsd0(topWhale.totalUSD),
+        metricLabel: "Lifetime from top fan",
+        accent: C.pink,
+      })
+    }
+    return list
+  }, [dayPattern, topPlatform, momentum, whales, bestWindow, overlap])
+
+  const [noticeIndex, setNoticeIndex] = useState(0)
+  useEffect(() => {
+    if (notices.length <= 1) return undefined
+    const id = window.setInterval(() => setNoticeIndex((i) => (i + 1) % notices.length), 6000)
+    return () => window.clearInterval(id)
+  }, [notices.length])
+  useEffect(() => { if (noticeIndex >= notices.length) setNoticeIndex(0) }, [noticeIndex, notices.length])
+  const activeNotice = notices[noticeIndex] || null
+
   // Fans inside their typical return window. Uses the canonical
   // expectedNextTip string; no probability percentage is invented, and only
   // fans with >=3 tips (enough history for churnRisk to be meaningful).
@@ -246,6 +396,11 @@ export default function CommandCenter({
   const baseline = topGap?.overallMedianUsdPerHour ?? null
   const pctAbove = (bestWindow && baseline > 0)
     ? Math.round(((bestWindow.medianUsdPerHour - baseline) / baseline) * 100) : null
+  // Same baseline as the hero's own pctAbove above — so "Best Window Today"
+  // and the hero never quote two different "typical hour" numbers on the
+  // same screen.
+  const todayLiftPct = (bestWindowToday && baseline > 0)
+    ? Math.round(((bestWindowToday.medianUsdPerHour - baseline) / baseline) * 100) : null
   // Opportunity is quoted for the WINDOW WE RECOMMEND (a 2-hour bucket, the
   // same span fmtWindow renders), not the account's average session length.
   // Quoting a 1.1-hour basis under a "go live 8-10 AM" headline understated
@@ -256,6 +411,15 @@ export default function CommandCenter({
 
   const hasWindow = !!bestWindow
   const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
+
+  // Pro creators go straight to the Stream Planner. Free creators hit the
+  // upgrade modal instead of a locked/broken tab — "stream_plan" carries its
+  // own headline/subhead in page.js's UPGRADE_COPY so the pitch names the
+  // exact thing they just tried to do.
+  const handlePlanStreamClick = () => {
+    if (isPro) onPlanStream?.()
+    else onUpgrade?.("stream_plan")
+  }
 
   // Hourly distribution for the evidence bar chart — read straight off the
   // canonical grid, summed per local hour. Presentational shaping of an
@@ -321,7 +485,44 @@ export default function CommandCenter({
             )}
 
             <div style={{ marginTop: 26 }}>
-              <BrandButton onClick={onPlanStream} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
+              <BrandButton onClick={handlePlanStreamClick} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
+            </div>
+
+            {/* ── YOUR BEST WINDOW TODAY ─────────────────────────────
+                Compact, deliberately smaller than the hero CTA above it —
+                answers "if I go live TODAY, when's historically best?"
+                which the hero's headline (ranked across ALL days) doesn't. */}
+            <div style={{
+              marginTop: 16, padding: "13px 16px", borderRadius: 12, maxWidth: 380,
+              background: bestWindowToday ? "rgba(34,211,238,0.06)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${bestWindowToday ? "rgba(34,211,238,0.22)" : C.border}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: bestWindowToday ? C.cyan : C.muted }}>✨</span>
+                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: bestWindowToday ? C.cyan : C.muted }}>
+                  Your best window today
+                </span>
+              </div>
+              {bestWindowToday ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: "-0.01em" }}>{fmtWindow(bestWindowToday.localHour)}</span>
+                    <button onClick={handlePlanStreamClick} style={{
+                      background: "transparent", border: "none", color: C.cyan, fontSize: 12, fontWeight: 700,
+                      cursor: "pointer", padding: 0,
+                    }}>Go Live →</button>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.text, marginTop: 5, lineHeight: 1.5 }}>
+                    {todayLiftPct != null && todayLiftPct > 0
+                      ? <>You typically earn <strong style={{ color: C.cyan }}>{todayLiftPct}% more</strong> per hour during this window.</>
+                      : <>Based on {bestWindowToday.sessionCount} qualifying session{bestWindowToday.sessionCount === 1 ? "" : "s"} on {todayLocalDay}s.</>}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+                  Not enough {todayLocalDay} history yet for a reliable recommendation — keep streaming and this fills in.
+                </div>
+              )}
             </div>
           </div>
 
@@ -357,15 +558,82 @@ export default function CommandCenter({
       </div>
 
       {/* ── CAMCASH NOTICED ────────────────────────────────────────────
-          Rotating daily-intelligence carousel, restored directly under the
-          hero. Sourced from analytics.insights (generateInsights() in
-          lib/analytics.js) with the 'time' type excluded — that's the same
-          best-window fact the hero above already leads with, so surfacing
-          it twice would just repeat the headline in a smaller box. Renders
-          its own "not enough data yet" state rather than being hidden
-          entirely, so a new creator sees the daily-brief concept exists
-          before they have enough sessions to fill it. */}
-      <CamCashNoticedCarousel analytics={analytics} onPlanStream={onPlanStream} />
+          Sits directly beneath the hero, same as the reference: a slim,
+          rotating strip of secondary findings so the dashboard has a fresh
+          reason to check back, without competing with the hero's single
+          headline recommendation above it. */}
+      {activeNotice && (
+        <div style={card({ padding: "18px 22px", position: "relative", overflow: "hidden" })}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <div style={{
+                  width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: `${activeNotice.accent}18`, border: `1px solid ${activeNotice.accent}35`,
+                  fontSize: 13, color: activeNotice.accent,
+                }}>✦</div>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: activeNotice.accent }}>
+                  CamCash Noticed · {activeNotice.kicker}
+                </span>
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginTop: 11, letterSpacing: "-0.015em", lineHeight: 1.3 }}>
+                {activeNotice.title}
+              </div>
+              <div style={{ fontSize: 13, color: C.text, marginTop: 6, lineHeight: 1.55 }}>{activeNotice.body}</div>
+            </div>
+
+            {activeNotice.metricValue && (
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>{activeNotice.metricValue}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4, whiteSpace: "nowrap" }}>{activeNotice.metricLabel}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Pips double as manual navigation (click jumps straight to that
+              insight instead of waiting on the 6s timer); arrows step
+              one at a time for anyone who'd rather not aim at a 5px pip. */}
+          {notices.length > 1 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+              <div style={{ display: "flex", gap: 5 }}>
+                {notices.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setNoticeIndex(i)}
+                    aria-label={`Show insight ${i + 1} of ${notices.length}`}
+                    style={{
+                      width: i === noticeIndex ? 18 : 5, height: 5, borderRadius: 3, border: "none", padding: 0,
+                      background: i === noticeIndex ? activeNotice.accent : "rgba(255,255,255,0.14)",
+                      cursor: "pointer", transition: "width 0.25s ease, background 0.25s ease",
+                    }}
+                  />
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => setNoticeIndex((i) => (i - 1 + notices.length) % notices.length)}
+                  aria-label="Previous insight"
+                  style={{
+                    width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.03)", color: C.text, cursor: "pointer",
+                    fontSize: 13, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >‹</button>
+                <button
+                  onClick={() => setNoticeIndex((i) => (i + 1) % notices.length)}
+                  aria-label="Next insight"
+                  style={{
+                    width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.03)", color: C.text, cursor: "pointer",
+                    fontSize: 13, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >›</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
       {hasWindow && (
