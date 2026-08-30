@@ -3,7 +3,7 @@ import { useMemo, useState } from "react"
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
-import { calcPotentialEarningsRecovery } from "../../lib/analytics"
+import { calcPotentialEarningsRecovery, computeFanTrend } from "../../lib/analytics"
 import FanProfileDrawer from "./FanProfileDrawer"
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,12 +29,56 @@ const fmtMoney = (value) => {
   return `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 const initials = (name = "?") => name.trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()
-const tierClass = (tier) => (tier === "Whale" ? "fan-tier-whale" : tier === "Shark" ? "fan-tier-shark" : "fan-tier-regular")
+const tierClass = (tier) =>
+  tier === "Whale" ? "fan-tier-whale"
+  : tier === "Shark" ? "fan-tier-shark"
+  : tier === "Dormant" ? "fan-tier-dormant"
+  : tier === "New" ? "fan-tier-new"
+  : "fan-tier-regular"
 // churnRisk on a fan is an OBJECT ({level, risk}) from calcChurnRisk() in
 // lib/analytics.js, not a plain string — this reads the real level off it.
 const riskLevel = (fan) => fan?.churnRisk?.level || "Unknown"
+
+// ── RISK COPY ────────────────────────────────────────────────────────────
+// The Fans page is meant to help creators make more money, not scare them.
+// This maps the real churnRisk.level (calcChurnRisk — already relative to
+// each fan's OWN cadence, never raw days-inactive) onto calmer, opportunity-
+// framed language. "Critical" + the pulsing red treatment is reserved for
+// fans who are BOTH genuinely far outside their own pattern AND economically
+// meaningful (Whale/Shark) — everyone else below that bar reads as an
+// actionable "Re-engage" rather than an alarm.
+function riskCopy(fan) {
+  const level = riskLevel(fan)
+  if (level === "Unknown") return { label: "Not enough data", cls: "risk-unknown", pulse: false }
+  if (level === "Low") return { label: "Healthy", cls: "risk-low", pulse: false }
+  if (level === "Medium") return { label: "Watch", cls: "risk-medium", pulse: false }
+  if (level === "High") return { label: "Re-engage", cls: "risk-high", pulse: false }
+  // Critical
+  const isHighValue = fan.tier === "Whale" || fan.tier === "Shark"
+  return isHighValue
+    ? { label: "Critical", cls: "risk-critical", pulse: true }
+    : { label: "Re-engage", cls: "risk-high", pulse: false }
+}
+
+// ── TREND BADGE ──────────────────────────────────────────────────────────
+const TREND_BADGE = {
+  up:           { icon: "↑", label: "Trending up",   cls: "trend-up" },
+  down:         { icon: "↓", label: "Trending down", cls: "trend-down" },
+  stable:       { icon: "→", label: "Stable",         cls: "trend-stable" },
+  emerging:     { icon: "✦", label: "Emerging",       cls: "trend-emerging" },
+  insufficient: { icon: "",  label: "Not enough data", cls: "trend-insufficient" },
+}
+function trendBadge(fan) {
+  const t = computeFanTrend(fan)
+  const meta = TREND_BADGE[t.trend] || TREND_BADGE.insufficient
+  return { ...meta, trend: t.trend, changePct: t.changePct }
+}
+
 const monthLabel = (ym) => { const [y, m] = ym.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) }
 const PLATFORM_OPTIONS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
+const TIER_OPTIONS = ["Whale", "Shark", "Regular", "Dormant"]
+const INTEL_OPTIONS = ["Trending Up", "Trending Down", "At Risk", "Loyal", "New / Emerging"]
+const PAGE_SIZE = 10
 
 // Caps how many High/Critical-risk fans can occupy the front of a sorted
 // list per platform. Nobody is removed or hidden — every real churn-risk
@@ -63,7 +107,9 @@ function IntelligenceCard({ children, className = "" }) {
 function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
   if (!fan) return null
   const risk = riskLevel(fan)
-  const isHeatingUp = fan.tier === "Shark"
+  const copy = riskCopy(fan)
+  const trend = trendBadge(fan)
+  const isHeatingUp = trend.trend === "up"
 
   return (
     <IntelligenceCard className="top-fan-card">
@@ -76,6 +122,7 @@ function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
             <div className="fan-name-row">
               <strong>{fan.username}</strong>
               {rank === 1 && <span className="top-badge">TOP SPENDER</span>}
+              {isPro && trend.trend === "up" && <span className={`trend-badge ${trend.cls}`}>{trend.icon} TRENDING UP</span>}
             </div>
             <div className="fan-tags">
               <span className={tierClass(fan.tier)}>{fan.tier || "Regular"}</span>
@@ -96,8 +143,8 @@ function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
       {isPro ? (
         <div className="fan-risk-block">
           <div className="risk-label-row">
-            <span>RETENTION RISK</span>
-            <strong className={`risk-${risk.toLowerCase()}`}>{risk === "Unknown" ? "Not enough data" : risk}</strong>
+            <span>RETENTION STATUS</span>
+            <strong className={copy.cls}>{copy.label}</strong>
           </div>
           <div className="risk-track">
             <div className={`risk-fill risk-fill-${risk.toLowerCase()}`} style={{
@@ -110,7 +157,7 @@ function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
         </div>
       ) : (
         <div className="fan-risk-block">
-          <div className="risk-label-row"><span>RETENTION RISK</span><strong>🔒 Pro</strong></div>
+          <div className="risk-label-row"><span>RETENTION STATUS</span><strong>🔒 Pro</strong></div>
         </div>
       )}
 
@@ -254,19 +301,80 @@ function DependencyRiskCard({ dependencyRisk, topFan, isPro, onUpgrade, recovery
   )
 }
 
+// ── FAN MIX (composition) ───────────────────────────────────────────────────
+// Compact insight, not another big chart — account-wide tier breakdown from
+// lib/analytics.js's computeFanComposition(), which is just a % aggregation
+// of each fan's own already-computed `tier` (identifyWhales). Nothing new is
+// classified here. Only rendered once there's enough fans for the split to
+// mean something (same 5-fan floor dependencyRisk itself uses).
+function FanMixCard({ composition }) {
+  if (!composition || composition.total < 5) return null
+  const rows = [
+    { label: "Whales", pct: composition.whalePct, cls: "fan-tier-whale" },
+    { label: "Sharks", pct: composition.sharkPct, cls: "fan-tier-shark" },
+    { label: "Regulars", pct: composition.regularPct, cls: "fan-tier-regular" },
+    { label: "New", pct: composition.newPct, cls: "fan-tier-new" },
+    { label: "Dormant", pct: composition.dormantPct, cls: "fan-tier-dormant" },
+  ].filter((r) => r.pct > 0)
+
+  return (
+    <IntelligenceCard className="fan-mix-card">
+      <div className="chart-eyebrow">FAN MIX</div>
+      <h3>How your audience breaks down</h3>
+      <div className="fan-mix-rows">
+        {rows.map((r) => (
+          <div className="fan-mix-row" key={r.label}>
+            <span className={`fan-mix-label ${r.cls}`}>{r.label}</span>
+            <div className="fan-mix-track"><div className={`fan-mix-fill ${r.cls}`} style={{ width: `${r.pct}%` }} /></div>
+            <span className="fan-mix-pct">{r.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </IntelligenceCard>
+  )
+}
+
 // ── FAN INTELLIGENCE LIST ───────────────────────────────────────────────────
-function FanIntelligenceList({ fans, isPro, platform, setPlatform, search, setSearch, onView, onUpgrade }) {
+function FanIntelligenceList({
+  fans, isPro, hasRecentStreamingActivity, daysSinceLastMeaningfulSession,
+  platform, setPlatform, tierFilter, setTierFilter, intelFilter, setIntelFilter,
+  search, setSearch, page, setPage, onView, onUpgrade,
+}) {
   const ordered = useMemo(() => {
     let out = fans
     if (platform !== "All Platforms") out = out.filter((f) => f.platform === platform)
+    if (tierFilter !== "All") out = out.filter((f) => f.tier === tierFilter)
+    if (intelFilter !== "All") {
+      out = out.filter((f) => {
+        const risk = riskLevel(f)
+        const trend = computeFanTrend(f).trend
+        if (intelFilter === "Trending Up") return trend === "up"
+        if (intelFilter === "Trending Down") return trend === "down"
+        if (intelFilter === "At Risk") return risk === "High" || risk === "Critical"
+        if (intelFilter === "Loyal") return risk === "Low" && (f.tipCount ?? 0) >= 5
+        if (intelFilter === "New / Emerging") return trend === "emerging"
+        return true
+      })
+    }
     if (search) { const q = search.toLowerCase(); out = out.filter((f) => String(f.username || "").toLowerCase().includes(q)) }
     // fans is already spend-sorted (identifyWhales()'s own order) — the
-    // churn cap only reorders the excess High/Critical fans to the back,
-    // it never re-ranks by anything synthesized.
+    // churn cap only reorders the excess High/Critical fans to the back (max
+    // 1 per platform up front) so a wall of at-risk fans can never dominate
+    // the list — even when the person explicitly filters to "At Risk", they
+    // see the single most relevant at-risk fan per platform first.
     return applyChurnCap(out, 1)
-  }, [fans, platform, search])
+  }, [fans, platform, tierFilter, intelFilter, search])
 
-  const filtered = ordered.slice(0, isPro ? 12 : 6)
+  // Free users get a short, unpaginated teaser (matches the Top-3-cards
+  // free experience above). Pro users get real pagination over the full
+  // filtered set — never an endless list rendered and hidden with CSS.
+  const total = ordered.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safePage = Math.min(Math.max(1, page), totalPages)
+  const pageStart = (safePage - 1) * PAGE_SIZE
+  const pageItems = isPro ? ordered.slice(pageStart, pageStart + PAGE_SIZE) : ordered.slice(0, 6)
+
+  const resetAnd = (setter) => (value) => { setter(value); setPage(1) }
 
   return (
     <IntelligenceCard className="fan-list-card">
@@ -277,21 +385,45 @@ function FanIntelligenceList({ fans, isPro, platform, setPlatform, search, setSe
           <p>A focused list of the fans most relevant to your revenue and retention.</p>
         </div>
         <div className="fan-controls">
-          <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="cc-select">
+          <select value={platform} onChange={(e) => resetAnd(setPlatform)(e.target.value)} className="cc-select">
             <option>All Platforms</option>
             {PLATFORM_OPTIONS.map((p) => <option key={p}>{p}</option>)}
           </select>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search username..." className="cc-search" />
+          <select value={tierFilter} onChange={(e) => resetAnd(setTierFilter)(e.target.value)} className="cc-select">
+            <option value="All">All Types</option>
+            {TIER_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={intelFilter} onChange={(e) => resetAnd(setIntelFilter)(e.target.value)} className="cc-select">
+            <option value="All">All Intelligence</option>
+            {INTEL_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input
+            value={search}
+            onChange={(e) => resetAnd(setSearch)(e.target.value)}
+            placeholder="Search username..."
+            className="cc-search"
+          />
         </div>
       </div>
 
+      {!hasRecentStreamingActivity && (
+        <div className="activity-banner">
+          <span className="activity-banner-title">
+            {daysSinceLastMeaningfulSession == null
+              ? "Not enough recent streaming activity to assess fan risk yet."
+              : `No qualifying streams in the last ${daysSinceLastMeaningfulSession} days.`}
+          </span>
+          <span className="activity-banner-helper">Risk signals become more useful after you have recent qualifying sessions.</span>
+        </div>
+      )}
+
       <div className="fan-list">
-        {filtered.map((fan, index) => {
-          const risk = riskLevel(fan)
-          const isHeatingUp = fan.tier === "Shark"
+        {pageItems.map((fan, index) => {
+          const copy = riskCopy(fan)
+          const trend = trendBadge(fan)
           return (
             <div className="fan-list-row" key={`${fan.username}-${index}`}>
-              <div className={`fan-list-avatar ${isHeatingUp ? "fan-heating-glow" : ""}`}>{initials(fan.username)}</div>
+              <div className={`fan-list-avatar ${trend.trend === "up" ? "fan-heating-glow" : ""}`}>{initials(fan.username)}</div>
               <div className="fan-list-identity">
                 <strong>{fan.username}</strong>
                 <div>
@@ -299,11 +431,14 @@ function FanIntelligenceList({ fans, isPro, platform, setPlatform, search, setSe
                   <span className="platform-tag">{fan.platform}</span>
                 </div>
               </div>
-              <div className="fan-list-stat"><span>TIPPED</span><strong>{fmtMoney(fan.totalUSD)}</strong></div>
-              <div className="fan-list-stat"><span>TIPS</span><strong>{fan.tipCount ?? 0}</strong></div>
+              <div className="fan-list-stat"><span>LIFETIME</span><strong>{fmtMoney(fan.totalUSD)}</strong></div>
               <div className="fan-list-stat">
-                <span>RISK</span>
-                <strong className={`risk-${risk.toLowerCase()}`}>{isPro ? (risk === "Unknown" ? "—" : risk) : "🔒"}</strong>
+                <span>TREND</span>
+                <strong className={`trend-badge-inline ${trend.cls}`}>{trend.icon} {trend.label}</strong>
+              </div>
+              <div className="fan-list-stat">
+                <span>STATUS</span>
+                <strong className={copy.cls}>{isPro ? copy.label : "🔒"}</strong>
               </div>
               <div className="fan-list-action">
                 {isPro ? (
@@ -315,8 +450,19 @@ function FanIntelligenceList({ fans, isPro, platform, setPlatform, search, setSe
             </div>
           )
         })}
-        {filtered.length === 0 && <div className="empty-fans">No fans match your current filters.</div>}
+        {pageItems.length === 0 && <div className="empty-fans">No fans match your current filters.</div>}
       </div>
+
+      {isPro && total > 0 && (
+        <div className="fan-pagination">
+          <span>Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, total)} of {total} fans</span>
+          <div className="fan-pagination-buttons">
+            <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>← Previous</button>
+            <span className="fan-pagination-page">Page {safePage} of {totalPages}</span>
+            <button disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Next →</button>
+          </div>
+        </div>
+      )}
 
       {!isPro && (
         <div className="free-list-footer">
@@ -331,13 +477,23 @@ function FanIntelligenceList({ fans, isPro, platform, setPlatform, search, setSe
 // ── MAIN ────────────────────────────────────────────────────────────────────
 export default function Fans({ analytics, isPro = false, onUpgrade, onMessageFan, onPlanStream }) {
   const [platform, setPlatform] = useState("All Platforms")
+  const [tierFilter, setTierFilter] = useState("All")
+  const [intelFilter, setIntelFilter] = useState("All")
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
   const [openFan, setOpenFan] = useState(null)
 
   const fans = analytics?.whales || []
   const dependencyRisk = analytics?.dependencyRisk || null
   const fanGrowthSeries = analytics?.fanGrowthSeries || []
   const fanEngagementTrend = analytics?.fanEngagementTrend || null
+  const fanComposition = analytics?.fanComposition || null
+  // Whether the CREATOR has streamed recently enough for retention/risk
+  // signals to be meaningful (lib/analytics.js aggregateRows). Gates the
+  // calm "not enough recent activity" banner instead of ever implying the
+  // whole audience is churning just because the creator hasn't been live.
+  const hasRecentStreamingActivity = analytics?.hasRecentStreamingActivity ?? false
+  const daysSinceLastMeaningfulSession = analytics?.daysSinceLastMeaningfulSession ?? null
 
   // identifyWhales() already returns fans sorted by totalUSD descending.
   const topThree = fans.slice(0, 3)
@@ -389,6 +545,7 @@ export default function Fans({ analytics, isPro = false, onUpgrade, onMessageFan
             <FanEngagementChart trend={fanEngagementTrend} />
           </ChartCard>
         </div>
+        <FanMixCard composition={fanComposition} />
       </section>
 
       <section className="fans-section">
@@ -397,8 +554,15 @@ export default function Fans({ analytics, isPro = false, onUpgrade, onMessageFan
 
       <section className="fans-section">
         <FanIntelligenceList
-          fans={fans} isPro={isPro} platform={platform} setPlatform={setPlatform}
-          search={search} setSearch={setSearch} onView={setOpenFan} onUpgrade={onUpgrade}
+          fans={fans} isPro={isPro}
+          hasRecentStreamingActivity={hasRecentStreamingActivity}
+          daysSinceLastMeaningfulSession={daysSinceLastMeaningfulSession}
+          platform={platform} setPlatform={setPlatform}
+          tierFilter={tierFilter} setTierFilter={setTierFilter}
+          intelFilter={intelFilter} setIntelFilter={setIntelFilter}
+          search={search} setSearch={setSearch}
+          page={page} setPage={setPage}
+          onView={setOpenFan} onUpgrade={onUpgrade}
         />
       </section>
 
