@@ -19,10 +19,6 @@ const NAV = [
     ]
   },
   {
-    group: "TRANSACTIONS",
-    items: [{ id: "tx-hub", icon: "💳", label: "TX Hub", href: "/dashboard/tx-hub" }]
-  },
-  {
     group: "FANS",
     items: [{ id: "whales", icon: "👑", label: "Top Fans" }]
   },
