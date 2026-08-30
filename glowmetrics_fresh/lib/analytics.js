@@ -577,6 +577,140 @@ function calcExpectedNextTip(d, avg) {
   return `In ~${Math.round(n / 7)} weeks`
 }
 
+// ── POTENTIAL EARNINGS RECOVERY ─────────────────────────────────────────
+// Deliberately NOT "lifetime value at risk" (that's topFanDependency's
+// lossIfTopFanLeaves — what this fan represents in total). This is a
+// DIFFERENT, smaller claim: how much of what this fan's OWN history says
+// should have happened recently, didn't — and might come back if their
+// engagement returns toward their own historical pattern. It is an
+// estimate of a gap, never a promise of money that will be recovered.
+//
+// Inputs are all canonical fields identifyWhales() already computed for
+// this fan — no second per-fan calculation exists elsewhere:
+//   avgDaysBetweenTips  — this fan's own historical tipping cadence
+//   daysSinceLastTip    — how long it's actually been
+//   avgTipSize          — this fan's own historical tip size
+//   churnRisk           — same Low/Medium/High/Critical classification
+//                         shown elsewhere for this fan (calcChurnRisk)
+//   lifetimeValue.monthly — this fan's own historical monthly run-rate
+//                         (calcLifetimeValue), used only as a ceiling
+export function calcPotentialEarningsRecovery(fan) {
+  if (!fan) return null
+  const { tipCount, daysSinceLastTip, avgDaysBetweenTips, avgTipSize, churnRisk, lifetimeValue } = fan
+
+  // Same 3-tip floor calcChurnRisk() itself uses — below that there is no
+  // real "pattern" to measure a decline against.
+  if (!tipCount || tipCount < 3) return null
+  if (!churnRisk || churnRisk.level === 'Unknown' || churnRisk.level === 'Low') {
+    // 'Low' means this fan is tipping on/ahead of their own normal
+    // schedule right now — there is no gap to speak of, so no recovery
+    // number is shown rather than inventing one.
+    return null
+  }
+
+  // Days beyond this fan's OWN normal return window. Only overdue time
+  // counts — a fan who is not yet due has nothing "declining" to recover.
+  const overdueDays = daysSinceLastTip - avgDaysBetweenTips
+  if (!(overdueDays > 0) || !avgDaysBetweenTips || !avgTipSize) return null
+
+  // How many of the fan's own normal cycles have been skipped across that
+  // overdue window. E.g. a fan who tips every ~7 days and hasn't tipped in
+  // 21 days is 14 days overdue -> 2 skipped cycles.
+  const missedCycles = overdueDays / avgDaysBetweenTips
+
+  // Raw estimate: skipped cycles x this fan's own average tip size. This
+  // reads their OWN history back to them — "at your normal pace, roughly
+  // this much would have landed by now" — not a forecast of future tips.
+  const rawEstimate = missedCycles * avgTipSize
+
+  // Ceiling: never claim more than one month of this fan's own historical
+  // monthly run-rate. Without this, a fan dormant for a year would show an
+  // ever-growing number with no connection to a realistic re-engagement
+  // outcome. lifetimeValue.monthly is already computed from this fan's real
+  // totalUSD/lifetime days elsewhere — reused here, not recomputed.
+  const ceiling = lifetimeValue?.monthly
+  const estimate = ceiling != null ? Math.min(rawEstimate, ceiling) : rawEstimate
+  if (!(estimate > 0)) return null
+
+  return {
+    amount: parseFloat(estimate.toFixed(2)),
+    missedCycles: parseFloat(missedCycles.toFixed(1)),
+    overdueDays: Math.round(overdueDays),
+    // Plain-language basis for the microcopy — states what the number is
+    // (an estimate tied to this fan's own pattern), never that it will
+    // actually be recovered.
+    basis: `Estimated opportunity if engagement returns toward this fan's historical pattern — they typically tip every ~${Math.round(avgDaysBetweenTips)}d at ~$${avgTipSize.toFixed(0)} avg, and are ${Math.round(overdueDays)}d past that.`,
+  }
+}
+
+// ── FAN COMPOSITION ──────────────────────────────────────────────────────
+// % breakdown of a fan list by identifyWhales()' own tier field. No new
+// classification — just aggregating what each fan was already tiered as.
+export function computeFanComposition(whales) {
+  if (!whales?.length) return null
+  const counts = { Whale: 0, Shark: 0, Regular: 0, Dormant: 0 }
+  whales.forEach(f => { counts[f.tier] = (counts[f.tier] || 0) + 1 })
+  const total = whales.length
+  const pct = (n) => Math.round((n / total) * 100)
+  return {
+    total,
+    whalePct: pct(counts.Whale), sharkPct: pct(counts.Shark),
+    regularPct: pct(counts.Regular), dormantPct: pct(counts.Dormant),
+  }
+}
+
+// ── FAN GROWTH SERIES ────────────────────────────────────────────────────
+// Monthly new-vs-returning fan counts, using the SAME local-calendar-month
+// key (monthKeyLocal, defined where aggregateRows() builds monthlyData) so
+// this chart's months line up with every other monthly chart in the app.
+// "New" = this is the fan's first tip ever, in this calendar month.
+// "Returning" = the fan had already tipped in an earlier month.
+function computeFanGrowthSeries(tips, monthKeyFn) {
+  const firstMonthByFan = {}
+  tips.forEach(t => {
+    const key = t.username.toLowerCase()
+    const m = monthKeyFn(t.dateRaw || t.date_time)
+    if (!m) return
+    if (!firstMonthByFan[key] || m < firstMonthByFan[key]) firstMonthByFan[key] = m
+  })
+  const byMonth = {}
+  tips.forEach(t => {
+    const m = monthKeyFn(t.dateRaw || t.date_time)
+    if (!m) return
+    const key = t.username.toLowerCase()
+    if (!byMonth[m]) byMonth[m] = { newFans: new Set(), returningFans: new Set() }
+    if (firstMonthByFan[key] === m) byMonth[m].newFans.add(key)
+    else byMonth[m].returningFans.add(key)
+  })
+  return Object.entries(byMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, d]) => ({
+      month, newFans: d.newFans.size, returningFans: d.returningFans.size,
+      totalFans: d.newFans.size + d.returningFans.size,
+    }))
+}
+
+// ── FAN ENGAGEMENT TREND ─────────────────────────────────────────────────
+// Reads monthlyData (already canonical — same source as every other
+// monthly chart) rather than recomputing tips/fans. "Engagement" here means
+// average tips-per-fan per month: are the SAME fans tipping more or less
+// often, independent of how many total fans there are. Needs at least 2
+// active months to say anything about direction.
+function computeFanEngagementTrend(monthlyData) {
+  if (!monthlyData || monthlyData.length < 2) return null
+  const series = monthlyData.map(m => ({
+    month: m.month,
+    avgTipsPerFan: m.fans > 0 ? parseFloat((m.tips / m.fans).toFixed(2)) : 0,
+  }))
+  const cur = series[series.length - 1]
+  const prev = series[series.length - 2]
+  const changePct = prev.avgTipsPerFan > 0
+    ? Math.round(((cur.avgTipsPerFan - prev.avgTipsPerFan) / prev.avgTipsPerFan) * 100)
+    : null
+  const trend = changePct == null ? 'stable' : changePct >= 10 ? 'growing' : changePct <= -10 ? 'declining' : 'stable'
+  return { series, trend, changePct }
+}
+
 export function generateWhaleAlerts(whales) {
   let alerts = []
   if (!whales.length) return alerts
@@ -864,7 +998,8 @@ export function aggregateRows(tips, tz = null) {
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, sessionPerformance: null, latestPlatformDelta: null,
       bestPlatformByRate: null, rankablePlatformCount: 0,
-      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
+      canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null,
+      fanComposition: null, fanGrowthSeries: [], fanEngagementTrend: null
     }
   }
 
@@ -1281,7 +1416,23 @@ export function aggregateRows(tips, tz = null) {
             : level === 'medium'
               ? `Your top 3 fans are ${top3Pct}% of all revenue, and your top fan alone is ${top1Pct}%. Widening your tipping base lowers what one fan's departure costs you.`
               : `Your revenue is spread across your fan base — your top fan is ${top1Pct}% and your top 5 are ${top5Pct}% of the total.`
-        return { level, message, top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves, fanCount: whales.length }
+        // topFan/potentialRecovery: two DELIBERATELY DIFFERENT numbers.
+        // lossIfTopFanLeaves ("Earnings At Risk") is this fan's full
+        // lifetime concentration — how much revenue sits in one
+        // relationship. potentialRecovery ("Potential Earnings Recovery",
+        // calcPotentialEarningsRecovery above) is a much narrower, separate
+        // claim: only the recent gap implied by THIS fan's own declining
+        // pattern versus their own history. They are not meant to match,
+        // and one is frequently null (e.g. a top fan who is actively
+        // tipping on schedule has money at risk from concentration, but
+        // nothing currently "recoverable" — see the function's own gating).
+        const topFan = sortedWhales[0] || null
+        return {
+          level, message, top1Pct, top3Pct, top5Pct, lossIfTopFanLeaves, fanCount: whales.length,
+          topFanUsername: topFan?.username || null,
+          topFanPlatform: topFan?.platform || null,
+          potentialRecovery: topFan ? calcPotentialEarningsRecovery(topFan) : null,
+        }
       })()
     : null
 
@@ -1490,6 +1641,9 @@ export function aggregateRows(tips, tz = null) {
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenue, returningVsNew, topFanDependency, dependencyRisk, bestWindowFanOverlap,
+    fanComposition: computeFanComposition(whales),
+    fanGrowthSeries: computeFanGrowthSeries(tips, monthKeyLocal),
+    fanEngagementTrend: computeFanEngagementTrend(monthlyData),
     // preTipBehavior and trueHourlyAvg intentionally removed rather than
     // left as permanently-null keys. preTipBehavior's dashboard card was
     // deleted in the same pass: its "peak tipping window" duplicated
