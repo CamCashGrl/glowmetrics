@@ -306,6 +306,7 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 43px; height: 43px; border-radius: 12px;
   background: linear-gradient(135deg, #16dff5, #7658f4 55%, #ec3baf); color: #071020; font-size: 15px; font-weight: 900;
 }
+.dependency-avatar-lock { font-size: 15px; }
 .fan-avatar-primary { box-shadow: 0 0 22px rgba(32, 221, 245, 0.25), 0 0 30px rgba(236, 59, 175, 0.13); }
 /* Shark tier (the rung directly below Whale) — the closest real signal to
    "heating up" in the data. Same soft glow language as the avatar above,
