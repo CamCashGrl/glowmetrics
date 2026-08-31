@@ -30,6 +30,26 @@ const CHURN_COLOR = { Low: C.green, Medium: C.gold, High: "#FB923C", Critical: C
 const TREND_COLOR = { up: C.green, down: "#FB923C", stable: C.muted, emerging: C.cyan, insufficient: C.muted }
 const TREND_LABEL = { up: "↑ Trending up", down: "↓ Trending down", stable: "→ Stable", emerging: "✦ New · Emerging", insufficient: "Not enough data" }
 
+// Abstract CamCash brand mark — not username initials, not a profile photo.
+// Same deterministic-glyph approach as Fans.js's AvatarGlyph, kept as a
+// separate small copy here rather than importing across the client
+// component boundary for one tiny piece of decorative UI.
+function glyphIndexFor(name = "") {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return h % 3
+}
+function AvatarGlyph({ seed = "", size = 26 }) {
+  const variant = glyphIndexFor(seed)
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden="true">
+      {variant === 0 && <path d="M12 2 L14.5 9.5 L22 12 L14.5 14.5 L12 22 L9.5 14.5 L2 12 L9.5 9.5 Z" fill={C.white} opacity="0.92" />}
+      {variant === 1 && <circle cx="12" cy="12" r="7" fill={C.white} opacity="0.9" />}
+      {variant === 2 && <rect x="5" y="5" width="14" height="14" rx="4" fill={C.white} opacity="0.9" transform="rotate(45 12 12)" />}
+    </svg>
+  )
+}
+
 function Row({ label, value }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
@@ -104,7 +124,7 @@ export default function FanProfileDrawer({ fan, isPro, onClose, onUpgrade, onMes
             background: `linear-gradient(135deg,${C.indigo},${C.pink})`,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 22, fontWeight: 800, color: C.white,
-          }}>{fan.username.slice(0, 1).toUpperCase()}</div>
+          }}><AvatarGlyph seed={fan.username} size={26} /></div>
           <div style={{ fontSize: 18, fontWeight: 800, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{fan.platform} · {fan.tier}</div>
           <div style={{
