@@ -28,7 +28,28 @@ const fmtMoney = (value) => {
   if (value == null || Number.isNaN(Number(value))) return "$0.00"
   return `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
-const initials = (name = "?") => name.trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join("").toUpperCase()
+// ── ABSTRACT AVATAR ─────────────────────────────────────────────────────
+// Decorative CamCash brand mark — NOT a stand-in for a profile photo and
+// NOT username initials (those read as generic contact-card UI, not the
+// brand). A tiny deterministic hash picks one of a few abstract glyphs so
+// avatars aren't all visually identical, without encoding any part of the
+// username as text.
+function glyphIndexFor(name = "") {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return h % 3
+}
+function AvatarGlyph({ seed = "" }) {
+  const variant = glyphIndexFor(seed)
+  return (
+    <svg viewBox="0 0 24 24" width="52%" height="52%" fill="none" aria-hidden="true">
+      {variant === 0 && <path d="M12 2 L14.5 9.5 L22 12 L14.5 14.5 L12 22 L9.5 14.5 L2 12 L9.5 9.5 Z" fill="currentColor" opacity="0.92" />}
+      {variant === 1 && <circle cx="12" cy="12" r="7" fill="currentColor" opacity="0.9" />}
+      {variant === 2 && <rect x="5" y="5" width="14" height="14" rx="4" fill="currentColor" opacity="0.9" transform="rotate(45 12 12)" />}
+    </svg>
+  )
+}
+
 const tierClass = (tier) =>
   tier === "Whale" ? "fan-tier-whale"
   : tier === "Shark" ? "fan-tier-shark"
@@ -116,7 +137,7 @@ function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
       <div className="top-fan-header">
         <div className="fan-identity">
           <div className={`fan-avatar ${rank === 1 ? "fan-avatar-primary" : ""} ${isHeatingUp ? "fan-heating-glow" : ""}`}>
-            {initials(fan.username)}
+            <AvatarGlyph seed={fan.username} />
           </div>
           <div>
             <div className="fan-name-row">
@@ -283,7 +304,7 @@ function DependencyRiskCard({ dependencyRisk, topFan, isPro, onUpgrade, recovery
       </div>
 
       <div className="dependency-fan">
-        <div className="dependency-avatar">{isPro ? initials(topFan?.username) : "?"}</div>
+        <div className="dependency-avatar">{isPro ? <AvatarGlyph seed={topFan?.username} /> : <span className="dependency-avatar-lock">🔒</span>}</div>
         <div className="dependency-fan-info">
           <span>HIGH-VALUE FAN</span>
           {isPro ? <strong>{topFan?.username || "Unknown"}</strong> : <strong className="blurred-username">{topFan?.username || "high-value-fan"}</strong>}
@@ -423,7 +444,7 @@ function FanIntelligenceList({
           const trend = trendBadge(fan)
           return (
             <div className="fan-list-row" key={`${fan.username}-${index}`}>
-              <div className={`fan-list-avatar ${trend.trend === "up" ? "fan-heating-glow" : ""}`}>{initials(fan.username)}</div>
+              <div className={`fan-list-avatar ${trend.trend === "up" ? "fan-heating-glow" : ""}`}><AvatarGlyph seed={fan.username} /></div>
               <div className="fan-list-identity">
                 <strong>{fan.username}</strong>
                 <div>
