@@ -316,26 +316,35 @@ export default function Performance({
     const byAvgTip  = [...platforms].filter(p => p.tips > 0 && p.avgTipSize > 0).sort((a, b) => b.avgTipSize - a.avgTipSize)
     const byFans    = [...platforms].filter(p => p.uniqueFans > 0).sort((a, b) => b.uniqueFans - a.uniqueFans)
 
-    if (byRevenue.length) {
-      const top = byRevenue[0]
-      const share = shareOf(top)
+    // The rate line, reused whether it stands alone or folds into the revenue
+    // card — one platform commonly leads both, and two cards naming the same
+    // platform read as a bug rather than as two findings.
+    const rateLine = (top) => (
+      platformEfficiencyGap && platformEfficiencyGap.top.platform === top.platform && platformEfficiencyGap.multiple >= 1.3
+        ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}x what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
+        : `You're averaging ${fmtUsd(top.usdPerHour)}/hr here across ${top.sessions} qualifying session${top.sessions === 1 ? "" : "s"}.`
+    )
+    const revenueLeader = byRevenue[0] || null
+    const hourlyLeader = byHourly[0] || null
+    const leadsBoth = revenueLeader && hourlyLeader && revenueLeader.platform === hourlyLeader.platform
+
+    if (revenueLeader) {
+      const share = shareOf(revenueLeader)
       out.push({
-        platform: top.platform,
-        title: "Highest revenue",
-        body: `${fmtUsd(top.totalUSD)} in qualifying sessions${share != null ? ` — ${share.toFixed(1)}% of everything you earned across your platforms` : ""}.`,
+        platform: revenueLeader.platform,
+        title: leadsBoth ? "Highest revenue and hourly rate" : "Highest revenue",
+        body: `${fmtUsd(revenueLeader.totalUSD)} in qualifying sessions${share != null ? ` — ${share.toFixed(1)}% of everything you earned across your platforms` : ""}.`
+          + (leadsBoth ? ` It also pays the most per hour: ${rateLine(revenueLeader)}` : ""),
       })
     }
-    if (byHourly.length) {
-      const top = byHourly[0]
+    if (hourlyLeader && !leadsBoth) {
       out.push({
-        platform: top.platform,
+        platform: hourlyLeader.platform,
         title: "Highest hourly earnings",
-        body: platformEfficiencyGap && platformEfficiencyGap.top.platform === top.platform && platformEfficiencyGap.multiple >= 1.3
-          ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}x what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
-          : `You're averaging ${fmtUsd(top.usdPerHour)}/hr here across ${top.sessions} qualifying session${top.sessions === 1 ? "" : "s"}.`,
+        body: rateLine(hourlyLeader),
       })
     }
-    if (byAvgTip.length && byAvgTip[0].platform !== byHourly[0]?.platform) {
+    if (byAvgTip.length && byAvgTip[0].platform !== hourlyLeader?.platform) {
       const top = byAvgTip[0]
       out.push({
         platform: top.platform,
@@ -343,7 +352,7 @@ export default function Performance({
         body: `Your average tip is ${fmtUsd(top.avgTipSize)} here, across ${Number(top.tips).toLocaleString()} tips.`,
       })
     }
-    if (byFans.length && byFans[0].platform !== byRevenue[0]?.platform) {
+    if (byFans.length && byFans[0].platform !== revenueLeader?.platform) {
       const top = byFans[0]
       out.push({
         platform: top.platform,
@@ -391,7 +400,7 @@ export default function Performance({
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: platforms.length > 1 ? "repeat(auto-fit, minmax(300px, 1fr))" : "1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: platforms.length > 1 ? "repeat(auto-fit, minmax(min(100%, 420px), 1fr))" : "1fr", gap: 16 }}>
               {platforms.map(p => (
                 <PlatformCard key={p.platform} p={p} share={shareOf(p)} onViewBreakdown={onViewPlatform} />
               ))}
