@@ -6,10 +6,17 @@ import { useMemo } from "react"
 //
 // Answers ONE question: "how is each platform doing?" — the account-wide
 // "how am I doing overall?" question belongs to the Overview/Command Center,
-// which is why the generic earnings/$-per-hour trend charts and the overall
-// KPI strip no longer live here. The page leads with the per-platform cards
-// rather than a chart, so "which site actually makes me the most money" is
-// readable in about two seconds.
+// which is why the generic KPI strip and trend charts no longer open this
+// page. The per-platform cards lead, so "which site actually makes me the
+// most money" is readable in about two seconds.
+//
+// PRESENTATION: this tab uses the same design system as the Sessions and
+// Fans tabs — .platforms-page, .glass-panel, .session-stat-box,
+// .gradient-button and the gradient page title, all defined in
+// app/globals.css. Styling lives in that stylesheet, not in inline style
+// objects here, so a change to the dashboard's look happens in one place.
+// The only inline value is each platform's --accent, which the card's
+// border, badge and corner glow read from.
 //
 // Every value is read from the frozen analytics layer (lib/analytics.js's
 // aggregateRows()). This file performs NO aggregation of its own — no reduces
@@ -28,22 +35,6 @@ import { useMemo } from "react"
 //     changes.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const C = {
-  bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45",
-  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B",
-  green: "#10B981", red: "#F87171", white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
-}
-const glassCard = {
-  background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
-}
-const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
-const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
-// C.text, not C.muted — at 12px uppercase on the glass card, #475569 rendered
-// too dim to read comfortably. These are the section headings; they carry the
-// page's structure.
-const sectionLabel = { fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.text }
-const microLabel = { fontSize: 10, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(241,245,249,0.38)" }
-
 const fmtUsd = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
 // Hours + minutes, for the one place a card gives streaming time its own line.
@@ -61,22 +52,21 @@ const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 
 const TIER_COPY = { high: "Strong pattern", supported: "Supported pattern", promising: "Early signal" }
 
-// One restrained accent per platform — a dark glass card with white primary
-// type and muted metadata, lifted by a single colour and a very subtle glow.
+// One restrained accent per platform, in the dashboard's existing palette.
 // Unknown/undetected platforms fall through to the neutral slate accent
 // rather than being given a brand identity they don't have.
 const PLATFORM_STYLES = {
   chaturbate: { short: "CB",  accent: "#22D3EE" },
   bongacams:  { short: "BC",  accent: "#EC4899" },
-  myfreecams: { short: "MFC", accent: "#7C5CFF" },
+  myfreecams: { short: "MFC", accent: "#A855F7" },
   camsoda:    { short: "CS",  accent: "#D946EF" },
   stripchat:  { short: "SC",  accent: "#FB923C" },
   streamate:  { short: "SM",  accent: "#38BDF8" },
   flirt4free: { short: "F4F", accent: "#F472B6" },
-  cam4:       { short: "C4",  accent: "#34D399" },
-  livejasmin: { short: "LJ",  accent: "#FBBF24" },
+  cam4:       { short: "C4",  accent: "#21D99A" },
+  livejasmin: { short: "LJ",  accent: "#FFC43D" },
 }
-const NEUTRAL_STYLE = { short: "—", accent: "#94A3B8" }
+const NEUTRAL_STYLE = { short: "—", accent: "#8B96B8" }
 const styleFor = (name) => {
   const key = String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "")
   if (PLATFORM_STYLES[key]) return PLATFORM_STYLES[key]
@@ -88,27 +78,14 @@ const styleFor = (name) => {
     : String(name || "?").slice(0, 2).toUpperCase()
   return { ...NEUTRAL_STYLE, short }
 }
-const rgba = (hex, a) => {
-  const h = hex.replace("#", "")
-  const n = parseInt(h, 16)
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
-}
 
-function BrandButton({ children, onClick, style }) {
+// Same box the Sessions tab uses for a session's stats, so a metric looks
+// like a metric everywhere in the dashboard.
+function Stat({ label, value, accent }) {
   return (
-    <button onClick={onClick} style={{
-      background: CTA_GRADIENT, border: "none", borderRadius: 12, padding: "13px 24px",
-      fontSize: 14.5, fontWeight: 800, color: "#06101A", cursor: "pointer",
-      boxShadow: "0 0 20px rgba(34,211,238,0.22), 0 0 30px rgba(236,72,153,0.16)", ...style,
-    }}>{children}</button>
-  )
-}
-
-function Metric({ label, value, accent }) {
-  return (
-    <div>
-      <div style={{ fontSize: 14.5, fontWeight: 800, color: accent || "rgba(241,245,249,0.88)" }}>{value}</div>
-      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{label}</div>
+    <div className="session-stat-box">
+      <div className="session-stat-label">{label}</div>
+      <div className="session-stat-value" style={accent ? { color: accent } : undefined}>{value}</div>
     </div>
   )
 }
@@ -121,101 +98,59 @@ function Metric({ label, value, accent }) {
 function PlatformCard({ p, share, onViewBreakdown }) {
   const s = styleFor(p.platform)
   return (
-    <div style={{
-      position: "relative", overflow: "hidden", borderRadius: 16,
-      ...glassCard, border: `1px solid ${rgba(s.accent, 0.2)}`,
-      padding: 20, transition: "border-color .2s ease, transform .2s ease",
-    }}>
-      {/* very subtle platform glow — restraint over a nightclub */}
-      <div style={{
-        position: "absolute", top: -90, left: -90, width: 200, height: 200, borderRadius: "50%",
-        background: `radial-gradient(circle, ${rgba(s.accent, 0.16)}, transparent 65%)`,
-        filter: "blur(28px)", pointerEvents: "none",
-      }} />
-
-      <div style={{ position: "relative" }}>
-        {/* header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 11, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: `1px solid ${rgba(s.accent, 0.32)}`, background: rgba(s.accent, 0.1),
-            fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", color: s.accent,
-          }}>{s.short}</div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 800, color: C.white }}>{p.platform}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Platform performance</div>
-          </div>
+    <div className="glass-panel platform-card" style={{ "--accent": s.accent }}>
+      <div className="platform-card-top">
+        <div className="platform-badge">{s.short}</div>
+        <div>
+          <div className="platform-card-name">{p.platform}</div>
+          <div className="platform-card-sub">Platform performance</div>
         </div>
-
-        {/* primary — total revenue */}
-        <div style={{ marginTop: 22 }}>
-          <div style={{ fontSize: 30, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>{fmtUsd(p.totalUSD)}</div>
-          <div style={{ ...microLabel, marginTop: 5 }}>Total earned</div>
-          {/* Explicit scope: platform totals are meaningful-session-scoped (the
-              same population usdPerHour is built from), so they can sum to less
-              than the account-wide total, which counts every tip. */}
-          <div style={{ fontSize: 10.5, color: C.muted, marginTop: 4 }}>in qualifying sessions</div>
-        </div>
-
-        {/* primary rates */}
-        <div style={{
-          marginTop: 18, paddingTop: 14, paddingBottom: 14,
-          borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)",
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14,
-        }}>
-          <Metric label="Hourly average" value={p.hours > 0 ? `${fmtUsd(p.usdPerHour)}/hr` : "—"} accent={C.cyan} />
-          <Metric label="Streaming time" value={fmtHoursLong(p.hours)} />
-        </div>
-
-        {/* secondary */}
-        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <Metric label="Tips" value={Number(p.tips || 0).toLocaleString()} />
-          <Metric label="Fans" value={p.uniqueFans != null ? Number(p.uniqueFans).toLocaleString() : "—"} />
-          <Metric label="Average tip" value={p.tips > 0 ? fmtUsd(p.avgTipSize) : "—"} />
-          <Metric label="Sessions" value={Number(p.sessions || 0).toLocaleString()} />
-        </div>
-
-        {/* revenue share */}
-        {share != null && (
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={microLabel}>Revenue share</span>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: C.white }}>{share.toFixed(1)}%</span>
-            </div>
-            <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-              <div style={{ width: `${Math.max(share, 1.5)}%`, height: "100%", borderRadius: 4, background: CTA_GRADIENT }} />
-            </div>
-          </div>
-        )}
-
-        {/* best window — never shown without its confidence tier */}
-        {p.bestLocalDay != null && p.bestLocalHour != null && (
-          <div style={{
-            marginTop: 18, padding: "11px 14px", borderRadius: 12,
-            border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.025)",
-          }}>
-            <div style={{ ...microLabel, fontSize: 9.5 }}>Best streaming window</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(241,245,249,0.85)", marginTop: 5 }}>
-              {p.bestLocalDay}s · {fmtWindow(p.bestLocalHour)}
-            </div>
-            <div style={{ fontSize: 10.5, color: C.gold, marginTop: 4 }}>
-              {TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence} · local time
-            </div>
-          </div>
-        )}
-
-        {onViewBreakdown && (
-          <button
-            onClick={() => onViewBreakdown(p.platform)}
-            style={{
-              marginTop: 16, width: "100%", borderRadius: 12, cursor: "pointer",
-              border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.035)",
-              padding: "11px 0", fontSize: 12.5, fontWeight: 700, color: "rgba(241,245,249,0.65)",
-            }}
-          >View in Money Map →</button>
-        )}
       </div>
+
+      <div className="platform-money">
+        <strong>{fmtUsd(p.totalUSD)}</strong>
+        <span>Total earned</span>
+        {/* Explicit scope: platform totals are meaningful-session-scoped (the
+            same population usdPerHour is built from), so they can sum to less
+            than the account-wide total, which counts every tip. */}
+        <small>in qualifying sessions</small>
+      </div>
+
+      <div className="platform-stats">
+        <Stat label="Hourly average" value={p.hours > 0 ? `${fmtUsd(p.usdPerHour)}/hr` : "—"} accent="#26e0ff" />
+        <Stat label="Streaming time" value={fmtHoursLong(p.hours)} />
+      </div>
+      <div className="platform-stats platform-stats-secondary">
+        <Stat label="Tips" value={Number(p.tips || 0).toLocaleString()} />
+        <Stat label="Fans" value={p.uniqueFans != null ? Number(p.uniqueFans).toLocaleString() : "—"} />
+        <Stat label="Average tip" value={p.tips > 0 ? fmtUsd(p.avgTipSize) : "—"} />
+        <Stat label="Sessions" value={Number(p.sessions || 0).toLocaleString()} />
+      </div>
+
+      {share != null && (
+        <div className="platform-share">
+          <div className="platform-share-row">
+            <span>Revenue share</span>
+            <strong>{share.toFixed(1)}%</strong>
+          </div>
+          <div className="platform-share-track">
+            <div className="platform-share-fill" style={{ width: `${Math.max(share, 1.5)}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* best window — never shown without its confidence tier */}
+      {p.bestLocalDay != null && p.bestLocalHour != null && (
+        <div className="platform-window">
+          <span>Best streaming window</span>
+          <strong>{p.bestLocalDay}s · {fmtWindow(p.bestLocalHour)}</strong>
+          <small>{TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence} · local time</small>
+        </div>
+      )}
+
+      {onViewBreakdown && (
+        <button className="gradient-button" onClick={() => onViewBreakdown(p.platform)}>View in Money Map →</button>
+      )}
     </div>
   )
 }
@@ -316,26 +251,35 @@ export default function Performance({
     const byAvgTip  = [...platforms].filter(p => p.tips > 0 && p.avgTipSize > 0).sort((a, b) => b.avgTipSize - a.avgTipSize)
     const byFans    = [...platforms].filter(p => p.uniqueFans > 0).sort((a, b) => b.uniqueFans - a.uniqueFans)
 
-    if (byRevenue.length) {
-      const top = byRevenue[0]
-      const share = shareOf(top)
+    // The rate line, reused whether it stands alone or folds into the revenue
+    // card — one platform commonly leads both, and two cards naming the same
+    // platform read as a bug rather than as two findings.
+    const rateLine = (top) => (
+      platformEfficiencyGap && platformEfficiencyGap.top.platform === top.platform && platformEfficiencyGap.multiple >= 1.3
+        ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}x what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
+        : `You're averaging ${fmtUsd(top.usdPerHour)}/hr here across ${top.sessions} qualifying session${top.sessions === 1 ? "" : "s"}.`
+    )
+    const revenueLeader = byRevenue[0] || null
+    const hourlyLeader = byHourly[0] || null
+    const leadsBoth = revenueLeader && hourlyLeader && revenueLeader.platform === hourlyLeader.platform
+
+    if (revenueLeader) {
+      const share = shareOf(revenueLeader)
       out.push({
-        platform: top.platform,
-        title: "Highest revenue",
-        body: `${fmtUsd(top.totalUSD)} in qualifying sessions${share != null ? ` — ${share.toFixed(1)}% of everything you earned across your platforms` : ""}.`,
+        platform: revenueLeader.platform,
+        title: leadsBoth ? "Highest revenue and hourly rate" : "Highest revenue",
+        body: `${fmtUsd(revenueLeader.totalUSD)} in qualifying sessions${share != null ? ` — ${share.toFixed(1)}% of everything you earned across your platforms` : ""}.`
+          + (leadsBoth ? ` It also pays the most per hour: ${rateLine(revenueLeader)}` : ""),
       })
     }
-    if (byHourly.length) {
-      const top = byHourly[0]
+    if (hourlyLeader && !leadsBoth) {
       out.push({
-        platform: top.platform,
+        platform: hourlyLeader.platform,
         title: "Highest hourly earnings",
-        body: platformEfficiencyGap && platformEfficiencyGap.top.platform === top.platform && platformEfficiencyGap.multiple >= 1.3
-          ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}x what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
-          : `You're averaging ${fmtUsd(top.usdPerHour)}/hr here across ${top.sessions} qualifying session${top.sessions === 1 ? "" : "s"}.`,
+        body: rateLine(hourlyLeader),
       })
     }
-    if (byAvgTip.length && byAvgTip[0].platform !== byHourly[0]?.platform) {
+    if (byAvgTip.length && byAvgTip[0].platform !== hourlyLeader?.platform) {
       const top = byAvgTip[0]
       out.push({
         platform: top.platform,
@@ -343,7 +287,7 @@ export default function Performance({
         body: `Your average tip is ${fmtUsd(top.avgTipSize)} here, across ${Number(top.tips).toLocaleString()} tips.`,
       })
     }
-    if (byFans.length && byFans[0].platform !== byRevenue[0]?.platform) {
+    if (byFans.length && byFans[0].platform !== revenueLeader?.platform) {
       const top = byFans[0]
       out.push({
         platform: top.platform,
@@ -357,41 +301,39 @@ export default function Performance({
   const hasPlatforms = platforms.length > 0
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+    <div className="platforms-page">
 
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <div>
-        <div style={{ ...microLabel, letterSpacing: "0.2em", color: rgba(C.cyan, 0.7) }}>Analytics</div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", marginTop: 6 }}>Platform Performance</div>
-        <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5, maxWidth: 560 }}>See exactly where your money, time, and fans are coming from.</div>
+      <div className="sessions-header">
+        <div>
+          <div className="sessions-title">PLATFORM PERFORMANCE</div>
+          <div className="sessions-subtitle">See exactly where your money, time, and fans are coming from.</div>
+        </div>
       </div>
 
       {!hasPlatforms ? (
-        <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 10 }}>Your platforms</div>
-          <div style={{ fontSize: 13.5, color: C.muted }}>Import your tip history to see how each of your platforms is performing.</div>
+        <div className="glass-panel platform-panel">
+          <div className="section-label">Your platforms</div>
+          <div className="session-empty-body" style={{ margin: 0 }}>Import your tip history to see how each of your platforms is performing.</div>
         </div>
       ) : (
         <>
           {/* ── 1. YOUR PLATFORMS — the first and most important section ── */}
-          <section>
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 14 }}>
+          <section className="platforms-section">
+            <div className="platforms-section-head">
               <div>
-                <div style={sectionLabel}>Your platforms</div>
-                <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>Individual performance across every platform you&apos;ve imported.</div>
+                <div className="section-label" style={{ marginBottom: 0 }}>Your platforms</div>
+                <p>Individual performance across every platform you&apos;ve imported.</p>
               </div>
-              <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>
-                {platforms.length} platform{platforms.length === 1 ? "" : "s"}
-              </div>
+              <div className="platforms-section-count">{platforms.length} platform{platforms.length === 1 ? "" : "s"}</div>
             </div>
 
             {platformEfficiencyGap && platformEfficiencyGap.multiple >= 1.3 && (
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 14, padding: "11px 15px", borderRadius: 12, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.18)", lineHeight: 1.5 }}>
-                <strong style={{ color: C.cyan }}>{platformEfficiencyGap.top.platform}</strong> earns <strong style={{ color: C.cyan }}>{platformEfficiencyGap.multiple.toFixed(1)}x</strong> more per hour than <strong>{platformEfficiencyGap.bottom.platform}</strong> — {fmtUsd(platformEfficiencyGap.top.usdPerHour)}/hr vs {fmtUsd(platformEfficiencyGap.bottom.usdPerHour)}/hr.
+              <div className="platform-lede">
+                <strong style={{ color: "#26e0ff" }}>{platformEfficiencyGap.top.platform}</strong> earns <strong style={{ color: "#26e0ff" }}>{platformEfficiencyGap.multiple.toFixed(1)}x</strong> more per hour than <strong>{platformEfficiencyGap.bottom.platform}</strong> — {fmtUsd(platformEfficiencyGap.top.usdPerHour)}/hr vs {fmtUsd(platformEfficiencyGap.bottom.usdPerHour)}/hr.
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: platforms.length > 1 ? "repeat(auto-fit, minmax(300px, 1fr))" : "1fr", gap: 16 }}>
+            <div className="platform-grid" style={platforms.length === 1 ? { gridTemplateColumns: "1fr" } : undefined}>
               {platforms.map(p => (
                 <PlatformCard key={p.platform} p={p} share={shareOf(p)} onViewBreakdown={onViewPlatform} />
               ))}
@@ -400,25 +342,25 @@ export default function Performance({
 
           {/* ── 2. REVENUE DISTRIBUTION ─────────────────────────────── */}
           {platforms.length > 1 && (
-            <div style={card()}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
                 <div>
-                  <div style={sectionLabel}>Revenue distribution</div>
-                  <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>How your earnings split across platforms.</div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Revenue distribution</div>
+                  <p>How your earnings split across platforms.</p>
                 </div>
-                <div style={{ fontSize: 12.5, color: C.text, whiteSpace: "nowrap" }}>{fmtUsd(platformTotal)} total</div>
+                <div className="platform-panel-total">{fmtUsd(platformTotal)} total</div>
               </div>
-              <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="platform-dist-rows">
                 {platforms.map(p => {
                   const share = shareOf(p) ?? 0
                   return (
                     <div key={p.platform}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}>
-                        <span style={{ fontSize: 12.5, color: "rgba(241,245,249,0.7)" }}>{p.platform}</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: C.white }}>{share.toFixed(1)}% · {fmtUsd0(p.totalUSD)}</span>
+                      <div className="platform-dist-row-top">
+                        <span>{p.platform}</span>
+                        <strong>{share.toFixed(1)}% · {fmtUsd0(p.totalUSD)}</strong>
                       </div>
-                      <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-                        <div style={{ width: `${Math.max(share, 1.5)}%`, height: "100%", borderRadius: 4, background: CTA_GRADIENT }} />
+                      <div className="platform-dist-track">
+                        <div className="platform-dist-fill" style={{ width: `${Math.max(share, 1.5)}%` }} />
                       </div>
                     </div>
                   )
@@ -429,23 +371,21 @@ export default function Performance({
 
           {/* ── 3. PLATFORM COMPARISON ──────────────────────────────── */}
           {platforms.length > 1 && (
-            <div style={card()}>
-              <div style={sectionLabel}>Platform comparison</div>
-              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginBottom: 16 }}>
-                Every figure measured over the same qualifying sessions. Highlights are calculated from these numbers, not fixed rankings.
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Platform comparison</div>
+                  <p>Every figure measured over the same qualifying sessions. Highlights are calculated from these numbers, not fixed rankings.</p>
+                </div>
               </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
+              <div className="session-table-wrap">
+                <table className="platform-table">
                   <thead>
                     <tr>
-                      <th style={{ textAlign: "left", padding: "0 12px 12px 0", fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Metric</th>
+                      <th>Metric</th>
                       {platforms.map(p => {
                         const s = styleFor(p.platform)
-                        return (
-                          <th key={p.platform} title={p.platform} style={{ textAlign: "right", padding: "0 0 12px 12px", fontSize: 12, fontWeight: 800, color: s.accent, whiteSpace: "nowrap" }}>
-                            {s.short}
-                          </th>
-                        )
+                        return <th key={p.platform} title={p.platform} style={{ color: s.accent }}>{s.short}</th>
                       })}
                     </tr>
                   </thead>
@@ -457,25 +397,19 @@ export default function Performance({
                         : null
                       return (
                         <tr key={row.label}>
-                          <td style={{ padding: "10px 12px 10px 0", fontSize: 12.5, color: C.text, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{row.label}</td>
-                          {platforms.map(p => {
-                            const isLeader = leader && leader.platform === p.platform
-                            return (
-                              <td key={p.platform} style={{
-                                padding: "10px 0 10px 12px", textAlign: "right", fontSize: 12.5, whiteSpace: "nowrap",
-                                borderTop: `1px solid ${C.border}`,
-                                fontWeight: isLeader ? 800 : 500,
-                                color: isLeader ? C.green : "rgba(241,245,249,0.8)",
-                              }}>{row.fmt(p)}</td>
-                            )
-                          })}
+                          <td>{row.label}</td>
+                          {platforms.map(p => (
+                            <td key={p.platform} className={leader && leader.platform === p.platform ? "is-leader" : undefined}>
+                              {row.fmt(p)}
+                            </td>
+                          ))}
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
               </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 12 }}>
+              <div className="platform-table-note">
                 Green marks the leading platform on rates and totals where more than one platform is measurable. Hours, tips, fans and sessions are volume, not performance, so they aren&apos;t ranked.
               </div>
             </div>
@@ -486,28 +420,30 @@ export default function Performance({
                  vanishes reads as a bug, and the two reasons it can be
                  empty (a single-platform account vs. not enough history)
                  are different facts the reader deserves to be told apart. */}
-          <div style={card()}>
-            <div style={sectionLabel}>What drove the change</div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginBottom: 14 }}>
-              Month-over-month movement, split by platform.
+          <div className="glass-panel platform-panel">
+            <div className="platform-panel-head">
+              <div>
+                <div className="section-label" style={{ marginBottom: 0 }}>What drove the change</div>
+                <p>Month-over-month movement, split by platform.</p>
+              </div>
             </div>
             {!canAttribute ? (
-              <div style={{ fontSize: 13.5, color: C.muted }}>
+              <div className="session-empty-body" style={{ margin: 0 }}>
                 {delta && delta.platforms.length < 2
                   ? "Single-platform account — your month-over-month change isn't split across platforms."
                   : "Not enough history to attribute this change."}
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
                 {delta.platforms.map((p, i) => (
-                  <div key={p.platform} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderRadius: 10, background: i === 0 ? "rgba(34,211,238,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${i === 0 ? "rgba(34,211,238,0.22)" : C.border}` }}>
-                    <div style={{ fontSize: 13.5, color: C.white, fontWeight: i === 0 ? 700 : 500 }}>
+                  <div key={p.platform} className={`platform-delta-row${i === 0 ? " is-lead" : ""}`}>
+                    <div>
                       {i === 0 && (p.deltaUSD >= 0 ? "🔼 " : "🔽 ")}{p.platform}
-                      {i === 0 && <span style={{ color: C.muted, fontWeight: 400 }}> contributed the largest share of the {p.deltaUSD >= 0 ? "increase" : "decrease"}</span>}
+                      {i === 0 && <em> contributed the largest share of the {p.deltaUSD >= 0 ? "increase" : "decrease"}</em>}
                     </div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: p.deltaUSD >= 0 ? C.green : C.red, whiteSpace: "nowrap" }}>
+                    <strong className={p.deltaUSD >= 0 ? "platform-delta-up" : "platform-delta-down"}>
                       {p.deltaUSD >= 0 ? "+" : ""}{fmtUsd(p.deltaUSD)}
-                    </div>
+                    </strong>
                   </div>
                 ))}
               </div>
@@ -516,18 +452,20 @@ export default function Performance({
 
           {/* ── 5. WHERE YOU'RE LEAVING MONEY — per-platform rate gap ── */}
           {missedByPlatform.length > 0 && (
-            <div style={card()}>
-              <div style={sectionLabel}>Where you&apos;re leaving money on the table</div>
-              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginBottom: 14 }}>
-                Measured rate gap between each platform&apos;s best window and a typical hour on it.
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Where you&apos;re leaving money on the table</div>
+                  <p>Measured rate gap between each platform&apos;s best window and a typical hour on it.</p>
+                </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div>
                 {missedByPlatform.map(m => (
-                  <div key={m.platform} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderRadius: 10, background: "rgba(251,146,60,0.06)", border: "1px solid rgba(251,146,60,0.2)" }}>
-                    <div style={{ fontSize: 12.5, color: C.white, minWidth: 0 }}>
-                      {m.platform} — {m.bestLocalDay}s {fmtHour(m.bestLocalHour)} earns <strong style={{ color: C.green }}>{fmtUsd(m.bestWindowMedianUsdPerHour)}/hr</strong> vs <strong>{fmtUsd(m.overallMedianUsdPerHour)}/hr</strong> typical
+                  <div key={m.platform} className="platform-gap-row">
+                    <div>
+                      {m.platform} — {m.bestLocalDay}s {fmtHour(m.bestLocalHour)} earns <strong style={{ color: "#21d99a" }}>{fmtUsd(m.bestWindowMedianUsdPerHour)}/hr</strong> vs <strong style={{ color: "#f4f7ff" }}>{fmtUsd(m.overallMedianUsdPerHour)}/hr</strong> typical
                     </div>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, whiteSpace: "nowrap" }}>+{fmtUsd(m.rateGapUsdPerHour)}/hr gap</div>
+                    <strong>+{fmtUsd(m.rateGapUsdPerHour)}/hr gap</strong>
                   </div>
                 ))}
               </div>
@@ -536,32 +474,35 @@ export default function Performance({
 
           {/* ── 6. WHAT YOUR DATA SAYS ──────────────────────────────── */}
           {insights.length > 0 && (
-            <div style={card()}>
-              <div style={sectionLabel}>What your data says</div>
-              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
-                {insights.map((ins, i) => {
-                  const s = styleFor(ins.platform)
-                  return (
-                    <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${rgba(s.accent, 0.18)}` }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 800, color: s.accent, letterSpacing: "0.04em" }}>{ins.platform}</div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, marginTop: 6 }}>{ins.title}</div>
-                      <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.55 }}>{ins.body}</div>
-                    </div>
-                  )
-                })}
+            <div className="glass-panel platform-panel">
+              <div className="section-label">What your data says</div>
+              {/* One platform commonly leads everything, and the dedupe above
+                  then leaves a single insight — which looked like a broken
+                  half-empty panel in a two-column grid. One card spans. */}
+              <div className="platform-insight-grid" style={insights.length === 1 ? { gridTemplateColumns: "1fr" } : undefined}>
+                {insights.map((ins, i) => (
+                  <div key={i} className="platform-insight" style={{ "--accent": styleFor(ins.platform).accent }}>
+                    <span>{ins.platform}</span>
+                    <strong>{ins.title}</strong>
+                    <p>{ins.body}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
+
           {/* ── 7. ACCOUNT-WIDE CONTEXT — explicitly not per-platform ─ */}
           {(byDay.length > 1 || (dep && dep.level !== "low") || earningsTrend) && (
-            <div style={card()}>
-              <div style={sectionLabel}>Account-wide context</div>
-              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>
-                Across every platform combined — not a per-platform figure.
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Account-wide context</div>
+                  <p>Across every platform combined — not a per-platform figure.</p>
+                </div>
               </div>
 
               {byDay.length > 1 && (
-                <div style={{ marginTop: 20 }}>
+                <div>
                   {/* EXPLICIT UNIT + EXPLICIT RECONCILIATION. These bars are
                       TOTAL $ earned per day; the canonical best window is
                       ranked by MEDIAN $/hour. Those answer different
@@ -572,39 +513,33 @@ export default function Performance({
                       making the chart agree by re-ranking it would mean
                       inventing a second best-time calculation, which
                       canonical-analytics-rules.md forbids. */}
-                  <div style={{ fontSize: 11.5, color: C.text, marginBottom: 4 }}>Total earned by day of week</div>
-                  <div style={{ fontSize: 11.5, color: C.text, marginBottom: 12, lineHeight: 1.55, maxWidth: 620, opacity: 0.85 }}>
-                    Total dollars, not hourly rate — so your biggest bar isn&apos;t always your best window. Your best window is the one with the highest median <strong style={{ color: C.white }}>$/hour</strong>, which is what actually repeats. Days with too few sessions to trust are left out.
+                  <div className="session-stat-label">Total earned by day of week</div>
+                  <div className="platform-day-note">
+                    Total dollars, not hourly rate — so your biggest bar isn&apos;t always your best window. Your best window is the one with the highest median <strong style={{ color: "#f4f7ff" }}>$/hour</strong>, which is what actually repeats. Days with too few sessions to trust are left out.
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {byDay.map(d => (
-                      <div key={d.day} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 38, fontSize: 11.5, color: C.text, flexShrink: 0 }}>{DAY_ABBR[d.day]}</div>
-                        <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-                          <div style={{ width: `${Math.max((d.totalUsd / maxDayUsd) * 100, 3)}%`, height: "100%", borderRadius: 4, background: d.day === bestWindow?.localDay ? CTA_GRADIENT : "rgba(148,163,184,0.35)" }} />
-                        </div>
-                        <div style={{ width: 60, fontSize: 11.5, color: C.muted, textAlign: "right", flexShrink: 0 }}>{fmtUsd0(d.totalUsd)}</div>
+                  {byDay.map(d => (
+                    <div key={d.day} className="platform-day-row">
+                      <span>{DAY_ABBR[d.day]}</span>
+                      <div className="platform-day-track">
+                        <div className={`platform-day-fill${d.day === bestWindow?.localDay ? " is-best" : ""}`} style={{ width: `${Math.max((d.totalUsd / maxDayUsd) * 100, 3)}%` }} />
                       </div>
-                    ))}
-                  </div>
+                      <strong>{fmtUsd0(d.totalUsd)}</strong>
+                    </div>
+                  ))}
                 </div>
               )}
 
               {earningsTrend && (
                 <div style={{ marginTop: 22 }}>
-                  <div style={{ fontSize: 11.5, color: C.text, marginBottom: 10 }}>Earnings trend, all platforms combined</div>
-                  {earningsTrend}
+                  <div className="session-stat-label">Earnings trend, all platforms combined</div>
+                  <div style={{ marginTop: 10 }}>{earningsTrend}</div>
                 </div>
               )}
 
               {dep && dep.level !== "low" && (
-                <div style={{ marginTop: 20, padding: "13px 16px", borderRadius: 10, background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.2)" }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, lineHeight: 1.45 }}>
-                    {dep.top1Pct}% of your revenue comes from a single fan
-                  </div>
-                  <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.55 }}>
-                    If they stopped tipping you&apos;d lose {fmtUsd0(dep.lossIfTopFanLeaves)} — worth building a second and third relationship to the same size.
-                  </div>
+                <div className="platform-dependency">
+                  <strong>{dep.top1Pct}% of your revenue comes from a single fan</strong>
+                  <p>If they stopped tipping you&apos;d lose {fmtUsd0(dep.lossIfTopFanLeaves)} — worth building a second and third relationship to the same size.</p>
                 </div>
               )}
             </div>
@@ -614,19 +549,12 @@ export default function Performance({
 
       {/* ── PRO STRATEGY ───────────────────────────────────────────── */}
       {!isPro && hasPlatforms && (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap",
-          padding: "20px 24px", borderRadius: 16,
-          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(124,92,255,0.26)",
-        }}>
-          <div style={{ minWidth: 260, flex: 1 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 800, color: C.white }}>Want to turn this into a schedule?</div>
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 6, lineHeight: 1.6 }}>
-              Pro connects your platform performance, best windows, high-value fan timing, and a forecast into one personalized weekly plan — not just more exact numbers.
-            </div>
+        <div className="platform-pro">
+          <div className="platform-pro-copy">
+            <strong>Want to turn this into a schedule?</strong>
+            <p>Pro connects your platform performance, best windows, high-value fan timing, and a forecast into one personalized weekly plan — not just more exact numbers.</p>
           </div>
-          <BrandButton onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</BrandButton>
+          <button className="gradient-button" onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</button>
         </div>
       )}
     </div>

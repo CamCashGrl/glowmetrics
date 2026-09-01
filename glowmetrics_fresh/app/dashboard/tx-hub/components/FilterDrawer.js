@@ -1,14 +1,16 @@
 "use client"
 import { useEffect } from 'react'
 import { C, card } from '../theme'
+import { TX_TYPES, TX_TYPE_LABELS } from '../../../../lib/txHub'
 
-const TYPE_OPTIONS = [
-  { id: 'tip', label: 'Tips' },
-  { id: 'private', label: 'Private' },
-  { id: 'group', label: 'Group' },
-  { id: 'spy', label: 'Spy' },
-  { id: 'other', label: 'Other' },
-]
+// Derived from the canonical taxonomy rather than hardcoded. This list was a
+// fourth independent copy of the transaction types and had already drifted:
+// it offered no Full-Private filter, and its ids stopped matching the keys
+// normalizeTipRow()/normalizePaidSessionRow() actually assign.
+const TYPE_OPTIONS = TX_TYPES.map(id => ({
+  id,
+  label: id === 'tip' ? 'Tips' : TX_TYPE_LABELS[id],
+}))
 
 const AMOUNT_OPTIONS = [
   { id: 'under5', label: 'Under $5', min: null, max: 5 },

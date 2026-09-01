@@ -4,7 +4,7 @@
 // were external (email support) or nonexistent. Backed by the already-working
 // /api/stripe/portal route, which just had no UI pointing at it.
 import { useState } from 'react'
-import { track as gtmTrack } from '../../lib/track'
+import { track as logEvent } from '../../lib/track'
 import { resolveCreatorTimezone, detectBrowserTimezone } from '../../lib/timezone'
 
 // Curated common IANA zones for the override dropdown — not exhaustive, but
@@ -54,7 +54,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
     try {
       const { error: tzErr } = await supabase.from('profiles').update({ timezone: tzDraft }).eq('id', user.id)
       if (tzErr) throw tzErr
-      gtmTrack('timezone_updated', { timezone: tzDraft })
+      logEvent('timezone_updated', { timezone: tzDraft })
       setEditingTz(false)
       onTimezoneSaved?.(tzDraft)
     } catch (e) {
@@ -67,7 +67,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
   const openBillingPortal = async () => {
     setError(null)
     setPortalLoading(true)
-    gtmTrack('billing_portal_opened', {})
+    logEvent('billing_portal_opened', {})
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/stripe/portal', {
@@ -87,7 +87,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
   const startCheckout = async () => {
     setError(null)
     setCheckoutLoading(true)
-    gtmTrack('upgrade_checkout_clicked', { source: 'settings' })
+    logEvent('upgrade_checkout_clicked', { source: 'settings' })
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/stripe/checkout', {
@@ -98,7 +98,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.url) throw new Error(data.error || 'Unable to start checkout.')
-      gtmTrack('checkout_started', { source: 'settings', plan_type: 'standard_monthly' })
+      logEvent('checkout_started', { source: 'settings', plan_type: 'standard_monthly' })
       window.location.assign(data.url)
     } catch (e) {
       setError(e?.message || 'Something went wrong starting checkout. Please try again.')

@@ -7,7 +7,7 @@ import {
 } from "recharts"
 import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
 import { toLocalHour, toLocalDow, toLocalDateStr } from "../../lib/analytics/localTime"
-import { detectSessions } from "../../lib/analytics/sessions"
+import { detectSessions, classifySession } from "../../lib/analytics/sessions"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -88,16 +88,33 @@ function groupIntoSessions(tips, tz) {
     tipsCount: s.tipCount,
     tippers: s.uniqueFans,
     platform: normPlatform(s.platform),
-    durationMins: s.durationMinutes || 5,
+    // finalizeSession() already guarantees durationMinutes >= 1, so the old
+    // `|| 5` fallback could never fire — and had it ever fired it would have
+    // invented a duration the data does not support.
+    durationMins: s.durationMinutes,
+    durationUnknown: s.durationUnknown,
+    // Carried through so consumers can apply the canonical meaningful-only
+    // filter instead of averaging over low-signal and invalid sessions.
+    quality: classifySession(s),
     localHourStart: localHourDecFromDate(s.startTime, tz),
   }))
 }
 
 function platformEfficiency(tips, tz) {
   const map = {}
+  // Session counts come from the canonical grouping rather than being
+  // accumulated per tip. The Set here was created but never added to, so
+  // `p.sessions.size || 1` reported exactly 1 session for every platform,
+  // forever. Nothing renders it today — this stops it lying the moment
+  // something does.
+  const sessionsPerPlatform = {}
+  for (const s of groupIntoSessions(tips, tz)) {
+    if (s.quality === 'invalid') continue
+    sessionsPerPlatform[s.platform] = (sessionsPerPlatform[s.platform] || 0) + 1
+  }
   for (const t of tips) {
     const p = normPlatform(t.platform)
-    if (!map[p]) map[p] = { platform:p, tokens:0, usd:0, count:0, sessions:new Set(), days:new Set() }
+    if (!map[p]) map[p] = { platform:p, tokens:0, usd:0, count:0, days:new Set() }
     map[p].tokens += Number(t.tokens||0)
     map[p].usd    += Number(t.usd||0)
     map[p].count++
@@ -105,7 +122,7 @@ function platformEfficiency(tips, tz) {
   }
   return Object.values(map).map(p => ({
     ...p,
-    sessions: p.sessions.size || 1,
+    sessions: sessionsPerPlatform[p.platform] || 0,
     activeDays: p.days.size,
     avgTip: p.count ? p.usd/p.count : 0,
     usdPerDay: p.days.size ? p.usd/p.days.size : 0,
@@ -735,9 +752,14 @@ function MoneyMapContent({ tips, isPro=true, tz }) {
   const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
   const totalTokens = useMemo(()=>tips.reduce((s,t)=>s+Number(t.tokens||0),0),[tips])
   const whales      = useMemo(()=>detectWhales(tips).filter(w=>w.isWhale),[tips])
+  // Averaged over MEANINGFUL sessions only — the same population
+  // lib/analytics.js pins avgMeaningfulSessionUSD to. Averaging over every
+  // detected session (low-signal and invalid included) made this tab report
+  // a different "avg session" than Command Center for identical data.
   const avgSession  = useMemo(()=>{
-    if (!sessions.length) return 0
-    return sessions.reduce((s,x)=>s+x.usd,0)/sessions.length
+    const meaningful = sessions.filter(s => s.quality === 'meaningful')
+    if (!meaningful.length) return 0
+    return meaningful.reduce((s,x)=>s+x.usd,0)/meaningful.length
   },[sessions])
 
   const TABS = [

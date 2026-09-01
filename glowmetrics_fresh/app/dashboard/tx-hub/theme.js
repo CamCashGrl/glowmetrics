@@ -53,10 +53,14 @@ export function platformColor(platform) {
   return PLATFORM_COLORS[platform] || C.blue
 }
 
+// Keyed by TX_TYPE_LABELS values (lib/txHub.js). Full-Private is a distinct
+// stream, not a shade of Private, so it needs its own entry — without one it
+// would fall back to C.muted and read as "Other" in the donut.
 export const TYPE_COLORS = {
   Tip: C.cyan,
   Private: C.gold,
-  Group: C.purple,
+  'Full-Private': C.purple,
+  Group: C.green,
   Spy: C.blue,
   Other: C.muted,
 }

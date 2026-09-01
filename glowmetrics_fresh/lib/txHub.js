@@ -17,15 +17,22 @@
 // ============================================================
 
 import { tokenRate } from './constants'
+import { classifyPaidSessionStream } from './analytics/revenueMix'
 import { detectSessions } from './analytics/sessions'
 
-export const TX_TYPES = ['tip', 'private', 'group', 'spy', 'other']
+// Keys are the canonical revenue-stream keys from lib/analytics/revenueMix.js
+// (plus 'tip' and 'other', which are TX-Hub-only). They used to be an
+// independent 5-value taxonomy that collapsed Full-Private into Private,
+// so the same paid session read "Private" here and "Full-Private" on the
+// Sessions tab. Keep these aligned with REVENUE_STREAMS.
+export const TX_TYPES = ['tip', 'private_chat', 'full_private', 'group_chat', 'spy_mode', 'other']
 
 export const TX_TYPE_LABELS = {
   tip: 'Tip',
-  private: 'Private',
-  group: 'Group',
-  spy: 'Spy',
+  private_chat: 'Private',
+  full_private: 'Full-Private',
+  group_chat: 'Group',
+  spy_mode: 'Spy',
   other: 'Other',
 }
 
@@ -35,20 +42,23 @@ function usdFor(row) {
   return hasUsd ? Number(row.usd) : parseFloat((tokens * tokenRate(row.platform)).toFixed(2))
 }
 
+// Both classifiers now defer to the one canonical implementation rather than
+// re-deriving the rules with their own substring checks in their own order.
 function classifyTipType(rawType) {
+  // A tips-table row whose tip_type names a paid format (imports predating
+  // the paid_sessions split, or a label the importer's regex missed) is
+  // still surfaced under that stream, not as an open-chat tip.
+  const stream = classifyPaidSessionStream(rawType)
+  if (stream) return stream
   const lower = (rawType || 'Tip').toLowerCase()
-  if (lower.includes('private')) return 'private'
-  if (lower.includes('spy')) return 'spy'
-  if (lower.includes('group')) return 'group'
   if (lower === 'tip' || lower.includes('tip')) return 'tip'
   return 'other'
 }
 
 function classifySessionType(rawType) {
-  const lower = (rawType || 'Private Chat').toLowerCase()
-  if (lower.includes('group')) return 'group'
-  if (lower.includes('spy')) return 'spy'
-  return 'private'
+  // Unrecognised labels fall through to 'other'. This previously defaulted to
+  // 'private', which quietly inflated Private with anything unclassifiable.
+  return classifyPaidSessionStream(rawType) || 'other'
 }
 
 export function normalizeTipRow(row) {

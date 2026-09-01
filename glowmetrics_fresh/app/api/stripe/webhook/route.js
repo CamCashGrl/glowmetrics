@@ -23,14 +23,21 @@ function getSupabaseAdmin() {
 // re-run the profile write above it.
 async function logEvent(supabase, userId, eventName, properties = {}) {
   try {
-    await supabase.from('analytics_events').insert({
+    const { error } = await supabase.from('analytics_events').insert({
       user_id: userId ?? null,
       event_name: eventName,
       properties,
       url: 'stripe:webhook',
     })
+    // supabase-js RESOLVES with { error } on a rejected insert rather than
+    // throwing, so the try/catch around it caught nothing and every failed
+    // analytics write looked like a success. That is why the trial funnel
+    // read as "no trial ever started" while profiles said otherwise.
+    if (error) {
+      console.error(`Analytics insert failed for ${eventName}:`, error.message)
+    }
   } catch (e) {
-    console.error(`Analytics insert failed for ${eventName}:`, e.message)
+    console.error(`Analytics insert threw for ${eventName}:`, e.message)
   }
 }
 
@@ -72,8 +79,14 @@ async function resolveUserId(supabase, { metadataUserId, customerId }) {
 }
 
 async function sendResendNotification(subject, text) {
+  // Missing key is the single most likely reason an owner alert never
+  // arrives, and it used to fail as a 401 nobody ever saw.
+  if (!process.env.RESEND_API_KEY) {
+    console.error(`Resend notification skipped (RESEND_API_KEY unset): ${subject}`)
+    return
+  }
   try {
-    await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
@@ -86,6 +99,10 @@ async function sendResendNotification(subject, text) {
         text,
       }),
     })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error(`Resend notification rejected (${res.status}) for "${subject}": ${body}`)
+    }
   } catch (e) {
     console.error('Resend notification failed:', e.message)
   }
@@ -139,6 +156,38 @@ function trialFields(sub) {
 // is rarer, and far less costly, than a paying customer losing access. The
 // downgrade paths below intentionally do NOT touch plan_expires_at, so a
 // promo grant on a non-subscriber is left alone.
+// Idempotent trial_started: writes the funnel event and alerts the owner only
+// if no trial_started has ever been recorded for this user, so replays and
+// repeated `updated` events during one trial cannot duplicate either.
+async function recordTrialStartedOnce(supabase, userId, sub) {
+  const { data, error } = await supabase
+    .from('analytics_events')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('event_name', 'trial_started')
+    .limit(1)
+
+  // On a read failure, do nothing rather than risk a duplicate alert — the
+  // profile write has already happened and is what governs access.
+  if (error) {
+    console.error(`recordTrialStartedOnce: lookup failed for ${userId}:`, error.message)
+    return
+  }
+  if (data?.length) return
+
+  await logEvent(supabase, userId, 'trial_started', {
+    plan_type: sub.metadata?.plan_type || null,
+    status: sub.status,
+    trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+    backfilled_from: 'customer.subscription.updated',
+  })
+  const email = await getEmailFromCustomer(sub.customer) || userId
+  await sendResendNotification(
+    `🚀 CamCash Trial Started — ${email}`,
+    `${email} started a free trial with a card on file. Converts automatically unless they cancel.`
+  )
+}
+
 function proGrantFields(sub) {
   return { plan: 'pro', plan_expires_at: null, ...(sub ? trialFields(sub) : {}) }
 }
@@ -271,6 +320,15 @@ export async function POST(request) {
         // converting to paid from an ordinary renewal — both arrive as an
         // `updated` event with status 'active'.
         const wasTrialing = event.data.previous_attributes?.status === 'trialing'
+        // A trial whose `customer.subscription.created` never reached us
+        // (event type not enabled on the endpoint, delivery failed and
+        // exhausted its retries, or the endpoint was disabled at the time)
+        // would otherwise never produce a trial_started event or an owner
+        // alert — the trial would exist in Stripe and be invisible here.
+        // Backfill it the first time we see this user trialing.
+        if (sub.status === 'trialing') {
+          await recordTrialStartedOnce(supabase, userId, sub)
+        }
         if (plan === 'pro' && sub.status === 'active' && wasTrialing) {
           await logEvent(supabase, userId, 'trial_converted', {
             plan_type: sub.metadata?.plan_type || null,
@@ -324,7 +382,14 @@ export async function POST(request) {
       }
 
       default:
-        return NextResponse.json({ error: 'Unhandled event type' }, { status: 400 })
+        // Previously returned 400. Stripe records any non-2xx as a FAILED
+        // delivery, retries it, and disables endpoints with a sustained
+        // failure rate — so every event type this endpoint is subscribed to
+        // but does not handle was quietly counting against the endpoint's
+        // health and could take the whole webhook (including the
+        // subscription events) offline. Acknowledge and ignore instead.
+        console.log(`Webhook: ignoring unhandled event type ${event.type}`)
+        return NextResponse.json({ received: true, ignored: event.type })
     }
 
     return NextResponse.json({ received: true })
