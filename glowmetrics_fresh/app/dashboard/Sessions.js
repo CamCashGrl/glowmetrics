@@ -12,7 +12,11 @@ const TYPE_META = {
 }
 // Keyed by paid_sessions.session_type, matching PrivateSessions.js so the
 // same session type is the same colour wherever it is shown.
-const PAID_TYPE_COLORS = { "Private Chat": "#22d3ee", "Full-Private Chat": "#a855f7", "Group Chat": "#f59e0b", "Spy Mode": "#f472b6" }
+// Six streams share one stacked bar, so every colour has to be separable from
+// the other five. Private Chat was cyan, the same hue TYPE_META.free already
+// uses, which rendered Free Chat and Private Chat as one indistinguishable
+// cyan run. Cyan stays with free chat; paid types get their own hues.
+const PAID_TYPE_COLORS = { "Private Chat": "#5B8DEF", "Full-Private Chat": "#A855F7", "Group Chat": "#FACC15", "Spy Mode": "#F472B6" }
 const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
 const RANGES = [{ id: "7d", label: "7D", days: 7 }, { id: "30d", label: "30D", days: 30 }, { id: "90d", label: "90D", days: 90 }, { id: "all", label: "ALL", days: null }]
 const TYPES = [{ id: "all", label: "All Sessions" }, { id: "free", label: "Free Chat" }, { id: "live", label: "Live Mode" }, { id: "paid", label: "Paid Session" }]

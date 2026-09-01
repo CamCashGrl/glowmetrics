@@ -158,12 +158,12 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
             {/* ── CORE METRICS — the per-session numbers the old Session
                    Breakdown card carried, which the drawer's four overview
                    chips alone do not cover. ── */}
+            {/* Tips and $/hr already appear in the overview grid above, so only
+                the metrics the old card added are repeated here. */}
             <SectionLabel>📊 Session metrics</SectionLabel>
             <div className="drawer-overview-grid">
-              <StatChip label="Tips" value={s.tipCount ?? (s.tips || []).length} color={C.cyan} />
               <StatChip label="Unique Fans" value={s.uniqueFans ?? "—"} color={C.pink} />
               <StatChip label="Avg Tip" value={s.avgTipSize != null ? fmtUsd(s.avgTipSize) : "—"} color={C.gold} />
-              <StatChip label="$/Hour" value={s.usdPerHour != null ? fmtUsd(s.usdPerHour) : "—"} color={C.green} />
               {/* null on durationUnknown sessions — shown as "—" rather than a
                   confident rate for a duration we do not actually know. */}
               <StatChip label="$/Min" value={s.usdPerMinute != null ? fmtUsd(s.usdPerMinute) : "—"} color={C.cyan} />
