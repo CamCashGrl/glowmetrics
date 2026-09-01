@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { getSessionBreakdown, SESSION_PERF_BADGE } from "../../lib/analytics/session-insights"
 
 const C = {
@@ -28,11 +28,7 @@ const TYPE_LABEL = { free: "Free Chat", live: "Live Mode", paid: "Paid / Private
 const TYPE_COLOR = { free: C.cyan, live: "#FB923C", paid: C.indigo }
 
 function SectionLabel({ children }) {
-  return (
-    <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text, marginTop: 18, marginBottom: 8 }}>
-      {children}
-    </div>
-  )
+  return <div className="drawer-section-label">{children}</div>
 }
 
 function StatChip({ label, value, color = C.white }) {
@@ -46,6 +42,7 @@ function StatChip({ label, value, color = C.white }) {
 
 // row: { type: 'free'|'live'|'paid', session, comparablePopulation, coachingEvents, coachingLoading, onLoadCoaching }
 export default function SessionDrawer({ row, onClose, coachingEvents, coachingLoading, onLoadCoaching }) {
+  const [notes, setNotes] = useState("")
   useEffect(() => {
     if (!row) return undefined
     const onKey = (e) => { if (e.key === "Escape") onClose() }
@@ -88,15 +85,11 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
   const perf = bd ? SESSION_PERF_BADGE[bd.performance] : null
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 90 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
-      <div style={{
-        position: "absolute", top: 0, right: 0, bottom: 0, width: "min(460px, 100vw)",
-        background: C.panel, borderLeft: `1px solid ${C.border}`, padding: 24, overflowY: "auto",
-        animation: "sessionDrawerIn .22s ease",
-      }}>
+    <div className="session-drawer-overlay">
+      <div onClick={onClose} style={{ position: "absolute", inset: 0 }} />
+      <div className="session-drawer">
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 18, cursor: "pointer" }}>✕</button>
+          <button onClick={onClose} className="drawer-close">✕</button>
         </div>
 
         {/* ── HEADER — the important stuff, no scroll needed to see it ── */}
@@ -116,7 +109,7 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
           {fmtDate(startTime)} · {fmtTime(startTime)}{endTime && endTime !== startTime ? ` → ${fmtTime(endTime)}` : ""}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 6 }}>
+        <div className="drawer-overview-grid">
           <StatChip label="Duration" value={fmtDuration(durationMinutes)} />
           <StatChip label="Revenue" value={fmtUsd(revenue)} color={C.green} />
           <StatChip label="$/hr" value={usdPerHr != null ? `$${usdPerHr}` : "—"} color={C.cyan} />
@@ -252,10 +245,15 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
             </div>
           </>
         )}
+
+        <SectionLabel>📝 Session notes</SectionLabel>
+        <textarea
+          className="drawer-notes"
+          placeholder="Write a note about this session (visible only to you, not saved)…"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
       </div>
-      <style jsx>{`
-        @keyframes sessionDrawerIn { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-      `}</style>
     </div>
   )
 }
