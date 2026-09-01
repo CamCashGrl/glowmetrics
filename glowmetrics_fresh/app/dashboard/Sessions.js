@@ -3,6 +3,7 @@ import { useState, useMemo } from "react"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { getSessionBreakdown, SESSION_PERF_BADGE } from "../../lib/analytics/session-insights"
 import { computePaidSessionAnalytics } from "../../lib/analytics"
+import { computeRevenueMix } from "../../lib/analytics/revenueMix"
 import SessionDrawer from "./SessionDrawer"
 
 const TYPE_META = {
@@ -16,7 +17,14 @@ const TYPE_META = {
 // the other five. Private Chat was cyan, the same hue TYPE_META.free already
 // uses, which rendered Free Chat and Private Chat as one indistinguishable
 // cyan run. Cyan stays with free chat; paid types get their own hues.
-const PAID_TYPE_COLORS = { "Private Chat": "#5B8DEF", "Full-Private Chat": "#A855F7", "Group Chat": "#FACC15", "Spy Mode": "#F472B6" }
+// Display colours for the canonical REVENUE_STREAMS keys. Six streams share
+// one stacked bar, so each hue has to be separable from the other five —
+// revenueMix.js's own defaults put private_chat and full_private on adjacent
+// purples, which is fine for a legend but not for abutting bar segments.
+const STREAM_COLORS = {
+  free_chat: "#22D3EE", live_mode: "#FB923C", private_chat: "#5B8DEF",
+  full_private: "#A855F7", group_chat: "#FACC15", spy_mode: "#F472B6", other: "#64748B",
+}
 const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
 const RANGES = [{ id: "7d", label: "7D", days: 7 }, { id: "30d", label: "30D", days: 30 }, { id: "90d", label: "90D", days: 90 }, { id: "all", label: "ALL", days: null }]
 const TYPES = [{ id: "all", label: "All Sessions" }, { id: "free", label: "Free Chat" }, { id: "live", label: "Live Mode" }, { id: "paid", label: "Paid Session" }]
@@ -231,6 +239,11 @@ export default function Sessions({
   }, [filteredFree, filteredLive, filteredPaid])
 
   const paidStats = useMemo(() => computePaidSessionAnalytics(filteredPaid, timezone), [filteredPaid, timezone])
+  const mix = useMemo(() => computeRevenueMix({
+    freeChatSessions: filteredFree,
+    paidSessions: filteredPaid,
+    liveTotalUSD: filteredLive.length ? typePerf.live.revenue : null,
+  }), [filteredFree, filteredPaid, filteredLive, typePerf])
   const trendData = useMemo(() => monthlyData.filter(m => m.usdPerHour != null).map(m => ({ month: m.month, usdPerHour: m.usdPerHour })), [monthlyData])
 
   const sorted = useMemo(() => {
@@ -299,26 +312,18 @@ export default function Sessions({
           </div>
 
           {/* ── EARNINGS BREAKDOWN — free chat vs Live Mode vs each paid
-                 session type. Everything here is rendered from figures that
-                 are already computed (typePerf, paidStats.sessionTypeBreakdown);
-                 no revenue is re-derived. ── */}
+                 session type, over the same filtered window as everything
+                 else on this page. Composition comes from computeRevenueMix(),
+                 the one place allowed to add the three revenue tables
+                 together; this only lays the result out. ── */}
           {(() => {
-            const rows = [
-              { key: "free", label: "Free Chat", color: TYPE_META.free.color, usd: typePerf.free.revenue, count: typePerf.free.count, note: "Public tips in open chat" },
-              { key: "live", label: "Live Mode", color: TYPE_META.live.color, usd: typePerf.live.revenue, count: typePerf.live.count, note: "Earned during a tracked Live Mode stream" },
-              ...(paidStats?.sessionTypeBreakdown || []).map(t => ({
-                key: `paid:${t.type}`, label: t.type, color: PAID_TYPE_COLORS[t.type] || TYPE_META.paid.color,
-                usd: t.usd, count: t.count, note: `${t.clients} client${t.clients === 1 ? "" : "s"}`,
-              })),
-            ].filter(r => r.usd > 0)
-            const total = rows.reduce((a, r) => a + r.usd, 0)
-            if (!rows.length || total <= 0) return null
-            const withPct = rows.map(r => ({ ...r, pct: (r.usd / total) * 100 })).sort((a, b) => b.usd - a.usd)
+            if (!mix || mix.isEmpty) return null
+            const rows = mix.byStream.map(r => ({ ...r, color: STREAM_COLORS[r.key] || "#64748B" }))
             return (
               <div className="glass-panel" style={{ padding: 20, marginTop: 22 }}>
                 <div className="section-label">💰 Where your money came from</div>
                 <div style={{ display: "flex", height: 30, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 16 }}>
-                  {withPct.map(r => (
+                  {rows.map(r => (
                     <div key={r.key} title={`${r.label}: ${fmtUsd(r.usd)} (${r.pct.toFixed(1)}%)`}
                       style={{ width: `${r.pct}%`, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.35s" }}>
                       {r.pct >= 11 && <span style={{ fontSize: 10, fontWeight: 800, color: "rgba(8,12,24,0.85)" }}>{Math.round(r.pct)}%</span>}
@@ -326,14 +331,16 @@ export default function Sessions({
                   ))}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-                  {withPct.map(r => (
+                  {rows.map(r => (
                     <div key={r.key}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 4, background: r.color, flexShrink: 0 }} />
                         <span className="session-kpi-label" style={{ marginBottom: 0 }}>{r.label}</span>
                       </div>
                       <div style={{ fontSize: 17, fontWeight: 800, color: r.color }}>{fmtUsd(r.usd)}</div>
-                      <div className="session-kpi-sub">{Math.round(r.pct)}% · {r.count} session{r.count === 1 ? "" : "s"}</div>
+                      <div className="session-kpi-sub">
+                        {Math.round(r.pct)}%{r.count > 0 ? ` · ${r.count} session${r.count === 1 ? "" : "s"}` : ""}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -343,11 +350,6 @@ export default function Sessions({
               </div>
             )
           })()}
-
-          <div className="section-label">✨ Recent Session Intelligence</div>
-          <div className="recent-session-grid">
-            {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} comparablePopulation={filteredFree} timezone={timezone} />)}
-          </div>
 
           {trendData.length > 1 && (
             <div style={{ marginTop: 22 }}>
