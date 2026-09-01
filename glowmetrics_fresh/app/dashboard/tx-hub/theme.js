@@ -1,3 +1,4 @@
+import { platformColor as sharedPlatformColor } from '../../../lib/platforms'
 // TX Hub design tokens — deliberately a muted cyan/blue navy palette rather
 // than the site-wide neon cyan-to-pink gradient (see branding skill). This
 // surface is a financial command center and should read closer to a
@@ -40,17 +41,16 @@ export const glowTop = (color) => ({
   opacity: 0.7,
 })
 
-export const PLATFORM_COLORS = {
-  Chaturbate: C.cyan,
-  BongaCams: C.gold,
-  MyFreeCams: C.purple,
-  Stripchat: C.green,
-  CamSoda: C.blue,
-  Unknown: C.muted,
-}
+// Platform colours come from lib/platforms.js so a platform reads the same
+// here as on the Platforms tab and the Money Map. This file used to keep its
+// own map, which coloured CamSoda blue here and magenta there.
+export { PLATFORM_IDENTITY } from '../../../lib/platforms'
 
 export function platformColor(platform) {
-  return PLATFORM_COLORS[platform] || C.blue
+  // 'Unknown' is the parser's undetected bucket, not a platform — it keeps the
+  // muted treatment rather than being given a brand colour.
+  if (!platform || String(platform).toLowerCase() === 'unknown') return C.muted
+  return sharedPlatformColor(platform)
 }
 
 // Keyed by TX_TYPE_LABELS values (lib/txHub.js). Full-Private is a distinct

@@ -5,6 +5,7 @@ import {
 } from "recharts"
 import { calcPotentialEarningsRecovery, computeFanTrend } from "../../lib/analytics"
 import FanProfileDrawer from "./FanProfileDrawer"
+import { CAM_PLATFORMS } from "../../lib/platforms"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS — Fan Intelligence
@@ -96,7 +97,9 @@ function trendBadge(fan) {
 }
 
 const monthLabel = (ym) => { const [y, m] = ym.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) }
-const PLATFORM_OPTIONS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
+// The supported-platform list lives in lib/platforms.js — adding a platform
+// there makes it appear in every picker at once.
+const PLATFORM_OPTIONS = CAM_PLATFORMS
 const TIER_OPTIONS = ["Whale", "Shark", "Regular", "Dormant"]
 const INTEL_OPTIONS = ["Trending Up", "Trending Down", "At Risk", "Loyal", "New / Emerging"]
 const PAGE_SIZE = 10
