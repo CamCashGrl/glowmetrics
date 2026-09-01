@@ -954,12 +954,20 @@ export function aggregateRows(tips, tz = null) {
 
   const platformMap = {}
   meaningfulSessions.forEach(s => {
-    if (!platformMap[s.platform]) { platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
+    if (!platformMap[s.platform]) { platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0, _fans: new Set() } }
     platformMap[s.platform].totalUSD    += s.totalUSD
     platformMap[s.platform].totalTokens += s.totalTokens
     platformMap[s.platform].sessions    += 1
     if (!s.durationUnknown) platformMap[s.platform].hours += s.durationHours
     platformMap[s.platform].tips        += s.tipCount
+    // Unique supporters on this platform, deduped across sessions by the
+    // SAME lowercased username key sessions.js itself uses for its per-session
+    // `uniqueFans`. Summing sessions[].uniqueFans would double-count anyone who
+    // returns, so the set is accumulated here once rather than re-derived by
+    // any consumer — this stays the single place a per-platform fan count is
+    // computed, over exactly the meaningfulSessions population every other
+    // platforms[] figure is built from.
+    ;(s.tips || []).forEach(t => { if (t.username) platformMap[s.platform]._fans.add(String(t.username).toLowerCase()) })
   })
 
   // Canonical best local day/hour per platform — reuses the same day×hour
@@ -974,8 +982,9 @@ export function aggregateRows(tips, tz = null) {
     platformBestWindow[p] = bestWindow
   })
 
-  const platforms = Object.values(platformMap).map(p => ({
+  const platforms = Object.values(platformMap).map(({ _fans, ...p }) => ({
     ...p,
+    uniqueFans:    _fans.size,
     usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
     tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
     avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0,

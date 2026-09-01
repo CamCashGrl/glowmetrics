@@ -65,8 +65,8 @@ const OnboardingChecklist = dynamic(() => import('./OnboardingChecklist'), { ssr
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
-const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
+const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 // The exact same Live Engine page component /live uses — not a rebuild, not
 // a second copy. Embedding it directly here means the dashboard's "Live
@@ -3517,36 +3517,45 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {/* Trend charts live on Performance, not the Command Center — the
-            Command Center answers "what should I do next", this answers
-            "what happened". Relocated here from the old Overview tab. */}
         {/* ═══════════════════════════════════════════════════════
-            PHASE 3 — PERFORMANCE. Answers "what happened", not "what
-            should I do" (the Command Center's job) or "who should I pay
-            attention to" (Fans). Replaces three earlier things stacked on
-            this tab: the standalone DashboardGrowthCharts mount, the
-            sections relocated here from the old Overview in Phase 2
-            (What's Working / You're Losing Money / Revenue Dependency
-            Risk), and the legacy "Platform Comparison" card pile —
-            which itself contained a real defect this rebuild fixes by
-            omission: its per-platform "Peak time" insight ranked hours by
-            raw total $ earned, not $/hour, the exact thing
+            PLATFORMS — Performance.js. Answers exactly one question,
+            "how is each platform doing?"; the account-wide "how am I
+            doing overall?" belongs to the Command Center. That split is
+            why this tab no longer OPENS on an account-wide KPI strip or a
+            chart: it leads with the per-platform cards, then revenue
+            distribution, the comparison table, per-platform attribution and
+            rate gaps, and insights generated from those same numbers.
+
+            The account-wide evidence that has no other home today — the
+            canonical day-of-week view, revenue-dependency risk, and
+            DashboardGrowthCharts (passed in below, because its daily/weekly/
+            time-of-day modes need raw tips/sessions this analytics-only
+            component never receives) — is rendered LAST, inside one block
+            labelled "Account-wide context", so it is present without
+            competing with the per-platform answer. If Overview ever takes
+            those back, that block is the thing to move.
+
+            The legacy "Platform Comparison" card pile this tab once
+            carried contained a real defect the rebuild fixes by omission:
+            its per-platform "Peak time" insight ranked hours by raw total
+            $ earned, not $/hour, the exact thing
             canonical-analytics-rules.md's Best Time section says never to
             do, and it duplicated (and could disagree with) the one
-            canonical bestWindow every other surface reads. That insight
-            is not reintroduced here.
+            canonical bestWindow every other surface reads. Not
+            reintroduced here — the cards read
+            platforms[].bestLocalDay/bestLocalHour and always show the
+            canonical confidence tier with it.
+
             All content Performance.js renders is read from the frozen
-            analytics layer. DashboardGrowthCharts is the one exception,
-            mounted here (not inside Performance.js) because its
-            daily/weekly/time-of-day modes need raw tips/sessions —
-            Performance.js itself receives analytics only, same discipline
-            as CommandCenter.js.
+            analytics layer; it receives analytics only, same discipline as
+            CommandCenter.js.
         ═══════════════════════════════════════════════════════ */}
         {activeTab === "platforms" && (
           <Performance
             analytics={analytics}
             isPro={isPro}
             onUpgrade={(src) => openUpgradeModal(src)}
+            onViewPlatform={() => handleTabChange('moneymap')}
             earningsTrend={tips.length > 0 ? (
               <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} timezone={creatorTz} />
             ) : null}

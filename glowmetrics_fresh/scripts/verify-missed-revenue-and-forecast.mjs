@@ -117,7 +117,7 @@ function tonightStream(sameDayTotals) {
   // same figure "hourly rate" next to an explicit "/hr" suffix instead).
   // The protected property — an hourly figure never mislabeled as
   // per-session — is the assertion directly below, which still holds.
-  check('platform hourly rates are explicitly labeled "/hr", never left unitless', performance.includes('usdPerHour)}/hr') && performance.includes('hourly rate'))
+  check('platform hourly rates are explicitly labeled "/hr", never left unitless', performance.includes('usdPerHour)}/hr') && /hourly (rate|average)/i.test(performance))
   check('no "avg/session" label on an hourly figure', !dashboard.includes('avg/session') && !performance.includes('avg/session'))
 }
 {
