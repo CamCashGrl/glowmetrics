@@ -66,6 +66,7 @@ const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false,
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
 const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
+const SessionRevenueMix = dynamic(() => import('./SessionRevenueMix'), { ssr: false })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 // The exact same Live Engine page component /live uses — not a rebuild, not
@@ -3741,6 +3742,14 @@ const stopImportMessageRotation = () => {
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)
 
+          // Every clock/date on this tab renders in the creator's resolved
+          // timezone, not the browser's. Bare toLocaleTimeString() here meant
+          // a creator reviewing sessions while travelling saw start/end times
+          // that disagreed with every other tab (see the same bug called out
+          // at the platform-hour bucketing above).
+          const fmtClock = ms => new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: creatorTz })
+          const fmtDay   = iso => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: creatorTz })
+
           // ── SESSION BREAKDOWN ENGINE ────────────────────────────────
           // Pure logic — runs on each session's tips array
           const getSessionBreakdown = (s) => {
@@ -3779,10 +3788,12 @@ const stopImportMessageRotation = () => {
             const peakTime = new Date(startMs + peakMinute * 60000)
 
             // ── FIRST HALF vs SECOND HALF ────────────────────────────
-            const half = Math.floor(buckets.length / 2)
-            const firstHalfUSD = buckets.slice(0, half).reduce((s, b) => s + b.usd, 0)
-            const secondHalfUSD = buckets.slice(half).reduce((s, b) => s + b.usd, 0)
-            const firstHalfPct = s.totalUSD > 0 ? Math.round((firstHalfUSD / s.totalUSD) * 100) : 0
+            // Read straight off the session — finalizeSession() already split
+            // it at the timestamp midpoint, and that is the same split
+            // velocityTrend uses. Re-halving by 5-minute bucket index here
+            // disagreed with the momentum badge on any odd bucket count, so a
+            // card could show "First half 62%" beside "Momentum building".
+            const firstHalfPct = s.firstHalfPct
 
             // ── TOP TIPPERS ─────────────────────────────────────────
             const tipperMap = {}
@@ -3807,8 +3818,15 @@ const stopImportMessageRotation = () => {
               .map(b => ({
                 minute: b.idx * 5,
                 usd: parseFloat(b.usd.toFixed(2)),
-                time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                time: fmtClock(startMs + b.idx * 5 * 60000),
               }))
+            // `spikes` stays chronological for the timeline. Anything that
+            // says "biggest" must read this instead — sorting by USD, not by
+            // time. spikes[0] is the EARLIEST spike, and captioning the gold
+            // peak bar with it pointed the label at a different bar.
+            const topSpike = spikes.length
+              ? [...spikes].sort((a, b) => b.usd - a.usd)[0]
+              : null
 
             // ── PERFORMANCE vs historical avg ────────────────────────
             const allAvg = displaySessions.length > 0
@@ -3821,7 +3839,10 @@ const stopImportMessageRotation = () => {
               : "average"
 
             // ── REVENUE PER MINUTE ───────────────────────────────────
-            const revenuePerMin = parseFloat((s.totalUSD / durationMins).toFixed(3))
+            // s.usdPerMinute is null on durationUnknown sessions. Deriving it
+            // locally as totalUSD/durationMins printed a confident $X.XX/min
+            // in the header while the $/Min metric right below it showed "—".
+            const revenuePerMin = s.usdPerMinute
 
             // ── INSIGHTS ────────────────────────────────────────────
             const insights = []
@@ -3831,8 +3852,8 @@ const stopImportMessageRotation = () => {
               insights.push(`Your stream warmed up slowly — earnings picked up in the second half`)
             if (topTippers[0] && topTippers[0].pct >= 40)
               insights.push(`${topTippers[0].username} drove ${topTippers[0].pct}% of this session's revenue`)
-            if (spikes.length > 0)
-              insights.push(`Your biggest spike was at ${spikes[0].time} — $${spikes[0].usd} in 5 minutes`)
+            if (topSpike)
+              insights.push(`Your biggest spike was at ${topSpike.time} — $${topSpike.usd} in 5 minutes`)
             if (s.uniqueFans === 1)
               insights.push(`Only one fan tipped this session — great loyalty, but audience diversity helps`)
             if (s.uniqueFans >= 5)
@@ -3861,7 +3882,7 @@ const stopImportMessageRotation = () => {
               recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min — short sessions give tipping momentum less time to build. Try extending to 45–60 min`)
             if (spikes.length >= 2)
               recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
-            if (revenuePerMin > 0 && revenuePerMin < 0.10)
+            if (revenuePerMin !== null && revenuePerMin > 0 && revenuePerMin < 0.10)
               recommendations.push("Low revenue per minute — try setting a token goal every 15 min to maintain tipping momentum")
             if (performance === "high")
               recommendations.push("Replicate this stream: same time, same platform, similar energy — your data supports it")
@@ -3870,7 +3891,7 @@ const stopImportMessageRotation = () => {
 
             return {
               buckets, peakTime, peakBucket, firstHalfPct,
-              topTippers, spikes, performance, revenuePerMin,
+              topTippers, spikes, topSpike, performance, revenuePerMin,
               insights, recommendations,
             }
           }
@@ -3889,7 +3910,7 @@ const stopImportMessageRotation = () => {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                 <div>
                   <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each free-chat stream and how to earn more next time. Session cards below cover public tips only — the mix panel shows every stream.</p>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
                   <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
@@ -3902,6 +3923,19 @@ const stopImportMessageRotation = () => {
                 </div>
               </div>
 
+              {/* EARNINGS MIX — free chat vs private/full-private/group/spy vs
+                  Live Mode, toggleable to a per-platform view. Sits above the
+                  stats bar because the bar's totals are free-chat-only, which
+                  read as all-earnings without this context. */}
+              <SessionRevenueMix
+                C={C}
+                glassCard={glassCard}
+                freeChatSessions={displaySessions}
+                paidSessions={paidSessions}
+                liveTotalUSD={liveTipsTotalUSD}
+                populationLabel={meaningfulOnly ? 'meaningful sessions only' : 'all valid sessions'}
+              />
+
               {/* OVERVIEW STATS BAR */}
               {displaySessions.length > 0 && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
@@ -3909,7 +3943,7 @@ const stopImportMessageRotation = () => {
                     { label: "Total Sessions", value: displaySessions.length, color: C.cyan },
                     { label: "Avg Earnings", value: `$${avgSession.toFixed(2)}`, color: C.green },
                     { label: "Best Session", value: `$${Math.max(...displaySessions.map(s => s.totalUSD)).toFixed(2)}`, color: C.gold },
-                    { label: "Total Earned", value: `$${displaySessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
+                    { label: "Free-Chat Earned", value: `$${displaySessions.reduce((s,x) => s+x.totalUSD,0).toFixed(2)}`, color: C.pink },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ ...glassCard, borderRadius: 12, padding: "16px 18px" }}>
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
@@ -3934,7 +3968,7 @@ const stopImportMessageRotation = () => {
                 if (!bd) return null
                 const perf = PERF[bd.performance]
                 const maxBucketUSD = Math.max(...bd.buckets.map(b => b.usd), 0.01)
-                const fmt = dt => new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                const fmt = dt => fmtClock(new Date(dt).getTime())
 
                 return (
                   <div key={si} style={{ ...glassCard, borderRadius: 16, marginBottom: 24, overflow: "hidden" }}>
@@ -3944,7 +3978,7 @@ const stopImportMessageRotation = () => {
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                           <span style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-                            {new Date(s.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                            {fmtDay(s.startTime)}
                           </span>
                           <span style={{ fontSize: 13, color: C.muted }}>{fmt(s.startTime)} → {fmt(s.endTime)}</span>
                           <span style={{ fontSize: 12, color: C.muted }}>• {s.platform}</span>
@@ -3953,7 +3987,7 @@ const stopImportMessageRotation = () => {
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 28, fontWeight: 900, color: C.green }}>${s.totalUSD.toFixed(2)}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{Math.round(s.durationMinutes)} min • ${bd.revenuePerMin.toFixed(2)}/min</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{Math.round(s.durationMinutes)} min{bd.revenuePerMin !== null ? ` • $${bd.revenuePerMin.toFixed(2)}/min` : ""}</div>
                       </div>
                     </div>
 
@@ -4055,7 +4089,7 @@ const stopImportMessageRotation = () => {
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                             <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.startTime)}</span>
-                            {bd.spikes.length > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {bd.spikes[0].time}</span>}
+                            {bd.peakBucket?.usd > 0 && <span style={{ fontSize: 9, color: C.gold }}>🔥 Peak at {fmtClock(bd.peakTime.getTime())}</span>}
                             <span style={{ fontSize: 9, color: C.muted }}>{fmt(s.endTime)}</span>
                           </div>
                         </div>

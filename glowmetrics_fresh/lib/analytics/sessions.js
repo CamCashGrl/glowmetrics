@@ -79,8 +79,16 @@ function finalizeSession(s) {
   const firstHalf = sorted.filter(t => t.timestamp.getTime() <= midMs)
   const secondHalf = sorted.filter(t => t.timestamp.getTime() > midMs)
   const halfMins = Math.max(durationMinutes / 2, 1)
-  const firstHalfUPM = firstHalf.reduce((a, t) => a + (t.usd || 0), 0) / halfMins
-  const secondHalfUPM = secondHalf.reduce((a, t) => a + (t.usd || 0), 0) / halfMins
+  const firstHalfUSD = firstHalf.reduce((a, t) => a + (t.usd || 0), 0)
+  const secondHalfUSD = secondHalf.reduce((a, t) => a + (t.usd || 0), 0)
+  const firstHalfUPM = firstHalfUSD / halfMins
+  const secondHalfUPM = secondHalfUSD / halfMins
+  // The canonical first-half share. Derived from the SAME timestamp-midpoint
+  // split as velocityTrend below, so a consumer rendering both a pacing bar
+  // and a momentum badge can never show two contradicting halves of the same
+  // session. Consumers must read this instead of re-halving the session
+  // themselves (the Session Breakdown tab previously split by 5-minute bucket
+  // index, which disagreed with velocityTrend on any odd bucket count).
   let velocityTrend = 'unknown'
   if (!durationUnknown && durationMinutes >= 10) {
     if (secondHalfUPM > firstHalfUPM * 1.15) velocityTrend = 'growing'
@@ -103,6 +111,8 @@ function finalizeSession(s) {
     usdPerHour: (!durationUnknown && durationHours > 0) ? parseFloat((totalUSD / durationHours).toFixed(2)) : null,
     usdPerMinute, avgTipSize: tipCount > 0 ? parseFloat((totalUSD / tipCount).toFixed(2)) : 0,
     velocityTrend, firstHalfUPM: parseFloat(firstHalfUPM.toFixed(3)), secondHalfUPM: parseFloat(secondHalfUPM.toFixed(3)),
+    firstHalfUSD: parseFloat(firstHalfUSD.toFixed(2)), secondHalfUSD: parseFloat(secondHalfUSD.toFixed(2)),
+    firstHalfPct: totalUSD > 0 ? Math.round((firstHalfUSD / totalUSD) * 100) : 0,
     topContributor, topContributorPct, tips: s.tips
   }
 }
