@@ -116,10 +116,11 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
           {fmtDate(startTime)} · {fmtTime(startTime)}{endTime && endTime !== startTime ? ` → ${fmtTime(endTime)}` : ""}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 6 }}>
           <StatChip label="Duration" value={fmtDuration(durationMinutes)} />
           <StatChip label="Revenue" value={fmtUsd(revenue)} color={C.green} />
           <StatChip label="$/hr" value={usdPerHr != null ? `$${usdPerHr}` : "—"} color={C.cyan} />
+          <StatChip label="Tips" value={type === "free" ? (s.tipCount ?? (s.tips || []).length) : type === "live" ? (s.tip_count ?? "—") : 1} color={C.pink} />
         </div>
 
         {/* ── WHAT WORKED / COULD IMPROVE ── */}
@@ -153,6 +154,7 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontSize: 13 }}>{["🥇", "🥈", "🥉"][i]}</span>
                     <span style={{ fontSize: 12.5, color: C.white, fontWeight: 700, flex: 1 }}>{t.username}</span>
+                    <span style={{ fontSize: 11, color: C.muted }}>{t.count} tip{t.count === 1 ? "" : "s"}</span>
                     <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>{fmtUsd(t.usd)}</span>
                     <span style={{ fontSize: 11, color: C.muted, width: 34, textAlign: "right" }}>{t.pct}%</span>
                   </div>
@@ -213,7 +215,7 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
                       background: e.action_status === "performed" ? "rgba(16,185,129,0.15)" : e.action_status === "skipped" ? "rgba(148,163,184,0.15)" : "rgba(245,158,11,0.15)",
                       color: e.action_status === "performed" ? C.green : e.action_status === "skipped" ? C.muted : C.gold,
                     }}>
-                      {e.action_status === "performed" ? "✓ Performed" : e.action_status === "skipped" ? "↩ Skipped" : "— No action recorded"}
+                      {e.action_status === "performed" ? "✓ Performed" : e.action_status === "skipped" ? "↩ Skipped" : "— Unmarked"}
                     </span>
                     <span style={{ color: C.white }}>{e.title || e.message}</span>
                   </div>
