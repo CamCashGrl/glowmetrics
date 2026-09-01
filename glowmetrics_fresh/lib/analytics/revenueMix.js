@@ -25,6 +25,31 @@ const PAID_TYPE_TO_STREAM = {
   'Spy Mode':          'spy_mode',
 }
 
+/**
+ * The canonical paid-session classifier. Order matters: full-private must be
+ * tested before private, or "Full-Private Chat" matches /private/ and is
+ * silently downgraded. This mirrors PAID_SESSION_TYPE_PATTERNS in
+ * lib/analytics.js, which the CSV import already applies when routing rows
+ * into paid_sessions — so a row's stream is decided the same way at import
+ * time and at display time.
+ *
+ * Returns null for anything unrecognised. Callers must NOT default an
+ * unknown label to a real stream: doing so overstates whichever stream
+ * absorbs it. lib/txHub.js previously defaulted to 'private' here.
+ *
+ * @param {?string} rawType - paid_sessions.session_type or a tip's tip_type
+ * @returns {?string} a REVENUE_STREAMS key, or null if unrecognised
+ */
+export function classifyPaidSessionStream(rawType) {
+  if (!rawType) return null
+  const t = String(rawType).toLowerCase()
+  if (/full[\s-]?private/.test(t)) return 'full_private'
+  if (t.includes('private'))        return 'private_chat'
+  if (t.includes('spy'))            return 'spy_mode'
+  if (t.includes('group'))          return 'group_chat'
+  return null
+}
+
 export const REVENUE_STREAMS = [
   { key: 'free_chat',    label: 'Free Chat',    color: '#22d3ee', note: 'Public tips in open chat' },
   { key: 'private_chat', label: 'Private',      color: '#a855f7', note: 'One-on-one paid sessions' },
@@ -32,6 +57,7 @@ export const REVENUE_STREAMS = [
   { key: 'group_chat',   label: 'Group',        color: '#f59e0b', note: 'Multi-fan paid sessions' },
   { key: 'spy_mode',     label: 'Spy',          color: '#f472b6', note: 'Fans paying to watch a private' },
   { key: 'live_mode',    label: 'Live Mode',    color: '#4ade80', note: 'Earned during a tracked Live Mode stream' },
+  { key: 'other',        label: 'Other',        color: '#64748b', note: 'Paid sessions whose type could not be classified' },
 ]
 
 const STREAM_ORDER = REVENUE_STREAMS.map(s => s.key)
@@ -64,11 +90,14 @@ export function computeRevenueMix({ freeChatSessions = [], paidSessions = [], li
   freeChatSessions.forEach(s => bump(s.platform, 'free_chat', s.totalUSD || 0))
 
   paidSessions.forEach(r => {
+    // An unrecognised session_type goes to 'other'. It must NOT be folded
+    // into "Private" (that overstates a stream the creator acts on), but it
+    // must not be dropped either — dropping it would make this panel's total
+    // silently under-report actual earnings and disagree with TX Hub's
+    // ledger, which keeps the same rows as 'other'.
     const streamKey = PAID_TYPE_TO_STREAM[r.session_type]
-    // An unrecognised session_type is deliberately dropped from the mix
-    // rather than folded into "Private" — inventing a bucket for it would
-    // overstate a stream the creator can act on.
-    if (!streamKey) return
+      || classifyPaidSessionStream(r.session_type)
+      || 'other'
     bump(r.platform, streamKey, parseFloat(r.usd) || 0)
   })
 

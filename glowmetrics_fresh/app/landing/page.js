@@ -161,7 +161,7 @@ function AuthPanel({
         <form onSubmit={handleAuth}>
           <input type="email" placeholder="Email address" required
             value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
-            onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)"; TrackEvents.signupStarted(window?.location?.pathname) }}
+            onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)"; TrackEvents.signupFormFocused(window?.location?.pathname) }}
             onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
           />
           <input type="password" placeholder={isSignUp ? "Create a password" : "Password"} required
@@ -854,7 +854,11 @@ export default function LandingPage() {
               else try { localStorage.removeItem('camcash_attribution') } catch {}
             })
           }
-          track('signup_success'); TrackEvents.signupCompleted(window?.location?.pathname)
+          // One event for one moment. TrackEvents.signupCompleted() now emits
+          // 'signup_success' itself, enriched with signup_method/source_page/
+          // traffic_source, so the bare track('signup_success') that used to
+          // sit beside it here would be a duplicate.
+          TrackEvents.signupCompleted(window?.location?.pathname)
           if (pendingPlan && await goToCheckout(pendingPlan)) return
           // New signups always go through onboarding first — never straight to /dashboard.
           router.push("/onboarding")
