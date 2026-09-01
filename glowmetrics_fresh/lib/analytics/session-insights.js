@@ -14,7 +14,7 @@
 // fabricating an insight.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function getSessionBreakdown(s, comparablePopulation = []) {
+export function getSessionBreakdown(s, comparablePopulation = [], timezone = 'UTC') {
   const rawTips = s.tips || []
   if (rawTips.length === 0) return null
 
@@ -49,9 +49,11 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
   const peakTime = new Date(startMs + peakMinute * 60000)
 
   // ── FIRST HALF vs SECOND HALF ────────────────────────────
-  const half = Math.floor(buckets.length / 2)
-  const firstHalfUSD = buckets.slice(0, half).reduce((sum, b) => sum + b.usd, 0)
-  const firstHalfPct = s.totalUSD > 0 ? Math.round((firstHalfUSD / s.totalUSD) * 100) : 0
+  // Read off the session — finalizeSession() already split it at the
+  // timestamp midpoint, which is the same split velocityTrend uses. Halving
+  // by 5-minute bucket index here disagreed with the momentum badge on any
+  // odd bucket count.
+  const firstHalfPct = s.firstHalfPct ?? 0
 
   // ── TOP TIPPERS ─────────────────────────────────────────
   const tipperMap = {}
@@ -79,8 +81,15 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
     .map(b => ({
       minute: b.idx * 5,
       usd: parseFloat(b.usd.toFixed(2)),
-      time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: timezone }),
     }))
+
+  // ── BIGGEST SPIKE ────────────────────────────────────────
+  // `spikes` stays chronological for the timeline, so spikes[0] is the
+  // EARLIEST spike. Anything describing the "biggest" one must sort by USD.
+  const topSpike = spikes.length
+    ? [...spikes].sort((a, b) => b.usd - a.usd)[0]
+    : null
 
   // ── PERFORMANCE vs comparable population ─────────────────
   const allAvg = comparablePopulation.length > 0
@@ -91,7 +100,10 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
     : "average"
 
   // ── REVENUE PER MINUTE ───────────────────────────────────
-  const revenuePerMin = parseFloat((s.totalUSD / durationMins).toFixed(3))
+  // s.usdPerMinute is null on durationUnknown sessions. Deriving it here as
+  // totalUSD/durationMins produced a confident rate for a session whose
+  // duration is not actually known.
+  const revenuePerMin = s.usdPerMinute ?? null
 
   // ── INSIGHTS ────────────────────────────────────────────
   const insights = []
@@ -101,8 +113,8 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
     insights.push(`Your stream warmed up slowly — earnings picked up in the second half`)
   if (topTippers[0] && topTippers[0].pct >= 40)
     insights.push(`${topTippers[0].username} drove ${topTippers[0].pct}% of this session's revenue`)
-  if (spikes.length > 0)
-    insights.push(`Your biggest spike was at ${spikes[0].time} — $${spikes[0].usd} in 5 minutes`)
+  if (topSpike)
+    insights.push(`Your biggest spike was at ${topSpike.time} — $${topSpike.usd} in 5 minutes`)
   if (s.uniqueFans === 1)
     insights.push(`Only one fan tipped this session — great loyalty, but audience diversity helps`)
   if (s.uniqueFans >= 5)
@@ -128,7 +140,7 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
     recommendations.push(`You earned $${s.totalUSD} in ${Math.round(durationMins)} min — short sessions give tipping momentum less time to build. Try extending to 45–60 min`)
   if (spikes.length >= 2)
     recommendations.push("Multiple spike moments detected — identify what triggered them and recreate it intentionally")
-  if (revenuePerMin > 0 && revenuePerMin < 0.10)
+  if (revenuePerMin !== null && revenuePerMin > 0 && revenuePerMin < 0.10)
     recommendations.push("Low revenue per minute — try setting a token goal every 15 min to maintain tipping momentum")
   if (performance === "high")
     recommendations.push("Replicate this stream: same time, same platform, similar energy — your data supports it")
@@ -137,7 +149,7 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
 
   return {
     buckets, peakTime, peakBucket, firstHalfPct,
-    topTippers, spikes, performance, revenuePerMin,
+    topTippers, spikes, topSpike, performance, revenuePerMin,
     insights, recommendations,
   }
 }

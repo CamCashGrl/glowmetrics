@@ -47,12 +47,15 @@ function QualityBadge({ perf }) {
 }
 
 // ── Recent session intelligence card — the primary experience ───────────
-function RecentCard({ row, onOpen }) {
+function RecentCard({ row, onOpen, comparablePopulation = [], timezone = "UTC" }) {
   const { type, session: s } = row
   const meta = TYPE_META[type]
   const revenue = rowRevenue(type, s)
   const usdPerHr = rowUsdPerHr(type, s)
-  const bd = type === "free" ? getSessionBreakdown(s, []) : null
+  // Passing [] here left allAvg at 0, so performance fell through to
+  // "average" for every session and the quality badge on this card — the
+  // primary experience — was a fixed label rather than a real verdict.
+  const bd = type === "free" ? getSessionBreakdown(s, comparablePopulation, timezone) : null
   const perf = bd?.performance
 
   let whatWorked = null, whoDrove = [], opportunity = null
@@ -254,7 +257,7 @@ export default function Sessions({
 
           <div className="section-label">✨ Recent Session Intelligence</div>
           <div className="recent-session-grid">
-            {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} />)}
+            {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} comparablePopulation={filteredFree} timezone={timezone} />)}
           </div>
 
           {trendData.length > 1 && (
@@ -343,7 +346,7 @@ export default function Sessions({
               </div>
               {pageRows.map((r, i) => {
                 const meta = TYPE_META[r.type]
-                const bd = r.type === "free" ? getSessionBreakdown(r.session, filteredFree) : null
+                const bd = r.type === "free" ? getSessionBreakdown(r.session, filteredFree, timezone) : null
                 return (
                   <div className="session-table-row" key={i}>
                     <div>{fmtDateShort(rowDate(r.type, r.session))}</div>
@@ -374,6 +377,7 @@ export default function Sessions({
           coachingEvents={drawerRow.type === "live" ? coachingEventsBySession[drawerRow.session.id] : null}
           coachingLoading={coachingLoadingSessionId}
           onLoadCoaching={loadCoachingEvents}
+          timezone={timezone}
         />
       )}
     </div>

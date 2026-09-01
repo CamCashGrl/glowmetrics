@@ -41,7 +41,7 @@ function StatChip({ label, value, color = C.white }) {
 }
 
 // row: { type: 'free'|'live'|'paid', session, comparablePopulation, coachingEvents, coachingLoading, onLoadCoaching }
-export default function SessionDrawer({ row, onClose, coachingEvents, coachingLoading, onLoadCoaching }) {
+export default function SessionDrawer({ row, onClose, coachingEvents, coachingLoading, onLoadCoaching, timezone = "UTC" }) {
   const [notes, setNotes] = useState("")
   useEffect(() => {
     if (!row) return undefined
@@ -81,7 +81,7 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
     usdPerHr = null
   }
 
-  const bd = type === "free" ? getSessionBreakdown(s, row.comparablePopulation || []) : null
+  const bd = type === "free" ? getSessionBreakdown(s, row.comparablePopulation || [], timezone) : null
   const perf = bd ? SESSION_PERF_BADGE[bd.performance] : null
 
   return (
