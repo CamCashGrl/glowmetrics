@@ -476,7 +476,10 @@ export default function Performance({
           {insights.length > 0 && (
             <div className="glass-panel platform-panel">
               <div className="section-label">What your data says</div>
-              <div className="platform-insight-grid">
+              {/* One platform commonly leads everything, and the dedupe above
+                  then leaves a single insight — which looked like a broken
+                  half-empty panel in a two-column grid. One card spans. */}
+              <div className="platform-insight-grid" style={insights.length === 1 ? { gridTemplateColumns: "1fr" } : undefined}>
                 {insights.map((ins, i) => (
                   <div key={i} className="platform-insight" style={{ "--accent": styleFor(ins.platform).accent }}>
                     <span>{ins.platform}</span>
