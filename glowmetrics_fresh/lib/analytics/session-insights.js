@@ -57,15 +57,18 @@ export function getSessionBreakdown(s, comparablePopulation = []) {
   const tipperMap = {}
   sorted.forEach(t => {
     const u = t.username || "unknown"
-    tipperMap[u] = (tipperMap[u] || 0) + (parseFloat(t.usd) || 0)
+    if (!tipperMap[u]) tipperMap[u] = { usd: 0, count: 0 }
+    tipperMap[u].usd += (parseFloat(t.usd) || 0)
+    tipperMap[u].count += 1
   })
   const topTippers = Object.entries(tipperMap)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1].usd - a[1].usd)
     .slice(0, 3)
-    .map(([username, usd]) => ({
+    .map(([username, d]) => ({
       username,
-      usd: parseFloat(usd.toFixed(2)),
-      pct: s.totalUSD > 0 ? Math.round((usd / s.totalUSD) * 100) : 0,
+      usd: parseFloat(d.usd.toFixed(2)),
+      count: d.count,
+      pct: s.totalUSD > 0 ? Math.round((d.usd / s.totalUSD) * 100) : 0,
     }))
 
   // ── SPIKES (bucket > 2x avg) ─────────────────────────────
