@@ -13,7 +13,7 @@ import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
-import { track as gtmTrack } from '../../lib/track'
+import { track as logEvent } from '../../lib/track'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
@@ -1665,7 +1665,7 @@ export default function Dashboard() {
 
   const openUpgradeModal = (source) => {
     track('upgrade_click', { source })
-    gtmTrack('paywall_hit', { feature: source })
+    logEvent('paywall_hit', { feature: source })
     setUpgradeModalSource(source || 'default')
     setShowUpgradeModal(true)
   }
@@ -1683,7 +1683,7 @@ export default function Dashboard() {
   const trackProPreviewViewed = (feature) => {
     if (proPreviewFiredRef.current.has(feature)) return
     proPreviewFiredRef.current.add(feature)
-    gtmTrack('pro_preview_viewed', { feature })
+    logEvent('pro_preview_viewed', { feature })
   }
 
   const redeemPromoCode = async () => {
@@ -1758,7 +1758,7 @@ export default function Dashboard() {
 
   // Tab persistence
   const handleTabChange = (tab) => {
-    gtmTrack('tab_switched', { tab_name: tab })
+    logEvent('tab_switched', { tab_name: tab })
     // Live Mode is the one tab that's ENTIRELY a locked Pro preview for
     // free users (see the isPro gate a few hundred lines below) — this is
     // the funnel's "Pro preview viewed" step for that surface specifically,
@@ -1940,10 +1940,10 @@ export default function Dashboard() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('success') === 'true') {
-        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
+        logEvent('subscription_completed', { plan_type: params.get('plan') || null })
         window.history.replaceState({}, '', window.location.pathname)
       } else if (params.get('canceled') === 'true') {
-        gtmTrack('checkout_canceled', {})
+        logEvent('checkout_canceled', {})
         window.history.replaceState({}, '', window.location.pathname)
       }
     }
@@ -2343,7 +2343,7 @@ const stopImportMessageRotation = () => {
       setShowImportSparkle(true)
       setTimeout(() => setShowImportSparkle(false), 2400)
     }
-    gtmTrack('platform_limit_preview_shown', { platform: detectedLabel, hasPreview: !!preview })
+    logEvent('platform_limit_preview_shown', { platform: detectedLabel, hasPreview: !!preview })
   }
 
   const handleCSV = async (file, forcePlatform = null) => {
@@ -2357,7 +2357,7 @@ const stopImportMessageRotation = () => {
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
-    gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
+    logEvent('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
 
     stopImportMessageRotation()
     importMessageTimerRef.current = setInterval(() => {
@@ -2392,7 +2392,7 @@ const stopImportMessageRotation = () => {
       }
 
       track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
-      gtmTrack('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
+      logEvent('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
 
       const msg = result.skipped > 0
         ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
@@ -2408,17 +2408,6 @@ const stopImportMessageRotation = () => {
         dateTo: result.dateTo,
       })
       setImportStage('success')
-
-      // Google Ads — CSV Upload conversion
-      try {
-        if (typeof window.gtag !== 'undefined') {
-          window.gtag('event', 'conversion', {
-            'send_to': 'AW-18107430539/5qolCPeRnLMcEIvtpbpD',
-            'value': 0.0,
-            'currency': 'USD'
-          })
-        }
-      } catch(e) {}
 
       setUploadCount(c => c + 1)
       if (typeof window !== 'undefined') localStorage.setItem('camcash_onboarded', '1')

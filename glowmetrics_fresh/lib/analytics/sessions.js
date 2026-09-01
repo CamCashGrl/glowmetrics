@@ -83,12 +83,12 @@ function finalizeSession(s) {
   const secondHalfUSD = secondHalf.reduce((a, t) => a + (t.usd || 0), 0)
   const firstHalfUPM = firstHalfUSD / halfMins
   const secondHalfUPM = secondHalfUSD / halfMins
-  // The canonical first-half share, derived from the SAME timestamp-midpoint
-  // split as velocityTrend below. Consumers must read this rather than
-  // re-halving the session themselves: session-insights.js split by 5-minute
-  // bucket index instead, which disagrees with velocityTrend on any odd
-  // bucket count, so one card could show "First half 62%" beside a
-  // "Momentum building" badge.
+  // The canonical first-half share. Derived from the SAME timestamp-midpoint
+  // split as velocityTrend below, so a consumer rendering both a pacing bar
+  // and a momentum badge can never show two contradicting halves of the same
+  // session. Consumers must read this instead of re-halving the session
+  // themselves (the Session Breakdown tab previously split by 5-minute bucket
+  // index, which disagreed with velocityTrend on any odd bucket count).
   let velocityTrend = 'unknown'
   if (!durationUnknown && durationMinutes >= 10) {
     if (secondHalfUPM > firstHalfUPM * 1.15) velocityTrend = 'growing'
