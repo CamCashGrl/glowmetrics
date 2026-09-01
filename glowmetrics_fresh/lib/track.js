@@ -1,9 +1,9 @@
+// The single analytics path: every event is logged to Supabase via
+// /api/track. The GTM/GA4 dataLayer push that used to sit here was removed
+// along with the GTM container in app/layout.js — nothing consumes
+// window.dataLayer any more.
 export function track(eventName, properties = {}) {
   if (typeof window === 'undefined') return
-
-  // GTM / GA4
-  window.dataLayer = window.dataLayer || []
-  window.dataLayer.push({ event: eventName, ...properties })
 
   // Supabase server-side log (fire and forget)
   const body = JSON.stringify({
