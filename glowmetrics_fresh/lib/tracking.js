@@ -6,15 +6,11 @@ const fired = new Set()
 // This module used to push straight to window.dataLayer and stop there, so
 // every event defined in T below — the whole landing/signup funnel, the CSV
 // upload events, paywall_viewed, upgrade_clicked — reached GA4 but was NEVER
-// written to Supabase via /api/track. Meanwhile LandingClient fires
-// track('signup_success') from lib/track.js on the same line as
-// T.signupCompleted(), so the events table held one half of the funnel and
-// silently omitted the other, with no way to tell the difference when
-// querying it.
+// written to Supabase via /api/track.
 //
-// Delegating to lib/track.js makes that one path: it handles the dataLayer
-// push AND the sendBeacon to /api/track. Do not re-add a dataLayer push
-// here — it would double-count every event in GA4.
+// It now delegates to lib/track.js, which is the single analytics path. The
+// gtag() call that used to sit alongside was removed together with the rest
+// of the Google Tag config; window.gtag is no longer defined anywhere.
 export function track(event, params = {}) {
   try {
     if (typeof window === 'undefined') return
@@ -22,12 +18,6 @@ export function track(event, params = {}) {
       console.log('[Track]', event, params)
     }
     canonicalTrack(event, params)
-    // gtag is additional to (not a replacement for) the dataLayer push
-    // canonicalTrack already made, and lib/track.js has no gtag call, so
-    // this stays here rather than moving into it.
-    if (typeof window.gtag === 'function') {
-      window.gtag('event', event, params)
-    }
   } catch (e) {}
 }
 
@@ -35,15 +25,6 @@ export function trackOnce(event, params = {}) {
   if (fired.has(event)) return
   fired.add(event)
   track(event, params)
-}
-
-export function setUserProps(props = {}) {
-  try {
-    if (typeof window === 'undefined') return
-    if (typeof window.gtag === 'function') {
-      window.gtag('set', 'user_properties', props)
-    }
-  } catch (e) {}
 }
 
 export function getSource() {
