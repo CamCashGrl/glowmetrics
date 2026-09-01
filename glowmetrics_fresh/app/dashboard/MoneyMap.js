@@ -5,6 +5,7 @@ import {
   PieChart, Pie, Cell, Label,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
+import { platformColor } from '../../lib/platforms'
 import { WHALE_LIFETIME_TOKEN_THRESHOLD } from "../../lib/constants"
 import { toLocalHour, toLocalDow, toLocalDateStr } from "../../lib/analytics/localTime"
 import { detectSessions, classifySession } from "../../lib/analytics/sessions"
@@ -24,7 +25,10 @@ const TEXT   = "#f1f5f9"
 const TWO_HR_SLOTS = [0,2,4,6,8,10,12,14,16,18,20,22]
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 const DAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:"#ec4899", bongacams:"#8b5cf6", camsoda:"#10b981", other:"#64748b" }
+// Colours come from lib/platforms.js — this file used to keep its own map,
+// which gave the same platform a different colour here than on the Platforms
+// tab and in the Transaction Hub.
+const platColorOf = (p) => (String(p).toLowerCase() === "other" ? SLATE : platformColor(p))
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
 // ─── Time helpers ────────────────────────────────────────────────────────────
@@ -243,7 +247,7 @@ function StatCard({ label, value, sub, color=CYAN }) {
 }
 
 function PlatformBadge({ platform }) {
-  const color = PLATFORM_COLORS[platform] || SLATE
+  const color = platColorOf(platform)
   return <span style={{background:`${color}22`,color,border:`1px solid ${color}44`,borderRadius:"6px",padding:"2px 8px",fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:".04em"}}>{platform}</span>
 }
 
@@ -439,8 +443,6 @@ function SessionsTab({ sessions, tz }) {
       .reverse()
   },[sessions])
 
-  const platformColor = (p) => PLATFORM_COLORS[p] || SLATE
-
   // Bar width/offset: map local hour decimal to percentage of 24h
   const barStyle = (s) => {
     const start = Math.max(s.localHourStart, 0)
@@ -451,7 +453,7 @@ function SessionsTab({ sessions, tz }) {
       width:`${Math.max((durH/24)*100,1)}%`,
       height:"20px",
       borderRadius:"4px",
-      background:platformColor(s.platform),
+      background:platColorOf(s.platform),
       opacity:0.8,
       cursor:"default",
       display:"flex",
@@ -578,7 +580,7 @@ function PlatformsTab({ tips, sessions, tz }) {
       <div style={{display:"flex",gap:"12px",flexWrap:"wrap",marginBottom:"24px"}}>
         {platforms.map(p=>{
           const role = roleLabel(p, platforms)
-          const color = PLATFORM_COLORS[p.platform]||SLATE
+          const color = platColorOf(p.platform)
           return (
             <div key={p.platform} style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:"12px",padding:"16px",flex:"1",minWidth:"180px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
@@ -624,7 +626,7 @@ function PlatformsTab({ tips, sessions, tz }) {
               <Tooltip content={<CTIP/>}/>
               <Legend wrapperStyle={{fontSize:"11px",color:SLATE}}/>
               {allPlats.map(p=>(
-                <Bar key={p} dataKey={p} name={p} stackId="a" fill={PLATFORM_COLORS[p]||SLATE}/>
+                <Bar key={p} dataKey={p} name={p} stackId="a" fill={platColorOf(p)}/>
               ))}
             </BarChart>
           </ResponsiveContainer>

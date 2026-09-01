@@ -5,6 +5,7 @@ import { getSessionBreakdown, SESSION_PERF_BADGE } from "../../lib/analytics/ses
 import { computePaidSessionAnalytics } from "../../lib/analytics"
 import { computeRevenueMix } from "../../lib/analytics/revenueMix"
 import SessionDrawer from "./SessionDrawer"
+import { CAM_PLATFORMS } from "../../lib/platforms"
 
 const TYPE_META = {
   free: { label: "Free Chat", icon: "🎥", color: "#22D3EE" },
@@ -25,7 +26,9 @@ const STREAM_COLORS = {
   free_chat: "#22D3EE", live_mode: "#FB923C", private_chat: "#5B8DEF",
   full_private: "#A855F7", group_chat: "#FACC15", spy_mode: "#F472B6", other: "#64748B",
 }
-const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
+// The supported-platform list lives in lib/platforms.js — adding a platform
+// there makes it appear in every picker at once.
+const PLATFORMS = CAM_PLATFORMS
 const RANGES = [{ id: "7d", label: "7D", days: 7 }, { id: "30d", label: "30D", days: 30 }, { id: "90d", label: "90D", days: 90 }, { id: "all", label: "ALL", days: null }]
 const TYPES = [{ id: "all", label: "All Sessions" }, { id: "free", label: "Free Chat" }, { id: "live", label: "Live Mode" }, { id: "paid", label: "Paid Session" }]
 
