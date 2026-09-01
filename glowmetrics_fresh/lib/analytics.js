@@ -4,7 +4,7 @@
 
 // Token rates live in ONE place — lib/constants.js
 // Do not define rates here. Import only.
-import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate, UNDETECTED_PLATFORM } from './constants'
+import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate, UNDETECTED_PLATFORM, canonicalPlatform, normalizeRowPlatforms } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
 import { detectSessions, classifySession as classifySessionQuality } from './analytics/sessions'
@@ -384,12 +384,12 @@ function parseWithHeaders(lines, platform) {
     const parsedDate = new Date(dateRaw)
     if (isNaN(parsedDate.getTime())) continue
 
-    const rowPlatform = row.platform
-      ? (row.platform.toLowerCase().includes('bonga') ? 'BongaCams'
-        : row.platform.toLowerCase().includes('chaturbate') ? 'Chaturbate'
-        : row.platform.toLowerCase().includes('mfc') || row.platform.toLowerCase().includes('freecams') ? 'MyFreeCams'
-        : row.platform || platform)
-      : platform
+    // canonicalPlatform() (lib/constants.js) replaces the substring chain that
+    // used to live here inline. Same rules, plus the short codes ('BC', 'CB',
+    // 'MFC') that previously fell through to `row.platform` verbatim — the
+    // source of the 519 'BC' rows in production, which split BongaCams into
+    // two platforms and missed its 0.025 token rate.
+    const rowPlatform = row.platform ? canonicalPlatform(row.platform) : platform
 
     results.push({
       dateRaw, date_time: dateRaw, username,
@@ -867,6 +867,21 @@ export function aggregateRows(tips, tz = null) {
       canonicalBestTimes: { grid: [], bestWindow: null, earlySignal: null }, bestWindowFanOverlap: null
     }
   }
+
+  // ── PLATFORM NORMALIZATION (read boundary) ───────────────────────────
+  // Historical rows carry whatever spelling they were imported with — in
+  // production that includes 'BC' for BongaCams and lowercase 'chaturbate'
+  // from the extension path. Canonicalizing here, ONCE, before any grouping,
+  // means every downstream figure (sessions, best-time grid, platform
+  // comparison, fan platform, missed revenue) sees one name per site.
+  //
+  // This must run BEFORE detectSessions(), which starts a new session on any
+  // platform change — otherwise one real stream that spans the two spellings
+  // is split into two sessions.
+  //
+  // Normalization only: no formula, threshold or definition changes, and no
+  // stored row is modified. See canonicalPlatform() in lib/constants.js.
+  tips = normalizeRowPlatforms(tips)
 
   const sessions = detectSessions(tips)
 

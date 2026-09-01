@@ -10,7 +10,7 @@ import { detectSessions, detectMeaningfulSessions } from '../../lib/analytics/se
 import { computeCanonicalBestTimes } from '../../lib/analytics/bestTimes';
 import { resolveCreatorTimezone } from '../../lib/timezone';
 import { toLocalHour } from '../../lib/analytics/localTime';
-import { tokenRate } from '../../lib/constants';
+import { tokenRate, normalizeRowPlatforms } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
@@ -249,7 +249,12 @@ export default function LivePage({ embedded = false } = {}) {
       supabase.from('tips').select('username, platform, tokens, usd, date_time')
         .eq('user_id', u.id).gte('date_time', sessionsSince)
         .order('date_time', { ascending: true })
-        .then(({ data }) => {
+        .then(({ data: raw }) => {
+          // Same one-name-per-site normalization the dashboard applies at its
+          // load boundary — this page mixes CSV history ('Chaturbate') with the
+          // extension's lowercase writes, and detectSessions() splits on any
+          // platform change.
+          const data = normalizeRowPlatforms(raw);
           if (data) {
             setSessions(detectSessions(data));
             // Shimmed to the {bestHour:{hour,avg}} shape peakHourData below

@@ -12,7 +12,7 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, tokenRate, normalizeRowPlatforms } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
@@ -2001,7 +2001,11 @@ export default function Dashboard() {
 
         setTips(prev => {
           const existingKeys = new Set(prev.map(t => `${t.date_time}|${t.username}|${t.tokens}`))
-          const newRows = batch.filter(row => {
+          // Live-tip rows arrive from the extension path, which writes
+          // lowercase platform names ('chaturbate') where the CSV path writes
+          // 'Chaturbate'. Canonicalize before they join the tips array, or a
+          // single stream spanning both sources splits into two sessions.
+          const newRows = normalizeRowPlatforms(batch).filter(row => {
             const key = `${row.date_time}|${row.username}|${row.tokens}`
             if (existingKeys.has(key)) return false
             existingKeys.add(key)
@@ -2244,6 +2248,11 @@ export default function Dashboard() {
         }
       }
       if (allData.length) {
+        // Canonicalize platform spellings once, at the load boundary, so the
+        // components reading `tips` directly (MoneyMap, StreamPlanner) see the
+        // same one-name-per-site view aggregateRows() produces internally.
+        // Normalization only — see canonicalPlatform() in lib/constants.js.
+        allData = normalizeRowPlatforms(allData)
         setTips(allData)
         try {
           const result = runEngine(allData, userTz)

@@ -25,6 +25,12 @@ const TWO_HR_SLOTS = [0,2,4,6,8,10,12,14,16,18,20,22]
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 const DAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:"#ec4899", bongacams:"#8b5cf6", camsoda:"#10b981", other:"#64748b" }
+// Keys above are lowercase; platform values reaching this file are canonical
+// title-case ('Chaturbate') now that names are normalized at the load
+// boundary. Look up case-insensitively rather than re-keying the map, so a
+// row that somehow still carries an old spelling still finds its colour
+// instead of silently falling back to grey.
+const platformColorFor = (p) => PLATFORM_COLORS[String(p || "").toLowerCase()] || SLATE
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
 // ─── Time helpers ────────────────────────────────────────────────────────────
@@ -243,7 +249,7 @@ function StatCard({ label, value, sub, color=CYAN }) {
 }
 
 function PlatformBadge({ platform }) {
-  const color = PLATFORM_COLORS[platform] || SLATE
+  const color = platformColorFor(platform)
   return <span style={{background:`${color}22`,color,border:`1px solid ${color}44`,borderRadius:"6px",padding:"2px 8px",fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:".04em"}}>{platform}</span>
 }
 
@@ -439,7 +445,7 @@ function SessionsTab({ sessions, tz }) {
       .reverse()
   },[sessions])
 
-  const platformColor = (p) => PLATFORM_COLORS[p] || SLATE
+  const platformColor = platformColorFor
 
   // Bar width/offset: map local hour decimal to percentage of 24h
   const barStyle = (s) => {
@@ -578,7 +584,7 @@ function PlatformsTab({ tips, sessions, tz }) {
       <div style={{display:"flex",gap:"12px",flexWrap:"wrap",marginBottom:"24px"}}>
         {platforms.map(p=>{
           const role = roleLabel(p, platforms)
-          const color = PLATFORM_COLORS[p.platform]||SLATE
+          const color = platformColorFor(p.platform)
           return (
             <div key={p.platform} style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:"12px",padding:"16px",flex:"1",minWidth:"180px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
@@ -624,7 +630,7 @@ function PlatformsTab({ tips, sessions, tz }) {
               <Tooltip content={<CTIP/>}/>
               <Legend wrapperStyle={{fontSize:"11px",color:SLATE}}/>
               {allPlats.map(p=>(
-                <Bar key={p} dataKey={p} name={p} stackId="a" fill={PLATFORM_COLORS[p]||SLATE}/>
+                <Bar key={p} dataKey={p} name={p} stackId="a" fill={platformColorFor(p)}/>
               ))}
             </BarChart>
           </ResponsiveContainer>
