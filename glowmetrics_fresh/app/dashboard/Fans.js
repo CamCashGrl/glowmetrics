@@ -1,374 +1,601 @@
 "use client"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts"
+import { calcPotentialEarningsRecovery, computeFanTrend } from "../../lib/analytics"
+import FanProfileDrawer from "./FanProfileDrawer"
+import { CAM_PLATFORMS } from "../../lib/platforms"
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FANS
+// FANS — Fan Intelligence
 //
-// Answers "who should I pay attention to?" — an action queue, not a CRM table.
-// The old tab led with a filterable grid of every supporter; a creator opening
-// it had to do the prioritising themselves. This leads with PRIORITY FANS:
-// each row states WHY it is on the list and WHAT to do, both derived from
-// canonical per-fan fields (lib/analytics.js's identifyWhales()).
+// Visual system/component structure is the exact template provided (see
+// app/globals.css's "FANS PAGE" section for the matching CSS — global, not
+// a module, because app/dashboard has no layout.js of its own to import a
+// scoped stylesheet from).
 //
-// Like CommandCenter.js and Performance.js, this component COMPUTES NOTHING.
-// It reads canonical fan fields, orders them, and labels them. Specifically it
-// does NOT:
-//   - re-bucket a fan's tips to find their peak hour. identifyWhales() already
-//     computes that (peakLocalHour/peakHourTipCount, the numeric form of
-//     typicalOnlineHours); the old Fans block re-derived it from raw tips,
-//     which was a second implementation of the same calculation.
-//   - display a probability percentage. calcTipProbability() emits fixed
-//     percentages (85/70/50/30/15) that nothing calibrates, so only its
-//     qualitative level is ever used, and the row states the OBSERVATION
-//     behind it ("usually every ~7d, last seen 12d ago") instead.
-//
-// ORDERING vs MEASURING: priority order is a heuristic ranking (documented in
-// PRIORITY_RULES below), not a score shown to the creator. No number on screen
-// comes from it — every figure in a row is a canonical field.
+// Every number rendered here comes from lib/analytics.js's identifyWhales()
+// / dependencyRisk / fanGrowthSeries / fanEngagementTrend / calcPotential-
+// EarningsRecovery. This file only selects, labels, filters, and gates by
+// isPro — it does not compute anything new, and per explicit instruction:
+// NO fabricated 0-100 "fan score" anywhere, not for display and not for
+// sorting. Fans are ordered by real totalUSD (identifyWhales() already
+// returns them spend-sorted) with a churn-priority cap layered on top (see
+// applyChurnCap below) — never a synthesized composite number.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const C = {
-  bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45",
-  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B",
-  green: "#10B981", red: "#F87171", orange: "#FB923C",
-  white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
+const fmtMoney = (value) => {
+  if (value == null || Number.isNaN(Number(value))) return "$0.00"
+  return `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
-const glassCard = {
-  background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
+// ── ABSTRACT AVATAR ─────────────────────────────────────────────────────
+// Decorative CamCash brand mark — NOT a stand-in for a profile photo and
+// NOT username initials (those read as generic contact-card UI, not the
+// brand). A tiny deterministic hash picks one of a few abstract glyphs so
+// avatars aren't all visually identical, without encoding any part of the
+// username as text.
+function glyphIndexFor(name = "") {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return h % 3
 }
-const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
-const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
-const sectionLabel = { fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.text }
-
-const fmtUsd = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
-const fmtHour = (h) => { const H = ((h % 24) + 24) % 24; return H === 0 ? "12 AM" : H < 12 ? `${H} AM` : H === 12 ? "12 PM" : `${H - 12} PM` }
-const fmtDays = (d) => (d == null ? "—" : d === 0 ? "today" : d === 1 ? "1 day ago" : d < 30 ? `${d} days ago` : d < 365 ? `${Math.round(d / 30)} mo ago` : `${(d / 365).toFixed(1)} yr ago`)
-
-function BrandButton({ children, onClick, style }) {
+function AvatarGlyph({ seed = "" }) {
+  const variant = glyphIndexFor(seed)
   return (
-    <button onClick={onClick} style={{
-      background: CTA_GRADIENT, border: "none", borderRadius: 12, padding: "13px 24px",
-      fontSize: 14.5, fontWeight: 800, color: "#06101A", cursor: "pointer",
-      boxShadow: "0 0 20px rgba(34,211,238,0.22), 0 0 30px rgba(236,72,153,0.16)", ...style,
-    }}>{children}</button>
+    <svg viewBox="0 0 24 24" width="52%" height="52%" fill="none" aria-hidden="true">
+      {variant === 0 && <path d="M12 2 L14.5 9.5 L22 12 L14.5 14.5 L12 22 L9.5 14.5 L2 12 L9.5 9.5 Z" fill="currentColor" opacity="0.92" />}
+      {variant === 1 && <circle cx="12" cy="12" r="7" fill="currentColor" opacity="0.9" />}
+      {variant === 2 && <rect x="5" y="5" width="14" height="14" rx="4" fill="currentColor" opacity="0.9" transform="rotate(45 12 12)" />}
+    </svg>
   )
 }
 
-// ── PRIORITY RULES ────────────────────────────────────────────────────────
-// Each rule reads canonical fields only and supplies the row's REASON and
-// ACTION. Order here IS the priority order; the first matching rule wins, so
-// a fan appears exactly once. `rank` breaks ties within a rule by lifetime
-// value, so the most valuable fan in a band surfaces first.
-//
-// Every rule requires tipCount >= 3 before making a timing claim —
-// avgDaysBetweenTips from one or two tips is not an interval, and
-// calcChurnRisk() itself returns 'Unknown' below 3 tips for the same reason.
-const PRIORITY_RULES = [
-  {
-    id: "best_window",
-    label: "In your best window",
-    color: C.cyan,
-    test: (f, ctx) => f.tipCount >= 3 && ctx.bestWindowUsernames.has(f.username.toLowerCase()),
-    // Precise about what bestWindowFanOverlap actually means: the fan has at
-    // least one tip inside that exact day+hour bucket (and 3+ tips overall).
-    // It does NOT mean that is their usual hour — a fan can peak at 8 PM and
-    // still have tipped during your 8 AM window, and the row shows both.
-    // "Tips during ..." implied a habit the field does not establish.
-    reason: (f, ctx) => `Has tipped during ${ctx.bestWindow.localDay}s ${fmtHour(ctx.bestWindow.localHour)} — your strongest earning window`,
-    action: "Message before you go live",
-  },
-  {
-    id: "overdue_high_value",
-    label: "Overdue",
-    color: C.pink,
-    test: (f) => f.tipCount >= 3 && f.expectedNextTip === "Overdue",
-    reason: (f) => `Usually tips every ~${Math.round(f.avgDaysBetweenTips)}d — last seen ${fmtDays(f.daysSinceLastTip)}`,
-    action: "Send a re-engage message",
-  },
-  {
-    id: "returning_soon",
-    label: "Returning soon",
-    color: C.green,
-    test: (f) => f.tipCount >= 3 && (f.expectedNextTip === "Tomorrow" || /^In ~?[1-7] days?$/.test(f.expectedNextTip || "")),
-    reason: (f) => `Approaching their usual return window — tips every ~${Math.round(f.avgDaysBetweenTips)}d`,
-    action: "Be live when they show up",
-  },
-  {
-    id: "cooling_off",
-    label: "Cooling off",
-    color: C.orange,
-    test: (f) => f.tipCount >= 3 && (f.churnRisk?.level === "High" || f.churnRisk?.level === "Medium"),
-    reason: (f) => `High lifetime value, going quiet — ${f.churnRisk.risk.toLowerCase()} at ${fmtDays(f.daysSinceLastTip)}`,
-    action: "Check in before they lapse",
-  },
-  {
-    id: "frequent",
-    label: "Frequent supporter",
-    color: C.indigo,
-    test: (f) => f.tipCount >= 10,
-    reason: (f) => `${f.tipCount} tips lifetime — one of your most consistent supporters`,
-    action: "Keep them warm",
-  },
-]
+const tierClass = (tier) =>
+  tier === "Whale" ? "fan-tier-whale"
+  : tier === "Shark" ? "fan-tier-shark"
+  : tier === "Dormant" ? "fan-tier-dormant"
+  : tier === "New" ? "fan-tier-new"
+  : "fan-tier-regular"
+// churnRisk on a fan is an OBJECT ({level, risk}) from calcChurnRisk() in
+// lib/analytics.js, not a plain string — this reads the real level off it.
+const riskLevel = (fan) => fan?.churnRisk?.level || "Unknown"
 
-function FanRow({ fan, rule, ctx, onMessage }) {
+// ── RISK COPY ────────────────────────────────────────────────────────────
+// The Fans page is meant to help creators make more money, not scare them.
+// This maps the real churnRisk.level (calcChurnRisk — already relative to
+// each fan's OWN cadence, never raw days-inactive) onto calmer, opportunity-
+// framed language. "Critical" + the pulsing red treatment is reserved for
+// fans who are BOTH genuinely far outside their own pattern AND economically
+// meaningful (Whale/Shark) — everyone else below that bar reads as an
+// actionable "Re-engage" rather than an alarm.
+function riskCopy(fan) {
+  const level = riskLevel(fan)
+  if (level === "Unknown") return { label: "Not enough data", cls: "risk-unknown", pulse: false }
+  if (level === "Low") return { label: "Healthy", cls: "risk-low", pulse: false }
+  if (level === "Medium") return { label: "Watch", cls: "risk-medium", pulse: false }
+  if (level === "High") return { label: "Re-engage", cls: "risk-high", pulse: false }
+  // Critical
+  const isHighValue = fan.tier === "Whale" || fan.tier === "Shark"
+  return isHighValue
+    ? { label: "Critical", cls: "risk-critical", pulse: true }
+    : { label: "Re-engage", cls: "risk-high", pulse: false }
+}
+
+// ── TREND BADGE ──────────────────────────────────────────────────────────
+const TREND_BADGE = {
+  up:           { icon: "↑", label: "Trending up",   cls: "trend-up" },
+  down:         { icon: "↓", label: "Trending down", cls: "trend-down" },
+  stable:       { icon: "→", label: "Stable",         cls: "trend-stable" },
+  emerging:     { icon: "✦", label: "Emerging",       cls: "trend-emerging" },
+  insufficient: { icon: "",  label: "Not enough data", cls: "trend-insufficient" },
+}
+function trendBadge(fan) {
+  const t = computeFanTrend(fan)
+  const meta = TREND_BADGE[t.trend] || TREND_BADGE.insufficient
+  return { ...meta, trend: t.trend, changePct: t.changePct }
+}
+
+const monthLabel = (ym) => { const [y, m] = ym.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }) }
+// The supported-platform list lives in lib/platforms.js — adding a platform
+// there makes it appear in every picker at once.
+const PLATFORM_OPTIONS = CAM_PLATFORMS
+const TIER_OPTIONS = ["Whale", "Shark", "Regular", "Dormant"]
+const INTEL_OPTIONS = ["Trending Up", "Trending Down", "At Risk", "Loyal", "New / Emerging"]
+const PAGE_SIZE = 10
+
+// Caps how many High/Critical-risk fans can occupy the front of a sorted
+// list per platform. Nobody is removed or hidden — every real churn-risk
+// fan stays in the data — this only demotes anything past the cap to the
+// end, so the front of the list can't be dominated by a wall of lapsed fans.
+function applyChurnCap(sorted, capPerPlatform = 1) {
+  const seen = {}
+  const kept = []
+  const demoted = []
+  for (const fan of sorted) {
+    const lvl = riskLevel(fan)
+    if (lvl !== "High" && lvl !== "Critical") { kept.push(fan); continue }
+    const key = fan.platform || "Unknown"
+    seen[key] = (seen[key] || 0) + 1
+    if (seen[key] <= capPerPlatform) kept.push(fan)
+    else demoted.push(fan)
+  }
+  return [...kept, ...demoted]
+}
+
+function IntelligenceCard({ children, className = "" }) {
+  return <div className={`cc-card ${className}`}>{children}</div>
+}
+
+// ── TOP 3 FAN CARD ─────────────────────────────────────────────────────────
+function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
+  if (!fan) return null
+  const risk = riskLevel(fan)
+  const copy = riskCopy(fan)
+  const trend = trendBadge(fan)
+  const isHeatingUp = trend.trend === "up"
+
   return (
-    // flexWrap + a flex-basis on the text column, so the action button drops
-    // to its own line on narrow screens instead of squeezing the text. Without
-    // it, at 390px the nowrap button held ~200px and the text column collapsed
-    // to roughly one character wide — the row rendered as a vertical column of
-    // single letters, ~7700px tall for the page.
-    <div style={{
-      display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap", padding: "16px 16px", borderRadius: 12,
-      background: C.card2,
-      border: `1px solid ${rule.color}33`,
-    }}>
-      <div style={{
-        width: 42, height: 42, borderRadius: "50%", background: `linear-gradient(135deg,${rule.color},${C.indigo})`,
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800,
-        color: C.white, flexShrink: 0,
-      }}>{fan.username.slice(0, 1).toUpperCase()}</div>
-
-      <div style={{ flex: "1 1 210px", minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 5 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.white, overflowWrap: "anywhere" }}>{fan.username}</span>
-          <span style={{
-            fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20, whiteSpace: "nowrap",
-            background: `${rule.color}1f`, color: rule.color, border: `1px solid ${rule.color}3d`,
-          }}>{rule.label}</span>
+    <IntelligenceCard className="top-fan-card">
+      <div className="top-fan-header">
+        <div className="fan-identity">
+          <div className={`fan-avatar ${rank === 1 ? "fan-avatar-primary" : ""} ${isHeatingUp ? "fan-heating-glow" : ""}`}>
+            <AvatarGlyph seed={fan.username} />
+          </div>
+          <div>
+            <div className="fan-name-row">
+              <strong>{fan.username}</strong>
+              {rank === 1 && <span className="top-badge">TOP SPENDER</span>}
+              {isPro && trend.trend === "up" && <span className={`trend-badge ${trend.cls}`}>{trend.icon} TRENDING UP</span>}
+            </div>
+            <div className="fan-tags">
+              <span className={tierClass(fan.tier)}>{fan.tier || "Regular"}</span>
+              <span className="platform-tag">{fan.platform || "Platform"}</span>
+            </div>
+          </div>
         </div>
-
-        {/* WHY this fan is on the list — the point of the row. */}
-        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5, marginBottom: 8, overflowWrap: "anywhere" }}>
-          {rule.reason(fan, ctx)}
-        </div>
-
-        {/* Canonical facts, each labeled. No probability percentage. */}
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11.5, color: C.muted }}>
-          <span><strong style={{ color: C.white }}>{fmtUsd0(fan.totalUSD)}</strong> lifetime</span>
-          <span><strong style={{ color: C.white }}>{fan.tipCount}</strong> tips</span>
-          {fan.tipCount >= 3 && <span>every ~<strong style={{ color: C.white }}>{Math.round(fan.avgDaysBetweenTips)}d</strong></span>}
-          {fan.peakLocalHour != null && <span>usually around <strong style={{ color: C.white }}>{fmtHour(fan.peakLocalHour)}</strong></span>}
-          <span>last seen <strong style={{ color: C.white }}>{fmtDays(fan.daysSinceLastTip)}</strong></span>
-        </div>
+        <div className="fan-rank">#{rank}</div>
       </div>
 
-      <button
-        onClick={() => onMessage?.(fan.username)}
-        style={{
-          flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
-          background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
-          color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-        }}>{rule.action}</button>
+      <div className="fan-stat-grid">
+        <div><span>LIFETIME SPEND</span><strong>{fmtMoney(fan.totalUSD)}</strong></div>
+        <div><span>TOTAL TIPS</span><strong>{fan.tipCount ?? 0}</strong></div>
+        <div><span>AVG. TIP</span><strong>{fmtMoney(fan.avgTipSize)}</strong></div>
+        <div><span>SPEND PERCENTILE</span><strong>{fan.spendPercentile != null ? `Top ${100 - fan.spendPercentile}%` : "—"}</strong></div>
+      </div>
+
+      {isPro ? (
+        <div className="fan-risk-block">
+          <div className="risk-label-row">
+            <span>RETENTION STATUS</span>
+            <strong className={copy.cls}>{copy.label}</strong>
+          </div>
+          <div className="risk-track">
+            <div className={`risk-fill risk-fill-${risk.toLowerCase()}`} style={{
+              width: risk === "Critical" ? "94%" : risk === "High" ? "75%" : risk === "Medium" ? "48%" : risk === "Low" ? "22%" : "0%",
+            }} />
+          </div>
+          <div className="risk-helper">
+            {fan.daysSinceLastTip != null ? `Last tipped ${fan.daysSinceLastTip === 0 ? "today" : `${fan.daysSinceLastTip}d ago`}` : "Not enough history yet"}
+          </div>
+        </div>
+      ) : (
+        <div className="fan-risk-block">
+          <div className="risk-label-row"><span>RETENTION STATUS</span><strong>🔒 Pro</strong></div>
+        </div>
+      )}
+
+      <div className="fan-card-actions">
+        {isPro ? (
+          <button className="cc-gradient-button" onClick={() => onView?.(fan)}>View Full Profile</button>
+        ) : (
+          <button className="cc-gradient-button" onClick={() => onUpgrade?.("fan-profile")}>Unlock Fan Intelligence</button>
+        )}
+      </div>
+    </IntelligenceCard>
+  )
+}
+
+// ── CHART CARD ─────────────────────────────────────────────────────────────
+function ChartCard({ title, eyebrow, description, children, badge }) {
+  return (
+    <IntelligenceCard className="chart-card">
+      <div className="chart-header">
+        <div><div className="chart-eyebrow">{eyebrow}</div><h3>{title}</h3><p>{description}</p></div>
+        {badge && <span className="chart-badge">{badge}</span>}
+      </div>
+      <div className="chart-area">{children}</div>
+    </IntelligenceCard>
+  )
+}
+
+function ChartTip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: "#151a32", border: "1px solid rgba(130,110,255,.22)", borderRadius: 8, padding: "7px 11px", fontSize: 11 }}>
+      <div style={{ color: "#8f99b5", marginBottom: 3 }}>{label}</div>
+      {payload.map((p, i) => <div key={i} style={{ color: p.color }}>{p.name}: <strong>{p.value}</strong></div>)}
     </div>
   )
 }
 
-export default function Fans({
-  analytics,
-  isPro = false,
-  freeFanLimit = 3,
-  onMessageFan,
-  onUpgrade,
-  onPlanStream,
-}) {
-  const whales = analytics?.whales || []
-  const bestWindow = analytics?.canonicalBestTimes?.bestWindow || null
-  const overlap = analytics?.bestWindowFanOverlap || null
-  const fanCount = analytics?.uniqueFanCount ?? 0
-  const dependencyRisk = analytics?.dependencyRisk || null
+function FanGrowthChart({ series }) {
+  if (!series?.length) return <div className="chart-empty">Not enough monthly history yet to chart fan growth.</div>
+  const rows = series.map((s) => ({ ...s, label: monthLabel(s.month) }))
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={rows} barGap={2}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+        <XAxis dataKey="label" tick={{ fill: "#67718c", fontSize: 10 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: "#67718c", fontSize: 10 }} axisLine={false} tickLine={false} width={26} allowDecimals={false} />
+        <Tooltip content={<ChartTip />} />
+        <Bar dataKey="newFans" name="New fans" stackId="f" fill="#20ddf5" />
+        <Bar dataKey="returningFans" name="Returning fans" stackId="f" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
 
-  const ctx = useMemo(() => ({
-    bestWindow,
-    bestWindowUsernames: new Set(overlap?.usernames || []),
-  }), [bestWindow, overlap])
+const TREND_META = { growing: { label: "Growing", color: "#17d89a" }, stable: { label: "Stable", color: "#f5a400" }, declining: { label: "Declining", color: "#ff6b73" } }
 
-  // Assign each fan to the FIRST matching rule, so nobody appears twice.
-  // Fans matching no rule are not "unimportant" — they simply have no
-  // timing signal worth acting on, and land in the supporters list below.
-  const prioritised = useMemo(() => {
-    const out = []
-    const claimed = new Set()
-    for (const rule of PRIORITY_RULES) {
-      const matches = whales
-        .filter(f => !claimed.has(f.username.toLowerCase()) && rule.test(f, ctx))
-        .sort((a, b) => b.totalUSD - a.totalUSD)
-      for (const f of matches) {
-        claimed.add(f.username.toLowerCase())
-        out.push({ fan: f, rule })
-      }
-    }
-    return out
-  }, [whales, ctx])
+function FanEngagementChart({ trend }) {
+  if (!trend) return <div className="chart-empty">Not enough monthly history yet to chart engagement.</div>
+  const rows = trend.series.map((s) => ({ ...s, label: monthLabel(s.month) }))
+  const meta = TREND_META[trend.trend]
+  return (
+    <div style={{ height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 9px", borderRadius: 20, background: `${meta.color}1f`, color: meta.color, border: `1px solid ${meta.color}45` }}>
+          {meta.label}{trend.changePct != null ? ` ${trend.changePct > 0 ? "+" : ""}${trend.changePct}%` : ""}
+        </span>
+        <span style={{ fontSize: 10, color: "#67718c" }}>vs. previous month</span>
+      </div>
+      <ResponsiveContainer width="100%" height="85%">
+        <LineChart data={rows}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+          <XAxis dataKey="label" tick={{ fill: "#67718c", fontSize: 10 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#67718c", fontSize: 10 }} axisLine={false} tickLine={false} width={26} />
+          <Tooltip content={<ChartTip />} />
+          <Line type="monotone" dataKey="avgTipsPerFan" name="Avg tips / fan" stroke="#ec3baf" strokeWidth={2} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
 
-  const visible = isPro ? prioritised : prioritised.slice(0, freeFanLimit)
-  const hidden = isPro ? [] : prioritised.slice(freeFanLimit)
-
-  // Summary of what Free is not seeing — real counts from the hidden slice,
-  // so the upsell describes this account rather than a generic promise.
-  const hiddenSummary = useMemo(() => {
-    if (isPro || hidden.length === 0) return null
-    const fans = hidden.map(h => h.fan)
-    return {
-      count: fans.length,
-      lifetimeUSD: fans.reduce((s, f) => s + (f.totalUSD || 0), 0),
-      overdue: fans.filter(f => f.expectedNextTip === "Overdue").length,
-      inBestWindow: fans.filter(f => ctx.bestWindowUsernames.has(f.username.toLowerCase())).length,
-    }
-  }, [isPro, hidden, ctx])
-
-  const hasAnyFans = whales.length > 0
+// ── DEPENDENCY RISK CARD ────────────────────────────────────────────────────
+function DependencyRiskCard({ dependencyRisk, topFan, isPro, onUpgrade, recovery }) {
+  if (!dependencyRisk || dependencyRisk.level === "low") return null
+  // Same canonical top1Pct just gets a finer CRITICAL label above 70% — no
+  // new threshold logic, purely a display refinement over the real number.
+  const displayLevel = dependencyRisk.level === "high"
+    ? (dependencyRisk.top1Pct >= 70 ? "CRITICAL" : "HIGH")
+    : dependencyRisk.level.toUpperCase()
+  const loss = dependencyRisk.lossIfTopFanLeaves ?? topFan?.totalUSD ?? 0
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>Fans</div>
-        <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5 }}>Who deserves your attention, and what to do about it.</div>
-      </div>
-
-      {/* ── SNAPSHOT ───────────────────────────────────────────────── */}
-      <div style={{ ...card({ padding: "16px 20px" }), display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 16 }}>
+    <div className={`dependency-card ${displayLevel === "HIGH" || displayLevel === "CRITICAL" ? "dependency-danger" : ""}`}>
+      <div className="dependency-glow" />
+      <div className="dependency-top">
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{fanCount.toLocaleString()}</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>Total supporters</div>
+          <div className="dependency-eyebrow">CAMCASH WATCH</div>
+          <h3>Dependency Risk</h3>
+          <p>One high-value fan is responsible for a meaningful concentration of your earnings.</p>
         </div>
+        <div className={`dependency-status status-${displayLevel.toLowerCase()}`}>{displayLevel}</div>
+      </div>
+
+      <div className="dependency-metrics">
+        <div className="dependency-metric">
+          <span>EARNINGS AT RISK</span>
+          <strong>{fmtMoney(loss)}</strong>
+          <small>Estimated revenue exposure if this fan stops spending.</small>
+        </div>
+        <div className="dependency-divider" />
+        <div className="dependency-metric">
+          <span>POTENTIAL EARNINGS RECOVERY</span>
+          {/* Never fabricated — calcPotentialEarningsRecovery() returns null
+              when this fan is tipping on schedule or has too little history,
+              and null is shown honestly, not as a fake $0.00. */}
+          <strong>{recovery ? fmtMoney(recovery.amount) : "—"}</strong>
+          <small>
+            {recovery
+              ? "Estimated opportunity if engagement returns toward this fan's historical pattern."
+              : "This fan is tipping on schedule right now — no decline to estimate a recovery from yet."}
+          </small>
+        </div>
+      </div>
+
+      <div className="dependency-fan">
+        <div className="dependency-avatar">{isPro ? <AvatarGlyph seed={topFan?.username} /> : <span className="dependency-avatar-lock">🔒</span>}</div>
+        <div className="dependency-fan-info">
+          <span>HIGH-VALUE FAN</span>
+          {isPro ? <strong>{topFan?.username || "Unknown"}</strong> : <strong className="blurred-username">{topFan?.username || "high-value-fan"}</strong>}
+          <small>{isPro ? `${topFan?.platform || "Platform"} · ${fmtMoney(topFan?.totalUSD)} lifetime` : "Identity locked"}</small>
+        </div>
+        {!isPro && <button className="dependency-upgrade" onClick={() => onUpgrade?.("dependency-risk")}>Upgrade to Pro →</button>}
+      </div>
+
+      {!isPro && (
+        <div className="dependency-lock-copy">
+          🔒 Unlock the fan identity, dependency analysis, tipping patterns, and potential lost-earnings insights.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── FAN MIX (composition) ───────────────────────────────────────────────────
+// Compact insight, not another big chart — account-wide tier breakdown from
+// lib/analytics.js's computeFanComposition(), which is just a % aggregation
+// of each fan's own already-computed `tier` (identifyWhales). Nothing new is
+// classified here. Only rendered once there's enough fans for the split to
+// mean something (same 5-fan floor dependencyRisk itself uses).
+function FanMixCard({ composition }) {
+  if (!composition || composition.total < 5) return null
+  const rows = [
+    { label: "Whales", pct: composition.whalePct, cls: "fan-tier-whale" },
+    { label: "Sharks", pct: composition.sharkPct, cls: "fan-tier-shark" },
+    { label: "Regulars", pct: composition.regularPct, cls: "fan-tier-regular" },
+    { label: "New", pct: composition.newPct, cls: "fan-tier-new" },
+    { label: "Dormant", pct: composition.dormantPct, cls: "fan-tier-dormant" },
+  ].filter((r) => r.pct > 0)
+
+  return (
+    <IntelligenceCard className="fan-mix-card">
+      <div className="chart-eyebrow">FAN MIX</div>
+      <h3>How your audience breaks down</h3>
+      <div className="fan-mix-rows">
+        {rows.map((r) => (
+          <div className="fan-mix-row" key={r.label}>
+            <span className={`fan-mix-label ${r.cls}`}>{r.label}</span>
+            <div className="fan-mix-track"><div className={`fan-mix-fill ${r.cls}`} style={{ width: `${r.pct}%` }} /></div>
+            <span className="fan-mix-pct">{r.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </IntelligenceCard>
+  )
+}
+
+// ── FAN INTELLIGENCE LIST ───────────────────────────────────────────────────
+function FanIntelligenceList({
+  fans, isPro, hasRecentStreamingActivity, daysSinceLastMeaningfulSession,
+  platform, setPlatform, tierFilter, setTierFilter, intelFilter, setIntelFilter,
+  search, setSearch, page, setPage, onView, onUpgrade,
+}) {
+  const ordered = useMemo(() => {
+    let out = fans
+    if (platform !== "All Platforms") out = out.filter((f) => f.platform === platform)
+    if (tierFilter !== "All") out = out.filter((f) => f.tier === tierFilter)
+    if (intelFilter !== "All") {
+      out = out.filter((f) => {
+        const risk = riskLevel(f)
+        const trend = computeFanTrend(f).trend
+        if (intelFilter === "Trending Up") return trend === "up"
+        if (intelFilter === "Trending Down") return trend === "down"
+        if (intelFilter === "At Risk") return risk === "High" || risk === "Critical"
+        if (intelFilter === "Loyal") return risk === "Low" && (f.tipCount ?? 0) >= 5
+        if (intelFilter === "New / Emerging") return trend === "emerging"
+        return true
+      })
+    }
+    if (search) { const q = search.toLowerCase(); out = out.filter((f) => String(f.username || "").toLowerCase().includes(q)) }
+    // fans is already spend-sorted (identifyWhales()'s own order) — the
+    // churn cap only reorders the excess High/Critical fans to the back (max
+    // 1 per platform up front) so a wall of at-risk fans can never dominate
+    // the list — even when the person explicitly filters to "At Risk", they
+    // see the single most relevant at-risk fan per platform first.
+    return applyChurnCap(out, 1)
+  }, [fans, platform, tierFilter, intelFilter, search])
+
+  // Free users get a short, unpaginated teaser (matches the Top-3-cards
+  // free experience above). Pro users get real pagination over the full
+  // filtered set — never an endless list rendered and hidden with CSS.
+  const total = ordered.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const safePage = Math.min(Math.max(1, page), totalPages)
+  const pageStart = (safePage - 1) * PAGE_SIZE
+  const pageItems = isPro ? ordered.slice(pageStart, pageStart + PAGE_SIZE) : ordered.slice(0, 6)
+
+  const resetAnd = (setter) => (value) => { setter(value); setPage(1) }
+
+  return (
+    <IntelligenceCard className="fan-list-card">
+      <div className="fan-list-header">
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{prioritised.length.toLocaleString()}</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>Worth acting on now</div>
+          <div className="chart-eyebrow">FAN INTELLIGENCE</div>
+          <h3>Your fans worth watching</h3>
+          <p>A focused list of the fans most relevant to your revenue and retention.</p>
         </div>
-        {overlap?.count > 0 && (
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.indigo }}>{overlap.count}</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>In your best window</div>
-          </div>
-        )}
-        {dependencyRisk && (
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: dependencyRisk.level === "high" ? C.red : C.gold }}>{dependencyRisk.top1Pct}%</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>From your top fan</div>
-          </div>
-        )}
+        <div className="fan-controls">
+          <select value={platform} onChange={(e) => resetAnd(setPlatform)(e.target.value)} className="cc-select">
+            <option>All Platforms</option>
+            {PLATFORM_OPTIONS.map((p) => <option key={p}>{p}</option>)}
+          </select>
+          <select value={tierFilter} onChange={(e) => resetAnd(setTierFilter)(e.target.value)} className="cc-select">
+            <option value="All">All Types</option>
+            {TIER_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={intelFilter} onChange={(e) => resetAnd(setIntelFilter)(e.target.value)} className="cc-select">
+            <option value="All">All Intelligence</option>
+            {INTEL_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input
+            value={search}
+            onChange={(e) => resetAnd(setSearch)(e.target.value)}
+            placeholder="Search username..."
+            className="cc-search"
+          />
+        </div>
       </div>
 
-      {/* ── PRIORITY FANS ──────────────────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Priority fans</div>
+      {!hasRecentStreamingActivity && (
+        <div className="activity-banner">
+          <span className="activity-banner-title">
+            {daysSinceLastMeaningfulSession == null
+              ? "Not enough recent streaming activity to assess fan risk yet."
+              : `No qualifying streams in the last ${daysSinceLastMeaningfulSession} days.`}
+          </span>
+          <span className="activity-banner-helper">Risk signals become more useful after you have recent qualifying sessions.</span>
+        </div>
+      )}
 
-        {!hasAnyFans ? (
-          <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
-            No supporters imported yet. Once you import your tip history, the fans worth messaging show up here first.
-          </div>
-        ) : visible.length === 0 ? (
-          <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
-            None of your supporters have enough history yet for a timing call — it takes at least 3 tips from someone before their return pattern means anything. Your full supporter list is below.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-            {visible.map(({ fan, rule }) => (
-              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} />
-            ))}
-
-            {/* The two blurred "locked" fan rows that used to sit here are
-                gone. The summary card immediately below already states what
-                is being held back using this account's REAL numbers — how
-                many fans, their combined lifetime tips, how many are overdue
-                — which is strictly more informative than a blurred row and
-                does not ask the creator to squint at their own data. */}
-          </div>
-        )}
-
-        {hiddenSummary && (
-          <div style={{
-            marginTop: 16, padding: "16px 18px", borderRadius: 12,
-            background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-            border: "1px solid rgba(124,92,255,0.26)",
-          }}>
-            <div style={{ fontSize: 14.5, fontWeight: 800, color: C.white, marginBottom: 6 }}>
-              {hiddenSummary.count} more {hiddenSummary.count === 1 ? "fan is" : "fans are"} worth acting on
+      <div className="fan-list">
+        {pageItems.map((fan, index) => {
+          const copy = riskCopy(fan)
+          const trend = trendBadge(fan)
+          return (
+            <div className="fan-list-row" key={`${fan.username}-${index}`}>
+              <div className={`fan-list-avatar ${trend.trend === "up" ? "fan-heating-glow" : ""}`}><AvatarGlyph seed={fan.username} /></div>
+              <div className="fan-list-identity">
+                <strong>{fan.username}</strong>
+                <div>
+                  <span className={tierClass(fan.tier)}>{fan.tier || "Regular"}</span>
+                  <span className="platform-tag">{fan.platform}</span>
+                </div>
+              </div>
+              <div className="fan-list-stat"><span>LIFETIME</span><strong>{fmtMoney(fan.totalUSD)}</strong></div>
+              <div className="fan-list-stat">
+                <span>TREND</span>
+                <strong className={`trend-badge-inline ${trend.cls}`}>{trend.icon} {trend.label}</strong>
+              </div>
+              <div className="fan-list-stat">
+                <span>STATUS</span>
+                <strong className={copy.cls}>{isPro ? copy.label : "🔒"}</strong>
+              </div>
+              <div className="fan-list-action">
+                {isPro ? (
+                  <button className="row-view-button" onClick={() => onView?.(fan)}>View →</button>
+                ) : (
+                  <button className="row-lock-button" onClick={() => onUpgrade?.("fan-list")}>🔒</button>
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>
-              They&apos;re worth <strong style={{ color: C.cyan }}>{fmtUsd0(hiddenSummary.lifetimeUSD)}</strong> in lifetime tips
-              {hiddenSummary.overdue > 0 && <>, and <strong style={{ color: C.pink }}>{hiddenSummary.overdue}</strong> {hiddenSummary.overdue === 1 ? "is" : "are"} already past their usual return window</>}
-              {hiddenSummary.inBestWindow > 0 && <>, with <strong style={{ color: C.cyan }}>{hiddenSummary.inBestWindow}</strong> who {hiddenSummary.inBestWindow === 1 ? "tips" : "tip"} during your best hours</>}.
-            </div>
-            <BrandButton onClick={() => onUpgrade?.("fans_priority_locked")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
-              Find My Highest-Value Fans →
-            </BrandButton>
-          </div>
-        )}
+          )
+        })}
+        {pageItems.length === 0 && <div className="empty-fans">No fans match your current filters.</div>}
       </div>
 
-      {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
-      {bestWindow && overlap?.count > 0 && (
-        <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Who shows up in your best window</div>
-          <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>
-            <strong style={{ color: C.white }}>{overlap.count}</strong> of your highest-value supporters tip during{" "}
-            <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtHour(bestWindow.localHour)}</strong> — {fmtUsd0(overlap.totalUSD)} in combined lifetime value.
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-            {(overlap.fans || []).map(f => (
-              <span key={f.username} style={{
-                fontSize: 12, padding: "6px 12px", borderRadius: 20,
-                background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan,
-                overflowWrap: "anywhere",
-              }}>{f.username} · {fmtUsd0(f.totalUSD)}</span>
-            ))}
-          </div>
-          <button onClick={onPlanStream} style={{
-            padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-            background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
-            color: C.white, fontSize: 12.5, fontWeight: 700,
-          }}>Plan a stream in this window →</button>
-        </div>
-      )}
-
-      {/* ── DEPENDENCY RISK ────────────────────────────────────────── */}
-      {dependencyRisk && dependencyRisk.level !== "low" && (
-        <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : "rgba(245,158,11,0.3)"}` })}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Concentration risk</div>
-          <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>{dependencyRisk.message}</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {[
-              { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
-              { label: "Top 3", value: `${dependencyRisk.top3Pct}%` },
-              { label: "Top 5", value: `${dependencyRisk.top5Pct}%` },
-              { label: "If #1 leaves", value: fmtUsd0(dependencyRisk.lossIfTopFanLeaves) },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ padding: "8px 14px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 10.5, color: C.muted }}>{label}</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.white, marginTop: 2 }}>{value}</div>
-              </div>
-            ))}
+      {isPro && total > 0 && (
+        <div className="fan-pagination">
+          <span>Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, total)} of {total} fans</span>
+          <div className="fan-pagination-buttons">
+            <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>← Previous</button>
+            <span className="fan-pagination-page">Page {safePage} of {totalPages}</span>
+            <button disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>Next →</button>
           </div>
         </div>
       )}
 
-      {/* ── ALL SUPPORTERS ─────────────────────────────────────────── */}
-      {hasAnyFans && (
-        <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 6 }}>All supporters</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
-            Ranked by lifetime tips{!isPro && whales.length > freeFanLimit ? ` · showing your top ${freeFanLimit}` : ""}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {(isPro ? whales : whales.slice(0, freeFanLimit)).map((f, i) => (
-              <div key={f.username} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10,
-                background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`,
-              }}>
-                <span style={{ fontSize: 11.5, color: C.muted, width: 22, flexShrink: 0 }}>#{i + 1}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{f.username}</span>
-                <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>{f.tipCount} tips</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>{fmtUsd(f.totalUSD)}</span>
-              </div>
-            ))}
-          </div>
+      {!isPro && (
+        <div className="free-list-footer">
+          <span>Showing your highest-priority fans.</span>
+          <button onClick={() => onUpgrade?.("fan-intelligence")}>Upgrade to Pro to unlock full Fan Intelligence →</button>
         </div>
       )}
+    </IntelligenceCard>
+  )
+}
+
+// ── MAIN ────────────────────────────────────────────────────────────────────
+export default function Fans({ analytics, isPro = false, onUpgrade, onMessageFan, onPlanStream }) {
+  const [platform, setPlatform] = useState("All Platforms")
+  const [tierFilter, setTierFilter] = useState("All")
+  const [intelFilter, setIntelFilter] = useState("All")
+  const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+  const [openFan, setOpenFan] = useState(null)
+
+  const fans = analytics?.whales || []
+  const dependencyRisk = analytics?.dependencyRisk || null
+  const fanGrowthSeries = analytics?.fanGrowthSeries || []
+  const fanEngagementTrend = analytics?.fanEngagementTrend || null
+  const fanComposition = analytics?.fanComposition || null
+  // Whether the CREATOR has streamed recently enough for retention/risk
+  // signals to be meaningful (lib/analytics.js aggregateRows). Gates the
+  // calm "not enough recent activity" banner instead of ever implying the
+  // whole audience is churning just because the creator hasn't been live.
+  const hasRecentStreamingActivity = analytics?.hasRecentStreamingActivity ?? false
+  const daysSinceLastMeaningfulSession = analytics?.daysSinceLastMeaningfulSession ?? null
+
+  // identifyWhales() already returns fans sorted by totalUSD descending.
+  const topThree = fans.slice(0, 3)
+  const topFan = fans[0] || null
+  const recovery = topFan ? calcPotentialEarningsRecovery(topFan) : null
+
+  if (!fans.length) {
+    return (
+      <div className="fans-page">
+        <div className="fans-page-header">
+          <div className="fans-eyebrow">CAMCASH · FAN INTELLIGENCE</div>
+          <h1>Know who's driving your revenue.</h1>
+          <p>No supporters imported yet. Once you import your tip history, your top fans, growth, engagement, and risk show up here.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fans-page">
+      <div className="fans-page-header">
+        <div className="fans-eyebrow">CAMCASH · FAN INTELLIGENCE</div>
+        <h1>Know who's driving your revenue.</h1>
+        <p>Track your highest-value fans, spot changing engagement, and catch retention risks before they become lost revenue.</p>
+      </div>
+
+      <section className="fans-section">
+        <div className="section-heading">
+          <div><span>TOP FANS</span><h2>Your top 3 revenue drivers</h2></div>
+          <p>Your highest-value fans based on actual tipping data.</p>
+        </div>
+        <div className="top-fans-grid">
+          {topThree.map((fan, index) => (
+            <TopFanCard key={`${fan.username}-${index}`} fan={fan} rank={index + 1} isPro={isPro} onView={setOpenFan} onUpgrade={onUpgrade} />
+          ))}
+        </div>
+      </section>
+
+      <section className="fans-section">
+        <div className="section-heading">
+          <div><span>FAN TRENDS</span><h2>What's changing?</h2></div>
+          <p>Understand whether your audience is growing, returning, or drifting away.</p>
+        </div>
+        <div className="fans-charts-grid">
+          <ChartCard eyebrow="AUDIENCE GROWTH" title="New vs. returning fans" description="How your fan base is changing over time." badge="MONTHLY">
+            <FanGrowthChart series={fanGrowthSeries} />
+          </ChartCard>
+          <ChartCard eyebrow="ENGAGEMENT" title="Fan engagement trend" description="Average tips per fan, month over month." badge="TREND">
+            <FanEngagementChart trend={fanEngagementTrend} />
+          </ChartCard>
+        </div>
+        <FanMixCard composition={fanComposition} />
+      </section>
+
+      <section className="fans-section">
+        <DependencyRiskCard dependencyRisk={dependencyRisk} topFan={topFan} isPro={isPro} onUpgrade={onUpgrade} recovery={recovery} />
+      </section>
+
+      <section className="fans-section">
+        <FanIntelligenceList
+          fans={fans} isPro={isPro}
+          hasRecentStreamingActivity={hasRecentStreamingActivity}
+          daysSinceLastMeaningfulSession={daysSinceLastMeaningfulSession}
+          platform={platform} setPlatform={setPlatform}
+          tierFilter={tierFilter} setTierFilter={setTierFilter}
+          intelFilter={intelFilter} setIntelFilter={setIntelFilter}
+          search={search} setSearch={setSearch}
+          page={page} setPage={setPage}
+          onView={setOpenFan} onUpgrade={onUpgrade}
+        />
+      </section>
+
+      <FanProfileDrawer
+        fan={openFan} isPro={isPro} dependencyRisk={dependencyRisk}
+        onClose={() => setOpenFan(null)}
+        onUpgrade={onUpgrade}
+        onMessage={(username) => { onMessageFan?.(username); setOpenFan(null) }}
+      />
     </div>
   )
 }

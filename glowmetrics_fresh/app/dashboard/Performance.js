@@ -1,147 +1,145 @@
 "use client"
 import { useMemo } from "react"
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from "recharts"
+// Platform colour/abbreviation come from the shared identity module, so a
+// platform looks the same here as it does on the Money Map and the
+// Transaction Hub. Adding a platform is one entry there, not one per surface.
+import { platformIdentity } from "../../lib/platforms"
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PERFORMANCE
+// PLATFORM PERFORMANCE  (the "Platforms" tab)
 //
-// Answers "what happened?" — the evidence/diagnosis layer beneath the Command
-// Center's "what should I do next?". Every value here is read from the frozen
-// analytics layer (lib/analytics.js's aggregateRows()). This file performs no
-// aggregation of its own — no reduces over raw tips or sessions, no re-derived
-// rates, windows, or percentages. Where a chart needs to group an
-// ALREADY-CANONICAL array for presentation (e.g. summing canonicalBestTimes'
-// per-bucket totals into a day-level bar), that is reshaping an existing
-// canonical result, not computing a new one — the same distinction
-// CommandCenter.js's own contract draws.
+// Answers ONE question: "how is each platform doing?" — the account-wide
+// "how am I doing overall?" question belongs to the Overview/Command Center,
+// which is why the generic KPI strip and trend charts no longer open this
+// page. The per-platform cards lead, so "which site actually makes me the
+// most money" is readable in about two seconds.
+//
+// PRESENTATION: this tab uses the same design system as the Sessions and
+// Fans tabs — .platforms-page, .glass-panel, .session-stat-box,
+// .gradient-button and the gradient page title, all defined in
+// app/globals.css. Styling lives in that stylesheet, not in inline style
+// objects here, so a change to the dashboard's look happens in one place.
+// The only inline value is each platform's --accent, which the card's
+// border, badge and corner glow read from.
+//
+// Every value is read from the frozen analytics layer (lib/analytics.js's
+// aggregateRows()). This file performs NO aggregation of its own — no reduces
+// over raw tips or sessions, no re-derived rates, windows, or percentages.
+// Revenue share is the only arithmetic done here, and it is a presentational
+// ratio of already-canonical platforms[].totalUSD values against their own
+// sum, not a second revenue calculation.
 //
 // Two things this component deliberately does NOT do:
-//   - Recompute "best time." Section 8 reads analytics.canonicalBestTimes
-//     exclusively, filtered to the SAME confidence tiers the engine itself
-//     uses to decide what counts as evidence (never 'insufficient').
-//   - Claim a causal story the data can't support. Section 2/3's findings
-//     are gated on the actual sign of the canonical month-over-month
-//     figures — if the data doesn't support a sentence, the sentence isn't
-//     shown, not replaced with a vaguer one.
+//   - Recompute "best time." The per-platform window is read from
+//     platforms[].bestLocalDay/bestLocalHour/bestWindowConfidence, which the
+//     engine computes with the same canonical best-times logic, and it is
+//     never shown without its confidence tier.
+//   - Hardcode a ranking. Comparison-table highlights and the insight cards
+//     are derived from the current numbers, so they stay true when the data
+//     changes.
 // ═══════════════════════════════════════════════════════════════════════════
-
-const C = {
-  bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45",
-  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B",
-  green: "#10B981", red: "#F87171", white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
-}
-const glassCard = {
-  background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
-}
-const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
-const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
-// C.text, not C.muted — at 12px uppercase on the glass card, #475569 rendered
-// too dim to read comfortably in the first rendered pass. These are the
-// section headings; they carry the page's structure.
-const sectionLabel = { fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.text }
 
 const fmtUsd = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
-const fmtHours = (h) => (h > 0 && h < 10 ? `${h.toFixed(1)}h` : `${Math.round(h || 0)}h`)
+// Hours + minutes, for the one place a card gives streaming time its own line.
+const fmtHoursLong = (h) => {
+  const total = Math.round((Number(h) || 0) * 60)
+  if (total <= 0) return "—"
+  const hrs = Math.floor(total / 60), mins = total % 60
+  return hrs === 0 ? `${mins}m` : mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m`
+}
 const fmtHour = (h) => { const H = ((h % 24) + 24) % 24; return H === 0 ? "12 AM" : H < 12 ? `${H} AM` : H === 12 ? "12 PM" : `${H - 12} PM` }
 const fmtWindow = (h) => `${fmtHour(h)} – ${fmtHour(h + 2)}`
-const fmtMonth = (ym) => { const [y, m] = ym.split("-"); return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" }) }
+
 const DAY_ABBR = { Sunday: "Sun", Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat" }
 const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 const TIER_COPY = { high: "Strong pattern", supported: "Supported pattern", promising: "Early signal" }
 
-function BrandButton({ children, onClick, style }) {
+// One cell of the card's metric inset. Colour is semantic, matching the
+// Command Center's KPI cards exactly: cyan for an hourly rate, gold for
+// sessions, white for plain counts — never colour for decoration.
+function Metric({ label, value, tone }) {
   return (
-    <button onClick={onClick} style={{
-      background: CTA_GRADIENT, border: "none", borderRadius: 12, padding: "13px 24px",
-      fontSize: 14.5, fontWeight: 800, color: "#06101A", cursor: "pointer",
-      boxShadow: "0 0 20px rgba(34,211,238,0.22), 0 0 30px rgba(236,72,153,0.16)", ...style,
-    }}>{children}</button>
-  )
-}
-
-function SnapshotStat({ value, label, accent = C.white }) {
-  return (
-    <div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: accent, letterSpacing: "-0.02em" }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{label}</div>
+    <div className="platform-metric">
+      <span>{label}</span>
+      <strong className={tone === "rate" ? "is-rate" : tone === "muted" ? "is-muted" : undefined}
+        style={tone === "gold" ? { color: "#f5b53d" } : undefined}>{value}</strong>
     </div>
   )
 }
 
-// Two-value comparison bar — same visual language as Command Center's
-// WindowProof, reused rather than re-invented, because it already solves the
-// exact problem Section 8 has: a 24-bar/7-day chart can be dwarfed by one
-// high-outlier bucket, arguing against the very window it's supposed to
-// support. A bounded comparison states only what the data can carry.
-function CompareBars({ title, a, b }) {
-  const max = Math.max(a.value, b.value, 0.01)
+// ── PLATFORM CARD ─────────────────────────────────────────────────────────
+// Primary (revenue, $/hour, streaming time) → secondary (tips, fans, average
+// tip, sessions) → insight (revenue share, best window). Reads canonical
+// fields only; `share` is passed in already computed by the parent so the
+// ratio exists in exactly one place on this page.
+function PlatformCard({ p, share, onViewBreakdown }) {
+  const s = platformIdentity(p.platform)
+  const hasRate = p.hours > 0 && p.usdPerHour > 0
   return (
-    <div>
-      {title && <div style={{ ...sectionLabel, marginBottom: 14 }}>{title}</div>}
-      {[a, b].map((row, i) => (
-        <div key={i} style={{ marginBottom: i === 0 ? 16 : 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-            <span style={{ fontSize: 13, color: i === 0 ? C.white : C.text, fontWeight: i === 0 ? 700 : 500 }}>{row.label}</span>
-            <span style={{ fontSize: 17, fontWeight: 800, color: i === 0 ? C.cyan : C.text }}>{row.display}</span>
-          </div>
-          <div style={{ height: 12, borderRadius: 6, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-            <div style={{ width: `${Math.max((row.value / max) * 100, 3)}%`, height: "100%", borderRadius: 6, background: i === 0 ? CTA_GRADIENT : "rgba(148,163,184,0.35)" }} />
-          </div>
-          {row.sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{row.sub}</div>}
+    <div className="glass-panel platform-card" style={{ "--accent": s.color }}>
+      <div className="platform-card-top">
+        <div className="platform-badge">{s.short}</div>
+        <div>
+          <div className="platform-card-name">{p.platform}</div>
+          <div className="platform-card-sub">Platform performance</div>
         </div>
-      ))}
-    </div>
-  )
-}
-
-const ChartTooltip = ({ active, payload, label, unit }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{ background: "#1e2840", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 13px", fontSize: 12 }}>
-      <div style={{ color: C.muted, marginBottom: 3 }}>{label}</div>
-      <div style={{ color: C.cyan, fontWeight: 700 }}>{unit === "usd" ? fmtUsd(payload[0].value) : `${fmtUsd(payload[0].value)}/hr`}</div>
-    </div>
-  )
-}
-
-// $/hour trend — the one chart this file draws itself, because no existing
-// component has an hourly-rate series. Reads analytics.monthlyData.usdPerHour
-// directly (added to the frozen layer alongside this redesign, same weighted
-// numerator/denominator as the account-wide estimatedHourlyRate — see
-// lib/analytics.js). Months with no rate-eligible sessions (usdPerHour: null)
-// are dropped rather than charted as zero, which would read as a real crash
-// in earnings rather than an absence of data.
-function HourlyRateTrend({ monthlyData }) {
-  const points = useMemo(
-    () => (monthlyData || [])
-      .filter(m => m.usdPerHour != null)
-      .slice(-12)
-      .map(m => ({ month: m.month, label: fmtMonth(m.month), usdPerHour: m.usdPerHour })),
-    [monthlyData]
-  )
-  if (points.length < 2) {
-    return <div style={{ fontSize: 13, color: C.muted, padding: "20px 0" }}>Not enough month-over-month history yet to chart your hourly rate.</div>
-  }
-  const avg = points.reduce((s, p) => s + p.usdPerHour, 0) / points.length
-  return (
-    <div>
-      <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>$ per streamed hour, by month — dashed line is the average across the months shown</div>
-      <div style={{ width: "100%", height: 180 }}>
-        <ResponsiveContainer>
-          <LineChart data={points} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.border }} tickLine={false} />
-            <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => `$${v}`} />
-            <ReferenceLine y={avg} stroke={C.muted} strokeDasharray="4 4" />
-            <Tooltip content={<ChartTooltip unit="rate" />} />
-            <Line type="monotone" dataKey="usdPerHour" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3, fill: C.cyan }} activeDot={{ r: 5 }} />
-          </LineChart>
-        </ResponsiveContainer>
       </div>
+
+      {/* Primary metric — the one number that dominates the card. */}
+      <div className="platform-money">
+        <strong>{fmtUsd(p.totalUSD)}</strong>
+        <span>Total earned</span>
+        {/* Explicit scope: platform totals are meaningful-session-scoped (the
+            same population usdPerHour is built from), so they can sum to less
+            than the account-wide total, which counts every tip. */}
+        <small>in qualifying sessions</small>
+      </div>
+
+      <div className="platform-metrics">
+        <Metric label="Hourly average" value={hasRate ? `${fmtUsd(p.usdPerHour)}/hr` : "Not enough data yet"} tone={hasRate ? "rate" : "muted"} />
+        <Metric label="Streaming time" value={p.hours > 0 ? fmtHoursLong(p.hours) : "Not enough data yet"} tone={p.hours > 0 ? undefined : "muted"} />
+        <Metric label="Tips" value={Number(p.tips || 0).toLocaleString()} />
+        <Metric label="Fans" value={p.uniqueFans != null ? Number(p.uniqueFans).toLocaleString() : "—"} />
+        <Metric label="Average tip" value={p.tips > 0 ? fmtUsd(p.avgTipSize) : "—"} />
+        <Metric label="Sessions" value={Number(p.sessions || 0).toLocaleString()} tone="gold" />
+      </div>
+
+      {share != null && (
+        <div className="platform-share">
+          <div className="platform-share-row">
+            <span>Revenue share</span>
+            <strong>{share.toFixed(1)}%</strong>
+          </div>
+          <div className="platform-share-track">
+            <div className="platform-share-fill" style={{ width: `${Math.max(share, 1.5)}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Best window — never shown without its confidence tier, and never as
+          a blank or zeroed box when the engine has no window for it. */}
+      <div className="platform-window">
+        <span>Best streaming window</span>
+        {p.bestLocalDay != null && p.bestLocalHour != null ? (
+          <>
+            <strong>{p.bestLocalDay}s · {fmtWindow(p.bestLocalHour)}</strong>
+            <small>{TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence} · local time</small>
+          </>
+        ) : (
+          <>
+            <strong>Not enough data yet</strong>
+            <small className="is-empty">Track another session on {p.platform} to unlock this insight.</small>
+          </>
+        )}
+      </div>
+
+      {onViewBreakdown && (
+        <div className="platform-cta">
+          <button onClick={() => onViewBreakdown(p.platform)}>View in Money Map →</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -150,49 +148,22 @@ export default function Performance({
   analytics,
   isPro = false,
   onUpgrade,
-  earningsTrend = null, // pre-rendered <DashboardGrowthCharts/> element — see app/dashboard/page.js. It needs raw tips/sessions for its daily/weekly/hourly-of-day modes, which this analytics-only component never receives.
+  onViewPlatform,  // optional — navigates to the Money Map breakdown; the CTA is hidden when absent
+  earningsTrend = null, // pre-rendered <DashboardGrowthCharts/> element — see app/dashboard/page.js. It needs raw tips/sessions for its daily/weekly/hourly-of-day modes, which this analytics-only component never receives. Rendered LAST, inside the account-wide block: it answers "how am I doing overall", so it must not be the first thing on a per-platform page.
 }) {
-  // ── SNAPSHOT ─────────────────────────────────────────────────────────
-  const totalUSD = analytics?.totalUSD ?? 0
-  const hourlyRate = analytics?.estimatedHourlyRate ?? 0
-  const sessionCount = analytics?.meaningfulSessionCount ?? 0
-  const streamHours = (analytics?.totalStreamMinutes ?? 0) / 60
-  const fanCount = analytics?.uniqueFanCount ?? 0
+  // ── PLATFORMS — canonical, ranked by their own revenue ────────────────
+  const platforms = useMemo(
+    () => [...(analytics?.platforms || [])].sort((a, b) => b.totalUSD - a.totalUSD),
+    [analytics?.platforms]
+  )
 
-  // ── WHAT CHANGED ─────────────────────────────────────────────────────
-  const monthlyData = analytics?.monthlyData || []
-  const curMonth = monthlyData.length ? monthlyData[monthlyData.length - 1] : null
-  const hasChange = !!curMonth && curMonth.prevMonth != null
+  // Revenue share: a presentational ratio of canonical totals against their
+  // own sum. Deliberately NOT analytics.totalUSD as the denominator — that
+  // figure counts tips outside any qualifying session, so shares would not
+  // add to 100% and each card would understate itself.
+  const platformTotal = useMemo(() => platforms.reduce((s, p) => s + (p.totalUSD || 0), 0), [platforms])
+  const shareOf = (p) => (platformTotal > 0 ? (p.totalUSD / platformTotal) * 100 : null)
 
-  const changeSupport = useMemo(() => {
-    if (!hasChange) return null
-    const { growthPct, hoursGrowthPct, usdPerHourGrowthPct } = curMonth
-    if (growthPct == null) return null
-    if (growthPct > 0 && hoursGrowthPct != null && hoursGrowthPct <= 0 && usdPerHourGrowthPct != null && usdPerHourGrowthPct > 0) {
-      return "Most of the improvement came from stronger session efficiency rather than more hours."
-    }
-    if (growthPct > 0 && hoursGrowthPct != null && hoursGrowthPct > 0) {
-      return "The increase tracked with more hours streamed, not a change in your hourly rate."
-    }
-    if (growthPct < 0 && usdPerHourGrowthPct != null && usdPerHourGrowthPct < 0) {
-      return "The decline was driven by a lower rate per hour, not fewer hours streamed."
-    }
-    if (growthPct < 0 && hoursGrowthPct != null && hoursGrowthPct < 0 && usdPerHourGrowthPct != null && usdPerHourGrowthPct >= 0) {
-      return "The decline tracked with fewer hours streamed — your rate per hour held up."
-    }
-    return null
-  }, [hasChange, curMonth])
-
-  // ── WHAT DROVE THE CHANGE ────────────────────────────────────────────
-  const delta = analytics?.latestPlatformDelta || null
-  const canAttribute = !!delta && delta.platforms.length >= 2 && Math.abs(delta.totalDeltaUSD) >= 1
-
-  // ── SESSION PERFORMANCE ──────────────────────────────────────────────
-  const sp = analytics?.sessionPerformance || null
-  const lowSignalCount = analytics?.lowSignalSessionCount ?? 0
-
-  // ── PLATFORM PERFORMANCE ─────────────────────────────────────────────
-  const platforms = useMemo(() => [...(analytics?.platforms || [])].sort((a, b) => b.totalUSD - a.totalUSD), [analytics?.platforms])
   const platformEfficiencyGap = useMemo(() => {
     if (platforms.length < 2) return null
     const sorted = [...platforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
@@ -201,28 +172,24 @@ export default function Performance({
     return { top, bottom, multiple: top.usdPerHour / bottom.usdPerHour }
   }, [platforms])
 
-  // ── MISSED REVENUE — ranked by the measured rate gap, same canonical
-  // module the old Overview card read (lib/analytics/missedRevenue.js).
-  // Rate gap only; no cumulative dollar total is produced or shown here —
-  // that figure was removed account-wide during the analytics freeze as
-  // unsupportable (rate gap x off-window hours implied every off-window
-  // hour could move to a slot that only recurs ~1h/week).
-  const missedByPlatform = useMemo(
-    () => Object.entries(analytics?.missedRevenue?.cumulative_by_platform || {})
-      .map(([platform, m]) => ({ platform, ...m }))
-      .sort((a, b) => b.rateGapUsdPerHour - a.rateGapUsdPerHour),
-    [analytics?.missedRevenue]
-  )
+  // ── WHAT DROVE THE CHANGE — per-platform month-over-month attribution ──
+  const delta = analytics?.latestPlatformDelta || null
+  const canAttribute = !!delta && delta.platforms.length >= 2 && Math.abs(delta.totalDeltaUSD) >= 1
 
-  // ── DAY / TIME ANALYSIS ──────────────────────────────────────────────
+  // ── ACCOUNT-WIDE CONTEXT ──────────────────────────────────────────────
+  // Two evidence blocks that were relocated OUT of the old Overview and have
+  // no other home in the product today: the canonical day-of-week evidence
+  // and the revenue-dependency figure. They are account-wide, not
+  // per-platform, so they sit last and clearly labelled as such rather than
+  // being deleted along with the generic trend charts — if Overview ever
+  // takes them back, this is the block to move.
   const bestWindow = analytics?.canonicalBestTimes?.bestWindow || null
-  const earlySignal = analytics?.canonicalBestTimes?.earlySignal || null
   const grid = analytics?.canonicalBestTimes?.grid || []
   const evidencedGrid = useMemo(() => grid.filter(g => g.tier !== "insufficient"), [grid])
-  // Presentational grouping of the already-canonical grid — sums totalUsd
-  // and sessionCount (real counts/totals, not a recomputed rate) into one
-  // row per day, purely so the reader can see WHERE the evidence sits.
-  // Never re-ranks a "best day" against canonicalBestTimes.bestWindow.
+  // Presentational grouping of the already-canonical grid — sums totalUsd and
+  // sessionCount (real counts/totals, not a recomputed rate) into one row per
+  // day, purely so the reader can see WHERE the evidence sits. Never re-ranks
+  // a "best day" against canonicalBestTimes.bestWindow.
   const byDay = useMemo(() => {
     const map = {}
     evidencedGrid.forEach(g => {
@@ -233,297 +200,350 @@ export default function Performance({
     return DAY_ORDER.filter(d => map[d]).map(d => map[d])
   }, [evidencedGrid])
   const maxDayUsd = Math.max(...byDay.map(d => d.totalUsd), 1)
+  const dep = analytics?.dependencyRisk || null
 
-  // ── KEY FINDINGS ──────────────────────────────────────────────────────
-  const findings = useMemo(() => {
+  // ── MISSED REVENUE — ranked by the measured rate gap, same canonical
+  // module the old Overview card read (lib/analytics/missedRevenue.js).
+  // Rate gap only; no cumulative dollar total is produced or shown here —
+  // that figure was removed account-wide during the analytics freeze as
+  // unsupportable.
+  const missedByPlatform = useMemo(
+    () => Object.entries(analytics?.missedRevenue?.cumulative_by_platform || {})
+      .map(([platform, m]) => ({ platform, ...m }))
+      .sort((a, b) => b.rateGapUsdPerHour - a.rateGapUsdPerHour),
+    [analytics?.missedRevenue]
+  )
+
+  // ── COMPARISON TABLE ──────────────────────────────────────────────────
+  // Rows declare how to read and render each canonical field; the leader of
+  // each row is computed from the current values, never declared by hand, so
+  // the highlighting stays correct as the data changes. Rows whose figure
+  // isn't measurable for a platform render "—" and can't win.
+  const comparisonRows = useMemo(() => ([
+    { label: "Revenue",        get: p => p.totalUSD,   fmt: p => fmtUsd(p.totalUSD),  eligible: p => p.totalUSD > 0 },
+    { label: "$/hour",         get: p => p.usdPerHour, fmt: p => (p.hours > 0 ? `${fmtUsd(p.usdPerHour)}/hr` : "—"), eligible: p => p.hours > 0 && p.usdPerHour > 0 },
+    { label: "Streaming time", get: p => p.hours,      fmt: p => fmtHoursLong(p.hours), eligible: p => p.hours > 0, noLeader: true },
+    { label: "Tips",           get: p => p.tips,       fmt: p => Number(p.tips || 0).toLocaleString(), eligible: p => p.tips > 0, noLeader: true },
+    { label: "Average tip",    get: p => p.avgTipSize, fmt: p => (p.tips > 0 ? fmtUsd(p.avgTipSize) : "—"), eligible: p => p.tips > 0 },
+    { label: "Fans",           get: p => p.uniqueFans, fmt: p => (p.uniqueFans != null ? Number(p.uniqueFans).toLocaleString() : "—"), eligible: p => p.uniqueFans > 0, noLeader: true },
+    { label: "Sessions",       get: p => p.sessions,   fmt: p => Number(p.sessions || 0).toLocaleString(), eligible: p => p.sessions > 0, noLeader: true },
+  ]), [])
+
+  // ── INSIGHTS — generated from the actual numbers, not written by hand ──
+  // Each one is gated on the figure underneath it being measurable, and a
+  // claim is only made where more than one platform exists to compare.
+  const insights = useMemo(() => {
+    if (platforms.length < 2) return []
     const out = []
-    if (sp?.distribution) {
-      const { aboveMedian, belowOrAtMedian } = sp.distribution
-      if (aboveMedian.avgUsdPerHour > 0 && belowOrAtMedian.avgUsdPerHour > 0) {
-        const ratio = Math.round((aboveMedian.avgUsdPerHour / belowOrAtMedian.avgUsdPerHour) * 10) / 10
-        if (ratio >= 1.5) {
-          out.push({
-            what: `Your strongest ${aboveMedian.count} sessions earn ${ratio}x more per hour than your weaker ${belowOrAtMedian.count}`,
-            why: `$${aboveMedian.avgUsdPerHour}/hr vs $${belowOrAtMedian.avgUsdPerHour}/hr — what's different about the strong ones is worth repeating.`,
-          })
-        }
-      }
-    }
-    if (platformEfficiencyGap && platformEfficiencyGap.multiple >= 1.5) {
-      const { top, bottom, multiple } = platformEfficiencyGap
+    const byRevenue = [...platforms].filter(p => p.totalUSD > 0).sort((a, b) => b.totalUSD - a.totalUSD)
+    const byHourly  = [...platforms].filter(p => p.hours > 0 && p.usdPerHour > 0).sort((a, b) => b.usdPerHour - a.usdPerHour)
+    const byAvgTip  = [...platforms].filter(p => p.tips > 0 && p.avgTipSize > 0).sort((a, b) => b.avgTipSize - a.avgTipSize)
+    const byFans    = [...platforms].filter(p => p.uniqueFans > 0).sort((a, b) => b.uniqueFans - a.uniqueFans)
+
+    // The rate line, reused whether it stands alone or folds into the revenue
+    // card — one platform commonly leads both, and two cards naming the same
+    // platform read as a bug rather than as two findings.
+    const rateLine = (top) => (
+      platformEfficiencyGap && platformEfficiencyGap.top.platform === top.platform && platformEfficiencyGap.multiple >= 1.3
+        ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}× what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
+        : `You're averaging ${fmtUsd(top.usdPerHour)}/hr here across ${top.sessions} qualifying session${top.sessions === 1 ? "" : "s"}.`
+    )
+    const revenueLeader = byRevenue[0] || null
+    const hourlyLeader = byHourly[0] || null
+    const leadsBoth = revenueLeader && hourlyLeader && revenueLeader.platform === hourlyLeader.platform
+
+    if (revenueLeader) {
+      const share = shareOf(revenueLeader)
       out.push({
-        what: `${top.platform} earns ${multiple.toFixed(1)}x more per hour than ${bottom.platform}`,
-        why: `${fmtUsd(top.usdPerHour)}/hr vs ${fmtUsd(bottom.usdPerHour)}/hr — shifting time toward ${top.platform} compounds.`,
+        platform: revenueLeader.platform,
+        title: leadsBoth ? "Highest revenue and hourly rate" : "Highest revenue",
+        body: `${fmtUsd(revenueLeader.totalUSD)} in qualifying sessions${share != null ? ` — ${share.toFixed(1)}% of everything you earned across your platforms` : ""}.`
+          + (leadsBoth ? ` It also pays the most per hour: ${rateLine(revenueLeader)}` : ""),
       })
     }
-    const overlap = analytics?.bestWindowFanOverlap
-    if (bestWindow && overlap?.count > 0) {
+    if (hourlyLeader && !leadsBoth) {
       out.push({
-        what: `${overlap.count} of your highest-value supporters overlap with your strongest window`,
-        why: `${fmtUsd0(overlap.totalUSD)} in combined lifetime value shows up specifically in ${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)}.`,
+        platform: hourlyLeader.platform,
+        title: "Highest hourly earnings",
+        body: rateLine(hourlyLeader),
       })
     }
-    const dep = analytics?.dependencyRisk
-    if (dep && dep.level !== "low") {
+    if (byAvgTip.length && byAvgTip[0].platform !== hourlyLeader?.platform) {
+      const top = byAvgTip[0]
       out.push({
-        what: `${dep.top1Pct}% of your revenue comes from a single fan`,
-        why: `If they stop tipping, you'd lose ${fmtUsd0(dep.lossIfTopFanLeaves)} — worth building a second and third relationship to the same size.`,
+        platform: top.platform,
+        title: "Highest average tip",
+        body: `Your average tip is ${fmtUsd(top.avgTipSize)} here, across ${Number(top.tips).toLocaleString()} tips.`,
       })
     }
-    if (bestWindow && bestWindow.tier === "high") {
+    if (byFans.length && byFans[0].platform !== revenueLeader?.platform) {
+      const top = byFans[0]
       out.push({
-        what: `${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)} is a strong, repeatable pattern`,
-        why: `${bestWindow.sessionCount} qualifying sessions back it — this is your most reliable window, not a lucky night.`,
+        platform: top.platform,
+        title: "Largest audience",
+        body: `${Number(top.uniqueFans).toLocaleString()} different supporters tipped you here — more than on any other platform.`,
       })
     }
-    return out.slice(0, 5)
-  }, [sp, platformEfficiencyGap, analytics, bestWindow])
+    return out.slice(0, 4)
+  }, [platforms, platformEfficiencyGap, platformTotal])
+
+  const hasPlatforms = platforms.length > 0
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+    <div className="platforms-page">
 
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>Performance</div>
-        <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5 }}>What happened, and what's behind it.</div>
+      <div className="sessions-header">
+        <div>
+          <div className="sessions-title">PLATFORM PERFORMANCE</div>
+          <div className="sessions-subtitle">See exactly where your money, time, and fans are coming from.</div>
+        </div>
       </div>
 
-      {/* ── 1. SNAPSHOT — compact, not the visual focus ───────────────── */}
-      <div style={{ ...card({ padding: "16px 20px" }), display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 16 }}>
-        <SnapshotStat value={fmtUsd(totalUSD)} label="Total earnings" />
-        <SnapshotStat value={`${fmtUsd(hourlyRate)}/hr`} label="Per hour" accent={C.cyan} />
-        <SnapshotStat value={sessionCount.toLocaleString()} label="Sessions" />
-        <SnapshotStat value={fmtHours(streamHours)} label="Hours" />
-        <SnapshotStat value={fanCount.toLocaleString()} label="Fans" accent={C.indigo} />
-      </div>
-
-      {/* ── 2. WHAT CHANGED ────────────────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>What changed</div>
-        {!hasChange ? (
-          <div style={{ fontSize: 14, color: C.text }}>Not enough month-over-month history yet — this fills in after your second active month.</div>
-        ) : (
-          <>
-            <div style={{ fontSize: 18, fontWeight: 700, color: C.white, lineHeight: 1.5 }}>
-              Earnings {curMonth.growthPct >= 0 ? "increased" : "decreased"}{" "}
-              <span style={{ color: curMonth.growthPct >= 0 ? C.green : C.red }}>{Math.abs(curMonth.growthPct)}%</span>{" "}
-              vs your last active month{fmtMonth(curMonth.prevMonth) ? <> (<span style={{ color: C.text }}>{fmtMonth(curMonth.prevMonth)} → {fmtMonth(curMonth.month)}</span>)</> : null}.
+      {!hasPlatforms ? (
+        <div className="glass-panel platform-panel">
+          <div className="section-label">Your platforms</div>
+          <div className="platform-empty">Import your tip history to see how each of your platforms is performing.</div>
+        </div>
+      ) : (
+        <>
+          {/* ── 1. YOUR PLATFORMS — the first and most important section ── */}
+          <section className="platforms-section">
+            <div className="platforms-section-head">
+              <div>
+                <div className="section-label" style={{ marginBottom: 0 }}>Your platforms</div>
+                <p>Individual performance across every platform you&apos;ve imported.</p>
+              </div>
+              <div className="platforms-section-count">{platforms.length} platform{platforms.length === 1 ? "" : "s"}</div>
             </div>
-            {curMonth.gapMonths > 0 && (
-              <div style={{ fontSize: 12.5, color: C.gold, marginTop: 8, lineHeight: 1.55 }}>
-                ⚠️ There {curMonth.gapMonths === 1 ? "was" : "were"} {curMonth.gapMonths} inactive month{curMonth.gapMonths === 1 ? "" : "s"} between these two — this compares your two most recent ACTIVE months, not consecutive calendar months.
-              </div>
-            )}
-            {changeSupport && <div style={{ fontSize: 13.5, color: C.text, marginTop: 10, lineHeight: 1.6 }}>{changeSupport}</div>}
-          </>
-        )}
-      </div>
 
-      {/* ── 3. WHAT DROVE THE CHANGE ───────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>What drove the change</div>
-        {!canAttribute ? (
-          <div style={{ fontSize: 14, color: C.muted }}>
-            {delta && delta.platforms.length < 2
-              ? "Single-platform account — the change above isn't split across platforms."
-              : "Not enough history to attribute this change."}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {delta.platforms.map((p, i) => (
-              <div key={p.platform} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderRadius: 10, background: i === 0 ? "rgba(34,211,238,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${i === 0 ? "rgba(34,211,238,0.22)" : C.border}` }}>
-                <div style={{ fontSize: 13.5, color: C.white, fontWeight: i === 0 ? 700 : 500 }}>
-                  {i === 0 && (p.deltaUSD >= 0 ? "🔼 " : "🔽 ")}{p.platform}
-                  {i === 0 && <span style={{ color: C.muted, fontWeight: 400 }}> contributed the largest share of the {p.deltaUSD >= 0 ? "increase" : "decrease"}</span>}
-                </div>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: p.deltaUSD >= 0 ? C.green : C.red, whiteSpace: "nowrap" }}>
-                  {p.deltaUSD >= 0 ? "+" : ""}{fmtUsd(p.deltaUSD)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── 4. EARNINGS TREND — DashboardGrowthCharts, rendered by page.js
-             (needs raw tips/sessions this component never receives) ──── */}
-      {earningsTrend && (
-        <div style={card({ padding: 20 })}>
-          <div style={{ ...sectionLabel, marginBottom: 14 }}>Earnings trend</div>
-          {earningsTrend}
-        </div>
-      )}
-
-      {/* ── 5. $/HOUR TREND ────────────────────────────────────────── */}
-      <div style={card({ padding: 20 })}>
-        <div style={{ ...sectionLabel, marginBottom: 6 }}>$/hour trend</div>
-        <HourlyRateTrend monthlyData={monthlyData} />
-      </div>
-
-      {/* ── 6. SESSION PERFORMANCE ─────────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Session performance</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 20 }}>
-          <SnapshotStat value={sessionCount.toLocaleString()} label="Meaningful sessions" />
-          <SnapshotStat value={lowSignalCount.toLocaleString()} label="Low-signal sessions" accent={C.muted} />
-          <SnapshotStat value={fmtUsd(sp?.avgMeaningfulSessionUSD)} label="Avg session earnings" accent={C.cyan} />
-          <SnapshotStat value={sp?.avgMeaningfulSessionMinutes != null ? `${sp.avgMeaningfulSessionMinutes}m` : "—"} label="Avg session length" />
-        </div>
-        {sp?.distribution ? (
-          <CompareBars
-            title="Which kinds of streams actually make you money"
-            a={{ label: `Your ${sp.distribution.aboveMedian.count} strongest sessions`, value: sp.distribution.aboveMedian.avgUsdPerHour, display: `${fmtUsd(sp.distribution.aboveMedian.avgUsdPerHour)}/hr`, sub: "above your own median rate" }}
-            b={{ label: `Your ${sp.distribution.belowOrAtMedian.count} weaker sessions`, value: sp.distribution.belowOrAtMedian.avgUsdPerHour, display: `${fmtUsd(sp.distribution.belowOrAtMedian.avgUsdPerHour)}/hr`, sub: `at or below the $${sp.distribution.medianUsdPerHour}/hr median` }}
-          />
-        ) : (
-          <div style={{ fontSize: 13, color: C.muted }}>Not enough rate-eligible sessions yet for a reliable performance split.</div>
-        )}
-      </div>
-
-      {/* ── 7. PLATFORM PERFORMANCE ────────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Platform performance</div>
-        {platforms.length === 0 ? (
-          <div style={{ fontSize: 13, color: C.muted }}>Import your tip history to see how your platforms compare.</div>
-        ) : (
-          <>
             {platformEfficiencyGap && platformEfficiencyGap.multiple >= 1.3 && (
-              <div style={{ fontSize: 13, color: C.text, marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.18)" }}>
-                <strong style={{ color: C.cyan }}>{platformEfficiencyGap.top.platform}</strong> earns <strong style={{ color: C.cyan }}>{platformEfficiencyGap.multiple.toFixed(1)}x</strong> more per hour than <strong>{platformEfficiencyGap.bottom.platform}</strong> — {fmtUsd(platformEfficiencyGap.top.usdPerHour)}/hr vs {fmtUsd(platformEfficiencyGap.bottom.usdPerHour)}/hr.
+              <div className="platform-lede">
+                <strong className="lede-accent">{platformEfficiencyGap.top.platform}</strong> earns <strong className="lede-multiple">{platformEfficiencyGap.multiple.toFixed(1)}×</strong> more per hour than <strong>{platformEfficiencyGap.bottom.platform}</strong> — {fmtUsd(platformEfficiencyGap.top.usdPerHour)}/hr vs {fmtUsd(platformEfficiencyGap.bottom.usdPerHour)}/hr.
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: platforms.length > 1 ? "repeat(auto-fit, minmax(260px, 1fr))" : "1fr", gap: 14 }}>
-              {platforms.map((p) => (
-                <div key={p.platform} style={{ padding: "16px 18px", borderRadius: 12, background: C.card2, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 14.5, fontWeight: 800, color: C.white, marginBottom: 12 }}>{p.platform}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: C.green }}>{fmtUsd(p.totalUSD)}</div>
-                      {/* Explicit scope: this platform total is meaningful-session-scoped
-                          (the same population p.usdPerHour is built from), which can be
-                          less than the account-wide totalUSD figure above (that one counts
-                          every tip, including ones outside any qualifying session). */}
-                      <div style={{ fontSize: 10.5, color: C.muted }}>in qualifying sessions</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: C.cyan }}>{fmtUsd(p.usdPerHour)}/hr</div>
-                      <div style={{ fontSize: 10.5, color: C.muted }}>hourly rate</div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: C.muted, marginBottom: p.bestLocalDay != null ? 8 : 0 }}>{p.sessions} sessions · {fmtHours(p.hours)} streamed</div>
-                  {p.bestLocalDay != null && p.bestLocalHour != null && (
-                    <div style={{ fontSize: 11.5, padding: "5px 9px", borderRadius: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.24)", color: C.gold, display: "inline-block" }}>
-                      Best: {p.bestLocalDay}s {fmtHour(p.bestLocalHour)}{p.bestWindowConfidence && p.bestWindowConfidence !== "high" ? ` (${TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence})` : ""}
-                    </div>
-                  )}
-                </div>
+
+            <div className="platform-grid" style={platforms.length === 1 ? { gridTemplateColumns: "1fr" } : undefined}>
+              {platforms.map(p => (
+                <PlatformCard key={p.platform} p={p} share={shareOf(p)} onViewBreakdown={onViewPlatform} />
               ))}
             </div>
-          </>
-        )}
-      </div>
+          </section>
 
-      {/* ── 8. DAY / TIME ANALYSIS ─────────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>When did you perform best</div>
-        {bestWindow ? (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{bestWindow.localDay}s · {fmtWindow(bestWindow.localHour)}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "3px 10px", borderRadius: 20 }}>
-                {TIER_COPY[bestWindow.tier] || bestWindow.tier}
-              </span>
-            </div>
-            <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 18 }}>{bestWindow.sessionCount} qualifying sessions · local time</div>
-            <CompareBars
-              a={{ label: `${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)}`, value: bestWindow.medianUsdPerHour, display: `${fmtUsd(bestWindow.medianUsdPerHour)}/hr` }}
-              b={{ label: "Your overall rate", value: hourlyRate, display: `${fmtUsd(hourlyRate)}/hr`, sub: "estimated across every qualifying session" }}
-            />
-          </>
-        ) : earlySignal ? (
-          <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>
-            {earlySignal.localDay}s around {fmtHour(earlySignal.localHour)} is your strongest signal so far, but only {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} back it up — not yet enough to call a best window.
-          </div>
-        ) : (
-          <div style={{ fontSize: 13.5, color: C.muted }}>Not enough qualifying sessions yet to identify a best window.</div>
-        )}
-
-        {byDay.length > 1 && (
-          <div style={{ marginTop: 22 }}>
-            {/* EXPLICIT UNIT + EXPLICIT RECONCILIATION. These bars are TOTAL $
-                earned per day; bestWindow above is ranked by MEDIAN $/hour.
-                Those answer different questions, so the longest bar is often
-                NOT the best window — a reader seeing them side by side without
-                this sentence would reasonably read the chart as contradicting
-                the headline. Stating the difference is the honest fix; making
-                the chart agree by re-ranking it would mean inventing a second
-                best-time calculation, which canonical-analytics-rules.md
-                forbids. */}
-            <div style={{ fontSize: 11.5, color: C.text, marginBottom: 4 }}>Total earned by day of week</div>
-            <div style={{ fontSize: 11.5, color: C.text, marginBottom: 12, lineHeight: 1.55, maxWidth: 620, opacity: 0.85 }}>
-              Total dollars, not hourly rate — so your biggest bar isn&apos;t always your best window. Your best window above is the one with the highest median <strong style={{ color: C.white }}>$/hour</strong>, which is what actually repeats. Days with too few sessions to trust are left out.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {byDay.map(d => (
-                <div key={d.day} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 38, fontSize: 11.5, color: C.text, flexShrink: 0 }}>{DAY_ABBR[d.day]}</div>
-                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
-                    <div style={{ width: `${Math.max((d.totalUsd / maxDayUsd) * 100, 3)}%`, height: "100%", borderRadius: 4, background: d.day === bestWindow?.localDay ? CTA_GRADIENT : "rgba(148,163,184,0.35)" }} />
-                  </div>
-                  <div style={{ width: 60, fontSize: 11.5, color: C.muted, textAlign: "right", flexShrink: 0 }}>{fmtUsd0(d.totalUsd)}</div>
+          {/* ── 2. REVENUE DISTRIBUTION ─────────────────────────────── */}
+          {platforms.length > 1 && (
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Revenue distribution</div>
+                  <p>How your earnings split across platforms.</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {missedByPlatform.length > 0 && (
-          <div style={{ marginTop: 22 }}>
-            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 10 }}>Where you're leaving money on the table — measured rate gap vs your typical hour on that platform</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {missedByPlatform.map((m, i) => (
-                <div key={m.platform} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderRadius: 10, background: "rgba(251,146,60,0.06)", border: "1px solid rgba(251,146,60,0.2)" }}>
-                  <div style={{ fontSize: 12.5, color: C.white, minWidth: 0 }}>
-                    {m.platform} — {m.bestLocalDay}s {fmtHour(m.bestLocalHour)} earns <strong style={{ color: C.green }}>{fmtUsd(m.bestWindowMedianUsdPerHour)}/hr</strong> vs <strong>{fmtUsd(m.overallMedianUsdPerHour)}/hr</strong> typical
-                  </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, whiteSpace: "nowrap" }}>+{fmtUsd(m.rateGapUsdPerHour)}/hr gap</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── 9. KEY FINDINGS ────────────────────────────────────────── */}
-      {findings.length > 0 && (
-        <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 14 }}>Key findings</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {findings.map((f, i) => (
-              <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.45 }}>{f.what}</div>
-                <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>{f.why}</div>
+                <div className="platform-panel-total">{fmtUsd(platformTotal)} total</div>
               </div>
-            ))}
+              <div className="platform-dist-rows">
+                {platforms.map(p => {
+                  const share = shareOf(p) ?? 0
+                  return (
+                    <div key={p.platform}>
+                      <div className="platform-dist-row-top">
+                        <span>{p.platform}</span>
+                        <strong>{share.toFixed(1)}% · {fmtUsd0(p.totalUSD)}</strong>
+                      </div>
+                      <div className="platform-dist-track">
+                        <div className="platform-dist-fill" style={{ width: `${Math.max(share, 1.5)}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── 3. PLATFORM COMPARISON ──────────────────────────────── */}
+          {platforms.length > 1 && (
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Platform comparison</div>
+                  <p>Every figure measured over the same qualifying sessions. Highlights are calculated from these numbers, not fixed rankings.</p>
+                </div>
+              </div>
+              <div className="session-table-wrap">
+                <table className="platform-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      {platforms.map(p => {
+                        const s = platformIdentity(p.platform)
+                        return <th key={p.platform} title={p.platform} style={{ color: s.color }}>{s.short}</th>
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparisonRows.map(row => {
+                      const eligible = platforms.filter(row.eligible)
+                      const leader = !row.noLeader && eligible.length > 1
+                        ? [...eligible].sort((a, b) => row.get(b) - row.get(a))[0]
+                        : null
+                      return (
+                        <tr key={row.label}>
+                          <td>{row.label}</td>
+                          {platforms.map(p => (
+                            <td key={p.platform} className={leader && leader.platform === p.platform ? "is-leader" : undefined}>
+                              {row.fmt(p)}
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="platform-table-note">
+                Green marks the leading platform on rates and totals where more than one platform is measurable. Hours, tips, fans and sessions are volume, not performance, so they aren&apos;t ranked.
+              </div>
+            </div>
+          )}
+
+          {/* ── 4. WHAT DROVE THE CHANGE — per-platform attribution ───
+                 Always rendered, never silently dropped: a section that
+                 vanishes reads as a bug, and the two reasons it can be
+                 empty (a single-platform account vs. not enough history)
+                 are different facts the reader deserves to be told apart. */}
+          <div className="glass-panel platform-panel">
+            <div className="platform-panel-head">
+              <div>
+                <div className="section-label" style={{ marginBottom: 0 }}>What drove the change</div>
+                <p>Month-over-month movement, split by platform.</p>
+              </div>
+            </div>
+            {!canAttribute ? (
+              <div className="platform-empty">
+                {delta && delta.platforms.length < 2
+                  ? "Single-platform account — your month-over-month change isn't split across platforms."
+                  : "Not enough history to attribute this change."}
+              </div>
+            ) : (
+              <div>
+                {delta.platforms.map((p, i) => (
+                  <div key={p.platform} className={`platform-delta-row${i === 0 ? " is-lead" : ""}`}>
+                    <div>
+                      {i === 0 && (p.deltaUSD >= 0 ? "🔼 " : "🔽 ")}{p.platform}
+                      {i === 0 && <em> contributed the largest share of the {p.deltaUSD >= 0 ? "increase" : "decrease"}</em>}
+                    </div>
+                    <strong className={p.deltaUSD >= 0 ? "platform-delta-up" : "platform-delta-down"}>
+                      {p.deltaUSD >= 0 ? "+" : ""}{fmtUsd(p.deltaUSD)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+
+          {/* ── 5. WHERE YOU'RE LEAVING MONEY — per-platform rate gap ── */}
+          {missedByPlatform.length > 0 && (
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Where you&apos;re leaving money on the table</div>
+                  <p>Measured rate gap between each platform&apos;s best window and a typical hour on it.</p>
+                </div>
+              </div>
+              <div>
+                {missedByPlatform.map(m => (
+                  <div key={m.platform} className="platform-gap-row">
+                    <div>
+                      {m.platform} — {m.bestLocalDay}s {fmtHour(m.bestLocalHour)} earns <strong style={{ color: "#21d99a" }}>{fmtUsd(m.bestWindowMedianUsdPerHour)}/hr</strong> vs <strong style={{ color: "#f4f7ff" }}>{fmtUsd(m.overallMedianUsdPerHour)}/hr</strong> typical
+                    </div>
+                    <strong className="gap-figure">+{fmtUsd(m.rateGapUsdPerHour)}/hr gap</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── 6. WHAT YOUR DATA SAYS ──────────────────────────────── */}
+          {insights.length > 0 && (
+            <div className="glass-panel platform-panel">
+              <div className="section-label">What your data says</div>
+              {/* One platform commonly leads everything, and the dedupe above
+                  then leaves a single insight — which looked like a broken
+                  half-empty panel in a two-column grid. One card spans. */}
+              <div className="platform-insight-grid" style={insights.length === 1 ? { gridTemplateColumns: "1fr" } : undefined}>
+                {insights.map((ins, i) => (
+                  <div key={i} className="platform-insight" style={{ "--accent": platformIdentity(ins.platform).color }}>
+                    <span>{ins.platform}</span>
+                    <strong>{ins.title}</strong>
+                    <p>{ins.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── 7. ACCOUNT-WIDE CONTEXT — explicitly not per-platform ─ */}
+          {(byDay.length > 1 || (dep && dep.level !== "low") || earningsTrend) && (
+            <div className="glass-panel platform-panel">
+              <div className="platform-panel-head">
+                <div>
+                  <div className="section-label" style={{ marginBottom: 0 }}>Account-wide context</div>
+                  <p>Across every platform combined — not a per-platform figure.</p>
+                </div>
+              </div>
+
+              {byDay.length > 1 && (
+                <div>
+                  {/* EXPLICIT UNIT + EXPLICIT RECONCILIATION. These bars are
+                      TOTAL $ earned per day; the canonical best window is
+                      ranked by MEDIAN $/hour. Those answer different
+                      questions, so the longest bar is often NOT the best
+                      window — a reader seeing them side by side without this
+                      sentence would reasonably read the chart as contradicting
+                      the headline. Stating the difference is the honest fix;
+                      making the chart agree by re-ranking it would mean
+                      inventing a second best-time calculation, which
+                      canonical-analytics-rules.md forbids. */}
+                  <div className="platform-share-row"><span>Total earned by day of week</span></div>
+                  <div className="platform-day-note">
+                    Total dollars, not hourly rate — so your biggest bar isn&apos;t always your best window. Your best window is the one with the highest median <strong style={{ color: "#f4f7ff" }}>$/hour</strong>, which is what actually repeats. Days with too few sessions to trust are left out.
+                  </div>
+                  {byDay.map(d => (
+                    <div key={d.day} className="platform-day-row">
+                      <span>{DAY_ABBR[d.day]}</span>
+                      <div className="platform-day-track">
+                        <div className={`platform-day-fill${d.day === bestWindow?.localDay ? " is-best" : ""}`} style={{ width: `${Math.max((d.totalUsd / maxDayUsd) * 100, 3)}%` }} />
+                      </div>
+                      <strong>{fmtUsd0(d.totalUsd)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {earningsTrend && (
+                <div style={{ marginTop: 22 }}>
+                  <div className="platform-share-row"><span>Earnings trend, all platforms combined</span></div>
+                  <div style={{ marginTop: 10 }}>{earningsTrend}</div>
+                </div>
+              )}
+
+              {dep && dep.level !== "low" && (
+                <div className="platform-dependency">
+                  <strong>{dep.top1Pct}% of your revenue comes from a single fan</strong>
+                  <p>If they stopped tipping you&apos;d lose {fmtUsd0(dep.lossIfTopFanLeaves)} — worth building a second and third relationship to the same size.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {/* ── 10. PRO STRATEGY ───────────────────────────────────────── */}
-      {!isPro && (bestWindow || platforms.length > 0) && (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap",
-          padding: "20px 24px", borderRadius: 16,
-          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(124,92,255,0.26)",
-        }}>
-          <div style={{ minWidth: 260, flex: 1 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 800, color: C.white }}>Want to turn this history into a strategy?</div>
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 6, lineHeight: 1.6 }}>
-              Pro connects your best windows, platform performance, high-value fan timing, and a forecast into one personalized weekly schedule — not just more exact numbers.
-            </div>
+      {/* ── PRO STRATEGY ───────────────────────────────────────────── */}
+      {!isPro && hasPlatforms && (
+        <div className="platform-pro">
+          <div className="platform-pro-copy">
+            <strong>Want to turn this into a schedule?</strong>
+            <p>Pro connects your platform performance, best windows, high-value fan timing, and a forecast into one personalized weekly plan — not just more exact numbers.</p>
           </div>
-          <BrandButton onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</BrandButton>
+          <button className="gradient-button" onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</button>
         </div>
       )}
     </div>

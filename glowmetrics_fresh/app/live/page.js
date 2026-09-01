@@ -11,6 +11,7 @@ import { computeCanonicalBestTimes } from '../../lib/analytics/bestTimes';
 import { resolveCreatorTimezone } from '../../lib/timezone';
 import { toLocalHour } from '../../lib/analytics/localTime';
 import { tokenRate } from '../../lib/constants';
+import { CAM_PLATFORMS } from '../../lib/platforms';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
@@ -50,6 +51,15 @@ export default function LivePage({ embedded = false } = {}) {
   // server-persisted engine (GET /api/live/coaching) — never computed
   // locally. null when nothing is currently active.
   const [coachingPrompt, setCoachingPrompt] = useState(null);
+  // The session's full prompt history, from GET /api/live/coaching/feed.
+  // Separate from coachingPrompt (the single active "do this now" card) so
+  // the 15s poll stays cheap.
+  const [coachingFeed, setCoachingFeed] = useState([]);
+  const [coachingSummary, setCoachingSummary] = useState(null);
+  // Ids the creator has cleared from her view. Held client-side on purpose:
+  // clearing tidies the feed, it must NOT delete coaching_events rows, which
+  // are the record the earnings comparison and Session Replay are built from.
+  const [clearedPromptIds, setClearedPromptIds] = useState(() => new Set());
   const [livePlatform, setLivePlatform] = useState('Chaturbate');
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
@@ -431,8 +441,19 @@ export default function LivePage({ embedded = false } = {}) {
         setCoachingPrompt(prompt);
       } catch (_) { /* one failed poll is never surfaced — the next tick retries */ }
     };
+    const fetchFeed = async () => {
+      try {
+        const res = await fetch('/api/live/coaching/feed', { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setCoachingFeed(data.feed || []);
+        setCoachingSummary(data.summary || null);
+      } catch (_) { /* one failed poll is never surfaced */ }
+    };
     fetchPrompt();
-    const id = setInterval(fetchPrompt, 15000);
+    fetchFeed();
+    const id = setInterval(() => { fetchPrompt(); fetchFeed(); }, 15000);
     return () => { cancelled = true; clearInterval(id); };
   }, [engine.serverSession?.id]);
 
@@ -499,6 +520,32 @@ export default function LivePage({ embedded = false } = {}) {
       setCoachingPrompt(previous);
     }
   };
+
+  // Mark any prompt in the feed, not only the active one. Shares the same
+  // endpoint as respondToCoachingPrompt so both surfaces write status the
+  // one way; the feed is refetched after so the earnings window appears once
+  // the server considers it complete.
+  const respondToFeedPrompt = async (eventId, status) => {
+    setCoachingFeed(prev => prev.map(f => (f.id === eventId ? { ...f, action_status: status } : f)));
+    try {
+      const res = await fetch('/api/live/coaching/respond', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId, status }),
+      });
+      if (!res.ok) return;
+      const feedRes = await fetch('/api/live/coaching/feed', { cache: 'no-store' });
+      if (!feedRes.ok) return;
+      const data = await feedRes.json();
+      setCoachingFeed(data.feed || []);
+      setCoachingSummary(data.summary || null);
+    } catch (_) { /* the next poll reconciles */ }
+  };
+
+  const clearCoachingFeed = () => {
+    setClearedPromptIds(new Set(coachingFeed.map(f => f.id)));
+  };
+
+  const visibleCoachingFeed = coachingFeed.filter(f => !clearedPromptIds.has(f.id));
 
   // ── DEMO SIMULATION ──────────────────────────────────────────────────
   const DEMO_TIPPERS = [
@@ -964,7 +1011,7 @@ export default function LivePage({ embedded = false } = {}) {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
-              {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => <option key={p} value={p}>{p}</option>)}
+              {CAM_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input type="number" value={liveGoalTokens || ''} onChange={e => {
               const next = Math.max(0, Number(e.target.value) || 0);
@@ -1322,6 +1369,104 @@ export default function LivePage({ embedded = false } = {}) {
                 </div>
               );
             })()}
+
+            {/* ── COACHING FEED ─────────────────────────────────────
+                 Scrollable history of this session's prompts. Each row can be
+                 marked performed or skipped after the fact, and a performed
+                 prompt shows what the room actually did in the 15 minutes
+                 after it — as an observation, never as attribution. ── */}
+            {liveActive && (
+              <div className="cc-card" style={{ ...glassCard, borderRadius: 16, padding: '20px 22px', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>🎯 Coaching Feed</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                      {coachingSummary && coachingSummary.total > 0
+                        ? `${coachingSummary.performed} performed · ${coachingSummary.skipped} skipped${coachingSummary.follow_through_pct !== null ? ` · ${coachingSummary.follow_through_pct}% follow-through` : ''}`
+                        : 'Prompts from this session appear here'}
+                    </div>
+                  </div>
+                  {visibleCoachingFeed.length > 0 && (
+                    <button onClick={clearCoachingFeed}
+                      style={{ padding: '5px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+                      title="Hides these from your view. Your coaching history is kept.">
+                      Clear feed
+                    </button>
+                  )}
+                </div>
+
+                {visibleCoachingFeed.length === 0 ? (
+                  <div style={{ fontSize: 12, color: C.muted, padding: '10px 0' }}>
+                    {coachingFeed.length > 0 ? 'Feed cleared. New prompts will appear here.' : 'No coaching prompts yet this session.'}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 340, overflowY: 'auto', paddingRight: 4 }}>
+                    {visibleCoachingFeed.map(f => {
+                      const mins = Math.floor((f.session_timestamp || 0) / 60);
+                      const done = f.action_status === 'performed';
+                      const skip = f.action_status === 'skipped';
+                      return (
+                        <div key={f.id} style={{
+                          padding: '11px 13px', borderRadius: 10,
+                          background: done ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${done ? 'rgba(16,185,129,0.22)' : 'rgba(255,255,255,0.07)'}`,
+                          opacity: skip ? 0.55 : 1,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>{TRIGGER_ICON[f.type] || 'ℹ️'}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, color: C.white, fontWeight: 600, lineHeight: 1.45 }}>
+                                {f.compact_message || f.title}
+                              </div>
+                              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{mins} min into session</div>
+                            </div>
+                            {f.action_status === 'unmarked' ? (
+                              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                <button onClick={() => respondToFeedPrompt(f.id, 'performed')}
+                                  style={{ padding: '4px 10px', borderRadius: 7, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>✓ Did it</button>
+                                <button onClick={() => respondToFeedPrompt(f.id, 'skipped')}
+                                  style={{ padding: '4px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Skip</button>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 10.5, fontWeight: 800, flexShrink: 0, color: done ? C.green : C.muted }}>
+                                {done ? '✓ Performed' : '↩ Skipped'}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Observed, not attributed — the wording says what
+                              happened, never that the prompt caused it. */}
+                          {f.earnings && (
+                            <div style={{ marginTop: 9, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 11, color: C.muted, lineHeight: 1.55 }}>
+                              After you did this: <span style={{ color: C.green, fontWeight: 700 }}>${f.earnings.after_usd.toFixed(2)}</span> in the next {f.earnings.window_minutes} min
+                              {' · '}before: ${f.earnings.before_usd.toFixed(2)}
+                              {f.earnings.vs_session_avg !== null && (
+                                <> {' · '}<span style={{ color: f.earnings.vs_session_avg >= 1 ? C.green : C.muted }}>
+                                  {f.earnings.vs_session_avg.toFixed(1)}x your session average
+                                </span></>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {coachingSummary && coachingSummary.measured_count > 0 && (
+                  <div style={{ marginTop: 12, paddingTop: 11, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ fontSize: 11, color: C.text, lineHeight: 1.6 }}>
+                      Across {coachingSummary.measured_count} performed prompt{coachingSummary.measured_count === 1 ? '' : 's'}, the {coachingSummary.window_minutes} minutes after averaged{' '}
+                      <span style={{ color: C.green, fontWeight: 700 }}>${coachingSummary.avg_after_usd.toFixed(2)}</span>, against{' '}
+                      ${coachingSummary.avg_before_usd.toFixed(2)} before and a session average of ${coachingSummary.session_avg_per_window_usd.toFixed(2)} per {coachingSummary.window_minutes} min.
+                    </div>
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
+                      These are observed totals either side of each prompt, not proof the prompt caused the change — coaching tends to fire when a room is already moving.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── MAIN GRID ─────────────────────────────────────────── */}
             <div className="cc-live-split" style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>

@@ -117,8 +117,12 @@ const avg = (arr) => arr.length ? arr.reduce((s, x) => s + (x.totalUSD || 0), 0)
   check('hardcoded "could 2x your earnings" claim removed', !dashboard.includes('could 2x your earnings'))
   // The surrounding advice should survive — the fix removes the invented
   // number, not the actionable recommendation.
+  // The advice moved out of page.js when the session tabs became Sessions.js:
+  // it is now produced by the canonical engine (lib/analytics/session-insights.js)
+  // and rendered from there. Checked where it lives, not where it used to.
+  const sessionInsights = readFileSync(new URL('../lib/analytics/session-insights.js', import.meta.url), 'utf8')
   check('short-session recommendation still present (advice kept, number dropped)',
-    dashboard.includes('Try extending to 45–60 min'))
+    sessionInsights.includes('Try extending to 45–60 min') || dashboard.includes('Try extending to 45–60 min'))
 }
 
 // ══════════════════════════════════════════════════════════════════════
