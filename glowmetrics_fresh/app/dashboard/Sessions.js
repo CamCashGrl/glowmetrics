@@ -10,6 +10,9 @@ const TYPE_META = {
   live: { label: "Live Mode", icon: "🔴", color: "#FB923C" },
   paid: { label: "Paid / Private", icon: "💎", color: "#A855F7" },
 }
+// Keyed by paid_sessions.session_type, matching PrivateSessions.js so the
+// same session type is the same colour wherever it is shown.
+const PAID_TYPE_COLORS = { "Private Chat": "#22d3ee", "Full-Private Chat": "#a855f7", "Group Chat": "#f59e0b", "Spy Mode": "#f472b6" }
 const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
 const RANGES = [{ id: "7d", label: "7D", days: 7 }, { id: "30d", label: "30D", days: 30 }, { id: "90d", label: "90D", days: 90 }, { id: "all", label: "ALL", days: null }]
 const TYPES = [{ id: "all", label: "All Sessions" }, { id: "free", label: "Free Chat" }, { id: "live", label: "Live Mode" }, { id: "paid", label: "Paid Session" }]
@@ -47,12 +50,15 @@ function QualityBadge({ perf }) {
 }
 
 // ── Recent session intelligence card — the primary experience ───────────
-function RecentCard({ row, onOpen }) {
+function RecentCard({ row, onOpen, comparablePopulation = [], timezone = "UTC" }) {
   const { type, session: s } = row
   const meta = TYPE_META[type]
   const revenue = rowRevenue(type, s)
   const usdPerHr = rowUsdPerHr(type, s)
-  const bd = type === "free" ? getSessionBreakdown(s, []) : null
+  // Passing [] here left allAvg at 0, so performance fell through to
+  // "average" for every session and the quality badge on this card — the
+  // primary experience — was a fixed label rather than a real verdict.
+  const bd = type === "free" ? getSessionBreakdown(s, comparablePopulation, timezone) : null
   const perf = bd?.performance
 
   let whatWorked = null, whoDrove = [], opportunity = null
@@ -146,6 +152,12 @@ export default function Sessions({
   const [drawerRow, setDrawerRow] = useState(null)
   const PAGE_SIZE = 10
 
+  // Meaningful sessions are the canonical population for rates and averages.
+  // This used to silently fall back to `sessions` (which still includes
+  // low-signal ones) whenever there were no meaningful sessions, changing
+  // what every KPI below measured with no change to any label. The fallback
+  // is kept so a new creator still sees her data, but it is now surfaced.
+  const usingFallbackPopulation = meaningfulSessions.length === 0 && sessions.length > 0
   const freeBase = meaningfulSessions.length > 0 ? meaningfulSessions : sessions
   const cutoff = cutoffFor(range)
   const inRange = (type, s) => {
@@ -178,9 +190,23 @@ export default function Sessions({
     const totalRevenue = visible.reduce((a, r) => a + rowRevenue(r.type, r.session), 0)
     const timedRevenue = timed.reduce((a, r) => a + rowRevenue(r.type, r.session), 0)
     const avgPerHr = totalMins > 0 ? timedRevenue / (totalMins / 60) : null
-    const avgSession = totalSessions > 0 ? totalRevenue / totalSessions : null
+
+    // A free/live row is a STREAM; a paid row is one booking (a single
+    // private, group or spy view). Averaging revenue across both divided a
+    // mixed total by a mixed count, so a creator with many small spy views
+    // saw her "avg session" collapse even when her streams were unchanged.
+    // Averaged over streams only, and the counts are surfaced separately.
+    const streams = visible.filter(r => r.type !== "paid")
+    const paidBookings = totalSessions - streams.length
+    const streamRevenue = streams.reduce((a, r) => a + rowRevenue(r.type, r.session), 0)
+    const avgSession = streams.length > 0 ? streamRevenue / streams.length : null
+
     const best = [...visible].sort((a, b) => rowRevenue(b.type, b.session) - rowRevenue(a.type, a.session))[0] || null
-    return { totalSessions, totalHours: totalMins / 60, totalRevenue, avgPerHr, avgSession, best }
+    return {
+      totalSessions, streamCount: streams.length, paidBookings,
+      totalHours: totalMins / 60, totalRevenue, avgPerHr, avgSession, best,
+      untimedCount: totalSessions - timed.length,
+    }
   }, [visible])
 
   const recent = useMemo(() => [...visible].sort((a, b) => new Date(rowDate(b.type, b.session)) - new Date(rowDate(a.type, a.session))).slice(0, 4), [visible])
@@ -243,18 +269,80 @@ export default function Sessions({
         </div>
       ) : (
         <>
+          {usingFallbackPopulation && (
+            <div className="insight-line" style={{ marginBottom: 12, color: "#ffc43d" }}>
+              ⚠ No sessions meet the meaningful-session threshold yet, so these figures include low-signal sessions. Treat them as an early signal.
+            </div>
+          )}
+
           <div className="session-kpis">
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Total Sessions</div><div className="session-kpi-value">{summary.totalSessions}</div></div>
+            <div className="glass-panel session-kpi">
+              <div className="session-kpi-label">Total Sessions</div>
+              <div className="session-kpi-value">{summary.totalSessions}</div>
+              <div className="session-kpi-sub">{summary.streamCount} stream{summary.streamCount === 1 ? "" : "s"}{summary.paidBookings > 0 ? ` · ${summary.paidBookings} paid booking${summary.paidBookings === 1 ? "" : "s"}` : ""}</div>
+            </div>
             <div className="glass-panel session-kpi"><div className="session-kpi-label">Stream Time</div><div className="session-kpi-value" style={{ color: "#22D3EE" }}>{fmtHrs(summary.totalHours)}</div></div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Total Revenue</div><div className="session-kpi-value" style={{ color: "#21d99a" }}>{fmtUsd0(summary.totalRevenue)}</div></div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Avg $/hr</div><div className="session-kpi-value" style={{ color: "#ffc43d" }}>{summary.avgPerHr != null ? fmtUsd(summary.avgPerHr) : "—"}</div></div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Avg Session</div><div className="session-kpi-value" style={{ color: "#EC4899" }}>{summary.avgSession != null ? fmtUsd(summary.avgSession) : "—"}</div></div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Best Session</div><div className="session-kpi-value" style={{ color: "#A855F7" }}>{summary.best ? fmtUsd(rowRevenue(summary.best.type, summary.best.session)) : "—"}</div></div>
+            <div className="glass-panel session-kpi"><div className="session-kpi-label">Total Revenue</div><div className="session-kpi-value" style={{ color: "#21d99a" }}>{fmtUsd0(summary.totalRevenue)}</div><div className="session-kpi-sub">All streams and paid bookings</div></div>
+            <div className="glass-panel session-kpi">
+              <div className="session-kpi-label">Avg $/hr</div>
+              <div className="session-kpi-value" style={{ color: "#ffc43d" }}>{summary.avgPerHr != null ? fmtUsd(summary.avgPerHr) : "—"}</div>
+              {/* Paid bookings carry no duration, so they are outside this rate
+                  entirely while still counting toward Total Revenue above. */}
+              <div className="session-kpi-sub">{summary.untimedCount > 0 ? `Timed sessions only · ${summary.untimedCount} excluded` : "Timed sessions only"}</div>
+            </div>
+            <div className="glass-panel session-kpi"><div className="session-kpi-label">Avg Session</div><div className="session-kpi-value" style={{ color: "#EC4899" }}>{summary.avgSession != null ? fmtUsd(summary.avgSession) : "—"}</div><div className="session-kpi-sub">Streams only</div></div>
+            <div className="glass-panel session-kpi"><div className="session-kpi-label">Best Session</div><div className="session-kpi-value" style={{ color: "#A855F7" }}>{summary.best ? fmtUsd(rowRevenue(summary.best.type, summary.best.session)) : "—"}</div><div className="session-kpi-sub">{summary.best ? TYPE_META[summary.best.type].label : "—"}</div></div>
           </div>
+
+          {/* ── EARNINGS BREAKDOWN — free chat vs Live Mode vs each paid
+                 session type. Everything here is rendered from figures that
+                 are already computed (typePerf, paidStats.sessionTypeBreakdown);
+                 no revenue is re-derived. ── */}
+          {(() => {
+            const rows = [
+              { key: "free", label: "Free Chat", color: TYPE_META.free.color, usd: typePerf.free.revenue, count: typePerf.free.count, note: "Public tips in open chat" },
+              { key: "live", label: "Live Mode", color: TYPE_META.live.color, usd: typePerf.live.revenue, count: typePerf.live.count, note: "Earned during a tracked Live Mode stream" },
+              ...(paidStats?.sessionTypeBreakdown || []).map(t => ({
+                key: `paid:${t.type}`, label: t.type, color: PAID_TYPE_COLORS[t.type] || TYPE_META.paid.color,
+                usd: t.usd, count: t.count, note: `${t.clients} client${t.clients === 1 ? "" : "s"}`,
+              })),
+            ].filter(r => r.usd > 0)
+            const total = rows.reduce((a, r) => a + r.usd, 0)
+            if (!rows.length || total <= 0) return null
+            const withPct = rows.map(r => ({ ...r, pct: (r.usd / total) * 100 })).sort((a, b) => b.usd - a.usd)
+            return (
+              <div className="glass-panel" style={{ padding: 20, marginTop: 22 }}>
+                <div className="section-label">💰 Where your money came from</div>
+                <div style={{ display: "flex", height: 30, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 16 }}>
+                  {withPct.map(r => (
+                    <div key={r.key} title={`${r.label}: ${fmtUsd(r.usd)} (${r.pct.toFixed(1)}%)`}
+                      style={{ width: `${r.pct}%`, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.35s" }}>
+                      {r.pct >= 11 && <span style={{ fontSize: 10, fontWeight: 800, color: "rgba(8,12,24,0.85)" }}>{Math.round(r.pct)}%</span>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+                  {withPct.map(r => (
+                    <div key={r.key}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 4, background: r.color, flexShrink: 0 }} />
+                        <span className="session-kpi-label" style={{ marginBottom: 0 }}>{r.label}</span>
+                      </div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: r.color }}>{fmtUsd(r.usd)}</div>
+                      <div className="session-kpi-sub">{Math.round(r.pct)}% · {r.count} session{r.count === 1 ? "" : "s"}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10.5, color: "#687696", marginTop: 12, lineHeight: 1.5 }}>
+                  Free chat, Live Mode and paid sessions are stored separately and each counted once — these add up, they never overlap.
+                </div>
+              </div>
+            )
+          })()}
 
           <div className="section-label">✨ Recent Session Intelligence</div>
           <div className="recent-session-grid">
-            {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} />)}
+            {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} comparablePopulation={filteredFree} timezone={timezone} />)}
           </div>
 
           {trendData.length > 1 && (
@@ -343,7 +431,7 @@ export default function Sessions({
               </div>
               {pageRows.map((r, i) => {
                 const meta = TYPE_META[r.type]
-                const bd = r.type === "free" ? getSessionBreakdown(r.session, filteredFree) : null
+                const bd = r.type === "free" ? getSessionBreakdown(r.session, filteredFree, timezone) : null
                 return (
                   <div className="session-table-row" key={i}>
                     <div>{fmtDateShort(rowDate(r.type, r.session))}</div>
@@ -374,6 +462,7 @@ export default function Sessions({
           coachingEvents={drawerRow.type === "live" ? coachingEventsBySession[drawerRow.session.id] : null}
           coachingLoading={coachingLoadingSessionId}
           onLoadCoaching={loadCoachingEvents}
+          timezone={timezone}
         />
       )}
     </div>

@@ -10,7 +10,7 @@ const C = {
 
 const fmtUsd = (n) => `$${Number(n || 0).toFixed(2)}`
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "—"
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"
+const fmtTime = (d, tz) => d ? new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) }) : "—"
 const fmtDuration = (mins) => {
   if (mins == null) return "—"
   const h = Math.floor(mins / 60), m = Math.round(mins % 60)
@@ -41,7 +41,7 @@ function StatChip({ label, value, color = C.white }) {
 }
 
 // row: { type: 'free'|'live'|'paid', session, comparablePopulation, coachingEvents, coachingLoading, onLoadCoaching }
-export default function SessionDrawer({ row, onClose, coachingEvents, coachingLoading, onLoadCoaching }) {
+export default function SessionDrawer({ row, onClose, coachingEvents, coachingLoading, onLoadCoaching, timezone = "UTC" }) {
   const [notes, setNotes] = useState("")
   useEffect(() => {
     if (!row) return undefined
@@ -81,7 +81,7 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
     usdPerHr = null
   }
 
-  const bd = type === "free" ? getSessionBreakdown(s, row.comparablePopulation || []) : null
+  const bd = type === "free" ? getSessionBreakdown(s, row.comparablePopulation || [], timezone) : null
   const perf = bd ? SESSION_PERF_BADGE[bd.performance] : null
 
   return (
@@ -106,7 +106,7 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
         </div>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 2 }}>{platform}</div>
         <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 16 }}>
-          {fmtDate(startTime)} · {fmtTime(startTime)}{endTime && endTime !== startTime ? ` → ${fmtTime(endTime)}` : ""}
+          {fmtDate(startTime)} · {fmtTime(startTime, timezone)}{endTime && endTime !== startTime ? ` → ${fmtTime(endTime, timezone)}` : ""}
         </div>
 
         <div className="drawer-overview-grid">
@@ -155,23 +155,98 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
               </div>
             )}
 
+            {/* ── CORE METRICS — the per-session numbers the old Session
+                   Breakdown card carried, which the drawer's four overview
+                   chips alone do not cover. ── */}
+            <SectionLabel>📊 Session metrics</SectionLabel>
+            <div className="drawer-overview-grid">
+              <StatChip label="Tips" value={s.tipCount ?? (s.tips || []).length} color={C.cyan} />
+              <StatChip label="Unique Fans" value={s.uniqueFans ?? "—"} color={C.pink} />
+              <StatChip label="Avg Tip" value={s.avgTipSize != null ? fmtUsd(s.avgTipSize) : "—"} color={C.gold} />
+              <StatChip label="$/Hour" value={s.usdPerHour != null ? fmtUsd(s.usdPerHour) : "—"} color={C.green} />
+              {/* null on durationUnknown sessions — shown as "—" rather than a
+                  confident rate for a duration we do not actually know. */}
+              <StatChip label="$/Min" value={s.usdPerMinute != null ? fmtUsd(s.usdPerMinute) : "—"} color={C.cyan} />
+            </div>
+
+            {/* ── VELOCITY + CONCENTRATION ── */}
+            {(s.velocityTrend !== "unknown" || s.topContributorPct >= 40) && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                {s.velocityTrend !== "unknown" && (() => {
+                  const V = {
+                    growing: { icon: "📈", label: "Momentum building", color: C.green, bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.25)" },
+                    dying:   { icon: "📉", label: "Earnings slowing",  color: C.red,   bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)" },
+                    steady:  { icon: "➡️", label: "Steady pace",       color: C.text,  bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)" },
+                  }[s.velocityTrend]
+                  const pctChange = s.firstHalfUPM && s.secondHalfUPM
+                    ? Math.round(Math.abs((s.secondHalfUPM - s.firstHalfUPM) / s.firstHalfUPM) * 100)
+                    : null
+                  return (
+                    <div style={{ flex: 1, minWidth: 160, padding: "9px 12px", borderRadius: 10, background: V.bg, border: `1px solid ${V.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 15 }}>{V.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: V.color }}>{V.label}</div>
+                        {pctChange !== null && (
+                          <div style={{ fontSize: 10.5, color: C.muted }}>
+                            {s.velocityTrend === "growing" ? `+${pctChange}%` : s.velocityTrend === "dying" ? `-${pctChange}%` : "~0%"} vs first half
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
+                {s.topContributorPct >= 40 && (
+                  <div style={{ flex: 1, minWidth: 180, padding: "9px 12px", borderRadius: 10, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 15 }}>⚠️</span>
+                    <div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: C.gold }}>{s.topContributorPct}% from one fan</div>
+                      <div style={{ fontSize: 10.5, color: C.muted }}>{s.topContributor} drove most of this session</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {bd.buckets.length > 1 && (
               <>
-                <SectionLabel>⏱ Session timeline</SectionLabel>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 48 }}>
-                  {bd.buckets.map((b, bi) => {
+                <SectionLabel>⏱ Earnings timeline (5-min buckets)</SectionLabel>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 56 }}>
+                  {(() => {
                     const maxUsd = Math.max(...bd.buckets.map(x => x.usd), 0.01)
-                    const heightPct = maxUsd > 0 ? (b.usd / maxUsd) * 100 : 0
-                    const isPeak = b === bd.peakBucket
-                    return (
-                      <div key={bi} title={`${b.label}: ${fmtUsd(b.usd)}`} style={{ flex: 1, height: "100%", display: "flex", alignItems: "flex-end" }}>
-                        <div style={{ width: "100%", height: `${Math.max(heightPct, b.usd > 0 ? 6 : 2)}%`, background: isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)", borderRadius: "2px 2px 0 0", minHeight: 2 }} />
-                      </div>
-                    )
-                  })}
+                    return bd.buckets.map((b, bi) => {
+                      const heightPct = maxUsd > 0 ? (b.usd / maxUsd) * 100 : 0
+                      const isPeak = b === bd.peakBucket && b.usd > 0
+                      return (
+                        <div key={bi} title={`${b.label}: ${fmtUsd(b.usd)}`} style={{ flex: 1, height: "100%", display: "flex", alignItems: "flex-end" }}>
+                          <div style={{ width: "100%", height: `${Math.max(heightPct, b.usd > 0 ? 6 : 2)}%`, background: isPeak ? C.gold : b.usd > 0 ? C.cyan : "rgba(255,255,255,0.06)", borderRadius: "2px 2px 0 0", minHeight: 2 }} />
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+                {/* Start / peak / end captions. The peak label reads the peak
+                    bucket's own time, so it always names the gold bar. */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+                  <span style={{ fontSize: 9.5, color: C.muted }}>{fmtTime(startTime, timezone)}</span>
+                  {bd.peakBucket?.usd > 0 && (
+                    <span style={{ fontSize: 9.5, color: C.gold }}>🔥 Peak at {fmtTime(bd.peakTime, timezone)}</span>
+                  )}
+                  <span style={{ fontSize: 9.5, color: C.muted }}>{fmtTime(endTime, timezone)}</span>
                 </div>
               </>
             )}
+
+            {/* ── SESSION PACING — first vs second half, from the canonical
+                   timestamp-midpoint split (finalizeSession's firstHalfPct). ── */}
+            <SectionLabel>📊 Session pacing</SectionLabel>
+            <div style={{ display: "flex", height: 26, borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ width: `${bd.firstHalfPct}%`, background: "linear-gradient(90deg, #22D3EE, #60A5FA)", display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.4s" }}>
+                {bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, fontWeight: 800, color: "#fff" }}>First half {bd.firstHalfPct}%</span>}
+              </div>
+              <div style={{ flex: 1, background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {100 - bd.firstHalfPct >= 20 && <span style={{ fontSize: 10, color: C.text }}>Second half {100 - bd.firstHalfPct}%</span>}
+              </div>
+            </div>
           </>
         )}
 
