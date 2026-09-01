@@ -6,12 +6,17 @@ import { computePaidSessionAnalytics } from "../../lib/analytics"
 import SessionDrawer from "./SessionDrawer"
 
 const C = {
-  bg: "#05070f", card: "rgba(15,20,32,0.75)", border: "rgba(255,255,255,0.08)",
-  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", purple: "#a855f7",
+  bg: "#05070f", card: "rgba(13,17,28,0.72)", border: "rgba(255,255,255,0.08)",
+  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", purple: "#A855F7",
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9",
   text: "#94A3B8", muted: "#475569",
 }
-const glassCard = { background: C.card, border: `1px solid ${C.border}`, backdropFilter: "blur(20px)", boxShadow: "0 0 40px rgba(59,130,246,0.10), 0 0 80px rgba(236,72,153,0.06)" }
+const glass = {
+  background: "linear-gradient(160deg, rgba(20,24,40,0.85), rgba(12,15,26,0.85))",
+  border: `1px solid ${C.border}`, backdropFilter: "blur(20px)",
+  boxShadow: "0 0 1px rgba(255,255,255,0.05) inset, 0 12px 40px rgba(0,0,0,0.35), 0 0 60px rgba(168,85,247,0.06)",
+}
+const gradientText = { background: "linear-gradient(90deg,#22D3EE,#A855F7,#EC4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }
 
 const TYPE_META = {
   free: { label: "Free Chat", icon: "🎥", color: C.cyan },
@@ -20,20 +25,15 @@ const TYPE_META = {
 }
 const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
 const RANGES = [{ id: "7d", label: "7D", days: 7 }, { id: "30d", label: "30D", days: 30 }, { id: "90d", label: "90D", days: 90 }, { id: "all", label: "ALL", days: null }]
-const TYPES = [{ id: "all", label: "All Sessions" }, { id: "live", label: "Live Mode" }, { id: "free", label: "Free Chat" }, { id: "paid", label: "Paid" }]
+const TYPES = [{ id: "all", label: "All" }, { id: "free", label: "Free Chat" }, { id: "live", label: "Live Mode" }, { id: "paid", label: "Paid / Private" }]
 
 const fmtUsd = (n) => `$${Number(n || 0).toFixed(2)}`
 const fmtUsd0 = (n) => `$${Math.round(Number(n || 0)).toLocaleString("en-US")}`
 const fmtHrs = (h) => h == null ? "—" : `${h.toFixed(1)}h`
-const fmtDur = (mins) => {
-  if (mins == null) return "—"
-  const h = Math.floor(mins / 60), m = Math.round(mins % 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
+const fmtDur = (mins) => { if (mins == null) return "—"; const h = Math.floor(mins / 60), m = Math.round(mins % 60); return h > 0 ? `${h}h ${m}m` : `${m}m` }
 const fmtDateShort = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 const fmtDateTime = (d) => new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
 
-// ── Normalizers: pull the fields every row shape needs, per session type ──
 function rowPlatform(type, s) { return type === "live" ? (s.stream_platform || "Chaturbate") : s.platform }
 function rowDate(type, s) { return type === "free" ? s.startTime : type === "live" ? s.started_at : s.date_time }
 function rowDurationMinutes(type, s) {
@@ -43,7 +43,7 @@ function rowDurationMinutes(type, s) {
     const secs = (new Date(s.ended_at) - new Date(s.started_at)) / 1000 - (s.total_paused_seconds || 0)
     return secs > 0 ? secs / 60 : null
   }
-  return null // paid — not tracked
+  return null
 }
 function rowRevenue(type, s) { return type === "free" ? s.totalUSD : type === "live" ? (s.session_earnings_usd || 0) : (parseFloat(s.usd) || 0) }
 function rowUsdPerHr(type, s) {
@@ -51,69 +51,34 @@ function rowUsdPerHr(type, s) {
   if (!mins || mins <= 0) return type === "free" ? s.usdPerHour : null
   return parseFloat((rowRevenue(type, s) / (mins / 60)).toFixed(2))
 }
-function rowTopContributor(type, s) {
-  if (type === "paid") return s.username || null
-  if (type === "free") return s.topContributor || null
-  return null
-}
-function cutoffFor(rangeId) {
-  const r = RANGES.find(x => x.id === rangeId)
-  if (!r || r.days == null) return null
-  return Date.now() - r.days * 86400000
-}
-function computeReturningFans(freeRows, paidRows) {
-  const counts = {}
-  freeRows.forEach(s => {
-    const seen = new Set()
-    ;(s.tips || []).forEach(t => {
-      const u = (t.username || "").toLowerCase()
-      if (!u || seen.has(u)) return
-      seen.add(u)
-      counts[u] = (counts[u] || 0) + 1
-    })
-  })
-  paidRows.forEach(s => {
-    const u = (s.username || "").toLowerCase()
-    if (!u) return
-    counts[u] = (counts[u] || 0) + 1
-  })
-  return Object.values(counts).filter(c => c > 1).length
-}
+function cutoffFor(rangeId) { const r = RANGES.find(x => x.id === rangeId); return (!r || r.days == null) ? null : Date.now() - r.days * 86400000 }
 
 // ── Small building blocks ──────────────────────────────────────────────
 function Pill({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      padding: "6px 13px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
-      border: `1px solid ${active ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)"}`,
-      background: active ? "linear-gradient(135deg,rgba(34,211,238,0.16),rgba(168,85,247,0.10))" : "rgba(255,255,255,0.03)",
+      padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+      border: `1px solid ${active ? "rgba(34,211,238,0.45)" : "rgba(255,255,255,0.1)"}`,
+      background: active ? "linear-gradient(135deg,rgba(34,211,238,0.18),rgba(168,85,247,0.14),rgba(236,72,153,0.10))" : "rgba(255,255,255,0.03)",
       color: active ? C.white : C.text, transition: "all .15s", whiteSpace: "nowrap",
     }}>{children}</button>
   )
 }
-function ScoreCard({ label, value, color = C.white, deltaPct, deltaGood = true }) {
-  return (
-    <div style={{ ...glassCard, borderRadius: 14, padding: "16px 16px" }}>
-      <div style={{ fontSize: 10.5, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 21, fontWeight: 800, color }}>{value}</div>
-      {deltaPct != null && (
-        <div style={{ fontSize: 11, marginTop: 4, fontWeight: 700, color: (deltaPct >= 0) === deltaGood ? C.green : C.orange }}>
-          {deltaPct >= 0 ? "▲" : "▼"} {Math.abs(deltaPct)}% vs prior period
-        </div>
-      )}
-    </div>
-  )
+function QualityBadge({ perf }) {
+  if (!perf) return null
+  const b = SESSION_PERF_BADGE[perf]
+  return <span style={{ padding: "2px 9px", borderRadius: 20, fontSize: 10.5, fontWeight: 800, color: b.color, background: b.bg, border: `1px solid ${b.border}` }}>{b.label}</span>
 }
-function NoSessions({ hasHistory, onViewHistorical }) {
+function EmptyState({ hasHistory, onViewHistorical }) {
   return (
-    <div style={{ ...glassCard, borderRadius: 16, padding: "44px 24px", textAlign: "center" }}>
-      <div style={{ fontSize: 36, marginBottom: 10 }}>🎥</div>
+    <div style={{ ...glass, borderRadius: 18, padding: "48px 24px", textAlign: "center" }}>
+      <div style={{ fontSize: 38, marginBottom: 10 }}>🎥</div>
       <div style={{ fontSize: 15, fontWeight: 800, color: C.white, marginBottom: 6 }}>No recent sessions</div>
-      <div style={{ fontSize: 13, color: C.muted, maxWidth: 440, margin: "0 auto" }}>
-        Once you stream, CamCash will start showing what worked, which fans contributed, and how your sessions are performing.
+      <div style={{ fontSize: 13, color: C.muted, maxWidth: 420, margin: "0 auto" }}>
+        Once you stream, CamCash will start showing what worked, who held the room, and where your next session can improve.
       </div>
       {hasHistory && (
-        <button onClick={onViewHistorical} style={{ marginTop: 16, padding: "9px 18px", borderRadius: 10, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.3)", color: C.cyan, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+        <button onClick={onViewHistorical} style={{ marginTop: 16, padding: "9px 20px", borderRadius: 10, background: "linear-gradient(135deg,#22D3EE,#A855F7)", border: "none", color: "#05070f", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
           View historical data
         </button>
       )}
@@ -121,38 +86,95 @@ function NoSessions({ hasHistory, onViewHistorical }) {
   )
 }
 
+// ── Recent session intelligence card — the centerpiece of the page ──────
+function RecentCard({ row, onOpen }) {
+  const { type, session: s } = row
+  const meta = TYPE_META[type]
+  const revenue = rowRevenue(type, s)
+  const usdPerHr = rowUsdPerHr(type, s)
+  const bd = type === "free" ? getSessionBreakdown(s, []) : null
+  const perf = bd?.performance
+
+  let whatWorked = null, whoHeldRoom = null, opportunity = null
+  if (type === "free" && bd) {
+    whatWorked = bd.insights[0] || null
+    whoHeldRoom = bd.topTippers.length ? `${bd.topTippers[0].username} — ${fmtUsd(bd.topTippers[0].usd)} (${bd.topTippers[0].pct}%)` : null
+    opportunity = bd.recommendations[0] || null
+  } else if (type === "live") {
+    whatWorked = (s.tip_count || 0) > 0 ? `${s.unique_tipper_count || 0} supporters tipped, ${s.tip_count} total tips` : null
+    whoHeldRoom = s.largest_tip_usd ? `Largest single tip: ${fmtUsd(s.largest_tip_usd)}` : null
+    opportunity = null
+  } else if (type === "paid") {
+    whatWorked = `${s.session_type || "Paid session"} — ${fmtUsd(s.usd)} for ${s.tokens || 0} tokens`
+    whoHeldRoom = s.username ? `${s.username} — 100% of session revenue` : null
+    opportunity = null
+  }
+
+  return (
+    <div style={{ ...glass, borderRadius: 18, padding: 20, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${meta.color}, transparent)`, opacity: 0.6 }} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: meta.color, letterSpacing: 0.3 }}>{meta.icon} {meta.label.toUpperCase()}</span>
+            <span style={{ fontSize: 11.5, color: C.muted }}>· {rowPlatform(type, s)}</span>
+            <QualityBadge perf={perf} />
+          </div>
+          <div style={{ fontSize: 14, color: C.white, fontWeight: 700 }}>{fmtDateTime(rowDate(type, s))}</div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{fmtDur(rowDurationMinutes(type, s))}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 22, fontWeight: 900, ...gradientText }}>{fmtUsd(revenue)}</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>{usdPerHr != null ? `${fmtUsd(usdPerHr)}/hr` : "—/hr"}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 800, color: C.cyan, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>💡 What worked</div>
+          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.45 }}>{whatWorked || "Not enough data yet."}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 800, color: C.pink, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>🏆 Who held the room</div>
+          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.45 }}>{whoHeldRoom || "Not enough data yet."}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9.5, fontWeight: 800, color: C.gold, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>🚀 Opportunity</div>
+          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.45 }}>{opportunity || "Not enough data yet."}</div>
+        </div>
+      </div>
+
+      <button onClick={onOpen} style={{
+        marginTop: 14, width: "100%", padding: "9px", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer",
+        background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: C.white,
+      }}>View full session →</button>
+    </div>
+  )
+}
+
 export default function Sessions({
-  sessions = [],                // analytics.allValidSessions
-  meaningfulSessions = [],      // analytics.meaningfulSessions
-  lowSignalSessionCount = 0,
+  sessions = [],
+  meaningfulSessions = [],
   paidSessions = [],
-  liveSessions = [],            // replaySessions
+  liveSessions = [],
   liveSessionsLoading = false,
   coachingEventsBySession = {},
   loadCoachingEvents,
   coachingLoadingSessionId = null,
   recentCoachingEvents = [],
   recentCoachingLoading = false,
-  tipsTotalUSD = null,
-  liveTotalUSD = null,
   monthlyData = [],
   timezone = "UTC",
-  onViewFan,
-  meaningfulOnly = true,
-  setMeaningfulOnly,
 }) {
   const [range, setRange] = useState("30d")
   const [typeFilter, setTypeFilter] = useState("all")
   const [platform, setPlatform] = useState("all")
-  const [sortBy, setSortBy] = useState("newest")
   const [page, setPage] = useState(1)
-  const [trendMetric, setTrendMetric] = useState("usdPerHour")
   const [drawerRow, setDrawerRow] = useState(null)
-  const PAGE_SIZE = 12
+  const PAGE_SIZE = 10
 
-  const freeBase = meaningfulOnly ? meaningfulSessions : sessions
+  const freeBase = meaningfulSessions.length > 0 ? meaningfulSessions : sessions
   const cutoff = cutoffFor(range)
-
   const inRange = (type, s) => {
     const t = new Date(rowDate(type, s)).getTime()
     if (cutoff != null && t < cutoff) return false
@@ -165,380 +187,201 @@ export default function Sessions({
   const filteredPaid = useMemo(() => paidSessions.filter(s => inRange("paid", s)), [paidSessions, cutoff, platform])
 
   const hasAnyHistory = sessions.length > 0 || liveSessions.length > 0 || paidSessions.length > 0
-  const hasFilteredData = filteredFree.length > 0 || filteredLive.length > 0 || filteredPaid.length > 0
 
-  // ── Previous-period comparison (skipped for range === 'all') ──
-  const prevWindow = useMemo(() => {
-    const r = RANGES.find(x => x.id === range)
-    if (!r || r.days == null) return null
-    const end = Date.now() - r.days * 86400000
-    const start = end - r.days * 86400000
-    const inPrev = (type, s) => {
-      const t = new Date(rowDate(type, s)).getTime()
-      if (t < start || t >= end) return false
-      if (platform !== "all" && rowPlatform(type, s) !== platform) return false
-      return true
-    }
-    const pFree = freeBase.filter(s => inPrev("free", s))
-    const pLive = liveSessions.filter(s => !s.is_inaccurate && inPrev("live", s))
-    const pPaid = paidSessions.filter(s => inPrev("paid", s))
-    return {
-      sessions: pFree.length + pLive.length + pPaid.length,
-      revenue: pFree.reduce((a, s) => a + s.totalUSD, 0) + pLive.reduce((a, s) => a + (s.session_earnings_usd || 0), 0) + pPaid.reduce((a, s) => a + (parseFloat(s.usd) || 0), 0),
-    }
-  }, [freeBase, liveSessions, paidSessions, range, platform])
-
-  // ── Scorecard ──
-  const scorecard = useMemo(() => {
-    const totalSessions = filteredFree.length + filteredLive.length + filteredPaid.length
-    const timedFree = filteredFree.filter(s => !s.durationUnknown)
-    const timedLive = filteredLive.filter(s => rowDurationMinutes("live", s) != null)
-    const totalHoursMins = timedFree.reduce((a, s) => a + s.durationMinutes, 0) + timedLive.reduce((a, s) => a + rowDurationMinutes("live", s), 0)
-    const totalHours = totalHoursMins / 60
-    const timedRevenue = timedFree.reduce((a, s) => a + s.totalUSD, 0) + timedLive.reduce((a, s) => a + (s.session_earnings_usd || 0), 0)
-    const totalRevenue = filteredFree.reduce((a, s) => a + s.totalUSD, 0) + filteredLive.reduce((a, s) => a + (s.session_earnings_usd || 0), 0) + filteredPaid.reduce((a, s) => a + (parseFloat(s.usd) || 0), 0)
-    const avgPerHr = totalHours > 0 ? timedRevenue / totalHours : null
-    const avgSession = totalSessions > 0 ? totalRevenue / totalSessions : null
-    const returningFans = computeReturningFans(filteredFree, filteredPaid)
-    const revDelta = prevWindow && prevWindow.revenue > 0 ? Math.round(((totalRevenue - prevWindow.revenue) / prevWindow.revenue) * 100) : null
-    const sessDelta = prevWindow && prevWindow.sessions > 0 ? Math.round(((totalSessions - prevWindow.sessions) / prevWindow.sessions) * 100) : null
-    return { totalSessions, totalHours, totalRevenue, avgPerHr, avgSession, returningFans, revDelta, sessDelta }
-  }, [filteredFree, filteredLive, filteredPaid, prevWindow])
-
-  // ── Session type performance comparison ──
-  const typePerf = useMemo(() => {
-    const build = (rows, type, revenueFn) => {
-      const timed = rows.filter(s => rowDurationMinutes(type, s) != null)
-      const hours = timed.reduce((a, s) => a + rowDurationMinutes(type, s), 0) / 60
-      const revenue = rows.reduce((a, s) => a + revenueFn(s), 0)
-      const timedRevenue = timed.reduce((a, s) => a + revenueFn(s), 0)
-      return {
-        count: rows.length, hours,
-        revenue, usdPerHr: hours > 0 ? timedRevenue / hours : null,
-        avgSession: rows.length > 0 ? revenue / rows.length : null,
-      }
-    }
-    return {
-      free: build(filteredFree, "free", s => s.totalUSD),
-      live: build(filteredLive, "live", s => s.session_earnings_usd || 0),
-      paid: build(filteredPaid, "paid", s => parseFloat(s.usd) || 0),
-    }
-  }, [filteredFree, filteredLive, filteredPaid])
-
-  // ── Recent session intelligence (respects type filter) ──
-  const unified = useMemo(() => {
+  const unifiedAll = useMemo(() => {
     const rows = []
     filteredFree.forEach(s => rows.push({ type: "free", session: s }))
     filteredLive.forEach(s => rows.push({ type: "live", session: s }))
     filteredPaid.forEach(s => rows.push({ type: "paid", session: s }))
-    return typeFilter === "all" ? rows : rows.filter(r => r.type === typeFilter)
-  }, [filteredFree, filteredLive, filteredPaid, typeFilter])
+    return rows
+  }, [filteredFree, filteredLive, filteredPaid])
 
-  const recent = useMemo(() => [...unified].sort((a, b) => new Date(rowDate(b.type, b.session)) - new Date(rowDate(a.type, a.session))).slice(0, 5), [unified])
+  const visible = typeFilter === "all" ? unifiedAll : unifiedAll.filter(r => r.type === typeFilter)
+  const hasFilteredData = visible.length > 0
 
-  // ── Coaching performance ──
-  const coachingScore = useMemo(() => {
-    const decided = recentCoachingEvents.filter(e => e.action_status === "performed" || e.action_status === "skipped")
-    if (decided.length < 5) return null
-    const performed = decided.filter(e => e.action_status === "performed").length
-    return { pct: Math.round((performed / decided.length) * 100), performed, total: decided.length }
-  }, [recentCoachingEvents])
+  // ── Top summary row ──
+  const summary = useMemo(() => {
+    const totalSessions = visible.length
+    const timed = visible.filter(r => rowDurationMinutes(r.type, r.session) != null)
+    const totalMins = timed.reduce((a, r) => a + rowDurationMinutes(r.type, r.session), 0)
+    const totalRevenue = visible.reduce((a, r) => a + rowRevenue(r.type, r.session), 0)
+    const timedRevenue = timed.reduce((a, r) => a + rowRevenue(r.type, r.session), 0)
+    const avgPerHr = totalMins > 0 ? timedRevenue / (totalMins / 60) : null
+    const best = [...visible].sort((a, b) => rowRevenue(b.type, b.session) - rowRevenue(a.type, a.session))[0] || null
+    return { totalSessions, totalHours: totalMins / 60, totalRevenue, avgPerHr, best }
+  }, [visible])
 
-  // ── Paid session intelligence ──
+  // ── Recent session intelligence (3-5 cards) ──
+  const recent = useMemo(() => [...visible].sort((a, b) => new Date(rowDate(b.type, b.session)) - new Date(rowDate(a.type, a.session))).slice(0, 5), [visible])
+
+  // ── Live Mode intelligence ──
+  const liveStats = useMemo(() => {
+    const timed = filteredLive.filter(s => rowDurationMinutes("live", s) != null)
+    const hours = timed.reduce((a, s) => a + rowDurationMinutes("live", s), 0) / 60
+    const revenue = filteredLive.reduce((a, s) => a + (s.session_earnings_usd || 0), 0)
+    const timedRevenue = timed.reduce((a, s) => a + (s.session_earnings_usd || 0), 0)
+    return { count: filteredLive.length, hours, revenue, usdPerHr: hours > 0 ? timedRevenue / hours : null }
+  }, [filteredLive])
+
+  // ── Paid / Private ──
   const paidStats = useMemo(() => computePaidSessionAnalytics(filteredPaid, timezone), [filteredPaid, timezone])
 
-  // ── Trend data ──
-  const trendData = useMemo(() => monthlyData.map(m => ({
-    month: m.month,
-    usdPerHour: m.usdPerHour,
-    usd: m.usd,
-    avgDurationMins: m.sessions > 0 ? parseFloat(((m.hours * 60) / m.sessions).toFixed(1)) : null,
-  })), [monthlyData])
+  // ── Performance trend ($/hr) ──
+  const trendData = useMemo(() => monthlyData.filter(m => m.usdPerHour != null).map(m => ({ month: m.month, usdPerHour: m.usdPerHour })), [monthlyData])
 
-  // ── Sorted + paginated history ──
-  const sorted = useMemo(() => {
-    const arr = [...unified]
-    if (sortBy === "newest") arr.sort((a, b) => new Date(rowDate(b.type, b.session)) - new Date(rowDate(a.type, a.session)))
-    else if (sortBy === "revenue") arr.sort((a, b) => rowRevenue(b.type, b.session) - rowRevenue(a.type, a.session))
-    else if (sortBy === "rate") arr.sort((a, b) => (rowUsdPerHr(b.type, b.session) || -1) - (rowUsdPerHr(a.type, a.session) || -1))
-    else if (sortBy === "duration") arr.sort((a, b) => (rowDurationMinutes(b.type, b.session) || -1) - (rowDurationMinutes(a.type, a.session) || -1))
-    return arr
-  }, [unified, sortBy])
-
+  // ── Sorted + paginated history (newest first, fixed) ──
+  const sorted = useMemo(() => [...visible].sort((a, b) => new Date(rowDate(b.type, b.session)) - new Date(rowDate(a.type, a.session))), [visible])
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
   const pageClamped = Math.min(page, totalPages)
   const pageRows = sorted.slice((pageClamped - 1) * PAGE_SIZE, pageClamped * PAGE_SIZE)
 
-  const openDrawer = (row, comparablePopulation) => setDrawerRow({ ...row, comparablePopulation })
-
-  const filtersRow = (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 22 }}>
-      <div style={{ display: "flex", gap: 6 }}>{RANGES.map(r => <Pill key={r.id} active={range === r.id} onClick={() => setRange(r.id)}>{r.label}</Pill>)}</div>
-      <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{TYPES.map(t => <Pill key={t.id} active={typeFilter === t.id} onClick={() => { setTypeFilter(t.id); setPage(1) }}>{t.label}</Pill>)}</div>
-      <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
-      <select value={platform} onChange={e => setPlatform(e.target.value)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "7px 12px", color: C.white, fontSize: 12 }}>
-        <option value="all">All Platforms</option>
-        {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
-      </select>
-      {meaningfulSessions.length !== sessions.length && (
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: C.muted, marginLeft: "auto" }}>
-          <input type="checkbox" checked={meaningfulOnly} onChange={e => setMeaningfulOnly?.(e.target.checked)} style={{ accentColor: C.cyan }} />
-          Meaningful sessions only {lowSignalSessionCount > 0 && `(${lowSignalSessionCount} low-signal hidden)`}
-        </label>
-      )}
-    </div>
-  )
+  const openDrawer = (row) => setDrawerRow({ ...row, comparablePopulation: row.type === "free" ? filteredFree : [] })
 
   return (
     <div>
-      <div style={{ marginBottom: 6 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: C.white, marginBottom: 4 }}>SESSION INTELLIGENCE</h1>
-        <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Understand what worked, who drove your earnings, and what to do next.</p>
+      <h1 style={{ fontSize: 27, fontWeight: 900, marginBottom: 6, ...gradientText }}>SESSION INTELLIGENCE</h1>
+      <p style={{ fontSize: 13, color: C.muted, marginBottom: 22, maxWidth: 560 }}>
+        See what happened in your streams, what worked, and where your next session can improve.
+      </p>
+
+      {/* ── Filters ── */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 6 }}>{TYPES.map(t => <Pill key={t.id} active={typeFilter === t.id} onClick={() => { setTypeFilter(t.id); setPage(1) }}>{t.label}</Pill>)}</div>
+        <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+        <div style={{ display: "flex", gap: 6 }}>{RANGES.map(r => <Pill key={r.id} active={range === r.id} onClick={() => setRange(r.id)}>{r.label}</Pill>)}</div>
+        <select value={platform} onChange={e => setPlatform(e.target.value)} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "7px 12px", color: C.white, fontSize: 12, marginLeft: "auto" }}>
+          <option value="all">All Platforms</option>
+          {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
       </div>
 
-      {filtersRow}
-
       {!hasFilteredData ? (
-        <NoSessions hasHistory={hasAnyHistory} onViewHistorical={() => setRange("all")} />
+        <EmptyState hasHistory={hasAnyHistory} onViewHistorical={() => setRange("all")} />
       ) : (
         <>
-          {/* ── 3. TOP PERFORMANCE SCORECARD ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
-            <ScoreCard label="Total Sessions" value={scorecard.totalSessions} deltaPct={scorecard.sessDelta} />
-            <ScoreCard label="Total Hours" value={fmtHrs(scorecard.totalHours)} color={C.cyan} />
-            <ScoreCard label="Total Revenue" value={fmtUsd0(scorecard.totalRevenue)} color={C.green} deltaPct={scorecard.revDelta} />
-            <ScoreCard label="Avg $/Hr" value={scorecard.avgPerHr != null ? fmtUsd(scorecard.avgPerHr) : "—"} color={C.gold} />
-            <ScoreCard label="Avg Session" value={scorecard.avgSession != null ? fmtUsd(scorecard.avgSession) : "—"} color={C.pink} />
-            <ScoreCard label="Returning Fans" value={scorecard.returningFans} color={C.purple} />
+          {/* ── 1. Summary row ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 26 }}>
+            {[
+              { label: "Total Sessions", value: summary.totalSessions, color: C.white },
+              { label: "Stream Time", value: fmtHrs(summary.totalHours), color: C.cyan },
+              { label: "Earnings", value: fmtUsd0(summary.totalRevenue), color: C.green },
+              { label: "Avg $/hr", value: summary.avgPerHr != null ? fmtUsd(summary.avgPerHr) : "—", color: C.gold },
+              { label: "Best Session", value: summary.best ? fmtUsd(rowRevenue(summary.best.type, summary.best.session)) : "—", color: C.pink },
+            ].map(c => (
+              <div key={c.label} style={{ ...glass, borderRadius: 14, padding: "14px 16px" }}>
+                <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>{c.label}</div>
+                <div style={{ fontSize: 19, fontWeight: 800, color: c.color }}>{c.value}</div>
+              </div>
+            ))}
           </div>
 
-          {/* ── 4. SESSION TYPE PERFORMANCE ── */}
-          <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Where is your time paying off?</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", textAlign: "left", color: C.muted }}>
-                    {["Type", "Sessions", "Hours", "Revenue", "$/hr", "Avg Session"].map(h => <th key={h} style={{ padding: "6px 10px", fontWeight: 700 }}>{h}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {["free", "live", "paid"].map(type => {
-                    const d = typePerf[type]
-                    const meta = TYPE_META[type]
-                    return (
-                      <tr key={type} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <td style={{ padding: "9px 10px", fontWeight: 700, color: meta.color }}>{meta.icon} {meta.label}</td>
-                        <td style={{ padding: "9px 10px", color: C.white }}>{d.count}</td>
-                        <td style={{ padding: "9px 10px", color: C.text }}>{type === "paid" ? "—" : fmtHrs(d.hours)}</td>
-                        <td style={{ padding: "9px 10px", color: C.green, fontWeight: 700 }}>{fmtUsd0(d.revenue)}</td>
-                        <td style={{ padding: "9px 10px", color: C.cyan }}>{d.usdPerHr != null ? fmtUsd(d.usdPerHr) : "—"}</td>
-                        <td style={{ padding: "9px 10px", color: C.white }}>{d.avgSession != null ? fmtUsd(d.avgSession) : "—"}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+          {/* ── 2. RECENT SESSION INTELLIGENCE — the centerpiece ── */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+              ✨ Recent Session Intelligence
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} />)}
             </div>
           </div>
 
-          {/* ── 5. RECENT SESSION INTELLIGENCE ── */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Recent Session Intelligence</div>
-            {recent.length === 0 && <div style={{ ...glassCard, borderRadius: 14, padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>No sessions match this filter yet.</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {recent.map((r, i) => {
-                const meta = TYPE_META[r.type]
-                const revenue = rowRevenue(r.type, r.session)
-                const usdPerHr = rowUsdPerHr(r.type, r.session)
-                const comparablePopulation = r.type === "free" ? filteredFree : []
-                const bd = r.type === "free" ? getSessionBreakdown(r.session, comparablePopulation) : null
-                const topContributor = rowTopContributor(r.type, r.session)
-                return (
-                  <div key={i} style={{ ...glassCard, borderRadius: 14, padding: "16px 18px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, marginBottom: bd || r.type !== "free" ? 10 : 0 }}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: meta.color }}>{meta.icon} {meta.label}</span>
-                          <span style={{ fontSize: 12, color: C.muted }}>· {rowPlatform(r.type, r.session)}</span>
-                        </div>
-                        <div style={{ fontSize: 13, color: C.white, fontWeight: 700 }}>{fmtDateTime(rowDate(r.type, r.session))}</div>
-                        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{fmtDur(rowDurationMinutes(r.type, r.session))}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{fmtUsd(revenue)}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{usdPerHr != null ? `${fmtUsd(usdPerHr)}/hr` : "—"}</div>
-                        <button onClick={() => openDrawer(r, comparablePopulation)} style={{ marginTop: 6, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", color: C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>View</button>
-                      </div>
+          {/* ── Live Mode intelligence (shown for All + Live Mode filter) ── */}
+          {(typeFilter === "all" || typeFilter === "live") && (
+            <div style={{ ...glass, borderRadius: 18, padding: 20, marginBottom: 22 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.orange, marginBottom: 14 }}>🔴 Live Mode Intelligence</div>
+              {liveSessionsLoading ? (
+                <div style={{ color: C.muted, fontSize: 13 }}>Loading Live Mode history…</div>
+              ) : liveStats.count === 0 ? (
+                <div style={{ color: C.muted, fontSize: 13 }}>No Live Mode sessions in this period.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, marginBottom: 18 }}>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Live Sessions</div><div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{liveStats.count}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Live Hours</div><div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>{fmtHrs(liveStats.hours)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Revenue</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{fmtUsd0(liveStats.revenue)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>$/hr</div><div style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{liveStats.usdPerHr != null ? fmtUsd(liveStats.usdPerHr) : "—"}</div></div>
+                </div>
+              )}
+
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.text, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14 }}>🎯 Coaching Feed</div>
+              {recentCoachingLoading && <div style={{ color: C.muted, fontSize: 13 }}>Loading coaching history…</div>}
+              {!recentCoachingLoading && recentCoachingEvents.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>Not enough coaching history yet.</div>}
+              {!recentCoachingLoading && recentCoachingEvents.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 260, overflowY: "auto" }}>
+                  {recentCoachingEvents.map(e => (
+                    <div key={e.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 12 }}>
+                      <span style={{ color: C.muted, minWidth: 92, fontVariantNumeric: "tabular-nums" }}>{fmtDateTime(e.shown_at)}</span>
+                      <span style={{
+                        padding: "1px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
+                        background: e.action_status === "performed" ? "rgba(16,185,129,0.15)" : e.action_status === "skipped" ? "rgba(148,163,184,0.15)" : "rgba(245,158,11,0.15)",
+                        color: e.action_status === "performed" ? C.green : e.action_status === "skipped" ? C.muted : C.gold,
+                      }}>{e.action_status === "performed" ? "✓ Performed" : e.action_status === "skipped" ? "↩ Skipped" : "— Unmarked"}</span>
+                      <span style={{ color: C.white, flex: 1 }}>{e.title || e.message}</span>
                     </div>
-                    {bd && (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: C.cyan, textTransform: "uppercase", marginBottom: 4 }}>What worked</div>
-                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{bd.insights[0] || "Not enough signal yet."}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: C.pink, textTransform: "uppercase", marginBottom: 4 }}>Who held the show</div>
-                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-                            {bd.topTippers.length ? bd.topTippers.slice(0, 2).map(t => `${t.username} — ${fmtUsd(t.usd)} (${t.pct}%)`).join(" · ") : "No tip data."}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {r.type === "live" && (
-                      <div style={{ fontSize: 12, color: C.text, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        {r.session.unique_tipper_count || 0} supporters · {r.session.tip_count || 0} tips{r.session.largest_tip_usd ? ` · largest tip ${fmtUsd(r.session.largest_tip_usd)}` : ""}
-                      </div>
-                    )}
-                    {r.type === "paid" && topContributor && (
-                      <div style={{ fontSize: 12, color: C.text, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        {r.session.session_type || "Paid session"} with <b style={{ color: C.white }}>{topContributor}</b>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
-          {/* ── 6. LIVE MODE INTELLIGENCE ── */}
-          <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>🔴 Live Mode Intelligence</div>
-            {liveSessionsLoading ? (
-              <div style={{ color: C.muted, fontSize: 13 }}>Loading Live Mode history…</div>
-            ) : filteredLive.length === 0 ? (
-              <div style={{ color: C.muted, fontSize: 13 }}>No Live Mode sessions in this period.</div>
-            ) : (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 16 }}>
-                  <ScoreCard label="Live Sessions" value={typePerf.live.count} />
-                  <ScoreCard label="Live Hours" value={fmtHrs(typePerf.live.hours)} color={C.cyan} />
-                  <ScoreCard label="Live Revenue" value={fmtUsd0(typePerf.live.revenue)} color={C.green} />
-                  <ScoreCard label="Avg $/hr" value={typePerf.live.usdPerHr != null ? fmtUsd(typePerf.live.usdPerHr) : "—"} color={C.gold} />
-                  <ScoreCard label="Avg Session" value={typePerf.live.avgSession != null ? fmtUsd(typePerf.live.avgSession) : "—"} color={C.pink} />
-                  <ScoreCard label="Tips/Hour" value={typePerf.live.hours > 0 ? (filteredLive.reduce((a, s) => a + (s.tip_count || 0), 0) / typePerf.live.hours).toFixed(1) : "—"} color={C.purple} />
+          {/* ── Paid / Private (shown for All + Paid filter) ── */}
+          {(typeFilter === "all" || typeFilter === "paid") && (
+            <div style={{ ...glass, borderRadius: 18, padding: 20, marginBottom: 22 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.purple, marginBottom: 14 }}>💎 Paid / Private</div>
+              {!paidStats ? (
+                <div style={{ color: C.muted, fontSize: 13 }}>Not enough data yet.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Sessions</div><div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{paidStats.totalCount}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Revenue</div><div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{fmtUsd0(paidStats.totalUSD)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Avg Session</div><div style={{ fontSize: 18, fontWeight: 800, color: C.pink }}>{fmtUsd(paidStats.avgSessionUSD)}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Unique Clients</div><div style={{ fontSize: 18, fontWeight: 800, color: C.purple }}>{paidStats.uniqueClients}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Repeat Rate</div><div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>{paidStats.repeatClientPct}%</div></div>
                 </div>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 60 }}>
-                  {[...filteredLive].sort((a, b) => new Date(a.started_at) - new Date(b.started_at)).slice(-24).map((s, i) => {
-                    const rev = s.session_earnings_usd || 0
-                    const max = Math.max(...filteredLive.map(x => x.session_earnings_usd || 0), 0.01)
-                    return <div key={i} title={`${fmtDateShort(s.started_at)}: ${fmtUsd(rev)}`} style={{ flex: 1, height: `${Math.max((rev / max) * 100, rev > 0 ? 6 : 2)}%`, background: C.orange, borderRadius: "2px 2px 0 0", minHeight: 2, opacity: 0.85 }} />
-                  })}
-                </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          {/* ── 7. LIVE MODE COACHING HISTORY ── */}
-          <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>🎯 Live Mode Coaching History</div>
-            {recentCoachingLoading && <div style={{ color: C.muted, fontSize: 13 }}>Loading coaching history…</div>}
-            {!recentCoachingLoading && recentCoachingEvents.length === 0 && <div style={{ color: C.muted, fontSize: 13 }}>No coaching prompts recorded yet — these appear once you use Live Mode.</div>}
-            {!recentCoachingLoading && recentCoachingEvents.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {recentCoachingEvents.slice(0, 12).map(e => (
-                  <div key={e.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 12.5 }}>
-                    <span style={{ color: C.muted, minWidth: 92, fontVariantNumeric: "tabular-nums" }}>{fmtDateTime(e.shown_at)}</span>
-                    <span style={{
-                      padding: "1px 8px", borderRadius: 5, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
-                      background: e.action_status === "performed" ? "rgba(16,185,129,0.15)" : e.action_status === "skipped" ? "rgba(148,163,184,0.15)" : "rgba(245,158,11,0.15)",
-                      color: e.action_status === "performed" ? C.green : e.action_status === "skipped" ? C.muted : C.gold,
-                    }}>{e.action_status === "performed" ? "✓ Performed" : e.action_status === "skipped" ? "↩ Skipped" : "— No action recorded"}</span>
-                    <span style={{ color: C.white, flex: 1 }}>{e.title || e.message}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── 8. COACHING PERFORMANCE ── */}
-          <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Coaching Performance</div>
-            {coachingScore ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ fontSize: 30, fontWeight: 900, color: C.green }}>{coachingScore.pct}%</div>
-                <div style={{ fontSize: 12.5, color: C.text }}>{coachingScore.performed} of {coachingScore.total} recent coaching prompts followed</div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 13, color: C.muted }}>Building your coaching history — keep using Live Mode to unlock a coaching score.</div>
-            )}
-          </div>
-
-          {/* ── 9. PAID SESSION INTELLIGENCE ── */}
-          <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.purple, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>💎 Paid Session Intelligence</div>
-            {!paidStats ? (
-              <div style={{ color: C.muted, fontSize: 13 }}>No paid sessions in this period.</div>
-            ) : (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 4 }}>
-                  <ScoreCard label="Paid Sessions" value={paidStats.totalCount} />
-                  <ScoreCard label="Paid Revenue" value={fmtUsd0(paidStats.totalUSD)} color={C.green} />
-                  <ScoreCard label="Avg Paid Session" value={fmtUsd(paidStats.avgSessionUSD)} color={C.pink} />
-                  <ScoreCard label="Unique Clients" value={paidStats.uniqueClients} color={C.purple} />
-                </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>Duration and $/hr aren't tracked for paid sessions yet — only tokens, revenue, and client are recorded.</div>
-              </>
-            )}
-          </div>
-
-          {/* ── 10. PERFORMANCE TREND ── */}
+          {/* ── Session performance trend ── */}
           {trendData.length > 1 && (
-            <div style={{ ...glassCard, borderRadius: 16, padding: 20, marginBottom: 24 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Performance Trend</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Pill active={trendMetric === "usdPerHour"} onClick={() => setTrendMetric("usdPerHour")}>$/HR</Pill>
-                  <Pill active={trendMetric === "usd"} onClick={() => setTrendMetric("usd")}>Revenue</Pill>
-                  <Pill active={trendMetric === "avgDurationMins"} onClick={() => setTrendMetric("avgDurationMins")}>Duration</Pill>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={160}>
+            <div style={{ ...glass, borderRadius: 18, padding: 20, marginBottom: 22 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: C.white, marginBottom: 10 }}>Session Performance — $/hr over time</div>
+              <ResponsiveContainer width="100%" height={140}>
                 <LineChart data={trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="month" tick={{ fill: C.muted, fontSize: 11 }} />
                   <YAxis tick={{ fill: C.muted, fontSize: 11 }} />
-                  <Tooltip contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.1)" }} formatter={v => trendMetric === "avgDurationMins" ? `${v} min` : trendMetric === "usdPerHour" || trendMetric === "usd" ? fmtUsd(v) : v} />
-                  <Line type="monotone" dataKey={trendMetric} stroke={C.cyan} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Tooltip contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.1)" }} formatter={v => fmtUsd(v)} />
+                  <Line type="monotone" dataKey="usdPerHour" stroke={C.cyan} strokeWidth={2} dot={{ r: 3, fill: C.purple }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* ── 11. SESSION HISTORY ── */}
-          <div style={{ ...glassCard, borderRadius: 16, padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Session History ({sorted.length})</div>
-              <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "6px 10px", color: C.white, fontSize: 12 }}>
-                <option value="newest">Newest</option>
-                <option value="revenue">Highest Revenue</option>
-                <option value="rate">Highest $/hr</option>
-                <option value="duration">Longest Session</option>
-              </select>
-            </div>
+          {/* ── Session History ── */}
+          <div style={{ ...glass, borderRadius: 18, padding: 20 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.white, marginBottom: 14 }}>SESSION HISTORY</div>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 720 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 700 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", textAlign: "left", color: C.muted }}>
-                    {["Date", "Platform", "Type", "Duration", "Earnings", "$/hr", "Top Contributor", ""].map(h => <th key={h} style={{ padding: "7px 8px", fontWeight: 700 }}>{h}</th>)}
+                    {["Date", "Platform", "Type", "Duration", "Earnings", "$/hr", "Quality", ""].map(h => <th key={h} style={{ padding: "7px 8px", fontWeight: 700 }}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((r, i) => {
                     const meta = TYPE_META[r.type]
-                    const comparablePopulation = r.type === "free" ? filteredFree : []
+                    const bd = r.type === "free" ? getSessionBreakdown(r.session, filteredFree) : null
                     return (
                       <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                        <td style={{ padding: "8px", color: C.text }}>{fmtDateShort(rowDate(r.type, r.session))}</td>
-                        <td style={{ padding: "8px", color: C.text }}>{rowPlatform(r.type, r.session)}</td>
-                        <td style={{ padding: "8px", color: meta.color, fontWeight: 700 }}>{meta.icon} {meta.label}</td>
-                        <td style={{ padding: "8px", color: C.text }}>{fmtDur(rowDurationMinutes(r.type, r.session))}</td>
-                        <td style={{ padding: "8px", color: C.green, fontWeight: 700 }}>{fmtUsd(rowRevenue(r.type, r.session))}</td>
-                        <td style={{ padding: "8px", color: C.cyan }}>{rowUsdPerHr(r.type, r.session) != null ? fmtUsd(rowUsdPerHr(r.type, r.session)) : "—"}</td>
-                        <td style={{ padding: "8px", color: C.white }}>{rowTopContributor(r.type, r.session) || "—"}</td>
-                        <td style={{ padding: "8px" }}>
-                          <button onClick={() => openDrawer(r, comparablePopulation)} style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", color: C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>View</button>
+                        <td style={{ padding: "9px 8px", color: C.text }}>{fmtDateShort(rowDate(r.type, r.session))}</td>
+                        <td style={{ padding: "9px 8px", color: C.text }}>{rowPlatform(r.type, r.session)}</td>
+                        <td style={{ padding: "9px 8px", color: meta.color, fontWeight: 700 }}>{meta.icon} {meta.label}</td>
+                        <td style={{ padding: "9px 8px", color: C.text }}>{fmtDur(rowDurationMinutes(r.type, r.session))}</td>
+                        <td style={{ padding: "9px 8px", color: C.green, fontWeight: 700 }}>{fmtUsd(rowRevenue(r.type, r.session))}</td>
+                        <td style={{ padding: "9px 8px", color: C.cyan }}>{rowUsdPerHr(r.type, r.session) != null ? fmtUsd(rowUsdPerHr(r.type, r.session)) : "—"}</td>
+                        <td style={{ padding: "9px 8px" }}><QualityBadge perf={bd?.performance} /></td>
+                        <td style={{ padding: "9px 8px" }}>
+                          <button onClick={() => openDrawer(r)} style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", color: C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>View</button>
                         </td>
                       </tr>
                     )
@@ -546,12 +389,10 @@ export default function Sessions({
                 </tbody>
               </table>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 16 }}>
-              <button disabled={pageClamped <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: pageClamped <= 1 ? C.muted : C.white, fontSize: 12, cursor: pageClamped <= 1 ? "default" : "pointer", opacity: pageClamped <= 1 ? 0.5 : 1 }}>Previous</button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(Math.max(0, pageClamped - 3), Math.max(0, pageClamped - 3) + 5).map(n => (
-                <button key={n} onClick={() => setPage(n)} style={{ width: 30, height: 30, borderRadius: 8, background: n === pageClamped ? "linear-gradient(135deg,rgba(34,211,238,0.25),rgba(168,85,247,0.18))" : "rgba(255,255,255,0.04)", border: `1px solid ${n === pageClamped ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)"}`, color: C.white, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{n}</button>
-              ))}
-              <button disabled={pageClamped >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: pageClamped >= totalPages ? C.muted : C.white, fontSize: 12, cursor: pageClamped >= totalPages ? "default" : "pointer", opacity: pageClamped >= totalPages ? 0.5 : 1 }}>Next</button>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, marginTop: 16 }}>
+              <button disabled={pageClamped <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: pageClamped <= 1 ? C.muted : C.white, fontSize: 12, cursor: pageClamped <= 1 ? "default" : "pointer", opacity: pageClamped <= 1 ? 0.5 : 1 }}>Previous</button>
+              <span style={{ fontSize: 12, color: C.text }}>Page {pageClamped} of {totalPages}</span>
+              <button disabled={pageClamped >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ padding: "6px 14px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: pageClamped >= totalPages ? C.muted : C.white, fontSize: 12, cursor: pageClamped >= totalPages ? "default" : "pointer", opacity: pageClamped >= totalPages ? 0.5 : 1 }}>Next</button>
             </div>
           </div>
         </>
