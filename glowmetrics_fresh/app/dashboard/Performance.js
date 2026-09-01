@@ -79,13 +79,15 @@ const styleFor = (name) => {
   return { ...NEUTRAL_STYLE, short }
 }
 
-// Same box the Sessions tab uses for a session's stats, so a metric looks
-// like a metric everywhere in the dashboard.
-function Stat({ label, value, accent }) {
+// One cell of the card's metric inset. Colour is semantic, matching the
+// Command Center's KPI cards exactly: cyan for an hourly rate, gold for
+// sessions, white for plain counts — never colour for decoration.
+function Metric({ label, value, tone }) {
   return (
-    <div className="session-stat-box">
-      <div className="session-stat-label">{label}</div>
-      <div className="session-stat-value" style={accent ? { color: accent } : undefined}>{value}</div>
+    <div className="platform-metric">
+      <span>{label}</span>
+      <strong className={tone === "rate" ? "is-rate" : tone === "muted" ? "is-muted" : undefined}
+        style={tone === "gold" ? { color: "#f5b53d" } : undefined}>{value}</strong>
     </div>
   )
 }
@@ -97,6 +99,7 @@ function Stat({ label, value, accent }) {
 // ratio exists in exactly one place on this page.
 function PlatformCard({ p, share, onViewBreakdown }) {
   const s = styleFor(p.platform)
+  const hasRate = p.hours > 0 && p.usdPerHour > 0
   return (
     <div className="glass-panel platform-card" style={{ "--accent": s.accent }}>
       <div className="platform-card-top">
@@ -107,6 +110,7 @@ function PlatformCard({ p, share, onViewBreakdown }) {
         </div>
       </div>
 
+      {/* Primary metric — the one number that dominates the card. */}
       <div className="platform-money">
         <strong>{fmtUsd(p.totalUSD)}</strong>
         <span>Total earned</span>
@@ -116,15 +120,13 @@ function PlatformCard({ p, share, onViewBreakdown }) {
         <small>in qualifying sessions</small>
       </div>
 
-      <div className="platform-stats">
-        <Stat label="Hourly average" value={p.hours > 0 ? `${fmtUsd(p.usdPerHour)}/hr` : "—"} accent="#26e0ff" />
-        <Stat label="Streaming time" value={fmtHoursLong(p.hours)} />
-      </div>
-      <div className="platform-stats platform-stats-secondary">
-        <Stat label="Tips" value={Number(p.tips || 0).toLocaleString()} />
-        <Stat label="Fans" value={p.uniqueFans != null ? Number(p.uniqueFans).toLocaleString() : "—"} />
-        <Stat label="Average tip" value={p.tips > 0 ? fmtUsd(p.avgTipSize) : "—"} />
-        <Stat label="Sessions" value={Number(p.sessions || 0).toLocaleString()} />
+      <div className="platform-metrics">
+        <Metric label="Hourly average" value={hasRate ? `${fmtUsd(p.usdPerHour)}/hr` : "Not enough data yet"} tone={hasRate ? "rate" : "muted"} />
+        <Metric label="Streaming time" value={p.hours > 0 ? fmtHoursLong(p.hours) : "Not enough data yet"} tone={p.hours > 0 ? undefined : "muted"} />
+        <Metric label="Tips" value={Number(p.tips || 0).toLocaleString()} />
+        <Metric label="Fans" value={p.uniqueFans != null ? Number(p.uniqueFans).toLocaleString() : "—"} />
+        <Metric label="Average tip" value={p.tips > 0 ? fmtUsd(p.avgTipSize) : "—"} />
+        <Metric label="Sessions" value={Number(p.sessions || 0).toLocaleString()} tone="gold" />
       </div>
 
       {share != null && (
@@ -139,17 +141,27 @@ function PlatformCard({ p, share, onViewBreakdown }) {
         </div>
       )}
 
-      {/* best window — never shown without its confidence tier */}
-      {p.bestLocalDay != null && p.bestLocalHour != null && (
-        <div className="platform-window">
-          <span>Best streaming window</span>
-          <strong>{p.bestLocalDay}s · {fmtWindow(p.bestLocalHour)}</strong>
-          <small>{TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence} · local time</small>
-        </div>
-      )}
+      {/* Best window — never shown without its confidence tier, and never as
+          a blank or zeroed box when the engine has no window for it. */}
+      <div className="platform-window">
+        <span>Best streaming window</span>
+        {p.bestLocalDay != null && p.bestLocalHour != null ? (
+          <>
+            <strong>{p.bestLocalDay}s · {fmtWindow(p.bestLocalHour)}</strong>
+            <small>{TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence} · local time</small>
+          </>
+        ) : (
+          <>
+            <strong>Not enough data yet</strong>
+            <small className="is-empty">Track another session on {p.platform} to unlock this insight.</small>
+          </>
+        )}
+      </div>
 
       {onViewBreakdown && (
-        <button className="gradient-button" onClick={() => onViewBreakdown(p.platform)}>View in Money Map →</button>
+        <div className="platform-cta">
+          <button onClick={() => onViewBreakdown(p.platform)}>View in Money Map →</button>
+        </div>
       )}
     </div>
   )
@@ -256,7 +268,7 @@ export default function Performance({
     // platform read as a bug rather than as two findings.
     const rateLine = (top) => (
       platformEfficiencyGap && platformEfficiencyGap.top.platform === top.platform && platformEfficiencyGap.multiple >= 1.3
-        ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}x what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
+        ? `${fmtUsd(top.usdPerHour)}/hr — ${platformEfficiencyGap.multiple.toFixed(1)}× what you earn per hour on ${platformEfficiencyGap.bottom.platform}.`
         : `You're averaging ${fmtUsd(top.usdPerHour)}/hr here across ${top.sessions} qualifying session${top.sessions === 1 ? "" : "s"}.`
     )
     const revenueLeader = byRevenue[0] || null
@@ -313,7 +325,7 @@ export default function Performance({
       {!hasPlatforms ? (
         <div className="glass-panel platform-panel">
           <div className="section-label">Your platforms</div>
-          <div className="session-empty-body" style={{ margin: 0 }}>Import your tip history to see how each of your platforms is performing.</div>
+          <div className="platform-empty">Import your tip history to see how each of your platforms is performing.</div>
         </div>
       ) : (
         <>
@@ -329,7 +341,7 @@ export default function Performance({
 
             {platformEfficiencyGap && platformEfficiencyGap.multiple >= 1.3 && (
               <div className="platform-lede">
-                <strong style={{ color: "#26e0ff" }}>{platformEfficiencyGap.top.platform}</strong> earns <strong style={{ color: "#26e0ff" }}>{platformEfficiencyGap.multiple.toFixed(1)}x</strong> more per hour than <strong>{platformEfficiencyGap.bottom.platform}</strong> — {fmtUsd(platformEfficiencyGap.top.usdPerHour)}/hr vs {fmtUsd(platformEfficiencyGap.bottom.usdPerHour)}/hr.
+                <strong className="lede-accent">{platformEfficiencyGap.top.platform}</strong> earns <strong className="lede-multiple">{platformEfficiencyGap.multiple.toFixed(1)}×</strong> more per hour than <strong>{platformEfficiencyGap.bottom.platform}</strong> — {fmtUsd(platformEfficiencyGap.top.usdPerHour)}/hr vs {fmtUsd(platformEfficiencyGap.bottom.usdPerHour)}/hr.
               </div>
             )}
 
@@ -428,7 +440,7 @@ export default function Performance({
               </div>
             </div>
             {!canAttribute ? (
-              <div className="session-empty-body" style={{ margin: 0 }}>
+              <div className="platform-empty">
                 {delta && delta.platforms.length < 2
                   ? "Single-platform account — your month-over-month change isn't split across platforms."
                   : "Not enough history to attribute this change."}
@@ -465,7 +477,7 @@ export default function Performance({
                     <div>
                       {m.platform} — {m.bestLocalDay}s {fmtHour(m.bestLocalHour)} earns <strong style={{ color: "#21d99a" }}>{fmtUsd(m.bestWindowMedianUsdPerHour)}/hr</strong> vs <strong style={{ color: "#f4f7ff" }}>{fmtUsd(m.overallMedianUsdPerHour)}/hr</strong> typical
                     </div>
-                    <strong>+{fmtUsd(m.rateGapUsdPerHour)}/hr gap</strong>
+                    <strong className="gap-figure">+{fmtUsd(m.rateGapUsdPerHour)}/hr gap</strong>
                   </div>
                 ))}
               </div>
@@ -513,7 +525,7 @@ export default function Performance({
                       making the chart agree by re-ranking it would mean
                       inventing a second best-time calculation, which
                       canonical-analytics-rules.md forbids. */}
-                  <div className="session-stat-label">Total earned by day of week</div>
+                  <div className="platform-share-row"><span>Total earned by day of week</span></div>
                   <div className="platform-day-note">
                     Total dollars, not hourly rate — so your biggest bar isn&apos;t always your best window. Your best window is the one with the highest median <strong style={{ color: "#f4f7ff" }}>$/hour</strong>, which is what actually repeats. Days with too few sessions to trust are left out.
                   </div>
@@ -531,7 +543,7 @@ export default function Performance({
 
               {earningsTrend && (
                 <div style={{ marginTop: 22 }}>
-                  <div className="session-stat-label">Earnings trend, all platforms combined</div>
+                  <div className="platform-share-row"><span>Earnings trend, all platforms combined</span></div>
                   <div style={{ marginTop: 10 }}>{earningsTrend}</div>
                 </div>
               )}
