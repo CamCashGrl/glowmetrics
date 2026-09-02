@@ -292,14 +292,168 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .section-heading h2 { margin: 5px 0 0; font-size: 20px; font-weight: 750; }
 .section-heading p { margin: 0; max-width: 420px; color: #727d9b; font-size: 12px; text-align: right; }
 
+/* ══════════════════════════════════════════════════════════════════════
+   CAMCASHGRL CARD SYSTEM — the one source of truth for glass surfaces.
+   components/ui/Card.jsx composes these classes. Nothing else should
+   define a card background, border, blur, radius or shadow.
+
+   Black is the canvas: these surfaces sit ON the dark page and are lit by
+   ambient colour rather than being coloured boxes themselves, so six to ten
+   can share a screen without the page becoming noisy.
+
+   Structure — the outer element owns border, glow, shadow and hover; the
+   inner element owns the glass fill, the internal highlight and clipping:
+       .cc-card > .cc-card__inner > content
+   Legacy call sites that render .cc-card with no inner element still get a
+   correct surface: the fill and blur fall back onto the outer element.
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Canonical brand palette (standing-instructions). The card system must
+     never introduce a near-miss variant of these. */
+  --cc-cyan:   #16F4FF;
+  --cc-blue:   #55B8FF;
+  --cc-purple: #7C5CFF;
+  --cc-pink:   #FF2BAE;
+  --cc-gradient: linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%);
+
+  /* Surface tokens — every card reads these, so radius/blur/shadow are
+     tuned in exactly one place.
+
+     PREMIUM 3D GLASS (approved direction): a subtle top-to-bottom gradient
+     instead of a flat fill, a brighter top bevel highlight, and a second
+     inset shadow along the bottom edge give the surface real dimension —
+     a lit panel, not a translucent rectangle. Alpha and radius are
+     unchanged, so density, blur and every existing glow/hover/gradient
+     mechanic built on top of these tokens carries over exactly as before. */
+  --cc-card-bg:       linear-gradient(165deg, rgba(15, 19, 40, 0.88) 0%, rgba(9, 12, 25, 0.85) 100%);
+  --cc-card-bg-quiet: linear-gradient(165deg, rgba(13, 16, 33, 0.74) 0%, rgba(8, 10, 21, 0.70) 100%);
+  --cc-card-border:   rgba(255, 255, 255, 0.075);
+  --cc-card-radius:   15px;
+  --cc-card-inset:    inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -16px 26px -20px rgba(0, 0, 0, 0.55);
+  --cc-card-drop:     0 18px 40px rgba(0, 0, 0, 0.40), 0 2px 0 rgba(255, 255, 255, 0.025);
+}
+
 .cc-card {
-  position: relative; overflow: hidden; border: 1px solid rgba(125, 111, 255, 0.19); border-radius: 20px;
-  background: linear-gradient(135deg, rgba(19, 28, 53, 0.96), rgba(14, 18, 38, 0.96));
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.23), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  position: relative;
+  border-radius: var(--cc-card-radius);
+  border: 1px solid var(--cc-card-border);
+  background: var(--cc-card-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--cc-card-inset), var(--cc-card-drop);
+  transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease, background-color .22s ease;
+}
+
+.cc-card__inner {
+  position: relative;
+  z-index: 1;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+/* Atmospheric light OUTSIDE the card — a soft diffuse halo sitting behind
+   the glass, painted by a pseudo-element at z-index -1 so it bleeds past the
+   edges without changing the card's box, its spacing or its border. The
+   border itself stays as thin and quiet as before: this is light in the
+   room, never a neon outline.
+
+   Intensity is one variable, --cc-lum, set per surface below and raised by
+   two modifiers for the templates that carry more presence. Templates never
+   define their own glow. */
+.cc-card { z-index: 0; }
+.cc-card::after {
+  content: "";
+  position: absolute;
+  inset: -20px;
+  border-radius: calc(var(--cc-card-radius) + 20px);
+  background: radial-gradient(58% 58% at 50% 50%,
+    var(--cc-glow, var(--cc-purple)) 0%, transparent 72%);
+  opacity: var(--cc-lum, 0);
+  filter: blur(30px);
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity .22s ease;
+}
+
+/* Per-surface intensity, quietest first. */
+.cc-card--quiet  { --cc-lum: .05; }   /* Standard   — almost none        */
+.cc-card--flat   { --cc-lum: 0;   }   /* Comparison — none, keeps tables clean */
+.cc-card--glass  { --cc-lum: .13; }   /* Metric, Split, Milestone — subtle */
+.cc-card--accent { --cc-lum: .24; }   /* Feature    — stronger presence  */
+
+/* Two steps above the surface default, for the templates that earn it. */
+.cc-card--lum-plus { --cc-lum: .19; } /* Insight — slightly stronger     */
+.cc-card--lum-max  { --cc-lum: .34; } /* Hero    — strongest, still refined */
+
+/* Hover lifts the halo a little along with the card. */
+.cc-card--interactive:hover::after { opacity: calc(var(--cc-lum, 0) + .06); }
+
+/* Ambient illumination — a diffuse wash behind the glass, not an edge
+   effect. Deliberately weak: light in the room, not a glowing box. */
+.cc-card--glass::before,
+.cc-card--accent::before {
+  content: "";
+  position: absolute;
+  inset: -45% 45% 55% -35%;
+  border-radius: 50%;
+  background: var(--cc-glow, var(--cc-purple));
+  opacity: .07;
+  filter: blur(72px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* QUIET — secondary content: same language, less presence. */
+.cc-card--quiet {
+  background: var(--cc-card-bg-quiet);
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 26px rgba(0, 0, 0, 0.28);
+}
+
+/* ACCENT — the one card that matters most on a screen: a luminous edge and
+   a slightly stronger wash. Still nowhere near a neon box. Use sparingly. */
+.cc-card--accent {
+  border-color: color-mix(in srgb, var(--cc-glow, var(--cc-purple)) 34%, transparent);
+  box-shadow:
+    var(--cc-card-inset),
+    0 18px 44px rgba(0, 0, 0, 0.36),
+    0 0 30px color-mix(in srgb, var(--cc-glow, var(--cc-purple)) 13%, transparent);
+}
+.cc-card--accent::before { opacity: .12; }
+
+/* FLAT — dense areas (tables, nested panels) where any glow adds noise. */
+.cc-card--flat {
+  background: rgba(255, 255, 255, 0.028);
+  border-color: rgba(255, 255, 255, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Compact by default — density is the point of this product. Padding lands
+   on the inner element, so it sits inside the clipped glass surface.
+   Legacy .cc-card call sites keep their own padding rules below. */
+.cc-card--pad-sm > .cc-card__inner { padding: 14px 16px; }
+.cc-card--pad-md > .cc-card__inner { padding: 18px 20px; }
+.cc-card--pad-lg > .cc-card__inner { padding: 22px 24px; }
+
+/* Hover only where the card is genuinely interactive. */
+.cc-card--interactive { cursor: pointer; }
+.cc-card--interactive:hover {
+  transform: translateY(-3px);
+  background: linear-gradient(165deg, rgba(18, 23, 46, 0.90) 0%, rgba(11, 14, 28, 0.88) 100%);
+  border-color: color-mix(in srgb, var(--cc-glow, var(--cc-purple)) 42%, rgba(255, 255, 255, 0.12));
+  box-shadow:
+    var(--cc-card-inset),
+    0 22px 52px rgba(0, 0, 0, 0.40),
+    0 0 26px color-mix(in srgb, var(--cc-glow, var(--cc-purple)) 16%, transparent);
+}
+.cc-card--interactive:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--cc-cyan) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .top-fans-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.top-fan-card { padding: 20px; }
 .top-fan-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
 .fan-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .fan-avatar, .fan-list-avatar, .dependency-avatar {
@@ -371,8 +525,7 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 }
 
 .fans-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.fan-mix-card { padding: 20px; margin-top: 16px; }
-.fan-mix-card h3 { margin: 5px 0 14px; font-size: 15px; }
+.fan-mix-card { margin-top: 16px; }
 .fan-mix-rows { display: flex; flex-direction: column; gap: 10px; }
 .fan-mix-row { display: grid; grid-template-columns: 90px 1fr 40px; align-items: center; gap: 12px; }
 .fan-mix-label { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; width: fit-content; }
@@ -384,19 +537,11 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .fan-mix-fill.fan-tier-new { background: #17d89a; }
 .fan-mix-fill.fan-tier-dormant { background: #67718c; }
 .fan-mix-pct { text-align: right; font-size: 11px; font-weight: 800; color: #c3c9db; }
-.chart-card { padding: 20px; }
-.chart-header { display: flex; align-items: flex-start; justify-content: space-between; }
-.chart-header h3 { margin: 4px 0 4px; font-size: 16px; }
-.chart-header p { margin: 0; color: #737e9a; font-size: 11px; }
 .chart-badge { border: 1px solid rgba(139,92,246,.2); border-radius: 999px; padding: 5px 8px; color: #9c7cff; font-size: 8px; font-weight: 800; }
 .chart-area { height: 190px; margin-top: 15px; }
 .chart-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #67718c; font-size: 11.5px; text-align: center; padding: 0 20px; }
 
-.dependency-card { position: relative; overflow: hidden; border: 1px solid rgba(255,107,115,.19); border-radius: 20px; padding: 24px; background: linear-gradient(135deg, rgba(20,24,48,.98), rgba(25,17,39,.98)); }
-.dependency-danger { box-shadow: 0 18px 50px rgba(0,0,0,.25), 0 0 45px rgba(255,67,83,.06); }
-.dependency-glow { position: absolute; top: -120px; right: -100px; width: 320px; height: 250px; border-radius: 50%; background: rgba(255,65,82,.07); filter: blur(70px); pointer-events: none; }
-.dependency-top { position: relative; display: flex; justify-content: space-between; gap: 30px; }
-.dependency-top h3 { margin: 5px 0; font-size: 22px; }
+.dependency-top { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 30px; margin-top: 8px; }
 .dependency-top p { max-width: 620px; margin: 0; color: #7d87a1; font-size: 12px; line-height: 1.5; }
 .dependency-status { align-self: flex-start; border-radius: 999px; padding: 7px 12px; font-size: 9px; font-weight: 900; letter-spacing: .1em; }
 .status-high, .status-critical { color: #ff6b73; border: 1px solid rgba(255,107,115,.3); background: rgba(255,107,115,.08); animation: dependencyPulse 2.4s ease-in-out infinite; }
@@ -419,7 +564,6 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .dependency-upgrade { margin-left: auto; border: 1px solid rgba(236,59,175,.3); border-radius: 9px; padding: 9px 13px; background: rgba(236,59,175,.07); color: #f06bc4; font-size: 10px; font-weight: 800; cursor: pointer; }
 .dependency-lock-copy { margin-top: 13px; color: #69738e; font-size: 10px; }
 
-.fan-list-card { padding: 20px; }
 .fan-list-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .fan-list-header h3 { margin: 5px 0; font-size: 18px; }
 .fan-list-header p { margin: 0; color: #707a96; font-size: 11px; }
@@ -494,17 +638,28 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .sessions-title { font-size: 26px; font-weight: 900; background: linear-gradient(90deg,#22D3EE,#A855F7,#EC4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 4px; }
 .sessions-subtitle { color: #8b96b8; font-size: 13px; max-width: 520px; }
 
-.glass-panel, .session-card {
+/* Same surface as .cc-card, expressed for the call sites that use this
+   class name. Reads the shared tokens so there is one definition of the
+   CamCashGrl glass surface, not two that drift apart. .session-card was
+   dropped from this rule when Sessions migrated: it now renders the real
+   Card component, so restating the surface for it would be exactly the
+   duplication this rule exists to prevent. */
+.glass-panel {
   position: relative;
-  background: linear-gradient(135deg, rgba(18,28,58,0.92), rgba(25,17,48,0.88));
-  border: 1px solid rgba(100,120,210,0.22);
-  border-radius: 22px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.035);
+  background: var(--cc-card-bg);
+  border: 1px solid var(--cc-card-border);
+  border-radius: var(--cc-card-radius);
+  box-shadow: var(--cc-card-inset), var(--cc-card-drop);
   backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .session-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 22px; }
 .session-pill-group { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Shared PlatformFilter component (components/ui/PlatformFilter.jsx) reuses
+   .session-pill for its buttons — this is only the wrapping layout, same
+   rhythm as .session-pill-group. */
+.platform-filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .session-pill {
   padding: 7px 15px; border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: #8b96b8;
@@ -520,7 +675,14 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 }
 
 .session-kpis { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 12px; margin: 24px 0; }
-.session-kpi { padding: 16px 16px; border-radius: 16px; }
+/* Summary strip: six KPIs sharing ONE surface instead of six competing
+   cards. Layout only — the surface, glow and padding come from the shared
+   Card the strip is rendered into, and the type comes from the existing
+   .session-kpi-* classes below. Thin rules separate the cells so the strip
+   still reads as six figures without six borders. */
+.session-summary { margin-top: 24px; }
+.session-kpi-cell { padding-left: 16px; border-left: 1px solid rgba(255,255,255,0.06); }
+.session-kpi-cell:first-child { padding-left: 0; border-left: 0; }
 .session-kpi-label { font-size: 10px; color: #687696; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
 /* Qualifier under a KPI value — says which population the number covers, so
    figures on different bases are not read as one set. */
@@ -532,38 +694,71 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 
 .section-label { font-size: 12.5px; font-weight: 800; color: #f4f7ff; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
-.recent-session-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
-.session-card { padding: 22px; overflow: hidden; }
-.session-card::before {
-  content: ""; position: absolute; inset: -100px auto auto -100px; width: 220px; height: 220px;
-  background: rgba(34,211,238,0.07); filter: blur(70px); pointer-events: none;
+/* Session buckets — the old Sessions information architecture (snapshot,
+   who drove it, what drove it) at current-system density. Each bucket is a
+   StandardCard (see SessionBucket in Sessions.js); these classes are
+   layout/type only — the surface comes from the shared Card underneath.
+   320px minimum: enough for a tipper row's three columns without wrapping,
+   while still fitting 2-4 per row on a wide screen instead of 2 giant ones. */
+.recent-session-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+
+.bucket-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bucket-type { font-size: 11px; font-weight: 800; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bucket-platform { font-weight: 700; margin-left: 4px; }
+.bucket-head .session-card-quality { font-size: 9.5px; padding: 2px 7px; margin-left: 0; flex-shrink: 0; }
+.bucket-date { margin-top: 4px; font-size: 11px; color: #8b96b8; }
+/* Performance-vs-average — same colours/wording as the drawer's banner, at
+   tile scale. */
+.bucket-perf-banner {
+  margin-top: 8px; padding: 6px 9px; border-radius: 8px; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; gap: 6px;
 }
-.session-card-top { display: flex; justify-content: space-between; gap: 20px; position: relative; z-index: 1; }
-.session-card-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: .04em; margin-bottom: 6px; }
-.session-card-date { font-size: 14px; color: #f4f7ff; font-weight: 700; }
+.bucket-perf-banner.is-good { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.28); color: #10B981; }
+.bucket-perf-banner.is-low  { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.28); color: #F87171; }
+
+/* SNAPSHOT — earnings/$hr/duration/tips, four cells sharing one row rather
+   than four separate boxes, matching the KPI-strip pattern used elsewhere
+   on this page. */
+.bucket-snapshot { margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+.bucket-snapshot > div { display: flex; flex-direction: column; gap: 2px; }
+.bucket-snapshot span { font-size: 9px; color: #687696; text-transform: uppercase; letter-spacing: .04em; }
+.bucket-snapshot strong { font-size: 14px; color: #f4f7ff; font-variant-numeric: tabular-nums; }
+
+.bucket-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+.bucket-label { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #8b96b8; margin-bottom: 6px; }
+
+/* WHO DROVE IT — real tipper identities as clickable rows (onViewFan, when
+   supplied) rather than plain text, since the fan profile they'd open to is
+   already a real destination in the product. */
+.bucket-tippers { display: flex; flex-direction: column; }
+.bucket-tipper-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 0; background: none; border: 0; border-bottom: 1px solid rgba(130,140,190,0.08);
+  font: inherit; font-size: 12px; color: inherit; text-align: left; cursor: pointer;
+}
+.bucket-tipper-row:disabled { cursor: default; }
+.bucket-tipper-row:last-child { border-bottom: 0; }
+.bucket-tipper-name { flex: 1; color: #f4f7ff; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bucket-tipper-pct { color: #8b96b8; font-size: 11px; }
+.bucket-tipper-row strong { color: #ffc43d; font-variant-numeric: tabular-nums; }
+.bucket-meta-line { margin-top: 4px; font-size: 11.5px; color: #8b96b8; }
+
+/* WHAT DROVE IT — the engine's own insight strings. */
+.bucket-drove-line { margin-top: 6px; font-size: 12px; color: #aeb9d5; line-height: 1.4; }
+.bucket-drove-line:first-child { margin-top: 0; }
+
+.bucket-foot-link {
+  display: block; width: 100%; margin-top: 12px; padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06); background: none; border-left: 0; border-right: 0; border-bottom: 0;
+  font: inherit; font-size: 12px; font-weight: 800; color: var(--cc-pink); text-align: left; cursor: pointer;
+}
+
 .session-card-quality {
-  display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10.5px; font-weight: 800; margin-left: 4px;
+  display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10.5px; font-weight: 800; margin-left: 4px; flex-shrink: 0;
 }
-.session-money { text-align: right; }
-.session-money strong { display: block; font-size: 27px; color: #f4f7ff; }
-.session-money span { display: block; margin-top: 4px; color: #26e0ff; font-weight: 700; font-size: 12px; }
-
-.session-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 20px 0; position: relative; z-index: 1; }
-.session-stat-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 10px 12px; }
-.session-stat-label { font-size: 9.5px; color: #687696; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
-.session-stat-value { font-size: 14px; font-weight: 800; color: #f4f7ff; }
-
-.session-insight-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 18px; margin-top: 18px; position: relative; z-index: 1; }
-.insight-block-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
 .insight-line { display: flex; gap: 8px; margin-top: 9px; color: #aeb9d5; font-size: 13px; line-height: 1.45; }
 .insight-line.positive span { color: #21d99a; font-weight: 800; }
 .insight-line.opportunity span { color: #ffc43d; font-weight: 800; }
-
-.who-drove-list { display: flex; flex-direction: column; }
-.top-tipper { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(130,140,190,0.10); }
-.top-tipper span { color: #b7c0d8; font-size: 12px; }
-.top-tipper strong { color: #ffc43d; }
-.top-tipper .tipper-name { color: #f4f7ff; font-weight: 700; flex: 1; }
 
 .gradient-button {
   width: 100%; margin-top: 20px; padding: 13px 18px; border: 0; border-radius: 12px;
@@ -576,6 +771,26 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .session-two-col { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; margin-bottom: 22px; }
 
 .session-table-wrap { overflow-x: auto; }
+/* Session History sits on a plain page section (not a card — density and
+   the requirement that it read as a record, not another container), but a
+   thin border in the same tokens as every card gives it the same edge
+   language as the rest of the page instead of looking like a leftover
+   legacy block. */
+.session-history {
+  border: 1px solid var(--cc-card-border);
+  border-radius: var(--cc-card-radius);
+  padding: 18px 20px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+@media (max-width: 700px) {
+  /* Session bucket header: type+platform and the quality badge can't both
+     fit on one line at 390px without a long platform name (e.g.
+     "MyFreeCams") going to ellipsis — wrap instead so the platform reads in
+     full. */
+  .bucket-head { flex-wrap: wrap; }
+  .bucket-type { white-space: normal; overflow: visible; text-overflow: clip; }
+}
 .session-table-header, .session-table-row {
   display: grid; grid-template-columns: 1.2fr 1fr 0.9fr 0.8fr 0.8fr 0.8fr 0.6fr 0.7fr; gap: 12px; align-items: center;
 }
@@ -595,14 +810,196 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 .session-empty-title { font-size: 15px; font-weight: 800; color: #f4f7ff; margin-bottom: 6px; }
 .session-empty-body { font-size: 13px; color: #687696; max-width: 420px; margin: 0 auto; }
 
+/* ══════════════════════════════════════════════════════════════════════
+   CARD TEMPLATES — composition only.
+   The surface (glass, border, radius, blur, shadow, glow, hover, focus,
+   reduced motion) belongs to .cc-card. Everything here is layout and
+   hierarchy: how a template arranges its content on that surface.
+   Nothing in this block may redefine a background, border or radius.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Shared type scale across every template, so eight compositions read as
+   one product rather than eight designs. */
+.cc-t-eyebrow {
+  font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  color: #6f7b99;
+}
+.cc-t-title { margin-top: 6px; font-size: 15px; font-weight: 800; color: #f4f7ff; letter-spacing: -0.01em; }
+.cc-t-body  { margin-top: 8px; font-size: 12.5px; line-height: 1.55; color: #8d93aa; }
+.cc-t-foot  { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
+.cc-t-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 800; color: var(--cc-pink);
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+.cc-t-link:hover { color: #ff62c4; }
+
+/* 02 METRIC — one number dominates; the delta sits under it, never beside
+   it competing for the same weight. */
+.cc-t-metric { margin-top: 10px; font-size: 34px; line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; color: #f4f7ff; }
+.cc-t-metric--lg { font-size: 42px; }
+.cc-t-delta { margin-top: 8px; font-size: 12.5px; font-weight: 700; }
+.cc-t-delta--up   { color: #21d99a; }
+.cc-t-delta--down { color: #ff9a7a; }
+.cc-t-sub { margin-top: 6px; font-size: 11.5px; color: #6f7b99; }
+
+/* 03 SPLIT — primary figure, a rule, then label/value rows. The rows are
+   deliberately quieter than the figure above them. */
+.cc-t-split-rows { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.07); }
+.cc-t-split-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+  padding: 7px 0; font-size: 12.5px;
+}
+.cc-t-split-row + .cc-t-split-row { border-top: 1px solid rgba(255,255,255,0.04); }
+.cc-t-split-row > span   { color: #8d93aa; }
+.cc-t-split-row > strong { color: #f4f7ff; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 04 INSIGHT — the takeaway is the hierarchy. The headline wraps a
+   gradient figure inside running text, so it reads as a sentence rather
+   than a KPI. */
+.cc-t-insight-head {
+  margin-top: 10px; font-size: 20px; line-height: 1.3; font-weight: 800;
+  color: #f4f7ff; letter-spacing: -0.015em;
+}
+.cc-t-insight-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px; margin-right: 9px; font-size: 13px;
+  border: 1px solid color-mix(in srgb, var(--cc-glow, var(--cc-purple)) 34%, transparent);
+  background: color-mix(in srgb, var(--cc-glow, var(--cc-purple)) 14%, transparent);
+}
+
+/* 05 COMPARISON — a real table. Density is the point; no glow, tabular
+   figures, and the leading row marked rather than recoloured wholesale. */
+.cc-t-table { width: 100%; border-collapse: collapse; }
+.cc-t-table th {
+  text-align: right; padding: 0 0 10px 12px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #6f7b99;
+}
+.cc-t-table th:first-child { text-align: left; padding-left: 0; }
+.cc-t-table td {
+  text-align: right; padding: 9px 0 9px 12px; font-size: 12.5px; color: #c2cbe4;
+  border-top: 1px solid rgba(255,255,255,0.055); font-variant-numeric: tabular-nums;
+}
+.cc-t-table td:first-child { text-align: left; padding-left: 0; color: #f4f7ff; font-weight: 600; }
+.cc-t-table tr.is-top td { color: #f4f7ff; }
+.cc-t-table tr.is-top td:first-child { color: var(--cc-cyan); }
+.cc-t-badge {
+  display: inline-block; margin-left: 7px; padding: 1px 6px; border-radius: 999px;
+  font-size: 8.5px; font-weight: 900; letter-spacing: .08em;
+  color: #06101a; background: var(--cc-cyan);
+}
+
+/* 06 FEATURE / CTA — headline, short promise, list, action. Stronger
+   ambient light is allowed here; the surface still does the lighting. */
+.cc-t-feature-head { font-size: 21px; line-height: 1.22; font-weight: 800; letter-spacing: -0.02em; color: #f4f7ff; }
+.cc-t-feature-list { margin: 14px 0 0; padding: 0; list-style: none; }
+.cc-t-feature-list li {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin-top: 8px; font-size: 12.5px; color: #b3bdd6;
+}
+.cc-t-feature-list li::before { content: "✓"; color: var(--cc-cyan); font-weight: 900; font-size: 11px; line-height: 1.35; }
+.cc-t-feature-action { margin-top: 18px; }
+
+/* 07 MILESTONE — progress and streak. Celebratory through restraint: one
+   gradient bar and quiet day markers, not trophies. */
+.cc-t-goal { display: flex; align-items: baseline; gap: 8px; margin-top: 10px; }
+.cc-t-goal strong { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; color: #f4f7ff; }
+.cc-t-goal span   { font-size: 14px; font-weight: 700; color: #6f7b99; }
+.cc-t-progress { margin-top: 12px; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.cc-t-progress-fill {
+  height: 100%; border-radius: inherit; background: var(--cc-gradient);
+  transform-origin: left center; animation: ccProgressIn .8s cubic-bezier(.22,.9,.3,1) both;
+}
+@keyframes ccProgressIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.cc-t-progress-meta { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11.5px; color: #6f7b99; }
+.cc-t-streak { display: flex; gap: 7px; margin-top: 12px; }
+.cc-t-streak-day {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  font-size: 9.5px; font-weight: 700; color: #6f7b99;
+}
+.cc-t-streak-dot {
+  width: 26px; height: 26px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; font-size: 11px;
+  border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); color: #6f7b99;
+}
+.cc-t-streak-dot.is-hit {
+  border-color: color-mix(in srgb, var(--cc-cyan) 40%, transparent);
+  background: color-mix(in srgb, var(--cc-cyan) 14%, transparent);
+  color: var(--cc-cyan);
+}
+
+/* 08 HERO — rare, page-level. Larger type and layered light; still the
+   same glass, the same radius, the same restraint about fills. */
+.cc-t-hero-head { font-size: 30px; line-height: 1.12; font-weight: 800; letter-spacing: -0.03em; color: #f4f7ff; }
+.cc-t-hero-body { margin-top: 12px; max-width: 46ch; font-size: 13.5px; line-height: 1.6; color: #b3bdd6; }
+.cc-t-hero-stats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.cc-t-hero-stat {
+  flex: 1 1 140px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.075); background: rgba(255,255,255,0.03);
+}
+.cc-t-hero-stat strong { display: block; font-size: 19px; font-weight: 800; color: #f4f7ff; letter-spacing: -0.02em; }
+.cc-t-hero-stat span   { display: block; margin-top: 4px; font-size: 11px; color: #6f7b99; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-t-progress-fill { animation: none; }
+}
+
+/* ── Gradient typography ───────────────────────────────────────────────
+   The signature treatment: the brand gradient fills the characters of an
+   important number. Used sparingly — supporting text stays readable.
+   Requires a bold weight and a reasonable size to read as intended. */
+.cc-gradient-text {
+  /* The palette is laid down twice so the full cyan → blue → purple → pink
+     ramp is visible across the characters at every point of the travel. A
+     single ramp at >100% width slides the pink off the end of a short
+     string, which is how the signature reads as "just blue".
+
+     ONE ramp at 120%, not two at 200%. Doubling the palette kept all four
+     colours on screen, but the seam where one ramp met the next travelled
+     through the number and read as a pink pinch in the middle of a figure —
+     the opposite of a finishing accent.
+
+     With a single ramp slightly wider than the text, cyan → blue → purple
+     covers the number and pink sits at the far end, easing in and out as the
+     position drifts. Purple holds to 90%; pink closes the last 10% and is
+     never more than a tail. Only the four canonical brand colours appear —
+     the intermediate violet an earlier pass introduced (#A855F7) was a
+     near-miss of #7C5CFF and is gone. */
+  background-image: linear-gradient(90deg,
+    #16F4FF 0%, #55B8FF 30%, #7C5CFF 64%, #7C5CFF 90%, #FF2BAE 100%);
+  background-size: 120% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  animation: ccGradientDrift 18s ease-in-out infinite alternate;
+}
+/* Travels gently across the characters and back. No flash, no pulse, no
+   hue cycling — the same four brand colours, moving slowly. */
+@keyframes ccGradientDrift {
+  from { background-position:   0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+/* Static variant for places where even a slow drift is unwanted. */
+.cc-gradient-text--static { animation: none; background-position: 0% 50%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-card,
+  .cc-card--interactive:hover { transition: none; transform: none; }
+  .cc-gradient-text { animation: none; background-position: 0% 50%; }
+}
+
 /* ── Session detail drawer — fixed to viewport, slides from right ── */
 .session-drawer-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(4,6,14,0.6); }
 .session-drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); z-index: 91;
   background: linear-gradient(160deg, rgba(15,19,36,0.98), rgba(11,10,24,0.98));
-  border-left: 1px solid rgba(100,120,210,0.22);
+  border-left: 1px solid var(--cc-card-border);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   padding: 22px; overflow-y: auto; animation: sessionDrawerIn .22s ease;
-  box-shadow: -20px 0 60px rgba(0,0,0,0.4);
+  box-shadow: -20px 0 60px rgba(0,0,0,0.4), inset 1px 0 0 rgba(255,255,255,0.05);
 }
 @keyframes sessionDrawerIn { from { transform: translateX(28px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 .drawer-close { background: none; border: none; color: #687696; font-size: 18px; cursor: pointer; }
@@ -612,6 +1009,9 @@ html, body { overflow-x: hidden; max-width: 100vw; }
 
 @media (max-width: 1100px) {
   .session-kpis { grid-template-columns: repeat(3,1fr); }
+  /* Once the strip wraps, a left rule would fall in the middle of a row
+     rather than between figures, so the gap does the separating instead. */
+  .session-kpi-cell { padding-left: 0; border-left: 0; }
   .recent-session-grid { grid-template-columns: 1fr; }
   .session-two-col { grid-template-columns: 1fr; }
 }

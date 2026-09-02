@@ -5,6 +5,10 @@ import {
 } from "recharts"
 import { calcPotentialEarningsRecovery, computeFanTrend } from "../../lib/analytics"
 import FanProfileDrawer from "./FanProfileDrawer"
+// Approved master card templates. Every card surface on this page is one of
+// them; nothing here defines its own glass, border, radius or glow.
+import Card from "../../components/ui/Card"
+import { StandardCard, InsightCard, FeatureCard } from "../../components/ui/cards"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS — Fan Intelligence
@@ -120,8 +124,13 @@ function applyChurnCap(sorted, capPerPlatform = 1) {
   return [...kept, ...demoted]
 }
 
-function IntelligenceCard({ children, className = "" }) {
-  return <div className={`cc-card ${className}`}>{children}</div>
+// Was a bare <div className="cc-card">, which reached past the shared
+// component into the class and so skipped .cc-card__inner, the padding
+// scale and the glow variables entirely. It now renders the real Card, so
+// this page's surfaces are the same object the rest of the product uses.
+// The className is layout only — the content grids the CSS still owns.
+function IntelligenceCard({ children, className = "", ...rest }) {
+  return <Card variant="glass" padding="md" className={className} {...rest}>{children}</Card>
 }
 
 // ── TOP 3 FAN CARD ─────────────────────────────────────────────────────────
@@ -133,7 +142,7 @@ function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
   const isHeatingUp = trend.trend === "up"
 
   return (
-    <IntelligenceCard className="top-fan-card">
+    <IntelligenceCard>
       <div className="top-fan-header">
         <div className="fan-identity">
           <div className={`fan-avatar ${rank === 1 ? "fan-avatar-primary" : ""} ${isHeatingUp ? "fan-heating-glow" : ""}`}>
@@ -194,15 +203,18 @@ function TopFanCard({ fan, rank, isPro, onView, onUpgrade }) {
 }
 
 // ── CHART CARD ─────────────────────────────────────────────────────────────
+// StandardCard: supporting information wrapped around a specialised
+// display. The Recharts figure keeps its own structure — a chart genuinely
+// needs it — the template only supplies the surface and the eyebrow/title.
 function ChartCard({ title, eyebrow, description, children, badge }) {
   return (
-    <IntelligenceCard className="chart-card">
-      <div className="chart-header">
-        <div><div className="chart-eyebrow">{eyebrow}</div><h3>{title}</h3><p>{description}</p></div>
+    <StandardCard eyebrow={eyebrow} title={title} className="chart-card">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8d93aa" }}>{description}</p>
         {badge && <span className="chart-badge">{badge}</span>}
       </div>
       <div className="chart-area">{children}</div>
-    </IntelligenceCard>
+    </StandardCard>
   )
 }
 
@@ -270,15 +282,20 @@ function DependencyRiskCard({ dependencyRisk, topFan, isPro, onUpgrade, recovery
     : dependencyRisk.level.toUpperCase()
   const loss = dependencyRisk.lossIfTopFanLeaves ?? topFan?.totalUSD ?? 0
 
+  // InsightCard: this is analytics turned into a takeaway, which is exactly
+  // what the template is for. It replaces the page-specific .dependency-card
+  // surface (its own border, radius, gradient background and a hand-rolled
+  // .dependency-glow blur div) — a second card implementation that has now
+  // been deleted from globals.css. The status pill, metrics, fan block and
+  // upgrade copy are unchanged; only the shell and the header moved.
   return (
-    <div className={`dependency-card ${displayLevel === "HIGH" || displayLevel === "CRITICAL" ? "dependency-danger" : ""}`}>
-      <div className="dependency-glow" />
+    <InsightCard
+      glow="pink"
+      eyebrow="CAMCASH WATCH"
+      headline="Dependency Risk"
+    >
       <div className="dependency-top">
-        <div>
-          <div className="dependency-eyebrow">CAMCASH WATCH</div>
-          <h3>Dependency Risk</h3>
-          <p>One high-value fan is responsible for a meaningful concentration of your earnings.</p>
-        </div>
+        <p>One high-value fan is responsible for a meaningful concentration of your earnings.</p>
         <div className={`dependency-status status-${displayLevel.toLowerCase()}`}>{displayLevel}</div>
       </div>
 
@@ -318,7 +335,7 @@ function DependencyRiskCard({ dependencyRisk, topFan, isPro, onUpgrade, recovery
           🔒 Unlock the fan identity, dependency analysis, tipping patterns, and potential lost-earnings insights.
         </div>
       )}
-    </div>
+    </InsightCard>
   )
 }
 
@@ -339,9 +356,7 @@ function FanMixCard({ composition }) {
   ].filter((r) => r.pct > 0)
 
   return (
-    <IntelligenceCard className="fan-mix-card">
-      <div className="chart-eyebrow">FAN MIX</div>
-      <h3>How your audience breaks down</h3>
+    <StandardCard eyebrow="FAN MIX" title="How your audience breaks down" className="fan-mix-card">
       <div className="fan-mix-rows">
         {rows.map((r) => (
           <div className="fan-mix-row" key={r.label}>
@@ -351,7 +366,7 @@ function FanMixCard({ composition }) {
           </div>
         ))}
       </div>
-    </IntelligenceCard>
+    </StandardCard>
   )
 }
 
@@ -398,7 +413,7 @@ function FanIntelligenceList({
   const resetAnd = (setter) => (value) => { setter(value); setPage(1) }
 
   return (
-    <IntelligenceCard className="fan-list-card">
+    <IntelligenceCard>
       <div className="fan-list-header">
         <div>
           <div className="chart-eyebrow">FAN INTELLIGENCE</div>
@@ -485,10 +500,12 @@ function FanIntelligenceList({
         </div>
       )}
 
+      {/* The upgrade CTA that used to sit here is now the FeatureCard below
+          the list — one Pro surface per page, same as Overview and Platforms.
+          The context line stays, because it explains what this short list is. */}
       {!isPro && (
         <div className="free-list-footer">
           <span>Showing your highest-priority fans.</span>
-          <button onClick={() => onUpgrade?.("fan-intelligence")}>Upgrade to Pro to unlock full Fan Intelligence →</button>
         </div>
       )}
     </IntelligenceCard>
@@ -586,6 +603,26 @@ export default function Fans({ analytics, isPro = false, onUpgrade, onMessageFan
           onView={setOpenFan} onUpgrade={onUpgrade}
         />
       </section>
+
+      {!isPro && (
+        <section className="fans-section">
+          <FeatureCard
+            eyebrow="CREATOR PRO"
+            headline="See every fan, not just the ones at the top."
+            bullets={[
+              "The full fan list with filtering, search and pagination",
+              "Retention status and trend on every fan, not only the top three",
+              "The identity behind your dependency risk, and the tipping pattern under it",
+              "Full fan profiles, with the history each figure is drawn from",
+            ]}
+            cta="Upgrade to Pro"
+            onCta={() => onUpgrade?.("fan-intelligence")}
+          >
+            You can already see your top revenue drivers. Pro opens the rest of the list and the
+            retention signals behind it.
+          </FeatureCard>
+        </section>
+      )}
 
       <FanProfileDrawer
         fan={openFan} isPro={isPro} dependencyRisk={dependencyRisk}

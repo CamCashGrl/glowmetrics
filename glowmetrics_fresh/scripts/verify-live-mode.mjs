@@ -171,21 +171,38 @@ check('revenue and tokens are summed from real live_tips rows',
   triggers.includes('totalRevenue += usd') && triggers.includes('totalTokens += Number(t.tokens) || 0'))
 
 // ══════════════════════════════════════════════════════════════════════
-// 7. FREE vs PRO — no surprise locks mid-session.
+// 7. FREE vs PRO — metered access (EXPERIENCE -> VALUE -> LIMIT -> UPGRADE),
+//    not a binary pre-session lock. A free creator now reaches
+//    LiveEnginePage and can actually stream a real session; only the NEXT
+//    session past the real monthly count is gated, and never mid-stream.
 // ══════════════════════════════════════════════════════════════════════
-check('Live Mode is Pro-gated before a session starts, not inside one',
-  page.includes('activeTab === "live" && (isPro ? <LiveEnginePage embedded />'))
-check('the lock is explained before starting, per the no-surprise-locks rule',
-  read('../app/dashboard/page.js').includes('never discovered mid-stream'))
-check('the Free preview is personalised from the creator\'s own real data',
-  page.includes('analytics?.canonicalBestTimes?.bestWindow') && page.includes('whales.length > 0'))
-check('the Free preview falls back to a generic line rather than fabricating one',
-  read('../app/dashboard/page.js').includes('Live Mode tracks your session pace, room health, and fan activity in real time while you stream.'))
-check('the Pro CTA is outcome-oriented, not a generic upgrade prompt',
-  read('../app/dashboard/page.js').includes('Turn On Live Coaching') &&
-  !read('../app/dashboard/page.js').includes('Upgrade to Pro — unlock Live Mode'))
-check('there is exactly one Pro CTA on the Free preview',
-  (page.match(/openUpgradeModal\('live_mode_locked'\)/g) || []).length === 1)
+check('the dashboard tab always mounts LiveEnginePage — no isPro ternary at this boundary',
+  page.includes('activeTab === "live" && (') &&
+  page.includes('<LiveEnginePage') &&
+  page.includes('embedded') &&
+  !page.includes('isPro ? <LiveEnginePage embedded /> :'))
+check('the dashboard wires a real onUpgradeClick/onViewSessions handoff, not a re-implemented modal',
+  page.includes('onUpgradeClick={() => openUpgradeModal(\'live_mode_locked\')}') &&
+  page.includes('onViewSessions={() => handleTabChange(\'sessions\')}'))
+check('a real, canonical-shaped free-session limit constant exists (same pattern as FREE_FAN_LIMIT)',
+  live.includes('const FREE_LIVE_SESSIONS_PER_MONTH ='))
+check('the limit is backed by a real count query against live_sessions, never a fabricated number',
+  live.includes("supabase.from('live_sessions').select('id', { count: 'exact', head: true })"))
+check('isPro is read from the canonical plan source (lib/plan.js), not reimplemented',
+  live.includes('isProPlan(prof)'))
+check('the limit only ever blocks the NEXT session — never an already-active one',
+  live.includes('!liveActive && !liveEvents.length && atFreeLimit'))
+check('handleGoLive itself refuses to start past the real limit (defense in depth)',
+  live.includes('if (!isPro && sessionsThisMonth != null && sessionsThisMonth >= FREE_LIVE_SESSIONS_PER_MONTH) return;'))
+check('the upgrade CTA is outcome-oriented, not a generic upgrade prompt',
+  live.includes("You've experienced Live Mode.") &&
+  live.includes('Unlock Unlimited Live Mode') &&
+  !live.includes('Upgrade to Pro — unlock Live Mode'))
+check('the impression/limit-reached funnel events reuse the canonical pro_preview_viewed mechanism',
+  live.includes("gtmTrack('pro_preview_viewed', { feature: 'live_mode' })") &&
+  live.includes("gtmTrack('live_mode_free_limit_reached'"))
+check('there is exactly one Pro CTA on the free-limit screen',
+  (live.match(/gtmTrack\('live_mode_upgrade_cta_clicked'/g) || []).length === 1)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

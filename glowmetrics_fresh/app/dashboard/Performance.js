@@ -1,5 +1,13 @@
 "use client"
 import { useMemo } from "react"
+// Approved master card templates. Every card surface on this page is one of
+// them; nothing here defines its own glass, border, radius or glow.
+import Card from "../../components/ui/Card"
+import { styleForPlatform, glowNameForPlatform } from "../../lib/platforms"
+import GradientText from "../../components/ui/GradientText"
+import {
+  StandardCard, ComparisonCard, InsightCard, FeatureCard, Eyebrow,
+} from "../../components/ui/cards"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PLATFORM PERFORMANCE  (the "Platforms" tab)
@@ -33,11 +41,9 @@ const C = {
   indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B",
   green: "#10B981", red: "#F87171", white: "#F1F5F9", text: "#94A3B8", muted: "#475569",
 }
-const glassCard = {
-  background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
-}
+// Card surface comes from the shared system (components/ui/Card.jsx),
+// which is the one place a glass surface is defined.
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
-const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
 // C.text, not C.muted — at 12px uppercase on the glass card, #475569 rendered
 // too dim to read comfortably. These are the section headings; they carry the
 // page's structure.
@@ -53,6 +59,11 @@ const fmtHoursLong = (h) => {
   const hrs = Math.floor(total / 60), mins = total % 60
   return hrs === 0 ? `${mins}m` : mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m`
 }
+// styleFor/glowNameFor call straight through to the shared functions —
+// pure alias, no behaviour change from the version that defined them here.
+const styleFor = styleForPlatform
+const glowNameFor = glowNameForPlatform
+
 const fmtHour = (h) => { const H = ((h % 24) + 24) % 24; return H === 0 ? "12 AM" : H < 12 ? `${H} AM` : H === 12 ? "12 PM" : `${H - 12} PM` }
 const fmtWindow = (h) => `${fmtHour(h)} – ${fmtHour(h + 2)}`
 
@@ -61,33 +72,6 @@ const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 
 const TIER_COPY = { high: "Strong pattern", supported: "Supported pattern", promising: "Early signal" }
 
-// One restrained accent per platform — a dark glass card with white primary
-// type and muted metadata, lifted by a single colour and a very subtle glow.
-// Unknown/undetected platforms fall through to the neutral slate accent
-// rather than being given a brand identity they don't have.
-const PLATFORM_STYLES = {
-  chaturbate: { short: "CB",  accent: "#22D3EE" },
-  bongacams:  { short: "BC",  accent: "#EC4899" },
-  myfreecams: { short: "MFC", accent: "#7C5CFF" },
-  camsoda:    { short: "CS",  accent: "#D946EF" },
-  stripchat:  { short: "SC",  accent: "#FB923C" },
-  streamate:  { short: "SM",  accent: "#38BDF8" },
-  flirt4free: { short: "F4F", accent: "#F472B6" },
-  cam4:       { short: "C4",  accent: "#34D399" },
-  livejasmin: { short: "LJ",  accent: "#FBBF24" },
-}
-const NEUTRAL_STYLE = { short: "—", accent: "#94A3B8" }
-const styleFor = (name) => {
-  const key = String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "")
-  if (PLATFORM_STYLES[key]) return PLATFORM_STYLES[key]
-  // Derive an abbreviation from the name itself rather than inventing a brand
-  // accent for a platform we don't have colours for.
-  const words = String(name || "").trim().split(/\s+/).filter(Boolean)
-  const short = words.length > 1
-    ? words.map(w => w[0]).join("").slice(0, 3).toUpperCase()
-    : String(name || "?").slice(0, 2).toUpperCase()
-  return { ...NEUTRAL_STYLE, short }
-}
 const rgba = (hex, a) => {
   const h = hex.replace("#", "")
   const n = parseInt(h, 16)
@@ -121,19 +105,8 @@ function Metric({ label, value, accent }) {
 function PlatformCard({ p, share, onViewBreakdown }) {
   const s = styleFor(p.platform)
   return (
-    <div style={{
-      position: "relative", overflow: "hidden", borderRadius: 16,
-      ...glassCard, border: `1px solid ${rgba(s.accent, 0.2)}`,
-      padding: 20, transition: "border-color .2s ease, transform .2s ease",
-    }}>
-      {/* very subtle platform glow — restraint over a nightclub */}
-      <div style={{
-        position: "absolute", top: -90, left: -90, width: 200, height: 200, borderRadius: "50%",
-        background: `radial-gradient(circle, ${rgba(s.accent, 0.16)}, transparent 65%)`,
-        filter: "blur(28px)", pointerEvents: "none",
-      }} />
-
-      <div style={{ position: "relative" }}>
+    <Card variant="glass" padding="md" style={{ "--cc-glow": s.accent, borderColor: rgba(s.accent, 0.22) }}>
+      <div>
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <div style={{
@@ -216,7 +189,7 @@ function PlatformCard({ p, share, onViewBreakdown }) {
           >View in Money Map →</button>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -376,10 +349,9 @@ export default function Performance({
       </div>
 
       {!hasPlatforms ? (
-        <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 10 }}>Your platforms</div>
-          <div style={{ fontSize: 13.5, color: C.muted }}>Import your tip history to see how each of your platforms is performing.</div>
-        </div>
+        <StandardCard eyebrow="Your platforms">
+          <div style={{ fontSize: 13.5, color: C.muted, marginTop: 8 }}>Import your tip history to see how each of your platforms is performing.</div>
+        </StandardCard>
       ) : (
         <>
           {/* ── 1. YOUR PLATFORMS — the first and most important section ── */}
@@ -409,7 +381,7 @@ export default function Performance({
 
           {/* ── 2. REVENUE DISTRIBUTION ─────────────────────────────── */}
           {platforms.length > 1 && (
-            <div style={card()}>
+            <StandardCard>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
                 <div>
                   <div style={sectionLabel}>Revenue distribution</div>
@@ -433,61 +405,45 @@ export default function Performance({
                   )
                 })}
               </div>
-            </div>
+            </StandardCard>
           )}
 
           {/* ── 3. PLATFORM COMPARISON ──────────────────────────────── */}
           {platforms.length > 1 && (
-            <div style={card()}>
-              <div style={sectionLabel}>Platform comparison</div>
-              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginBottom: 16 }}>
+            <ComparisonCard
+              eyebrow="Platform comparison"
+              columns={[
+                { key: "metric", label: "Metric" },
+                ...platforms.map(p => ({ key: p.platform, label: styleFor(p.platform).short })),
+              ]}
+              rows={comparisonRows.map(row => {
+                // Leader is computed exactly as before: from the current
+                // values, over the platforms this row can actually measure.
+                const eligible = platforms.filter(row.eligible)
+                const leader = !row.noLeader && eligible.length > 1
+                  ? [...eligible].sort((a, b) => row.get(b) - row.get(a))[0]
+                  : null
+                return {
+                  key: row.label,
+                  cells: {
+                    metric: row.label,
+                    ...Object.fromEntries(platforms.map(p => [
+                      p.platform,
+                      leader && leader.platform === p.platform
+                        ? <strong style={{ color: "#21d99a" }}>{row.fmt(p)}</strong>
+                        : row.fmt(p),
+                    ])),
+                  },
+                }
+              })}
+            >
+              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>
                 Every figure measured over the same qualifying sessions. Highlights are calculated from these numbers, not fixed rankings.
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: "left", padding: "0 12px 12px 0", fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Metric</th>
-                      {platforms.map(p => {
-                        const s = styleFor(p.platform)
-                        return (
-                          <th key={p.platform} title={p.platform} style={{ textAlign: "right", padding: "0 0 12px 12px", fontSize: 12, fontWeight: 800, color: s.accent, whiteSpace: "nowrap" }}>
-                            {s.short}
-                          </th>
-                        )
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparisonRows.map(row => {
-                      const eligible = platforms.filter(row.eligible)
-                      const leader = !row.noLeader && eligible.length > 1
-                        ? [...eligible].sort((a, b) => row.get(b) - row.get(a))[0]
-                        : null
-                      return (
-                        <tr key={row.label}>
-                          <td style={{ padding: "10px 12px 10px 0", fontSize: 12.5, color: C.text, borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>{row.label}</td>
-                          {platforms.map(p => {
-                            const isLeader = leader && leader.platform === p.platform
-                            return (
-                              <td key={p.platform} style={{
-                                padding: "10px 0 10px 12px", textAlign: "right", fontSize: 12.5, whiteSpace: "nowrap",
-                                borderTop: `1px solid ${C.border}`,
-                                fontWeight: isLeader ? 800 : 500,
-                                color: isLeader ? C.green : "rgba(241,245,249,0.8)",
-                              }}>{row.fmt(p)}</td>
-                            )
-                          })}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 12 }}>
                 Green marks the leading platform on rates and totals where more than one platform is measurable. Hours, tips, fans and sessions are volume, not performance, so they aren&apos;t ranked.
               </div>
-            </div>
+            </ComparisonCard>
           )}
 
           {/* ── 4. WHAT DROVE THE CHANGE — per-platform attribution ───
@@ -495,8 +451,7 @@ export default function Performance({
                  vanishes reads as a bug, and the two reasons it can be
                  empty (a single-platform account vs. not enough history)
                  are different facts the reader deserves to be told apart. */}
-          <div style={card()}>
-            <div style={sectionLabel}>What drove the change</div>
+          <StandardCard eyebrow="What drove the change">
             <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginBottom: 14 }}>
               Month-over-month movement, split by platform.
             </div>
@@ -521,12 +476,11 @@ export default function Performance({
                 ))}
               </div>
             )}
-          </div>
+          </StandardCard>
 
           {/* ── 5. WHERE YOU'RE LEAVING MONEY — per-platform rate gap ── */}
           {missedByPlatform.length > 0 && (
-            <div style={card()}>
-              <div style={sectionLabel}>Where you&apos;re leaving money on the table</div>
+            <StandardCard eyebrow="Where you&apos;re leaving money on the table">
               <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6, marginBottom: 14 }}>
                 Measured rate gap between each platform&apos;s best window and a typical hour on it.
               </div>
@@ -540,31 +494,31 @@ export default function Performance({
                   </div>
                 ))}
               </div>
-            </div>
+            </StandardCard>
           )}
 
           {/* ── 6. WHAT YOUR DATA SAYS ──────────────────────────────── */}
           {insights.length > 0 && (
-            <div style={card()}>
-              <div style={sectionLabel}>What your data says</div>
-              <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
-                {insights.map((ins, i) => {
-                  const s = styleFor(ins.platform)
-                  return (
-                    <div key={i} style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${rgba(s.accent, 0.18)}` }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 800, color: s.accent, letterSpacing: "0.04em" }}>{ins.platform}</div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, marginTop: 6 }}>{ins.title}</div>
-                      <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.55 }}>{ins.body}</div>
-                    </div>
-                  )
-                })}
+            <div>
+              <div style={{ ...sectionLabel, marginBottom: 12 }}>What your data says</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+                {insights.map((ins, i) => (
+                  <InsightCard
+                    key={i}
+                    eyebrow={ins.platform}
+                    headline={ins.title}
+                    glow={glowNameFor(ins.platform)}
+                  >
+                    {ins.body}
+                  </InsightCard>
+                ))}
               </div>
             </div>
           )}
+
           {/* ── 7. ACCOUNT-WIDE CONTEXT — explicitly not per-platform ─ */}
           {(byDay.length > 1 || (dep && dep.level !== "low") || earningsTrend) && (
-            <div style={card()}>
-              <div style={sectionLabel}>Account-wide context</div>
+            <StandardCard eyebrow="Account-wide context">
               <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>
                 Across every platform combined — not a per-platform figure.
               </div>
@@ -616,27 +570,22 @@ export default function Performance({
                   </div>
                 </div>
               )}
-            </div>
+            </StandardCard>
           )}
         </>
       )}
 
       {/* ── PRO STRATEGY ───────────────────────────────────────────── */}
       {!isPro && hasPlatforms && (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap",
-          padding: "20px 24px", borderRadius: 16,
-          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(124,92,255,0.26)",
-        }}>
-          <div style={{ minWidth: 260, flex: 1 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 800, color: C.white }}>Want to turn this into a schedule?</div>
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 6, lineHeight: 1.6 }}>
-              Pro connects your platform performance, best windows, high-value fan timing, and a forecast into one personalized weekly plan — not just more exact numbers.
-            </div>
-          </div>
-          <BrandButton onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</BrandButton>
-        </div>
+        <FeatureCard
+          eyebrow="Creator Pro"
+          headline="Want to turn this into a schedule?"
+          cta="Build My Strategy →"
+          onCta={() => onUpgrade?.("performance_strategy")}
+        >
+          Pro connects your platform performance, best windows, high-value fan timing, and a forecast
+          into one personalized weekly plan — not just more exact numbers.
+        </FeatureCard>
       )}
     </div>
   )

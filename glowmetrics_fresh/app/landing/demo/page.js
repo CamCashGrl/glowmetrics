@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect, useRef } from "react"
+import { CARD_SURFACE } from "../../../components/ui/Card"
 
 // ─── DEMO DATA ────────────────────────────────────────────────────────────────
 // Multi-platform streamer: Chaturbate, BongaCams, MyFreeCams
@@ -13,12 +14,9 @@ const C = {
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
 }
 
-const glassCard = {
-  background: "rgba(15,20,32,0.75)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  backdropFilter: "blur(20px)",
-  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
-}
+// Card surface comes from the shared system (components/ui/Card.jsx),
+// which is the one place a glass surface is defined.
+const glassCard = CARD_SURFACE
 
 const now = Date.now()
 const daysAgo = (d) => new Date(now - d * 86400000).toISOString()

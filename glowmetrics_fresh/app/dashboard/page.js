@@ -22,6 +22,7 @@ import Fans from './Fans'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import { CARD_SURFACE } from "../../components/ui/Card"
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -122,12 +123,9 @@ const IMPORT_MESSAGES = [
   "Updating your dashboard…",
 ]
 
-const glassCard = {
-  background: "rgba(15,20,32,0.75)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  backdropFilter: "blur(20px)",
-  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
-}
+// Card surface comes from the shared system (components/ui/Card.jsx),
+// which is the one place a glass surface is defined.
+const glassCard = CARD_SURFACE
 
 const formatImportDate = (iso) => {
   if (!iso) return null
@@ -1545,7 +1543,7 @@ export default function Dashboard() {
     setReplayCoachingLoading(sessionId)
     supabase
       .from('coaching_events')
-      .select('id, type, priority, title, message, action_status, shown_at')
+      .select('id, type, category, priority, title, message, action_status, shown_at')
       .eq('session_id', sessionId)
       .order('shown_at', { ascending: true })
       .then(({ data }) => {
@@ -1571,7 +1569,7 @@ export default function Dashboard() {
     setRecentCoachingLoading(true)
     supabase
       .from('coaching_events')
-      .select('id, type, priority, title, message, action_status, shown_at, session_id')
+      .select('id, type, category, priority, title, message, action_status, shown_at, session_id')
       .in('session_id', recentIds)
       .order('shown_at', { ascending: false })
       .limit(30)
@@ -1759,12 +1757,12 @@ export default function Dashboard() {
   // Tab persistence
   const handleTabChange = (tab) => {
     gtmTrack('tab_switched', { tab_name: tab })
-    // Live Mode is the one tab that's ENTIRELY a locked Pro preview for
-    // free users (see the isPro gate a few hundred lines below) — this is
-    // the funnel's "Pro preview viewed" step for that surface specifically,
-    // fired at the moment of actually landing on it, not just clicking an
-    // upgrade CTA (which upgrade_click/paywall_hit already cover elsewhere).
-    if (tab === 'live' && !isPro) trackProPreviewViewed('live_mode')
+    // Live Mode's own pro_preview_viewed('live_mode') now fires from inside
+    // LiveEnginePage itself, at the moment its free-limit-reached screen
+    // actually renders — that tab is no longer a blanket lock for free
+    // users (see the always-render call site a few hundred lines below), so
+    // "landed on the tab" is no longer the same moment as "saw the Pro
+    // preview."
     setActiveTab(tab)
     if (typeof window !== 'undefined') {
       localStorage.setItem('camcash_tab', tab)
@@ -3625,55 +3623,29 @@ const stopImportMessageRotation = () => {
           />
         )}
 
-        {activeTab === "live" && (isPro ? <LiveEnginePage embedded /> : (() => {
-          // Live Mode is Pro-only (real-time coaching/room-health/predictive
-          // nudges is Layer 3 "Action" intelligence). Per the no-surprise-
-          // locks rule: this must be visible and explained BEFORE the user
-          // starts a session, never discovered mid-stream — so free users
-          // never reach LiveEnginePage at all, not even to see it locked
-          // once inside. Personalized where the user's own real data
-          // supports it; never a fabricated number.
-          const bw = analytics?.canonicalBestTimes?.bestWindow
-          const bestWindowLine = bw
-            ? `Your data shows a real earning pattern around ${fmtHour(bw.localHour)} — Live Mode tracks your pace against it in real time and tells you when you're ahead or behind.`
-            : whales.length > 0
-              ? `You have ${whales.length} repeat fan${whales.length === 1 ? '' : 's'} in your history. Live Mode flags them the moment they show up in a session, in real time.`
-              : `Live Mode tracks your session pace, room health, and fan activity in real time while you stream.`
-          return (
-            <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 0' }}>
-              <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>🔴</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 8 }}>While you&apos;re live, CamCash can watch your pace for you</div>
-                <div style={{ fontSize: 13, color: C.muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.6 }}>{bestWindowLine}</div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
-                {[
-                  { icon: '⚡', label: 'Real-time revenue pace', desc: 'See exactly how tonight compares to your average as tips come in.' },
-                  { icon: '🐳', label: 'Whale alerts', desc: 'Know instantly when a top fan joins your room.' },
-                  { icon: '🧭', label: 'Room-health coaching', desc: 'Live prompts when engagement or pace is slipping.' },
-                  { icon: '🎯', label: 'Peak-window countdown', desc: 'A live countdown to your own historical best hour.' },
-                ].map((f, i) => (
-                  <div key={i} style={{ padding: '14px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ fontSize: 18, marginBottom: 6 }}>{f.icon}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: C.white, marginBottom: 3 }}>{f.label}</div>
-                    <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{f.desc}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <button onClick={() => openUpgradeModal('live_mode_locked')} style={{ padding: '12px 28px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#06101A', background: 'linear-gradient(135deg,#22D3EE,#EC4899)', animation: 'upgradeGlow 2.2s ease-in-out infinite' }}>
-                  {trialEligible ? "Start My 7-Day Pro Trial →" : "Turn On Live Coaching →"}
-                </button>
-              </div>
-            </div>
-          )
-        })())}
+        {/* Live Mode is no longer a binary Pro lock at this boundary — a
+            free creator now gets real Live Mode usage (a real monthly
+            session count against the canonical entitlement pattern, same
+            shape as FREE_FAN_LIMIT) before ever seeing an upgrade screen.
+            LiveEnginePage owns that gating internally (usage banner, and
+            the limit-reached screen once the free allowance is used), the
+            same way it already owns auth/session state — this call site
+            only wires the one thing it cannot know about itself: how to
+            open THIS dashboard's upgrade modal. */}
+        {activeTab === "live" && (
+          <LiveEnginePage
+            embedded
+            onUpgradeClick={() => openUpgradeModal('live_mode_locked')}
+            onViewSessions={() => handleTabChange('sessions')}
+          />
+        )}
 
         {activeTab === "sessions" && (
           <Sessions
             sessions={analytics?.allValidSessions || []}
             meaningfulSessions={analytics?.meaningfulSessions || []}
             lowSignalSessionCount={analytics?.lowSignalSessionCount || 0}
+            whales={analytics?.whales || []}
             paidSessions={paidSessions}
             liveSessions={replaySessions}
             liveSessionsLoading={replayLoading}
