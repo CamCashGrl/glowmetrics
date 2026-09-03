@@ -1,13 +1,19 @@
-// Phase 3 regression: the Performance tab is the evidence layer, and it
-// computes nothing.
+// Regression guard: the Platforms tab (app/dashboard/Performance.js) is the
+// per-platform evidence layer, and it computes nothing.
 //
-// Performance is the most metric-dense surface in the product — denser than
-// the Command Center — so it is the likeliest place for local aggregation to
-// creep back in. That is the failure mode the whole analytics audit existed
-// to remove: components independently recomputing metrics and disagreeing
-// with each other. These checks fail the build if it starts aggregating, if
-// it invents a second best-time answer, or if it draws a chart that argues
-// against the canonical one.
+// This tab is the most metric-dense surface in the product — denser than the
+// Command Center — so it is the likeliest place for local aggregation to creep
+// back in. That is the failure mode the whole analytics audit existed to
+// remove: components independently recomputing metrics and disagreeing with
+// each other. These checks fail the build if it starts aggregating, if it
+// invents a second best-time answer, or if it hardcodes a ranking.
+//
+// The tab was rebuilt around one question — "how is each platform doing?" —
+// so the account-wide snapshot strip, the earnings/$-per-hour trend charts,
+// the session-performance split and the day-of-week chart are gone (they
+// answer "how am I doing overall?", which is the Overview/Command Center's
+// question). The checks below track the sections that exist now; the honesty
+// rules they enforce are unchanged.
 
 import { readFileSync } from 'fs'
 
@@ -22,6 +28,7 @@ const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$
 const src = strip(raw)
 const page = strip(readFileSync(new URL('../app/dashboard/page.js', import.meta.url), 'utf8'))
 const cc = strip(readFileSync(new URL('../app/dashboard/CommandCenter.js', import.meta.url), 'utf8'))
+const engine = strip(readFileSync(new URL('../lib/analytics.js', import.meta.url), 'utf8'))
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. NO LOCAL AGGREGATION.
@@ -38,84 +45,102 @@ check('does not import session detection', !src.includes('detectSessions'))
 check('does not re-derive an hourly rate from a total and an hour count',
   !/totalUSD\s*\/\s*[^)]*hours/i.test(src))
 check('does not compute a median itself (the engine owns every median)', !/calcMedian|function\s+median/i.test(src))
+// Revenue share is the one ratio computed here. It is a presentational split
+// of canonical platform totals against THEIR OWN sum — using the account-wide
+// analytics.totalUSD as the denominator would silently mix two populations
+// (that figure counts tips outside any qualifying session), so the shares
+// would understate every platform and never reach 100%.
+check('revenue share divides canonical platform totals by their own sum',
+  src.includes('platforms.reduce((s, p) => s + (p.totalUSD || 0), 0)') &&
+  src.includes('p.totalUSD / platformTotal'))
+check('revenue share does not divide by the account-wide total',
+  !/analytics\?\.totalUSD/.test(src))
 
 // ══════════════════════════════════════════════════════════════════════
 // 2. READS THE CANONICAL FIELDS, BY NAME.
 // ══════════════════════════════════════════════════════════════════════
 for (const field of [
-  'analytics?.totalUSD',
-  'analytics?.estimatedHourlyRate',
-  'analytics?.meaningfulSessionCount',
-  'analytics?.lowSignalSessionCount',
-  'analytics?.totalStreamMinutes',
-  'analytics?.uniqueFanCount',
-  'analytics?.monthlyData',
-  'analytics?.sessionPerformance',
-  'analytics?.latestPlatformDelta',
   'analytics?.platforms',
-  'analytics?.canonicalBestTimes?.bestWindow',
-  'analytics?.canonicalBestTimes?.grid',
+  'analytics?.latestPlatformDelta',
   'analytics?.missedRevenue?.cumulative_by_platform',
-  'analytics?.bestWindowFanOverlap',
-  'analytics?.dependencyRisk',
 ]) {
   check(`reads ${field}`, src.includes(field))
 }
+for (const field of ['totalUSD', 'usdPerHour', 'avgTipSize', 'uniqueFans', 'sessions', 'hours', 'tips']) {
+  check(`platform cards read the canonical platforms[].${field}`, new RegExp(`p\\.${field}\\b`).test(src))
+}
+// The per-platform fan count must stay a single canonical field. Summing
+// sessions[].uniqueFans in a component would double-count every returning
+// supporter — the engine dedupes them once, over the same meaningfulSessions
+// population every other platforms[] figure is built from.
+check('per-platform unique fans is produced by the engine, not the component',
+  engine.includes('uniqueFans:    _fans.size') && !/uniqueFans\s*\+=/.test(src))
 
 // ══════════════════════════════════════════════════════════════════════
-// 3. ONE BEST-TIME ANSWER. Performance must never rank its own.
+// 3. ONE BEST-TIME ANSWER. The tab must never rank its own.
 // ══════════════════════════════════════════════════════════════════════
-check('the best window comes from canonicalBestTimes.bestWindow, not a local ranking',
-  src.includes('analytics?.canonicalBestTimes?.bestWindow || null'))
-check('the day-of-week view filters out the tier the engine calls insufficient',
-  src.includes("grid.filter(g => g.tier !== \"insufficient\")"))
-check('the day-of-week view sums canonical totals/counts, it does not re-rank by a computed rate',
-  src.includes('map[g.localDay].totalUsd += g.totalUsd') && !/byDay[\s\S]{0,200}usdPerHour/.test(src))
-check('falls back to the canonical earlySignal rather than promoting a weak bucket',
-  src.includes('analytics?.canonicalBestTimes?.earlySignal'))
-check('confidence wording is driven by the canonical tier', src.includes('TIER_COPY[bestWindow.tier]'))
+check('the per-platform window comes from the canonical platforms[] fields',
+  src.includes('p.bestLocalDay') && src.includes('p.bestLocalHour'))
+check('confidence wording is driven by the canonical tier', src.includes('TIER_COPY[p.bestWindowConfidence]'))
+check('the best window is never shown without its confidence tier',
+  !/bestLocalDay[\s\S]{0,900}?<\/div>\s*\)\}/.test(src) || src.includes('p.bestWindowConfidence'))
 check('does not claim a tier the engine calls insufficient', !src.includes('insufficient:'))
-
-// A chart that visually contradicts the headline is the exact defect the
-// Command Center's 24-bar chart was replaced for. Here the bars are TOTAL $
-// while bestWindow ranks by MEDIAN $/hour, so the longest bar often is NOT
-// the best window — the page must say so in words rather than let the reader
-// infer a contradiction.
+// The account-wide day view may RESHAPE the canonical grid for display, but
+// never rebuild it: it drops the tier the engine calls insufficient and sums
+// canonical totals/counts, and it must not re-rank days by a rate it computed
+// itself (that would be a second best-time answer).
+check('the day view filters out the tier the engine calls insufficient',
+  src.includes('grid.filter(g => g.tier !== "insufficient")'))
+check('the day view sums canonical totals/counts, it does not re-rank by a computed rate',
+  src.includes('map[g.localDay].totalUsd += g.totalUsd') && !/byDay[\s\S]{0,200}usdPerHour/.test(src))
 check('the total-$ day chart explicitly states its unit', raw.includes('Total earned by day of week'))
 check('the chart explains why the biggest bar is not necessarily the best window',
   raw.includes("biggest bar isn&apos;t always your best window"))
 check('the explanation names the actual ranking statistic ($/hour median)',
   raw.includes('highest median') && raw.includes('$/hour'))
+check('no per-platform hour grid is rebuilt here',
+  !/\b(bestHourByDay|platHourUSD|platDayHourUSD)\b/.test(src))
 
 // ══════════════════════════════════════════════════════════════════════
 // 4. NO FABRICATED STATISTICS — the failure mode this engagement kept
-//    surfacing (hardcoded "+101%", "2x", "5x").
+//    surfacing (hardcoded "+101%", "2x", "5x", a hand-declared "best").
 // ══════════════════════════════════════════════════════════════════════
 check('no hardcoded percentage claims in copy', !/\+\d{1,3}%\s*(more|higher|better)/.test(src))
 check('no hardcoded "Nx" multiplier literals in copy', !/>\s*\d+(\.\d+)?x\s*</.test(src))
 check('every multiplier shown is computed from two canonical values',
-  src.includes('aboveMedian.avgUsdPerHour / belowOrAtMedian.avgUsdPerHour') &&
   src.includes('top.usdPerHour / bottom.usdPerHour'))
-check('findings are capped so the section cannot become a wall', src.includes('.slice(0, 5)'))
+// The comparison table highlights a leader per row. It must be derived from
+// the current values — a hand-declared winner goes stale the moment the
+// underlying data moves.
+check('the comparison table computes its leader from the current values',
+  src.includes('[...eligible].sort((a, b) => row.get(b) - row.get(a))[0]'))
+check('rows whose figure is not measurable cannot win their row',
+  src.includes('platforms.filter(row.eligible)'))
+check('volume rows are not ranked as if they were performance',
+  src.includes('noLeader: true'))
+// Insights are generated from the platform numbers, never written by hand.
+check('insights are generated from sorted canonical values',
+  src.includes('sort((a, b) => b.usdPerHour - a.usdPerHour)') &&
+  src.includes('sort((a, b) => b.totalUSD - a.totalUSD)'))
+check('insights are capped so the section cannot become a wall', src.includes('.slice(0, 4)'))
+check('insights are suppressed when there is nothing to compare against',
+  src.includes('if (platforms.length < 2) return []'))
 
 // ══════════════════════════════════════════════════════════════════════
 // 5. HONEST EMPTY / SPARSE STATES — never a fabricated or broken section.
 // ══════════════════════════════════════════════════════════════════════
-check('"what changed" degrades to an honest message', raw.includes('Not enough month-over-month history yet'))
+check('the tab degrades to an honest message with no imported platforms',
+  raw.includes('Import your tip history to see how each of your platforms is performing.'))
 check('attribution uses the required honest fallback wording',
   raw.includes('Not enough history to attribute this change.'))
 check('attribution distinguishes a single-platform account from missing history',
   raw.includes('Single-platform account'))
 check('attribution is gated on having at least two platforms AND a material delta',
   src.includes('delta.platforms.length >= 2') && src.includes('Math.abs(delta.totalDeltaUSD) >= 1'))
-check('the session split is gated on the engine having produced a distribution',
-  src.includes('sp?.distribution ?') || src.includes('sp?.distribution &&'))
-check('the $/hour chart refuses to draw from a single point',
-  src.includes('points.length < 2'))
-check('months with no rate-eligible sessions are dropped, not charted as $0',
-  src.includes('m.usdPerHour != null'))
-check('best-window section degrades honestly when nothing qualifies',
-  raw.includes('Not enough qualifying sessions yet to identify a best window'))
+check('comparison and distribution are suppressed for a single platform',
+  (src.match(/platforms\.length > 1 &&/g) || []).length >= 2)
+check('a platform with no measurable hours shows no hourly rate rather than $0.00/hr',
+  src.includes('p.hours > 0 ? `${fmtUsd(p.usdPerHour)}/hr` : "—"'))
 
 // ══════════════════════════════════════════════════════════════════════
 // 6. SCOPE LABELLING — the session-scoped platform total must never read
@@ -124,7 +149,7 @@ check('best-window section degrades honestly when nothing qualifies',
 check('per-platform earnings are labeled "in qualifying sessions", not "total"',
   raw.includes('in qualifying sessions'))
 check('platform hourly rate carries an explicit /hr unit and label',
-  src.includes('usdPerHour)}/hr') && raw.includes('hourly rate'))
+  src.includes('usdPerHour)}/hr') && raw.includes('Hourly average'))
 // Caught by the rendered review: the platform-efficiency banner and the
 // platform finding both read "$$5.50/hr" because a literal "$" was prefixed
 // onto fmtUsd(), which already emits one. Cheap to reintroduce, invisible in
@@ -143,18 +168,13 @@ check('no "$$" prefixed onto an fmtUsd() interpolation inside a template literal
     jsxDollarBug.length === 0, jsxDollarBug.map(l => l.trim().slice(0, 90)).join('\n      '))
 }
 
-check('the month-gap disclosure is present so a gappy comparison cannot read as consecutive',
-  raw.includes('inactive month') && src.includes('curMonth.gapMonths > 0'))
-check('the gap disclosure states the comparison is between ACTIVE months',
-  raw.includes('not consecutive calendar months'))
-
 // ══════════════════════════════════════════════════════════════════════
 // 7. FREE vs PRO — evidence stays free; one contextual strategy CTA.
 // ══════════════════════════════════════════════════════════════════════
 check('exactly one upgrade CTA in the component', (src.match(/onUpgrade\?\./g) || []).length === 1)
 check('the Pro footer only renders for non-Pro', src.includes('!isPro &&'))
 check('the Pro footer is gated on there being something real to build on',
-  src.includes('!isPro && (bestWindow || platforms.length > 0)'))
+  src.includes('!isPro && hasPlatforms'))
 check('the CTA is outcome-oriented, not a generic upgrade prompt',
   raw.includes('Build My Strategy') && !raw.includes('>Upgrade to Pro<'))
 check('no chart or section is hidden behind the paywall (Free sees the evidence)',
@@ -165,8 +185,15 @@ check('no chart or section is hidden behind the paywall (Free sees the evidence)
 // ══════════════════════════════════════════════════════════════════════
 check('Performance is imported by the dashboard', page.includes("import Performance from './Performance'"))
 check('Performance is rendered on the platforms tab', page.includes('<Performance'))
+// The account-wide trend charts answer "how am I doing overall", so they are
+// still passed in (they need raw tips/sessions this component never receives)
+// but must render inside the clearly-labelled account-wide block at the
+// bottom — never as the first thing on a per-platform page.
 check('the growth charts are passed in rather than re-mounted separately',
   page.includes('earningsTrend={') && page.includes('<DashboardGrowthCharts'))
+check('the growth charts render inside the account-wide block, not above the platform cards',
+  src.indexOf('Your platforms') < src.indexOf('{earningsTrend}') &&
+  src.indexOf('Account-wide context') < src.indexOf('{earningsTrend}'))
 check('the legacy inline Platform Comparison card is gone', !page.includes('🎯 Platform Comparison'))
 check('the legacy per-platform hourly heatmap is gone', !page.includes('Earnings by hour of day (your local time)'))
 // The legacy card ranked a platform's "Peak time" by RAW TOTAL $ earned in an
