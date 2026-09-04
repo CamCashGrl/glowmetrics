@@ -1,10 +1,10 @@
 "use client"
 import React, { useMemo, useState } from "react"
-import { calculateConfidence } from "../../lib/analytics"
+import ConfidenceBadge from "./ConfidenceBadge"
 
 // ─── Design tokens (matches the rest of the dashboard) ───────────────────────
 const BG     = "#0a0e1a"
-const CARD   = "rgba(255,255,255,0.03)"
+const CARD   = "rgba(15,20,32,0.75)"   // the dashboard's authentic card fill
 const BORDER = "rgba(255,255,255,0.08)"
 const TEXT   = "#94A3B8"
 const WHITE  = "#F1F5F9"
@@ -28,6 +28,9 @@ const card = (extra = {}) => ({
   border: `1px solid ${BORDER}`,
   borderRadius: 12,
   padding: "20px 24px",
+  // The dashboard's authentic card treatment. Without the bloom a card sits
+  // flat on the page; every other surface carries it.
+  backdropFilter: "blur(20px)", boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
   ...extra,
 })
 
@@ -446,13 +449,17 @@ function PeriodComparisonCard({ sessions }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 5. DATA RELIABILITY — session quality breakdown + confidence band
 // ═══════════════════════════════════════════════════════════════════════════════
-const CONFIDENCE_COLOR = { "Very Low": MUTED, "Low": GOLD, "Medium": CYAN, "High": GREEN }
-
-function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
+// 2C-2: this card used to call the account confidence helper itself and colour
+// a band from its four levels. That was a second confidence path — it counted
+// meaningfulSessions where the canonical `hourly_rate` insight counts
+// hourlyRateSessionCount, so the two could disagree about the same account.
+// The band now comes from the canonical insight via <ConfidenceBadge>. The
+// session counts, hours and percentages below are unchanged; only the WORD
+// beside them has a new source.
+function ReliabilityCard({ allValidSessions, meaningfulSessions, intelligence }) {
   const meaningfulTimed = meaningfulSessions.filter(s => !s.durationUnknown)
   const streamedHours = meaningfulTimed.reduce((s, x) => s + x.durationHours, 0)
   const lowSignalCount = allValidSessions.length - meaningfulSessions.length
-  const confidence = calculateConfidence(meaningfulSessions.length, streamedHours)
   const meaningfulPct = allValidSessions.length > 0 ? Math.round((meaningfulSessions.length / allValidSessions.length) * 100) : 0
   const knownDurationPct = meaningfulSessions.length > 0 ? Math.round((meaningfulTimed.length / meaningfulSessions.length) * 100) : 0
 
@@ -461,13 +468,7 @@ function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
       {sectionTitle("Data Reliability", "How much to trust the patterns above")}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <div style={{
-          padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 700,
-          background: `${CONFIDENCE_COLOR[confidence.level]}22`, color: CONFIDENCE_COLOR[confidence.level],
-          border: `1px solid ${CONFIDENCE_COLOR[confidence.level]}55`,
-        }}>
-          {confidence.label}
-        </div>
+        <ConfidenceBadge intelligence={intelligence} insight="hourly_rate" style={{ fontSize: 13, padding: "6px 14px" }} />
         <div style={{ color: MUTED, fontSize: 12 }}>
           {meaningfulSessions.length} usable session{meaningfulSessions.length === 1 ? "" : "s"} · {streamedHours.toFixed(1)}h streamed with a known duration
         </div>
@@ -507,7 +508,7 @@ function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AnalyticsCharts({ analytics }) {
+export default function AnalyticsCharts({ analytics, intelligence = null }) {
   const allValidSessions = analytics?.allValidSessions || []
   const meaningfulSessions = analytics?.meaningfulSessions || allValidSessions.filter(s => s.sessionQuality === "meaningful")
 
@@ -535,7 +536,7 @@ export default function AnalyticsCharts({ analytics }) {
 
       <OutlierCard sessions={meaningfulSessions} />
       <PeriodComparisonCard sessions={meaningfulSessions} />
-      <ReliabilityCard allValidSessions={allValidSessions} meaningfulSessions={meaningfulSessions} />
+      <ReliabilityCard allValidSessions={allValidSessions} meaningfulSessions={meaningfulSessions} intelligence={intelligence} />
     </div>
   )
 }

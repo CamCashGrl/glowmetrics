@@ -113,14 +113,19 @@ check('the engine computes each platform\'s window with the SAME function as the
 // ══════════════════════════════════════════════════════════════════════
 // 3. ONE CONFIDENCE VOCABULARY.
 // ══════════════════════════════════════════════════════════════════════
-check('the planner uses the canonical tier names as its badge keys',
-  ['high:', 'supported:', 'promising:', 'insufficient:'].every(k => src.includes(k)))
+// 2C-2: the planner no longer keeps a badge table keyed by tier name. It maps
+// the tier onto the ONE canonical ladder with fromConfidenceTier() and renders
+// the shared <ConfidenceBadge>, so the keys it used to own now live in exactly
+// one place (lib/intelligence/states.js).
+check('the planner maps tiers onto the canonical ladder',
+  src.includes('fromConfidenceTier(level)'))
+check('the planner keeps no badge table of its own', !src.includes('const CONF = {'))
 check('the old high/medium/low vocabulary is gone',
   !src.includes('label: "Medium" }') && !src.includes('"needs-testing":'))
-check('badge wording matches the wording used on the other tabs',
-  raw.includes('Strong pattern') && raw.includes('Supported pattern') && raw.includes('Early signal'))
+check('badge wording matches the other tabs because it is the same component',
+  raw.includes('import ConfidenceBadge from "./ConfidenceBadge"') && raw.includes('<ConfidenceBadge state={state}'))
 check('an unknown tier degrades to "not enough data", never to a confident label',
-  src.includes('CONF[level] || CONF.insufficient'))
+  src.includes('if (!badge)') && src.includes('"Not enough data"'))
 
 // ══════════════════════════════════════════════════════════════════════
 // 4. UNITS ARE LABELLED HONESTLY — the value is a MEDIAN now.

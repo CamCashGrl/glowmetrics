@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, toLocalDow, toLocalHour, resolveCurrentMonthGrowth } from "../../lib/analytics"
 import { toLocalDateStr } from "../../lib/analytics/localTime"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
@@ -13,7 +13,22 @@ import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate, normalizeRowPlatforms } from "../../lib/constants"
+import { FREE_MAX_PLATFORMS } from "../../lib/planLimits"
+import { computeIntelligence } from "../../lib/intelligence/readiness"
 import { track as gtmTrack } from '../../lib/track'
+import ContextualUpgradeModal from './ContextualUpgradeModal'
+import UnimportedPlatforms from './UnimportedPlatforms'
+import CreatorReportView from '../../components/creator-report/CreatorReportView'
+import PlatformROI from './PlatformROI'
+import ConversionLoop from './ConversionLoop'
+import { conversionPrompts } from '../../lib/conversionLoop'
+import { newlyUnlocked } from '../../lib/unlockProgress'
+import FreeTierNotice from './FreeTierNotice'
+import PeakWindowPlan from './PeakWindowPlan'
+import { SessionsNav, SessionsOverview, LiveSessionsEmpty } from './SessionsHome'
+import { buildUpgradeContext } from '../../lib/upgradeContexts'
+import { resolvePlatformEntitlement, filterEntitledRows } from '../../lib/platformEntitlement'
+import { atLeast, CLAIMABLE_FLOOR } from '../../lib/intelligence/states'
 import { isProPlan, trialDaysRemaining, getAccessState, TRIAL_DAYS } from '../../lib/plan'
 import { resolveCreatorTimezone, autoPopulateTimezoneIfMissing } from '../../lib/timezone'
 import CommandCenter from './CommandCenter'
@@ -30,28 +45,19 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 // openUpgradeModal(source). Each trigger fires because of something the
 // user actually just did, so the headline should say that back to them
 // instead of one generic pitch for every context. Falls back to
-// UPGRADE_COPY.default for any source not listed here.
-const UPGRADE_COPY = {
-  default: {
-    headline: "Unlock Your Full Earning Potential",
-    subhead: "You're only seeing a preview of your data. Here's what's waiting for you inside:",
-  },
-  multi_platform: {
-    headline: "You've tracked 1 platform",
-    subhead: "Compare all your platforms with Creator Pro to see exactly where you actually earn best.",
-  },
-  whales_cutoff: {
-    headline: "You've found your top fans",
-    subhead: "See your full fan list — every VIP, not just the first 3 — and track them over time.",
-  },
-  whales_empty: {
-    headline: "Unlock Your Full Fan Insights",
-    subhead: "See your highest-value fans, repeat spenders, and who's worth re-engaging.",
-  },
-  creator_report: {
-    headline: "You have enough data for deeper insights",
-    subhead: "Upgrade to unlock your remaining personalized recommendations for next stream.",
-  },
+// lib/upgradeContexts.js's DEFAULT for any source not listed there.
+// 2C-4: UPGRADE_COPY is retired. Every in-dashboard upgrade now goes through
+// ContextualUpgradeModal, whose copy comes from lib/upgradeContexts.js — one
+// catalogue that carries the actual discovery (its real numbers) into the ask,
+// instead of a headline pair plus a fixed six-bullet feature list shown
+// regardless of what the creator had just found.
+
+// Legacy session tab ids -> the sub-tab they now open inside `sessions`.
+// Kept so existing deep links and saved tabs keep working after the merge.
+const SESSION_TAB_ALIASES = {
+  sessions: 'history',
+  'live-sessions': 'live',
+  private: 'private',
 }
 
 const TAB_LOADING = (
@@ -60,6 +66,7 @@ const TAB_LOADING = (
   </div>
 )
 const CreatorReport = dynamic(() => import('./CreatorReport'), { ssr: false, loading: () => TAB_LOADING })
+const ImportSuccess = dynamic(() => import('./ImportSuccess'), { ssr: false })
 const Settings = dynamic(() => import('./Settings'), { ssr: false, loading: () => TAB_LOADING })
 const OnboardingChecklist = dynamic(() => import('./OnboardingChecklist'), { ssr: false })
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
@@ -116,7 +123,7 @@ const IMPORT_MESSAGES = [
   "Finding your peak stream hours…",
   "Analyzing your fans…",
   "Calculating your earnings…",
-  "Gathering AI insights…",
+  "Comparing your streaming windows…",
   "Creating your personalized streaming schedule…",
   "Updating your dashboard…",
 ]
@@ -1441,6 +1448,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   // Import flow: idle -> processing -> success | error
   const [importStage, setImportStage] = useState('idle')
+  // The canonical intelligence diff returned by POST /api/intelligence after a
+  // successful import — what that upload actually taught CamCash. Never
+  // computed here; see the POST in handleCSV().
+  const [importIntel, setImportIntel] = useState(null)
+  const [importIntelPending, setImportIntelPending] = useState(false)
   const [importMessageIdx, setImportMessageIdx] = useState(0)
   const importMessageTimerRef = useRef(null)
   const uploading = importStage === 'processing'
@@ -1454,6 +1466,16 @@ export default function Dashboard() {
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
+  // ── SESSIONS: one destination, four views ────────────────────────────────
+  // The three former sidebar entries are now sub-tabs. Their old activeTab ids
+  // still work as deep links (localStorage, the extension, anything already
+  // pointing at them) — SESSION_TAB_ALIASES maps each onto this destination
+  // plus the right sub-tab, so nothing that used to navigate here breaks.
+  const [sessionsSubTab, setSessionsSubTab] = useState('overview')
+  const [platformEntitlement, setPlatformEntitlement] = useState(null)
+  // The diff between the creator's stored baseline and now, for "What changed".
+  const [changedSinceLastVisit, setChangedSinceLastVisit] = useState(null)
+  const seenBaselineRef = useRef(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
   const [messageTarget, setMessageTarget] = useState(null)
@@ -1461,6 +1483,9 @@ export default function Dashboard() {
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [upgradeModalSource, setUpgradeModalSource] = useState(null)
+  // Platforms she told onboarding she streams on. null = unknown (older
+  // account, or migration 20260827a not applied) — the UI stays silent then.
+  const [streamingPlatforms, setStreamingPlatforms] = useState(null)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -1523,7 +1548,7 @@ export default function Dashboard() {
   const [replayCoachingLoading, setReplayCoachingLoading] = useState(null)
 
   useEffect(() => {
-    if (activeTab !== 'live-sessions' || replayLoaded || !user) return
+    if (!(activeTab === 'sessions' && sessionsSubTab === 'live') || replayLoaded || !user) return
     setReplayLoading(true)
     supabase
       .from('live_sessions')
@@ -1537,7 +1562,7 @@ export default function Dashboard() {
         setReplayLoading(false)
         setReplayLoaded(true)
       })
-  }, [activeTab, replayLoaded, user])
+  }, [activeTab, sessionsSubTab, replayLoaded, user])
 
   const loadReplayCoachingEvents = (sessionId) => {
     if (replayCoachingEvents[sessionId]) return
@@ -1557,7 +1582,6 @@ export default function Dashboard() {
   const [liveTick, setLiveTick] = useState(0)
   const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
-  const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
@@ -1590,6 +1614,12 @@ export default function Dashboard() {
   const realtimeChannelRef = useRef(null)
   const liveTipsChannelRef = useRef(null)
   const refreshTimerRef = useRef(null)
+  // Separate from refreshTimerRef: that one re-runs the engine on cached tips,
+  // this one refetches from the database. Two different jobs, two timers.
+  const dbRefreshTimerRef = useRef(null)
+  // The interval closes over its first render, so it cannot read isRefreshing
+  // directly — this mirror lets it skip a tick while a reload is in flight.
+  const isRefreshingRef = useRef(false)
   const liveTickerRef = useRef(null)
   const derivedCacheRef = useRef({}) // see memoOn() — caches expensive per-render recomputation below
   // Fingerprint (row count + last row id) of the tips array as of the last runEngine()
@@ -1633,10 +1663,14 @@ export default function Dashboard() {
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
+  // Signature unchanged, so every existing call site still works. The
+  // difference is what it opens: the context is BUILT from the live analytics
+  // at click time, so the discovery that caused the click survives into the ask.
   const openUpgradeModal = (source) => {
-    track('upgrade_click', { source })
-    gtmTrack('paywall_hit', { feature: source })
-    setUpgradeModalSource(source || 'default')
+    const key = source || 'default'
+    track('upgrade_click', { source: key })
+    gtmTrack('paywall_hit', { feature: key })
+    setUpgradeModalSource(key)
     setShowUpgradeModal(true)
   }
 
@@ -1727,8 +1761,11 @@ export default function Dashboard() {
   }
 
   // Tab persistence
-  const handleTabChange = (tab) => {
-    gtmTrack('tab_switched', { tab_name: tab })
+  const handleTabChange = (rawTab) => {
+    const alias = SESSION_TAB_ALIASES[rawTab]
+    const tab = alias ? 'sessions' : rawTab
+    if (alias) setSessionsSubTab(alias)
+    gtmTrack('tab_switched', { tab_name: tab, sessions_view: alias || undefined })
     // Live Mode is the one tab that's ENTIRELY a locked Pro preview for
     // free users (see the isPro gate a few hundred lines below) — this is
     // the funnel's "Pro preview viewed" step for that surface specifically,
@@ -1817,7 +1854,7 @@ export default function Dashboard() {
   //   4. Historical events get _isHistory:true so computeState() excludes
   //      them from timing/pace calculations (only uses them for totals)
   useEffect(() => {
-    if (activeTab !== 'live-sessions' || !user) return
+    if (!(activeTab === 'sessions' && sessionsSubTab === 'live') || !user) return
     if (liveTipsChannelRef.current) return // singleton guard
 
     isHydratingHistory.current = true
@@ -1910,20 +1947,64 @@ export default function Dashboard() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       if (params.get('success') === 'true') {
-        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null })
+        const src = params.get('ctx') || null
+        gtmTrack('subscription_completed', { plan_type: params.get('plan') || null, feature_name: src })
+        gtmTrack('contextual_upgrade_completed', { plan_type: params.get('plan') || null, feature_name: src })
+        // 2C-4: land her back on the discovery she converted for, rather than
+        // making her find it again. The modal never reopens on return — she
+        // already bought — and the params are stripped so a refresh cannot
+        // replay any of this.
+        const tab = {
+          window_fan_overlap: 'whales', whales_cutoff: 'whales',
+          peak_window: 'planner', stream_planner: 'planner', import_discovery: 'planner',
+          platform_comparison: 'platforms', multi_platform: 'platforms',
+          money_map: 'moneymap', creator_report: 'report', live_mode_locked: 'live',
+        }[src]
+        if (tab) { setActiveTab(tab); try { localStorage.setItem('camcash_tab', tab) } catch {} }
+        setShowUpgradeModal(false)
+        showToast("You're on Creator Pro — your full data is unlocked.")
         window.history.replaceState({}, '', window.location.pathname)
       } else if (params.get('canceled') === 'true') {
-        gtmTrack('checkout_canceled', {})
+        // Clean return: no success state, and the modal stays closed rather
+        // than reopening the same ask the creator just declined.
+        gtmTrack('checkout_canceled', { feature_name: params.get('ctx') || null })
+        setShowUpgradeModal(false)
         window.history.replaceState({}, '', window.location.pathname)
       }
     }
   }, [])
 
+  // ── WHAT CHANGED SINCE THE LAST CHECK ────────────────────────────────────
+  // GET returns the diff against profiles.last_seen_intelligence; the POST that
+  // follows advances that baseline to now. Ordering matters: the baseline moves
+  // only AFTER the diff is in hand, so a change can never be swallowed by the
+  // very visit that should have reported it. Runs once per dashboard visit.
+  useEffect(() => {
+    if (!user || seenBaselineRef.current) return
+    seenBaselineRef.current = true
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/intelligence', { credentials: 'include' })
+        if (!res.ok) return
+        const data = await res.json().catch(() => ({}))
+        if (!cancelled) setChangedSinceLastVisit(data?.changed || null)
+        // Advance the baseline. Existing route, existing column, no new schema.
+        await fetch('/api/intelligence', { method: 'POST', credentials: 'include' }).catch(() => {})
+      } catch { /* the dashboard renders fine without a diff */ }
+    })()
+    return () => { cancelled = true }
+  }, [user])
+
   useEffect(() => {
     // Restore saved tab
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('camcash_tab')
-      if (saved) setActiveTab(saved)
+      if (saved) {
+        const alias = SESSION_TAB_ALIASES[saved]
+        if (alias) { setActiveTab('sessions'); setSessionsSubTab(alias) }
+        else setActiveTab(saved)
+      }
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
@@ -1954,10 +2035,20 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone')
+        .select('plan, plan_expires_at, trial_ends_at, stripe_customer_id, timezone, primary_pro_platform, display_name')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
+      // Roster of platforms she said she streams on, fetched SEPARATELY on
+      // purpose: profiles.streaming_platforms ships with migration 20260827a,
+      // and PostgREST fails the whole select on an unknown column. Isolating
+      // it means an unmigrated database costs us this one optional read
+      // instead of the entire profile.
+      supabase.from('profiles')
+        .select('streaming_platforms')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data, error }) => { if (!error && data?.streaming_platforms) setStreamingPlatforms(data.streaming_platforms) })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
@@ -2077,8 +2168,8 @@ export default function Dashboard() {
           // Flash animation: highlight the new tip row for 2.5s
           setFlashTipId(normalized._id)
           setTimeout(() => setFlashTipId(null), 2500)
-          // Switch to Live Mode tab automatically if user is on another tab
-          setActiveTab('live-sessions')
+          // Jump to the live session view automatically if she is elsewhere.
+          setActiveTab('sessions'); setSessionsSubTab('live')
         })
         .subscribe()
       liveTipsChannelRef.current = liveTipsChannel
@@ -2112,11 +2203,33 @@ export default function Dashboard() {
       const minuteTimer = setInterval(() => {
         setMinuteTick(t => t + 1)
       }, 60000)
+
+      // ── PERIODIC SILENT RELOAD ────────────────────────────────────────
+      // The 30s timer above re-runs the analytics engine on the tips already
+      // in memory; it never talks to the database. So a dashboard left open
+      // went stale — tips imported from the extension, another tab or another
+      // device simply never appeared, and because loadData() was never called
+      // the "Refreshing..." indicator never showed either.
+      //
+      // This actually refetches, every 3 minutes, in silent mode: the screen
+      // stays mounted, isRefreshing drives the indicator in the command bar,
+      // and lastRefreshed updates so "Updated HH:MM" means something.
+      //
+      // Skipped while the tab is hidden — a backgrounded dashboard polling the
+      // database forever is waste, and the focus handler already covers the
+      // return. Skipped while a reload is in flight so slow responses cannot
+      // stack up.
+      dbRefreshTimerRef.current = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return
+        if (isRefreshingRef.current) return
+        loadData(user.id, false, { silent: true })
+      }, 180000)
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
       if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
+      if (dbRefreshTimerRef.current) clearInterval(dbRefreshTimerRef.current)
       if (tipFlushTimerRef.current) clearTimeout(tipFlushTimerRef.current)
       // minuteTimer cleared inline
     }
@@ -2145,7 +2258,7 @@ export default function Dashboard() {
 
   // ── LIVE MODE: load existing tips when tab is activated ───────────────────
   useEffect(() => {
-    if (activeTab !== 'live-sessions' || !user) return
+    if (!(activeTab === 'sessions' && sessionsSubTab === 'live') || !user) return
     let cancelled = false
 
     const loadRecentLiveTips = async () => {
@@ -2178,7 +2291,7 @@ export default function Dashboard() {
 
     loadRecentLiveTips()
     return () => { cancelled = true }
-  }, [activeTab, user])
+  }, [activeTab, sessionsSubTab, user])
 
   // ── LIVE TICKER: 1-second interval drives time-based re-renders ─────────────
   // Drives the command bar's momentum widget (visible on every tab), which
@@ -2212,7 +2325,7 @@ export default function Dashboard() {
     // `silent` keeps the current screen mounted (e.g. after a CSV upload) instead of
     // replacing the whole dashboard with the full-page spinner, so the just-shown
     // success/error confirmation stays visible while data refreshes in the background.
-    if (silent) setIsRefreshing(true)
+    if (silent) { setIsRefreshing(true); isRefreshingRef.current = true }
     else setLoading(true)
     try {
       // Canonical timezone contract (canonical-analytics-rules.md): the
@@ -2220,7 +2333,11 @@ export default function Dashboard() {
       // detection is fallback-only, used to auto-populate the profile once
       // (see autoPopulateTimezoneIfMissing) rather than being read live on
       // every load.
-      const { data: profileTzRow } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      // Entitlement fields are read in the SAME query that already fetches the
+      // timezone — profiles is the existing subscription source of truth, so no
+      // extra round trip and no second system.
+      const { data: profileTzRow } = await supabase.from('profiles')
+        .select('timezone, plan, plan_expires_at, primary_pro_platform').eq('id', uid).maybeSingle()
       const { timezone: userTz } = resolveCreatorTimezone(profileTzRow?.timezone)
       autoPopulateTimezoneIfMissing(supabase, uid, profileTzRow?.timezone)
       const PAGE = 1000
@@ -2252,6 +2369,24 @@ export default function Dashboard() {
         // same one-name-per-site view aggregateRows() produces internally.
         // Normalization only — see canonicalPlatform() in lib/constants.js.
         allData = normalizeRowPlatforms(allData)
+
+        // ── PRO PLATFORM ENTITLEMENT (enforced here, once) ────────────────
+        // A Pro subscription entitles ONE platform to full history; the second
+        // gets a rolling 31-day window ending at its own newest record. This is
+        // the single access boundary: everything downstream — the engine, the
+        // intelligence layer, MoneyMap, StreamPlanner, Fans — reads the same
+        // entitled view, so no two surfaces can disagree about what is in scope.
+        //
+        // NOTHING IS DELETED. `allData` is the in-memory array for this render;
+        // the rows stay in Supabase exactly as imported, and changing the
+        // primary platform later simply re-slices this view.
+        // Free plans are untouched: resolvePlatformEntitlement() reports
+        // isPro:false and filterEntitledRows() returns everything.
+        const entitlement = resolvePlatformEntitlement({ profile: profileTzRow, rows: allData })
+        const entitledData = filterEntitledRows(entitlement, allData)
+        setPlatformEntitlement(entitlement)
+        allData = entitledData
+
         setTips(allData)
         try {
           const result = runEngine(allData, userTz)
@@ -2287,7 +2422,7 @@ export default function Dashboard() {
       setEngineInsights(engineData)
       setLastRefreshed(new Date())
     } finally {
-      if (silent) setIsRefreshing(false)
+      if (silent) { setIsRefreshing(false); isRefreshingRef.current = false }
       else setLoading(false)
     }
   }
@@ -2336,6 +2471,7 @@ const stopImportMessageRotation = () => {
     setImportStage('processing')
     setImportMessageIdx(0)
     setLastUploadResult(null)
+    setImportIntel(null)
     gtmTrack('csv_upload_started', { platform: forcePlatform || uploadPlatform || 'unknown' })
 
     stopImportMessageRotation()
@@ -2404,6 +2540,44 @@ const stopImportMessageRotation = () => {
       // Force reload after upload — bypass cache so new tips appear immediately
       try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
       await loadData(user.id, true, { silent: true })
+
+      // ── WHAT DID THIS IMPORT ACTUALLY TEACH CAMCASH? ──────────────────
+      // POST /api/intelligence re-runs the canonical engine on the freshly
+      // stored tips, diffs it against the snapshot taken the last time the
+      // creator was shown their report, writes any milestone rows to
+      // dashboard_events, and records the new baseline.
+      //
+      // This is the ONLY place the import success state gets its numbers —
+      // there is no second progress calculation in the importer. A failure
+      // here leaves the plain success state intact rather than blocking it,
+      // because the import itself already succeeded.
+      setImportIntelPending(true)
+      try {
+        const { data: { session: intelSession } } = await supabase.auth.getSession()
+        const intelRes = await fetch('/api/intelligence', {
+          method: 'POST',
+          headers: intelSession ? { Authorization: `Bearer ${intelSession.access_token}` } : {},
+        })
+        if (intelRes.ok) {
+          const intel = await intelRes.json()
+          setImportIntel(intel)
+          const improved = intel?.changed?.improved || []
+          const unlocked = improved.filter(c => c.isDiscovery ?? c.newlyClaimable)
+          gtmTrack('import_produced_evidence', {
+            improved_count: improved.length,
+            unlocked_count: unlocked.length,
+            calibration_before: intel?.changed?.pctBefore ?? null,
+            calibration_after: intel?.calibration?.pct ?? null,
+          })
+          for (const u of unlocked) {
+            track('milestone_reached', { insight: u.id, from: u.from, to: u.to })
+          }
+        }
+      } catch (e) {
+        // Non-fatal: the import succeeded, only the "what changed" read failed.
+      } finally {
+        setImportIntelPending(false)
+      }
 
     } catch (err) {
       showToast("❌ " + err.message)
@@ -2476,10 +2650,10 @@ const stopImportMessageRotation = () => {
   // Gate display on the same eligible sessions/minutes the number itself is
   // built from — never on the broader meaningfulSessionCount/totalStreamMinutes,
   // which include sessions this rate calc deliberately excludes.
-  const hourlyRateUnlocked = canShowHourlyRate({
-    sessionCount: hourlyRateSessionCount,
-    totalStreamMinutes: hourlyRateTotalMinutes,
-  })
+  // 2C-1: the gate is now the canonical `hourly_rate` insight (lib/intelligence),
+  // not a local counter comparison. The eligible-session/minute figures below are
+  // still what the SUBTEXT reports, so the number and its explanation still agree.
+  const hourlyRateUnlocked = canShowHourlyRate({ analytics })
   const formatDuration = (mins) => {
     const m = Math.round(mins || 0)
     const h = Math.floor(m / 60)
@@ -2566,7 +2740,11 @@ const stopImportMessageRotation = () => {
   // Performance rebuild, so it could never match anything again.
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  // The free tier tracks up to FREE_MAX_PLATFORMS (3) — this is what the
+  // database actually enforces (enforce_free_tier_platform_limit). The gate
+  // here previously fired at the SECOND platform, contradicting the DB and
+  // blocking imports the backend would have accepted.
+  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_MAX_PLATFORMS
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildDailyBrief = () => {
@@ -2962,23 +3140,32 @@ const stopImportMessageRotation = () => {
   // hasn't tipped yet this month would otherwise see last month's revenue
   // mislabeled as "this month"). Match the real current-month key instead,
   // via the same resolved-timezone contract lib/timezone.js defines.
+  // This block's logic now lives in resolveCurrentMonthGrowth()
+  // (lib/analytics.js) so Creator Report reads the same answer rather than
+  // re-deriving it. Behaviour is unchanged — the function is this code,
+  // moved, with the states named.
   const _momMonthly = analytics?.monthlyData || []
   const _momTz = creatorTz // single resolved source, hoisted above platformTimes
-  const _momCurrentKey = (() => {
-    try { return new Intl.DateTimeFormat('en-CA', { timeZone: _momTz }).format(new Date()).slice(0, 7) }
-    catch { return null }
-  })()
-  const _momThisIdx = _momCurrentKey ? _momMonthly.findIndex(m => m.month === _momCurrentKey) : -1
-  const _momThisMonth = _momThisIdx >= 0 ? _momMonthly[_momThisIdx] : null
-  const _momPrevMonth = _momThisIdx > 0 ? _momMonthly[_momThisIdx - 1] : null
-  const _momThisRev = _momThisMonth?.usd ?? 0
-  const _momPrevRev = _momPrevMonth?.usd ?? 0
-  const growthPct = _momThisMonth?.growthPct ?? null
+  const _momGrowth = resolveCurrentMonthGrowth(_momMonthly, _momTz)
+  const _momThisMonth = _momGrowth.thisMonth
+  const _momPrevMonth = _momGrowth.prevMonth
+  const _momThisRev = _momGrowth.thisRevenue
+  const _momPrevRev = _momGrowth.prevRevenue
+  const growthPct = _momGrowth.growthPct
+
+  // ── CANONICAL INTELLIGENCE ────────────────────────────────────────────
+  // One readiness object, computed from the analytics already in hand, shared
+  // by every surface that needs a confidence state. computeIntelligence()
+  // performs no aggregation of its own — it only reads fields aggregateRows()
+  // already produced, so this is not a second analytics path.
+  const intelligence = memoOn(derivedCacheRef.current, 'intelligence', [analytics], () =>
+    analytics ? computeIntelligence({ analytics, profile }) : null
+  )
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
     dashboardReadiness, _isLowData, _plannerLock, _moneyMapLock,
-  } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro], () => {
+  } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro, intelligence], () => {
     const drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
     const drRangeDays  = drDates.length >= 2 ? Math.round((drDates[drDates.length - 1] - drDates[0]) / 86400000) : 0
     const drStreamDays = new Set(drDates.map(d => d.toDateString())).size
@@ -2990,9 +3177,10 @@ const stopImportMessageRotation = () => {
       totalEarnings: analytics?.totalUSD || 0,
       dateRangeDays: drRangeDays,
       streamDays:    drStreamDays,
+      intelligence,
     })
     const isLowData  = readiness !== 'ready'
-    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount ?? 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount ?? 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0, intelligence }
     const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
     const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
     return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
@@ -3134,7 +3322,29 @@ const stopImportMessageRotation = () => {
         .card-glow-violet:hover{ box-shadow: 0 0 38px rgba(167,139,250,0.28),0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
         .card-glow-gold:hover  { box-shadow: 0 0 38px rgba(251,191,36,0.26), 0 8px 32px rgba(0,0,0,0.5) !important; transform: translateY(-4px) !important; }
         .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        /* The stat cards already carry the glass treatment via glassCard; what
+           they lost was the lift-and-glow on hover, which is what made them
+           read as objects rather than painted rectangles. Hover/focus only —
+           a continuous animation on a row of cards is not free. */
+        .stat-card:hover, .stat-card:focus-within {
+          transform: translateY(-2px);
+          box-shadow: 0 0 26px rgba(34,211,238,0.20), 0 0 46px rgba(236,72,153,0.12), 0 12px 30px rgba(0,0,0,0.5);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .stat-card:hover, .stat-card:focus-within { transform: none; }
+        }
         @keyframes cmd-pulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
+
+        /* You're in your peak window right now — a slow green breath around
+           the command bar. Subtle on purpose: it should register in
+           peripheral vision, not demand attention while she is streaming. */
+        @keyframes peak-window-glow {
+          0%,100% { box-shadow: 0 2px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(16,185,129,0.20), 0 6px 34px rgba(16,185,129,0.14); }
+          50%     { box-shadow: 0 2px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(16,185,129,0.48), 0 8px 46px rgba(16,185,129,0.30); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sticky-command-bar { animation: none !important; }
+        }
 
         /* ── CSV IMPORTER STATES ── */
         .import-spinner {
@@ -3221,7 +3431,7 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} trialEligible={trialEligible} onUpgrade={(src) => openUpgradeModal(src)} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── TRIAL COUNTDOWN ──
@@ -3322,7 +3532,7 @@ const stopImportMessageRotation = () => {
           const updatedLabel = lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null
 
           return (
-            <div className="sticky-command-bar cmdbar-wake" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 14, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '14px 32px', background: 'rgba(5,7,15,0.88)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
+            <div className="sticky-command-bar cmdbar-wake" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 14, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '14px 32px', background: 'rgba(5,7,15,0.88)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(255,255,255,0.06)'}`, boxShadow: '0 2px 24px rgba(0,0,0,0.45)', animation: atPeak ? 'peak-window-glow 2.8s ease-in-out infinite' : 'none' }}>
 
               {/* primary row — Total Earned dominant, secondary metrics + Go Live, wraps instead of clipping/scrolling */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px 24px' }}>
@@ -3395,6 +3605,279 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
+        {/* ── COMMAND CENTER LIVE BAND ────────────────────────────────
+            Every actionable insight belongs to the Command Center, and that
+            includes the moment something unlocks. When nothing has just
+            unlocked, one rotating conversion prompt — each conditional on
+            something already true in her data. See lib/conversionLoop.js. */}
+        {activeTab === 'overview' && (
+          <ConversionLoop
+            prompts={conversionPrompts({ analytics, intelligence, isPro })}
+            unlocked={newlyUnlocked(changedSinceLastVisit)}
+            onUpgrade={(src) => openUpgradeModal(src)}
+          />
+        )}
+
+        {/* One dismissible line telling a free creator what she has, in her
+            own numbers. Not a wall — she can close it and it stays closed. */}
+        <FreeTierNotice
+          isPro={isPro}
+          fanCount={analytics?.uniqueFanCount ?? 0}
+          onUpgrade={(src) => openUpgradeModal(src)}
+        />
+
+        {/* ══ DAILY BRIEF ═════════════════════════════════════════════
+            Restored. buildDailyBrief() never stopped computing any of this —
+            atPeak, the re-engage list, likelyOnline, the peak-window figures —
+            but the card that rendered it was deleted, so the whole thing was
+            being computed and thrown away every render.
+
+            This is the card that turns GREEN and reads "Peak Window LIVE — Go
+            Live Now" while she is inside her window, and it is the "what's
+            next" surface: several topical blocks rather than one line.
+            Restored verbatim from the mid-August dashboard; every identifier
+            it needs (canonicalPeakLabel, engineInsights, getModuleLockState,
+            handleTabChange, setMessageTarget) still exists unchanged. ═══ */}
+        {/* ═══════════════════════════════════════════════════════
+            DAILY BRIEF — always visible, above all tabs
+            Refreshes based on UTC time + your real session data
+        ═══════════════════════════════════════════════════════ */}
+        {activeTab === 'overview' && dailyBrief && (() => {
+          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
+            isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
+            reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
+          const bhLabel = canonicalPeakLabel || _bhLabel
+          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
+          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
+          // bestHour/platformBestTimes use internally (lib/analytics.js).
+          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
+          return (
+            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
+
+              {/* Header bar */}
+              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
+                    {atPeak ? '🟢' : '📋'}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
+                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {atPeak
+                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
+                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
+                  }
+                </div>
+              </div>
+
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
+                {bhLabel && (
+                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
+                        {atPeak
+                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
+                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
+                        }
+                      </div>
+                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+                        {`Since it's ${todayName}`}
+                        {isBestDay ? ` (your highest-earning day)` : ``}
+                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
+                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
+                        {`. Stream `}
+                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
+                        {` to earn `}
+                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
+                        {` — longer sessions earn `}
+                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
+                        {` on average.`}
+                      </div>
+                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
+                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
+                        </div>
+                      )}
+                      {atPeak && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
+                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ROW 1 — Today / Peak Window / Best Platform */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
+                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
+                      {(() => {
+                        const _bdA = bestDay?.avg || sessionAvg
+                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
+                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
+                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
+                      })()}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
+                    {bestTimeLock.locked ? (
+                      analytics?.canonicalBestTimes?.earlySignal ? (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: C.indigo }}>⚡ {fmtHour(analytics.canonicalBestTimes.earlySignal.localHour)}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>
+                            Early signal · ~${analytics.canonicalBestTimes.earlySignal.medianUsdPerHour.toFixed(0)} avg so far
+                          </div>
+                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(124,92,255,0.3)', background: 'rgba(124,92,255,0.08)', color: C.indigo, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Add data to confirm</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
+                          <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
+                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
+                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
+                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>{(!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}</div>
+                  </div>
+
+                  {bhLabel && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
+                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
+                    </div>
+                  )}
+                </div>
+
+                {/* ROW 2 — Likely Online + Re-engage */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
+                  {/* Likely Online */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
+                        Likely Online Right Now
+                      </div>
+                      {likelyOnline.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Re-engage */}
+                  {!atPeak && reengageFans.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        ⚠️ Re-engage Today
+                      </div>
+                      {reengageFans.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {w.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
+                            </div>
+                          </div>
+                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                            className="heart-envelope-btn"
+                            aria-label={`Message ${w.username}`}
+                            title="Message fan"
+                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* If neither list has data */}
+                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
+                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
+                      No fan alerts right now — check back after more sessions.
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ══ MONEY MAP + CROSS-PLATFORM, ON THE COMMAND CENTER ═══════
+            Both used to sit here and were moved out during the redesign. They
+            are insights, so by the split we agreed they belong on the Command
+            Center, not buried in their own tabs.
+
+            MoneyMap already handles its own free/Pro depth internally, so the
+            free creator gets the preview grid here and the full one behind
+            Pro — no second gate is introduced. PlatformROI is the restored
+            "What's Working" treatment reading canonical fields only. ═══ */}
+        {activeTab === 'overview' && (
+          <>
+            <PlatformROI analytics={analytics} />
+            <div style={{ marginTop: 16 }}>
+              <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} onUpgrade={(src) => openUpgradeModal(src)} />
+            </div>
+          </>
+        )}
+
+        {/* ── PLATFORMS SHE NAMED BUT HAS NOT IMPORTED ────────────────
+            Uses the onboarding roster to separate "does not stream there"
+            from "streams there, no data yet" — the honest conversion moment.
+            Silent when the roster is unknown or fully imported. */}
+        {(activeTab === 'overview' || activeTab === 'report' || activeTab === 'platforms') && (
+          <UnimportedPlatforms
+            analytics={analytics}
+            streamingPlatforms={streamingPlatforms}
+            isPro={isPro}
+            onImport={() => handleTabChange('upload')}
+            onUpgrade={(src) => openUpgradeModal(src)}
+          />
+        )}
+
         {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
         {_isLowData && (
           <DashboardProgressCard
@@ -3403,19 +3886,36 @@ const stopImportMessageRotation = () => {
             totalFans={analytics?.uniqueFanCount ?? 0}
             totalEarnings={analytics?.totalUSD || 0}
             readiness={dashboardReadiness}
+            intelligence={intelligence}
             onImport={() => handleTabChange('upload')}
           />
         )}
 
         {activeTab === "report" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
-            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={() => openUpgradeModal('creator_report')} engineInsights={engineInsights} />
+            {/* The reflective report: performance over a period, the patterns
+                behind it, and what they mean. Distinct from the Command
+                Center, which answers "what should I do now?" — same engine,
+                different question. CreatorReportView computes nothing; see
+                lib/creatorReportData.js. */}
+            <CreatorReportView
+              tips={tips}
+              analytics={analytics}
+              runEngine={runEngine}
+              timezone={creatorTz}
+              updatedLabel={lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null}
+              onAction={(tab) => handleTabChange(tab)}
+            />
+
+            {/* Build progress stays below it — what CamCash still needs. */}
+            <CreatorReport analytics={analytics} tips={tips} isPro={isPro} onUpgrade={(src) => openUpgradeModal(src || 'creator_report')} engineInsights={engineInsights} intelligence={intelligence} timezone={creatorTz} firstName={profile?.display_name || null} primaryPlatform={profile?.primary_pro_platform || null} streamingPlatforms={streamingPlatforms} />
           </div>
         )}
 
         {activeTab === "settings" && (
           <Settings
             user={user} profile={profile} isPro={isPro} supabase={supabase}
+            onUpgrade={(src) => openUpgradeModal(src)}
             onTimezoneSaved={(tz) => {
               setProfile(p => ({ ...(p || {}), timezone: tz }))
               loadData(user.id, true, { silent: true })
@@ -3434,6 +3934,495 @@ const stopImportMessageRotation = () => {
               onUpgrade={() => openUpgradeModal('default')}
             />
 
+            {/* ══ RESTORED COMMAND CENTER ZONES ═══════════════════════
+                Sections 1, 4, 5 and 6 of the mid-August dashboard: the Money
+                Snapshot KPI wall, the Tokens-vs-Hours and Monthly Growth
+                charts, Your Top Earners, You're Losing Money, and Smart
+                Insights.
+
+                None of this was retired on purpose. Commit d4606c0 — titled
+                "Fix three data defects" — refactored 2,497 lines out of this
+                file and dropped these zones on the way past; CommandCenter.js
+                was written to "replace sections 1-3" but only ever covered a
+                fraction of what they showed. Six of the seven original zones
+                were rendering nowhere at all.
+
+                Restored verbatim. Every block is self-contained: each defines
+                its own locals (cardDefs, allAlerts, atRisk, missedEntries,
+                thisMonthEntry, milestones, sessionsLast30 and the rest) and
+                reads only analytics, whales, lossAlerts and missedRevenue,
+                all of which still exist unchanged.
+
+                Sections 2 and 3 are deliberately NOT restored here: section 2
+                ("Make Money Right Now") already feeds CommandCenter's
+                nowActions, and section 3 ("What's Working") is back as
+                PlatformROI above. Restoring them would double them up. ═══ */}
+
+            {/* ═══════════════════════════════════════
+                1. MONEY SNAPSHOT
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // ── empty state — show null; DashboardProgressCard above covers zero-data ──
+              if (tips.length === 0) return null
+
+              // Canonical local-calendar-month boundaries + revenue/growth — read
+              // from analytics.monthlyData (lib/analytics.js) rather than
+              // recomputing with UTC month math. See _momMonthly above.
+              const thisMonthEntry = _momThisMonth
+              const prevMonthEntry = _momPrevMonth
+              const thisMonthStart = thisMonthEntry ? new Date(`${thisMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1))
+              const prevMonthStart = prevMonthEntry ? new Date(`${prevMonthEntry.month}-01T00:00:00Z`) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1))
+              const thisMonthRev = thisMonthEntry?.usd ?? 0
+              const prevMonthRev = prevMonthEntry?.usd ?? 0
+              const growthPct = thisMonthEntry?.growthPct ?? null
+              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+              const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
+              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
+              const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
+              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
+
+              // ── Per-card month-over-month trend ──
+              // Meaningful sessions only (analytics.meaningfulSessions), matching the
+              // valid-session rule used everywhere else — never the raw session list.
+              const meaningfulSessions = analytics?.meaningfulSessions || []
+              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
+              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
+                ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
+
+              const avgSessionUSD = meaningfulSessions.length ? meaningfulSessions.reduce((s,x) => s+(x.totalUSD||0),0) / meaningfulSessions.length : 0
+              const tmAvgSession = thisMonthMeaningful.length ? thisMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / thisMonthMeaningful.length : null
+              const pmAvgSession = prevMonthMeaningful.length ? prevMonthMeaningful.reduce((s,x) => s+(x.totalUSD||0),0) / prevMonthMeaningful.length : null
+              const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
+                ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
+
+              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
+              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
+
+              // trend badge renderer
+              const TrendBadge = ({ pct }) => {
+                if (pct === null || isNaN(pct)) return null
+                const up = pct >= 0
+                return <span style={{ fontSize:10, fontWeight:700, color: up ? '#10B981' : '#f87171', marginLeft:6 }}>{up ? '↑' : '↓'}{Math.abs(pct)}%</span>
+              }
+
+              // Card row intentionally shows different metrics than the sticky command
+              // bar above (which already covers Total Earned / Estimated $/Hour) —
+              // these four add depth instead of repeating the same headline numbers.
+              const cardDefs = [
+                { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
+                  value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
+                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
+                  icon:'💰', isHero:true },
+                { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
+                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
+                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
+                  icon:'🎯' },
+                { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
+                  value: whales.length > 0 ? whales.length.toLocaleString() : '—',
+                  sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
+                  icon:'👥' },
+                { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
+                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
+                  sub: meaningfulSessions.length > 0
+                    ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
+                    : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
+                  icon:'🎥' }
+              ]
+
+              // Earnings velocity per platform for velocity strip
+              const velPlatforms = Object.entries(platformVelocity).filter(([,v]) => v !== null).sort((a,b) => (b[1]||0)-(a[1]||0))
+              return (
+                <>
+                  <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 14 }}>
+                    {cardDefs.map((s, i) => (
+                      <div key={i} className={`stat-card ${s.glowClass}`} style={{ ...glassCard, borderRadius: 16, padding: "13px 16px", position: "relative", overflow: "hidden", animation: `fadeUp 0.3s ease ${i * 0.06}s both`, cursor:'default', display:'flex', flexDirection:'column' }}>
+                        {/* accent top bar */}
+                        <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${s.accent}80,${s.accent}20)`, borderRadius:'16px 16px 0 0' }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, color: C.text, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>{s.label}</span>
+                          <span style={{ fontSize: 18, opacity: 0.75 }}>{s.icon}</span>
+                        </div>
+                        <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
+                          {s.value}<TrendBadge pct={s.trend} />
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* section divider */}
+                  <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', marginBottom:14 }} />
+                </>
+              )
+            })()}
+
+            {/* ═══════════════════════════════════════
+                TOKENS VS HOURS ONLINE + MONTHLY GROWTH
+            ═══════════════════════════════════════ */}
+            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} monthlyData={analytics?.monthlyData} />}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                4. YOUR TOP EARNERS
+                A. Likely Online Now  B. Milestones  C. At Risk
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const currentUTCHourTE = new Date().getUTCHours()
+              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+
+              const likelyOnline = whales
+                .filter(w => w.tipCount >= 3)
+                .map(w => {
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const hourCounts = {}
+                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
+                  if (!sorted.length) return null
+                  const peakHour = parseInt(sorted[0][0])
+                  const hoursAway = (peakHour - currentUTCHourTE + 24) % 24
+                  // peakFraction: share of this fan's tips that fall at their peak hour
+                  const peakFraction = sorted[0][1] / fanTips.length
+                  // proximityDecay: current hour vs peak hour (exact match = 1.0, 1h off = 0.65, 2h off = 0.35)
+                  const proximityDecay = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
+                  // Scale by 200 so a fan with 40% tips at peak + exact match → 80%; 25% + 1h off → 33%
+                  const confidence = Math.min(90, Math.max(25, Math.round(peakFraction * 200 * proximityDecay)))
+                  return { ...w, peakHour, hoursAway, confidence, peakLabel: labelH(peakHour) }
+                })
+                .filter(Boolean)
+                .filter(w => w.hoursAway <= 2 && w.confidence >= 35)
+                .sort((a,b) => b.totalUSD - a.totalUSD)
+                .slice(0, 3)
+
+              // Deduplicate: a fan should only appear in one category (highest priority wins)
+              // Priority: Likely Online > Close to Milestone > At Risk
+              const seenUsernames = new Set(likelyOnline.map(w => w.username.toLowerCase()))
+
+              const milestones = (whatsNextAlerts || [])
+                .filter(a => a.type === 'milestone' && !seenUsernames.has((a.username || '').toLowerCase()))
+                .slice(0, 3)
+              milestones.forEach(a => seenUsernames.add((a.username || '').toLowerCase()))
+
+              const atRisk = reengageList
+                .filter(({ whale: w }) => !seenUsernames.has(w.username.toLowerCase()))
+                .slice(0, 3)
+
+              const hasAny = likelyOnline.length || milestones.length || atRisk.length
+              if (!hasAny) return null
+
+              const fanCard = (w, opts = {}) => (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: opts.bg || "rgba(255,255,255,0.03)", border: opts.border || "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", transition: "transform 0.15s, box-shadow 0.15s", cursor: "default" }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px) scale(1.01)"; e.currentTarget.style.boxShadow = opts.hoverGlow || "0 4px 16px rgba(255,255,255,0.06)" }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 160 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 9, background: opts.avatarBg || "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: opts.avatarColor || C.cyan, flexShrink: 0 }}>
+                      {w.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>{w.username}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <span style={{ color: C.white, fontWeight: 600 }}>${w.totalUSD.toFixed(0)}</span> lifetime
+                      {opts.sub ? ` · ${opts.sub}` : ''}
+                      {w.tipCount > 1 && ` · ${w.tipCount} tips`}
+                      {w.avgDaysBetweenTips && w.tipCount > 1 && <span style={{ color: w.churnRisk?.level === 'High' || w.churnRisk?.level === 'Critical' ? C.red : C.muted }}>{` · every ~${Math.round(w.avgDaysBetweenTips)}d`}</span>}
+                      {` · ${w.platform}`}
+                    </div>
+                    </div>
+                  </div>
+                  {opts.badge && <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: opts.badgeBg, color: opts.badgeColor, fontWeight: 700, whiteSpace: "nowrap" }}>{opts.badge}</span>}
+                  {opts.action && (
+                    <button onClick={opts.action} style={{ padding: "6px 12px", borderRadius: 8, background: opts.btnBg || "linear-gradient(135deg,#22D3EE,#EC4899)", border: "none", color: C.white, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, animation: opts.pulseBtn ? "pulse-msg 2.5s infinite" : "none" }}>
+                      {opts.btnLabel || "💌"}
+                    </button>
+                  )}
+                </div>
+              )
+
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.2s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#EC4899,#7C5CFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👑</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Your Top Earners</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Who's online, who's close to a milestone, who needs a message</div>
+                    </div>
+                  </div>
+
+                  {/* A. Likely Online Now */}
+                  {likelyOnline.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.green, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                        Likely Online Now
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {likelyOnline.map((w, i) => fanCard(w, {
+                          bg: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.22)", hoverGlow: "0 4px 16px rgba(16,185,129,0.15)",
+                          avatarBg: "rgba(16,185,129,0.18)", avatarColor: C.green,
+                          sub: `peaks at ${w.peakLabel}`,
+                          badge: `${w.confidence}% likely`, badgeBg: "rgba(16,185,129,0.2)", badgeColor: C.green,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: "none", pulseBtn: true
+                        }))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B. Close to Milestone */}
+                  {milestones.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.gold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>💰 Close to Milestone</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {milestones.map((a, i) => {
+                          const w = a.whale
+                          if (!w) return null
+                          return fanCard(w, {
+                            bg: "rgba(245,158,11,0.07)", border: "1px solid rgba(245,158,11,0.22)", hoverGlow: "0 4px 16px rgba(245,158,11,0.12)",
+                            avatarBg: "rgba(245,158,11,0.18)", avatarColor: C.gold,
+                            sub: a.message?.match(/\$[\d.]+ away/)?.[0] || '',
+                            action: () => { if (a.whale) { setMessageTarget(a.whale); setMessageIndex(0); setMessageCopied(false) } },
+                            btnBg: "linear-gradient(135deg,#F59E0B,#EC4899)", pulseBtn: false
+                          })
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* C. At Risk — Re-engage */}
+                  {atRisk.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>⚠️ At Risk — Re-engage</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {atRisk.map(({ whale: w, days, urgency, msg }, i) => fanCard(w, {
+                          bg: `${urgency}08`, border: `1px solid ${urgency}25`, hoverGlow: `0 4px 16px ${urgency}18`,
+                          avatarBg: `${urgency}20`, avatarColor: urgency,
+                          sub: `${days}d since last tip`,
+                          badge: `${days}d ago`, badgeBg: `${urgency}20`, badgeColor: urgency,
+                          action: () => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) },
+                          btnBg: `linear-gradient(135deg,${urgency},#EC4899)`, pulseBtn: i === 0,
+                          btnLabel: "💌"
+                        }))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
+            ═══════════════════════════════════════ */}
+            {(() => {
+              // Only show a fan re-engagement warning if the model has actually
+              // been online enough for the fan to have had a realistic chance to tip.
+              // Rule: model must have ≥3 sessions in the last N days, where N = fan's
+              // average tipping frequency. No-shows aren't "at risk" — we just weren't live.
+              const hasStreamedEnough = (whale) => {
+                if (!whale?.avgDaysBetweenTips) return true
+                const windowDays = Math.max(7, Math.round(whale.avgDaysBetweenTips))
+                const cutoff = Date.now() - windowDays * 86400000
+                const sessionsInWindow = sessions.filter(s => new Date(s.startTime).getTime() >= cutoff).length
+                return sessionsInWindow >= 3
+              }
+              const allAlerts = [
+                ...(lossAlerts || []).filter(a =>
+                  (a.type === 'fan_churn') ? hasStreamedEnough(a.whale) : true
+                ),
+                ...(alerts || []).filter(a =>
+                  (a.type === 'churn_risk') ? hasStreamedEnough(a.whale) : true
+                ).slice(0, 3)
+              ].slice(0, 6)
+              const missedEntries = Object.entries(missedRevenueByPlat)
+                .filter(([,m]) => m.missedRevenue > 5)
+                .sort((a,b) => b[1].missedRevenue - a[1].missedRevenue)
+              if (!allAlerts.length && !missedEntries.length) return null
+              const peakHourLabel = canonicalPeakLabel
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(251,146,60,0.2)", animation: "fadeUp 0.3s ease 0.25s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(251,146,60,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚨</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>You're Losing Money</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Inactivity, cold fans, missed windows</div>
+                    </div>
+                  </div>
+
+                  {/* Missed Revenue — formula: (bestHourAvg - overallAvg) × sessionsNotAtBestHour */}
+                  {missedEntries.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>💸 Missed Revenue (by streaming off-peak)</div>
+                      {missedEntries.map(([plat, m], i) => (
+                        <div key={i} style={{ padding: "12px 14px", borderRadius: 10, marginBottom: 8, background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.22)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 3 }}>
+                                📉 {plat} — peak hour earns <span style={{ color: C.cyan }}>{m.multiplier || (m.bestHourAvg && m.overallAvg ? (m.bestHourAvg/m.overallAvg).toFixed(1) : "5")}x</span> your avg session. Shift more streams to {peakHourLabel} to add ~<span style={{ color: C.green }}>${Math.round((m.bestHourAvg||0) - (m.overallAvg||0))}/stream</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: C.muted }}>
+                                {m.sessionsNotAtBestHour} sessions ran off-peak · Best hour is {peakHourLabel} (${m.bestHourAvg.toFixed(0)} avg) vs your overall ${m.overallAvg.toFixed(0)} avg
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(251,146,60,0.2)", color: C.orange, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Stream at {peakHourLabel}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {allAlerts.map((a, i) => (
+                      <div key={i} className={`alert-enter alert-pulse-${a.severity === "critical" ? "critical" : "warning"} alert-row`} style={{ padding: "12px 14px", borderRadius: 10, background: a.severity === 'critical' ? "rgba(248,113,113,0.1)" : "rgba(251,146,60,0.08)", border: `1px solid ${a.severity === 'critical' ? 'rgba(248,113,113,0.25)' : 'rgba(251,146,60,0.2)'}`, animationDelay: `${i * 50}ms` }}>
+                        <div style={{ fontSize: 13, color: C.white, marginBottom: 3 }}>{a.icon} {a.message}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>👉 {a.action}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+
+            {/* ═══════════════════════════════════════
+                6. SMART INSIGHTS — scannable, lower priority
+            ═══════════════════════════════════════ */}
+            <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, animation: "fadeUp 0.3s ease 0.3s both" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💡</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Smart Insights</div>
+                </div>
+
+                {(() => {
+                  // Build insights from data already in scope — no API call needed
+                  const _ins = []
+
+                  // 1. Peak hour insight
+                  if (canonicalPeakLabel) {
+                    const _pPlat = dailyBrief?.displayPlat || 'your top platform'
+                    const _pAvg = dailyBrief?.displayAvg
+                    _ins.push({
+                      title: `Your peak window is ${canonicalPeakLabel} on ${_pPlat}`,
+                      body: _pAvg > 0
+                        ? `Sessions at this hour average $${_pAvg.toFixed(0)} — ${Math.round(_pAvg / Math.max(avgPerHour, 0.01) * 10) / 10}x your overall rate. Go live during this window to maximise earnings.`
+                        : `This is when your fans are most active. Streaming at this time consistently will grow your peak-hour session count.`,
+                      action: `Schedule your next stream around ${canonicalPeakLabel}`
+                    })
+                  }
+
+                  // 2. Best platform insight
+                  const _topPlatEntry = Object.entries(platformVelocity || {}).filter(([,v]) => v != null).sort((a,b) => b[1]-a[1])[0]
+                  if (_topPlatEntry) {
+                    const [_tp, _tv] = _topPlatEntry
+                    const _tpLabel = _tp.replace('BongaCams','Bonga').replace('MyFreeCams','MFC').replace(/chaturbate/i,'Chaturbate')
+                    _ins.push({
+                      title: `${_tpLabel} is your highest-ROI platform at $${_tv.toFixed(2)}/hr`,
+                      body: Object.keys(platformVelocity).length > 1
+                        ? `Focus your high-effort streams here. Lower-ROI platforms can fill off-peak slots, but ${_tpLabel} should get your peak-hour time.`
+                        : `Your sessions here average $${_tv.toFixed(2)}/hr. Consistent streaming builds compounding fan loyalty — each session raises your baseline.`,
+                      action: `Prioritise ${_tpLabel} for peak-hour streams`
+                    })
+                  }
+
+                  // 3. Session average vs top fan contribution
+                  const _topWhale = whales?.[0]
+                  if (_topWhale && _topWhale.totalUSD > 0) {
+                    const _pct = totalRevenue > 0 ? Math.round((_topWhale.totalUSD / totalRevenue) * 100) : 0
+                    _ins.push({
+                      title: `${_topWhale.username} accounts for ${_pct}% of your lifetime revenue`,
+                      body: _pct >= 30
+                        ? `High fan concentration is a risk — if they churn your earnings drop sharply. Nurture 2–3 backup whales to reduce dependency.`
+                        : `They've spent $${_topWhale.totalUSD.toFixed(0)} lifetime. A personalised message when they've been quiet for 7+ days typically brings them back.`,
+                      action: _topWhale.daysSinceLastTip > 7 ? `Send ${_topWhale.username} a re-engage message now` : `Keep ${_topWhale.username} warm — they tipped recently`
+                    })
+                  } else if (avgPerHour > 0) {
+                    // Fallback: session avg insight
+                    const _sessAvg = sessions.length > 0 ? totalRevenue / sessions.length : 0
+                    _ins.push({
+                      title: `You average $${_sessAvg.toFixed(0)} per session at $${avgPerHour.toFixed(2)}/hr`,
+                      body: `Sessions over 60 minutes earn disproportionately more — longer streams let tipping patterns compound. Aim for at least one 90-min session per week.`,
+                      action: `Try a 90-min stream at your peak hour`
+                    })
+                  }
+
+                  if (_ins.length === 0) return (
+                    <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Upload more session data to generate personalised insights.</div>
+                  )
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {_ins.map((ins, i) => (
+                        <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.4 }}>{ins.title}</div>
+                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, marginBottom: 8 }}>{ins.body}</div>
+                          <div style={{ fontSize: 11, color: C.cyan, fontWeight: 600 }}>👉 {ins.action}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+
+            {/* Dependency risk + pre-tip behavior — kept, moved lower */}
+            {dependencyRisk && dependencyRisk.level !== 'low' && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20, border: `1px solid ${dependencyRisk.level === 'high' ? 'rgba(248,113,113,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: dependencyRisk.level === 'high' ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                    {dependencyRisk.level === 'high' ? '🚨' : '⚠️'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 4 }}>Revenue Dependency Risk — {dependencyRisk.level === 'high' ? 'High' : 'Medium'}</div>
+                    <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>{dependencyRisk.message}</div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {[
+                        { label: "Top fan", value: `${dependencyRisk.top1Pct}%` },
+                        { label: "Top 3 fans", value: `${dependencyRisk.top3Pct}%` },
+                        { label: "Top 5 fans", value: `${dependencyRisk.top5Pct}%` },
+                        { label: "Loss if #1 leaves", value: `$${dependencyRisk.lossIfTopFanLeaves}` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ padding: "6px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <div style={{ fontSize: 10, color: C.muted }}>{label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {preTipBehavior && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ fontSize: 20 }}>🧠</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>Tip Behavior Patterns</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Avg gap between tips</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: C.cyan }}>{preTipBehavior.avgGapMinutes} min</div>
+                  </div>
+                  {preTipBehavior.peakTippingWindow && (
+                    <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Peak tipping window</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{preTipBehavior.peakTippingWindow.label}</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: "10px 14px", background: "rgba(236,72,153,0.06)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 9, fontSize: 13, color: C.text }}>
+                  💡 {preTipBehavior.recommendation}
+                </div>
+                {preTipBehavior.clusteringDetected && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", borderRadius: 8, fontSize: 12, color: C.cyan }}>
+                    🔥 Tip clustering detected — fans tip in bursts. Acknowledge tips publicly to trigger more.
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ═══════════════════════════════════════════════════════
                 COMMAND CENTER — DISCOVER -> EXPLAIN -> OPPORTUNITY ->
                 ACTION -> MEASURE. Replaces the former sections 1-3
@@ -3443,6 +4432,9 @@ const stopImportMessageRotation = () => {
             ═══════════════════════════════════════════════════════ */}
             <CommandCenter
               analytics={analytics}
+              intelligence={intelligence}
+              changedSinceLastVisit={changedSinceLastVisit}
+              onImport={() => handleTabChange('upload')}
               isPro={isPro}
               nowActions={(() => {
                 // Moved from the old Overview's "Make Money Right Now"
@@ -3554,6 +4546,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "platforms" && (
           <Performance
             analytics={analytics}
+            intelligence={intelligence}
             isPro={isPro}
             onUpgrade={(src) => openUpgradeModal(src)}
             earningsTrend={tips.length > 0 ? (
@@ -3584,6 +4577,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "whales" && (
           <Fans
             analytics={analytics}
+            intelligence={intelligence}
             isPro={isPro}
             freeFanLimit={FREE_FAN_LIMIT}
             onMessageFan={(username) => {
@@ -3592,6 +4586,7 @@ const stopImportMessageRotation = () => {
             }}
             onUpgrade={(src) => openUpgradeModal(src)}
             onPlanStream={() => handleTabChange('planner')}
+            onSearchFans={() => setFanSearchOpen(true)}
           />
         )}
 
@@ -3639,7 +4634,32 @@ const stopImportMessageRotation = () => {
           )
         })())}
 
-        {activeTab === "live-sessions" && (() => {
+        {/* ── SESSIONS: one destination ─────────────────────────────
+            The bar below switches between four views that already existed.
+            No session is detected, recomputed or moved here — each view still
+            renders from its own block, unchanged. */}
+        {activeTab === "sessions" && (
+          <SessionsNav
+            active={sessionsSubTab}
+            onChange={(v) => { setSessionsSubTab(v); window.scrollTo({ top: 0, behavior: 'instant' }) }}
+            counts={{
+              history: analytics?.meaningfulSessionCount || 0,
+              private: paidSessions.length,
+              live: replaySessions.length,
+            }}
+          />
+        )}
+
+        {activeTab === "sessions" && sessionsSubTab === "overview" && (
+          <SessionsOverview
+            analytics={analytics}
+            privateCount={paidSessions.length}
+            liveCount={replaySessions.length}
+            onChange={setSessionsSubTab}
+          />
+        )}
+
+        {activeTab === "sessions" && sessionsSubTab === "live" && (() => {
           const fmtSessionDuration = (secs) => {
             const s = Math.max(0, Math.floor(secs || 0))
             const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
@@ -3667,12 +4687,10 @@ const stopImportMessageRotation = () => {
                 </div>
               )}
 
+              {/* Never used Live Mode: an intentional, complete section
+                  rather than a blank screen that reads as broken. */}
               {!replayLoading && replaySessions.length === 0 && (
-                <div style={{ ...glassCard, borderRadius: 16, padding: 40, textAlign: 'center' }}>
-                  <div style={{ fontSize: 40, marginBottom: 10 }}>📼</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>No completed sessions yet</div>
-                  <div style={{ fontSize: 13, color: C.muted }}>Once you end a Live Mode session, it'll show up here with what happened and what coaching fired during it.</div>
-                </div>
+                <LiveSessionsEmpty onTryLiveMode={() => handleTabChange('live')} />
               )}
 
               {!replayLoading && replaySessions.map((s) => {
@@ -3745,7 +4763,7 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
-        {activeTab === "sessions" && (() => {
+        {activeTab === "sessions" && sessionsSubTab === "history" && (() => {
           const displaySessions = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)
@@ -4276,7 +5294,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms.length} of ${FREE_MAX_PLATFORMS} platforms. Auto-removes duplicates.` : `Free plan tracks up to ${FREE_MAX_PLATFORMS} platforms. Auto-removes duplicates.`}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -4286,9 +5304,9 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  You're tracking all 3 platforms your free plan includes. Upgrade to Pro to add more.
                 </div>
-                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
+                <Button onClick={() => openUpgradeModal('multi_platform')} style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Add a platform →</Button>
               </div>
             )}
             <div style={{ ...glassCard, borderRadius: 14, padding: 32, marginBottom: 16, position: "relative", overflow: "hidden" }}>
@@ -4353,9 +5371,29 @@ const stopImportMessageRotation = () => {
                   {lastUploadResult.skipped > 0 && (
                     <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
                   )}
-                  <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
-                    <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
-                    <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 22px", fontSize: 13 }}>Import another CSV</Button>
+
+                  {/* ── WHAT CAMCASH LEARNED ──────────────────────────────
+                      Reads the canonical intelligence diff returned by
+                      POST /api/intelligence. Renders nothing invented: if the
+                      import moved no measurable evidence, it says so. The
+                      action row lives inside it (Creator Report / Dashboard /
+                      Import more), replacing the two buttons that were here. */}
+                  <div style={{ marginTop: 22, textAlign: "left" }}>
+                    <ImportSuccess
+                      result={lastUploadResult}
+                      changed={importIntel?.changed || null}
+                      calibration={importIntel?.calibration || intelligence?.calibration || null}
+                      insights={importIntel?.insights || intelligence?.insights || null}
+                      bestWindow={analytics?.canonicalBestTimes?.bestWindow || null}
+                      earlySignal={analytics?.canonicalBestTimes?.earlySignal || null}
+                      nextMilestone={importIntel?.nextMilestone || null}
+                      isPro={isPro}
+                      pending={importIntelPending}
+                      onViewReport={() => { gtmTrack('creator_report_opened_after_import', {}); handleTabChange('report') }}
+                      onViewDashboard={() => handleTabChange('overview')}
+                      onImportMore={resetImport}
+                      onUpgrade={() => openUpgradeModal('import_discovery')}
+                    />
                   </div>
                 </div>
               )}
@@ -4414,7 +5452,7 @@ const stopImportMessageRotation = () => {
                       🔒 Subscribe to view your insights for <strong style={{ color: C.white }}>{lockedPreview.platform}</strong>
                     </div>
                     <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                      <Button as="a" href="/pricing" style={{ padding: "8px 16px", fontSize: 12.5 }}>Subscribe →</Button>
+                      <Button onClick={() => openUpgradeModal('multi_platform')} style={{ padding: "8px 16px", fontSize: 12.5 }}>Add this platform with Pro →</Button>
                       <Button variant="secondary" onClick={resetImport} style={{ padding: "8px 16px", fontSize: 12.5 }}>Not now</Button>
                     </div>
                   </div>
@@ -4452,10 +5490,10 @@ const stopImportMessageRotation = () => {
               })() : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks up to <strong style={{ color: C.cyan }}>{FREE_MAX_PLATFORMS} platforms</strong> — import as much history as you want, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks <strong style={{ color: C.pink }}>unlimited platforms</strong> and the cross-platform analysis that shows which cam site pays you best by hour, day, and fan type.
                   </p>
-                  <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
-                    View Plans & Subscribe →
+                  <Button onClick={() => openUpgradeModal('multi_platform')} style={{ padding: "12px 26px", fontSize: 13 }}>
+                    Add another platform with Pro →
                   </Button>
 
                   <div style={{ marginTop: 18 }}>
@@ -4496,19 +5534,31 @@ const stopImportMessageRotation = () => {
                 Some insights unlock as you upload more data
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 8 }}>
+                {/* 2C-7: this list used to quote the counter thresholds 2C-1
+                    retired (25+ tips, 10+ fans, 8+ sessions...), which no
+                    longer govern anything, alongside "Whale detection" and
+                    "Earnings forecasting" — one unsupported tier and one held
+                    capability. It now reads the canonical insights directly:
+                    each row is an insight that is not yet claimable, with the
+                    intelligence layer's OWN next-milestone sentence. No
+                    threshold is written here. */}
                 {[
-                  ["Peak earning hours", "25+ tips & 3+ sessions"],
-                  ["Average $/hour", "3+ sessions & 60+ tracked minutes"],
-                  ["Top fans", "10+ tips & 5+ fans"],
-                  ["Whale detection", "10+ fans & $50+ earned"],
-                  ["Session breakdown", "3+ sessions"],
-                  ["Fan re-engagement", "20+ fans & $50+ earned"],
-                  ["Earnings forecasting", "8+ sessions & $50+ earned"],
-                  ["Platform comparison", isPro ? "2+ platforms imported" : "Subscription + 2+ platforms"],
-                ].map(([label, req]) => (
+                  ['peak_window', 'Peak earning window'],
+                  ['hourly_rate', 'Average $/hour'],
+                  ['top_supporters', 'Top supporters'],
+                  ['session_length', 'Session breakdown'],
+                  ['churn_risk', 'Fan re-engagement'],
+                  ['cross_platform', 'Platform comparison'],
+                ]
+                  .map(([id, label]) => [label, intelligence?.insights?.[id]])
+                  // Claimability is the canonical ladder comparison, not the
+                  // per-insight `claimable` flag, which only some entries set.
+                  .filter(([, e]) => e && !atLeast(e.state, CLAIMABLE_FLOOR) && e.nextMilestone?.label)
+                  .map(([label, e]) => [label, e.nextMilestone.label])
+                  .map(([label, req]) => (
                   <div key={label} style={{ fontSize: 12, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div style={{ color: C.white, fontWeight: 600, marginBottom: 2 }}>{label}</div>
-                    <div style={{ color: C.muted, fontSize: 11 }}>Unlocks at {req}</div>
+                    <div style={{ color: C.muted, fontSize: 11 }}>Needs {req}</div>
                   </div>
                 ))}
               </div>
@@ -4907,8 +5957,8 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
-        {activeTab === 'private' && (
+        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} intelligence={intelligence} />}
+        {activeTab === 'sessions' && sessionsSubTab === 'private' && (
           <PrivateSessions
             paidSessions={paidSessions}
             tipsTotalUSD={analytics?.totalUSD ?? null}
@@ -4918,14 +5968,32 @@ const stopImportMessageRotation = () => {
           />
         )}
         {activeTab === 'planner' && (
-          _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} />
+          /* 2C-5: the discovery leads, the planner follows. When peak_window is
+             claimable the creator sees what CamCash found and the action it
+             earns; below that floor she sees the evidence-building state and is
+             NOT asked to upgrade, because there is no reliable plan to sell yet.
+             _plannerLock is unchanged — it is the same canonical gate 2C-1 wired,
+             and it decides whether the planner itself mounts. */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <PeakWindowPlan
+              analytics={analytics}
+              intelligence={intelligence}
+              isPro={isPro}
+              onOpenPlanner={_plannerLock.locked ? undefined : () => {
+                document.getElementById('stream-planner')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              onUpgrade={(src) => openUpgradeModal(src)}
+              onImport={() => handleTabChange('upload')}
+            />
+            {_plannerLock.locked
+              ? <LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} />
+              : <div id="stream-planner"><StreamPlanner tips={tips} isPro={isPro} timezone={_momTz} analytics={analytics} onUpgrade={(src) => openUpgradeModal(src)} /></div>}
+          </div>
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} />
+            : <MoneyMap tips={tips} isPro={isPro} timezone={creatorTz} onUpgrade={(src) => openUpgradeModal(src)} />
         )}
       </div>
 
@@ -4977,7 +6045,9 @@ const stopImportMessageRotation = () => {
         const fanInsight = churnRisk === "Critical" || churnRisk === "High"
           ? "This fan's tipping has slowed — a quick message could bring them back."
           : w.tipProbability?.level === "High"
-          ? "This fan is highly engaged and likely to tip again soon."
+          // 2C-7: was "likely to tip again soon" — a prediction the engine does
+          // not calibrate. States the observed cadence instead.
+          ? "This fan tips on a short, regular cadence in your recorded history."
           : w.tipCount >= 5 && (churnRisk === "Low" || churnRisk === "Medium")
           ? "This fan is highly engaged and tips consistently. Keep the momentum going!"
           : null
@@ -5200,16 +6270,36 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
-                {whaleTips.length > 0 && (
+                {/* 2C-7: the "🤖 AI Predictions" block that sat here is retired.
+                    All four of its figures were fabricated: "predicted next tip
+                    size" was avgTipSize x 1.1, the "engagement score /100" was
+                    an invented weighting of tip count and lifetime value, and
+                    the "30-day revenue forecast" was lifetime value per month
+                    x 1.05. Nothing in the engine calibrates any of them, and
+                    "likely to tip again in ~N days" restated the observed
+                    cadence as a prediction about the fan.
+
+                    Replaced with the same cadence, stated as what it is: an
+                    observation about recorded tips. Both numbers below already
+                    appear elsewhere in this profile and are computed once. */}
+                {whaleTips.length > 1 && (
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Observed tipping pattern</div>
                     <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
+                      {[
+                        { label: "Tips recorded", value: `${w.tipCount}`, color: C.cyan },
+                        { label: "Typical gap between tips", value: `~${avgDaysBetweenTips} days`, color: C.cyan },
+                        { label: "Last tip", value: daysSinceLastTip === null ? "—" : daysSinceLastTip === 0 ? "Today" : `${daysSinceLastTip} days ago`, color: daysSinceLastTip !== null && daysSinceLastTip > avgDaysBetweenTips ? C.gold : C.text },
+                        { label: "Average tip size", value: `$${(w.avgTipSize || 0).toFixed(2)}`, color: C.text },
+                      ].map(({ label, value, color }) => (
                         <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
                           <div style={{ fontSize: 13, color: C.text }}>{label}</div>
                           <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
                         </div>
                       ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.55 }}>
+                      Counted from tips this fan has already sent. CamCash does not predict whether or when they will tip again.
                     </div>
                   </div>
                 )}
@@ -5286,83 +6376,37 @@ const stopImportMessageRotation = () => {
         )
       })()}
 
-      {/* UPGRADE MODAL */}
-      {showUpgradeModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 480, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #3b82f6, #a855f7, #ec4899)" }} />
-            <div style={{ padding: 36 }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: C.white, marginBottom: 8 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).headline}</h2>
-                <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6 }}>{(UPGRADE_COPY[upgradeModalSource] || UPGRADE_COPY.default).subhead}</p>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
-                {[
-                  { icon: "🐳", text: "See ALL your top spenders — not just the top 3" },
-                  { icon: "⏰", text: "Discover your exact highest-earning hours & days" },
-                  { icon: "💡", text: "Unlock 15+ advanced insights & strategy tips" },
-                  { icon: "📈", text: "Full session history with trend analysis" },
-                  { icon: "🤖", text: "AI fan behavior predictions & return forecasts" },
-                  { icon: "💌", text: "Unlimited re-engagement scripts & fan tracking" },
-                ].map(({ icon, text }) => (
-                  <div key={text} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.15)", borderRadius: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
-                    <span style={{ fontSize: 13, color: C.white }}>{text}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Was: "Most creators miss 30-60% of their earning potential
-                  without this" — an invented statistic about creators we have
-                  never measured. Replaced with a claim that is true and
-                  checkable: what is actually being offered. */}
-              {trialEligible && (
-                <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.25)", borderRadius: 10, marginBottom: 24 }}>
-                  <div style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Free for 7 days — every Pro feature, on your own data</div>
-                </div>
-              )}
-              <Button
-                disabled={earlyAccessSubmitting}
-                onClick={async () => {
-                  setEarlyAccessSubmitting(true)
-                  track('upgrade_checkout_clicked', { source: 'upgrade_modal' })
-                  try {
-                    const { data: { session } } = await supabase.auth.getSession()
-                    if (!session?.access_token) {
-                      showToast("Please sign in again, then retry upgrading.")
-                      return
-                    }
-                    const res = await fetch('/api/stripe/checkout', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-                      credentials: 'include',
-                      body: JSON.stringify({ plan_type: 'standard_monthly' }),
-                    })
-                    const data = await res.json().catch(() => ({}))
-                    if (!res.ok || !data.url) throw new Error(data.error || 'Unable to start checkout.')
-                    window.location.assign(data.url)
-                  } catch (e) {
-                    showToast(e?.message || "Something went wrong starting checkout. Please try again.")
-                    setEarlyAccessSubmitting(false)
-                  }
-                }}
-                style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                {earlyAccessSubmitting
-                  ? "Redirecting to checkout..."
-                  : trialEligible ? "Start my 7-day free trial →" : "🔓 Upgrade to Pro — $19.99/mo"}
-              </Button>
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>
-                {trialEligible
-                  ? `Card required to start. $19.99/mo begins after ${TRIAL_DAYS} days — cancel any time before then and you pay nothing.`
-                  : "Secure checkout powered by Stripe • Cancel anytime"}
-              </div>
-              <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                Maybe later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── CONTEXTUAL UPGRADE (2C-4) ────────────────────────────────
+          One modal for every in-dashboard upgrade action. The context is built
+          from the live analytics at open time, so the discovery that caused
+          the click is what the creator is asked about. The old modal is gone:
+          it showed the same six bullets whatever the trigger, one of which
+          ("AI fan behavior predictions & return forecasts") sold a capability
+          the engine does not have. */}
+      <ContextualUpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        context={buildUpgradeContext(upgradeModalSource, {
+          analytics,
+          trackedPlatformCount: [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length,
+        })}
+        isPro={isPro}
+        trialEligible={trialEligible}
+        getAccessToken={async () => {
+          const { data: { session } } = await supabase.auth.getSession()
+          return session?.access_token || null
+        }}
+        onProAction={(source) => {
+          // Already subscribed: take the deeper action instead of selling it.
+          const tab = {
+            window_fan_overlap: 'whales', whales_cutoff: 'whales',
+            peak_window: 'planner', stream_planner: 'planner', import_discovery: 'planner',
+            platform_comparison: 'platforms', multi_platform: 'platforms',
+            money_map: 'moneymap', creator_report: 'report', live_mode_locked: 'live',
+          }[source]
+          if (tab) handleTabChange(tab)
+        }}
+      />
 
       {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
           never sits over a fan card's actions or the bottom of the page content */}

@@ -4,11 +4,11 @@
 // One import for every consumer:
 //   import { computeIntelligence, INSIGHT_STATE } from '@/lib/intelligence'
 //
-// PHASE 1 IS ADDITIVE AND UNWIRED. Nothing in app/ imports this yet. The four
-// existing progress systems (getDashboardReadiness, getUnlockProgress,
-// getModuleLockState, CreatorReport's CalibrationCard) and the three existing
-// fan-value definitions all remain live and unchanged. Each is migrated in a
-// later phase, individually, with before/after numbers — never silently.
+// WIRED AS OF PHASE 2C-1. All four former progress systems now resolve here:
+// CreatorReport's CalibrationCard (2B-1), and getDashboardReadiness /
+// getUnlockProgress / getModuleLockState / getFeatureLockState / canShow*
+// (2C-1), which survive only as thin wrappers over this ladder via
+// lib/intelligence/locks.js. The three fan-value definitions are unchanged.
 //
 // WHAT THIS MODULE REUSES RATHER THAN REDEFINES:
 //   lib/analytics/bestTimes.js  CONFIDENCE_TIER      -> fromConfidenceTier()
@@ -37,6 +37,9 @@ export {
   fromAccountConfidence,
   promoteIfEstablished,
   capForComparison,
+  BADGE_EMPHASIS,
+  badgeFor,
+  badgeForInsight,
 } from './states'
 
 export {
@@ -75,3 +78,13 @@ export {
   fanEvidenceState,
   observedActivityLabel,
 } from './fanValue'
+
+export {
+  GATE_MAP,
+  READINESS_INSIGHTS,
+  stateOf,
+  gateOpen,
+  lockMessage,
+  resolveIntelligence,
+  resolveReadiness,
+} from './locks'

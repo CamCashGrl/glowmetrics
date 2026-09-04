@@ -1,5 +1,11 @@
 "use client"
 import { useMemo } from "react"
+import ConfidenceBadge from "./ConfidenceBadge"
+import WindowFanOverlap from "./WindowFanOverlap"
+import PeakWindowPlan from "./PeakWindowPlan"
+import NextBestMove from "./NextBestMove"
+import WhatChanged from "./WhatChanged"
+import { buildReportDiscoveries, primaryMove } from "../../lib/reportDiscoveries"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -75,17 +81,41 @@ const fmtWindow = (h) => `${fmtHour(h)} – ${fmtHour(h + 2)}`
 
 // Confidence vocabulary comes from the canonical tier, never invented.
 // bestTimes.js: <2 insufficient, 2–3 promising, 4–5 supported, 6+ high.
-const TIER_COPY = {
-  high:      "Strong pattern",
-  supported: "Supported pattern",
-  promising: "Pattern emerging",
-}
+// 2C-2: the local three-tier vocabulary is retired. Confidence words now come
+// from the canonical ladder via <ConfidenceBadge>, which reads
+// computeIntelligence()'s peak_window state — the same state the Creator
+// Report, Performance and the Stream Planner read. Nothing here computes or
+// thresholds anything; the badge renders nothing at all while intelligence is
+// still loading.
 
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
 
 const label = {
   fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
   textTransform: "uppercase", color: C.muted,
+}
+
+/**
+ * A zone divider. The four-zone hierarchy has to be VISIBLE, not just true in
+ * the source order — this is what tells a creator at a glance that she has
+ * passed from "what to do" into "why", and then into "the raw numbers".
+ * Deliberately understated: a hairline rule and a small label, never a card.
+ */
+function ZoneRule({ label, quiet = false }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: quiet ? 10 : 6 }}>
+      <span style={{
+        fontSize: 10.5, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase",
+        color: quiet ? "#5E647C" : "#8D93AA", whiteSpace: "nowrap",
+      }}>{label}</span>
+      <span style={{
+        flex: 1, height: 1,
+        background: quiet
+          ? "rgba(255,255,255,0.06)"
+          : "linear-gradient(90deg, rgba(22,244,255,0.22), rgba(255,255,255,0.04) 60%, transparent)",
+      }} />
+    </div>
+  )
 }
 
 function BrandButton({ children, onClick, style }) {
@@ -116,7 +146,7 @@ function GhostButton({ children, onClick }) {
 }
 
 // One measured fact. Never a claim without a number behind it.
-function Chip({ icon, title, value, sub, accent = C.pink }) {
+function Chip({ icon, title, value, sub, badge = null, accent = C.pink }) {
   return (
     <div style={card({ padding: "18px 20px", display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 })}>
       <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
@@ -126,6 +156,10 @@ function Chip({ icon, title, value, sub, accent = C.pink }) {
             were clipping to "8:00 AM - 1..." and "4 high-valu..." */}
         <div style={{ fontSize: 17, fontWeight: 800, color: accent, marginTop: 5, lineHeight: 1.3 }}>{value}</div>
         {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 5, lineHeight: 1.45 }}>{sub}</div>}
+        {/* Evidence strength for this chip's claim. Renders nothing while
+            intelligence is loading, and nothing for a chip with no canonical
+            insight behind it. */}
+        {badge && <div style={{ marginTop: 6 }}>{badge}</div>}
       </div>
     </div>
   )
@@ -160,7 +194,7 @@ function Stat({ value, label: l, delta, accent = C.white }) {
 // single bar, which read as broken. A 24-bar distribution implies a precision
 // this data does not have; a two-value comparison states exactly what the
 // recommendation rests on.
-function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, hourLabel }) {
+function WindowProof({ windowRate, baselineRate, sessions, intelligence, dayLabel, hourLabel }) {
   const max = Math.max(windowRate, baselineRate, 0.01)
   const Bar = ({ v, title, sub, gradient }) => (
     <div style={{ marginBottom: 20 }}>
@@ -181,7 +215,11 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
   return (
     <div>
       <div style={{ ...label, fontSize: 12, marginBottom: 16 }}>Why this window</div>
-      <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} qualifying session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
+      <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`}
+           sub={<span style={{ display: "inline-flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+             <span>{sessions} qualifying session{sessions === 1 ? "" : "s"}</span>
+             <ConfidenceBadge intelligence={intelligence} insight="peak_window" />
+           </span>} />
       <Bar v={baselineRate} title="Your typical hour" sub="median across every qualifying session" />
     </div>
   )
@@ -189,6 +227,14 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
 
 export default function CommandCenter({
   analytics,
+  // The diff /api/intelligence returns against the creator's stored baseline.
+  // Presentation only — this component computes no change of its own.
+  changedSinceLastVisit = null,
+  onImport,
+  // computeIntelligence() output, threaded from the dashboard. Presentation
+  // only: it decides which confidence WORD appears beside a claim, never any
+  // number, and never whether a card renders.
+  intelligence = null,
   isPro = false,
   firstName = null,
   onPlanStream,
@@ -204,6 +250,10 @@ export default function CommandCenter({
   onMessageFan,
 }) {
   // ── All values READ from the frozen layer. No local aggregation. ──
+  // The strongest discovery that actually carries an action — a "next best
+  // move" with nothing to do is not a move. Canonically ordered, never
+  // templated; falls back to the strongest finding when none has an action.
+  const primaryDiscovery = primaryMove(buildReportDiscoveries({ analytics, intelligence }))
   const bestWindow   = analytics?.canonicalBestTimes?.bestWindow || null
   const earlySignal  = analytics?.canonicalBestTimes?.earlySignal || null
   const grid         = analytics?.canonicalBestTimes?.grid || []
@@ -267,11 +317,41 @@ export default function CommandCenter({
         <div>
           <div style={{ fontSize: 27, fontWeight: 800, color: C.white, letterSpacing: "-0.025em" }}>👋 {greeting}</div>
           <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
-            {hasWindow ? "Here's how to make more money today." : "Here's what your data says so far."}
+            {/* 2C-7: was "Here's how to make more money today." — an income promise
+                the product cannot make. The dashboard reports what the recorded
+                history shows; it does not guarantee an outcome. */}
+            {hasWindow ? "Here's what your recorded history points to." : "Here's what your data says so far."}
           </div>
         </div>
       </div>
 
+      {/* ══ ZONE 1 — PRIMARY ═════════════════════════════════════════
+          One dominant move, chosen by evidence strength from the creator's own
+          canonical discoveries. Everything below is deliberately quieter. */}
+      <NextBestMove
+        discovery={primaryDiscovery}
+        intelligence={intelligence}
+        isPro={isPro}
+        onAction={(action) => {
+          if (action.source === 'stream_planner') onPlanStream?.()
+          else if (action.source === 'window_fan_overlap') onViewFans?.()
+          else if (action.source === 'platform_comparison') onSeePerformance?.()
+        }}
+        onUpgrade={onUpgrade}
+        onImport={onImport}
+      />
+
+      {/* ══ ZONE 2 — SECONDARY ═══════════════════════════════════════
+          Why today differs from yesterday. Renders nothing on a first visit,
+          and says so plainly when nothing actually moved. */}
+      <WhatChanged diff={changedSinceLastVisit} />
+
+      {/* ══ ZONE 3 — SUPPORTING EVIDENCE ═════════════════════════════
+          Everything from here down is deliberately quieter than the two zones
+          above: smaller label, muted rule, no gradient edge. A creator who
+          reads only the first screen has already got the answer; this is what
+          she looks at when she wants to check the working. */}
+      <ZoneRule label="The evidence behind it" />
       {/* ── HERO: YOUR NEXT BEST MOVE ──────────────────────────────── */}
       <div style={{
         background: hasWindow ? HERO_GRADIENT : "rgba(15,20,32,0.75)",
@@ -293,9 +373,7 @@ export default function CommandCenter({
                 {/* Confidence + sample sit directly under the recommendation
                     instead of being buried in a chip further down the page. */}
                 <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "5px 12px", borderRadius: 20 }}>
-                    {TIER_COPY[bestWindow.tier] || "Pattern"}
-                  </span>
+                  <ConfidenceBadge intelligence={intelligence} insight="peak_window" style={{ fontSize: 12.5, padding: "5px 12px" }} />
                   <span style={{ fontSize: 13, color: C.text }}>
                     based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} qualifying session{bestWindow.sessionCount === 1 ? "" : "s"}</strong> in this window
                   </span>
@@ -338,6 +416,9 @@ export default function CommandCenter({
                   <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
                     if you stream the full 2-hour window, at the {fmtUsd(topGap.rateGapUsdPerHour)}/hr gap
                   </div>
+                  <div style={{ marginTop: 7, display: "flex", justifyContent: "flex-end" }}>
+                    <ConfidenceBadge intelligence={intelligence} insight="revenue_opportunity" />
+                  </div>
                 </div>
               )}
               {baseline != null && (
@@ -345,7 +426,7 @@ export default function CommandCenter({
                   windowRate={bestWindow.medianUsdPerHour}
                   baselineRate={baseline}
                   sessions={bestWindow.sessionCount}
-                  tierLabel={TIER_COPY[bestWindow.tier] || "Pattern"}
+                  intelligence={intelligence}
                   dayLabel={bestWindow.localDay}
                   hourLabel={fmtWindow(bestWindow.localHour)}
                 />
@@ -358,16 +439,47 @@ export default function CommandCenter({
       {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
       {hasWindow && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(158px, 1fr))", gap: 11 }}>
-          <Chip icon="🕐" title="Best window" value={fmtWindow(bestWindow.localHour)} sub={`${bestWindow.localDay}s · ${TIER_COPY[bestWindow.tier] || "Pattern"}`} />
+          <Chip icon="🕐" title="Best window" value={fmtWindow(bestWindow.localHour)} sub={`${bestWindow.localDay}s`} badge={<ConfidenceBadge intelligence={intelligence} insight="peak_window" />} />
           <Chip icon="👥" title={overlap?.count ? "Fans active in it" : "Fan overlap"}
                 value={overlap?.count ? `${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"}` : "None yet"}
                 sub={overlap?.count ? `${fmtUsd0(overlap.totalUSD)} lifetime combined` : "No repeat fans in this window"}
-                accent={overlap?.count ? C.indigo : C.muted} />
+                accent={overlap?.count ? C.indigo : C.muted}
+                badge={<ConfidenceBadge intelligence={intelligence} insight="fan_behaviour" />} />
           {topPlatform && (
-            <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${fmtHours(topPlatform.hours || 0)}`} accent={C.cyan} />
+            <Chip icon="📈" title={`${topPlatform.platform} is #1`} value={`${fmtUsd(topPlatform.usdPerHour)}/hr`} sub={`${topPlatform.sessions} sessions · ${fmtHours(topPlatform.hours || 0)}`} accent={C.cyan} badge={<ConfidenceBadge intelligence={intelligence} insight="platform_profitability" />} />
           )}
-          <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} sub={TIER_COPY[bestWindow.tier] || "Pattern"} accent={C.gold} />
+          <Chip icon="📊" title="Sample behind it" value={`${bestWindow.sessionCount} session${bestWindow.sessionCount === 1 ? "" : "s"}`} badge={<ConfidenceBadge intelligence={intelligence} insight="peak_window" />} accent={C.gold} />
         </div>
+      )}
+
+      {/* ── DISCOVERY -> PERSONALIZED PLAN (2C-5) ───────────────────
+          The window is already the hero above; this is the action it earns.
+          Rendered only when the canonical peak_window state supports it — the
+          component itself decides, and shows the evidence-building state
+          instead when it does not. */}
+      <PeakWindowPlan
+        analytics={analytics}
+        intelligence={intelligence}
+        isPro={isPro}
+        onOpenPlanner={onPlanStream}
+        onUpgrade={onUpgrade}
+        compact
+      />
+
+      {/* ── DISCOVERY -> FAN INTELLIGENCE (2C-3) ────────────────────
+          Connects the peak window above to the fans actually observed in it.
+          Reads analytics.bestWindowFanOverlap only; states observations, never
+          predictions. Free sees the whole discovery and both counts; Pro opens
+          the fan-level detail the fan analytics layer already produces. */}
+      {hasWindow && (
+        <WindowFanOverlap
+          analytics={analytics}
+          intelligence={intelligence}
+          isPro={isPro}
+          onViewFans={onViewFans}
+          onUpgrade={onUpgrade}
+          compact
+        />
       )}
 
       {/* ── RIGHT NOW ──────────────────────────────────────────────
@@ -409,11 +521,17 @@ export default function CommandCenter({
           best move" card was removed: it duplicated the same distribution in a
           second card while the hero sat half-empty. */}
 
+      {/* ══ ZONE 4 — DEEPER ══════════════════════════════════════════
+          Totals and the fan list. Factual, unbadged, and last — the detail
+          tabs remain the real home for anything beyond this. */}
+      <ZoneRule label="Your numbers" quiet />
+
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
         <div style={card({ padding: 20 })}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
+            <ConfidenceBadge intelligence={intelligence} insight="churn_risk" />
           </div>
           {returningSoon.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
@@ -483,7 +601,10 @@ export default function CommandCenter({
                 `Every ranked window for the week, not just the top one`,
                 topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
                 overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
-                `A forecast you can hold next week's schedule against`,
+                // 2C-7: was "A forecast you can hold next week's schedule
+                // against". No forecast ships, and none is calibrated. Replaced
+                // with what Pro actually does on this data today.
+                `The same evidence and confidence behind every window, not just this one`,
               ].map((line, i) => (
                 <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
                   <span style={{ color: C.indigo, fontWeight: 800, flexShrink: 0 }}>→</span>

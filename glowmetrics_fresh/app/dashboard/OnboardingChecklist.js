@@ -13,7 +13,7 @@ const C = {
 const GRAD = 'linear-gradient(90deg,#22D3EE,#a855f7,#EC4899)'
 const DISMISS_KEY = 'camcash_checklist_dismissed'
 
-export default function OnboardingChecklist({ tips = [], isPro = false, visitedTabs = [], onNavigate, onUpgrade }) {
+export default function OnboardingChecklist({ tips = [], isPro = false, visitedTabs = [], onNavigate }) {
   const [dismissed, setDismissed] = useState(true) // default true until localStorage read, avoids a flash on load
   const [hydrated, setHydrated] = useState(false)
 
@@ -94,12 +94,12 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
         </>
       )}
 
-      {!isPro && (
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: C.muted }}>✦ Bonus: explore Creator Pro when you're ready for more platforms and deeper insights.</span>
-          <button onClick={onUpgrade} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.1)', color: C.purple, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>See Creator Pro</button>
-        </div>
-      )}
+      {/* 2C-7: the generic "See Creator Pro" footer that sat here is retired.
+          It was an upgrade prompt with no reason attached, on the same tab as
+          the Command Center's contextual discoveries — exactly the generic CTA
+          sitting beside a contextual one that this pass removes. This checklist
+          tracks discrete ACTIONS; conversion belongs to the discoveries below
+          it, and to the persistent sidebar entry. */}
 
       <style jsx>{`
         @keyframes obProgressGrow { from { width: 0; } }

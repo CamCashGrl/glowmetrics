@@ -9,10 +9,10 @@
 //   getModuleLockState()     (DashboardPreview.js)  needs_data / requires_pro
 //   CalibrationCard          (CreatorReport.js)     private 4-boolean percentage
 //
-// PHASE 1 IS ADDITIVE. Nothing above is changed, removed, or re-pointed by
-// this module existing. Those four remain the operative systems until a later
-// phase migrates each surface deliberately, one at a time, with before/after
-// verification. This file only establishes the destination.
+// PHASE 2C-1 UPDATE: the three DashboardPreview.js systems above have been
+// retired. They survive only as thin compatibility wrappers over this ladder
+// (see lib/intelligence/locks.js), so they no longer hold thresholds of their
+// own. CreatorReport's CalibrationCard was re-pointed in 2B-1.
 //
 // THIS MODULE INVENTS NO THRESHOLDS. Every state below is derived from a
 // threshold that already exists in the codebase:
@@ -127,6 +127,83 @@ export const STATE_META = {
     tone: 'strong',
     blurb: 'Strong evidence, sustained over time and compared against alternatives.',
   },
+}
+
+// ── BADGE VOCABULARY (Phase 2C-2) ───────────────────────────────────────────
+// THE one confidence vocabulary the dashboard renders. It replaces four local
+// copies that had drifted apart:
+//   CreatorReport.js  STATE_LABEL      7 states, different wording
+//   CommandCenter.js  TIER_COPY        3 bucket tiers
+//   Performance.js    TIER_COPY (read) 3 bucket tiers
+//   StreamPlanner.js  CONF / ConfBadge 4 bucket tiers
+//
+// NO NEW STATES AND NO NEW THRESHOLDS. Every entry is keyed by an existing
+// INSIGHT_STATE and takes its words from STATE_META above.
+//
+// `emphasis` is presentation only. It encodes the approved rule that the badge
+// must be LOUDEST WHERE THE CLAIM IS WEAKEST: a creator whose every insight is
+// established should barely notice the badges, while a thin window that the
+// hero copy states confidently must be visibly qualified.
+export const BADGE_EMPHASIS = {
+  /** Prominent: the reader must not miss that this is not yet a finding. */
+  STRONG: 'strong',
+  /** Visible but restrained: a stated finding, flagged as such. */
+  MEDIUM: 'medium',
+  /** Subtle: the claim stands on its own; the badge is a footnote. */
+  SUBTLE: 'subtle',
+}
+
+const BADGE_EMPHASIS_BY_STATE = {
+  [INSIGHT_STATE.NOT_AVAILABLE]:   BADGE_EMPHASIS.SUBTLE,
+  [INSIGHT_STATE.CALIBRATING]:     BADGE_EMPHASIS.STRONG,
+  [INSIGHT_STATE.EARLY_SIGNAL]:    BADGE_EMPHASIS.STRONG,
+  [INSIGHT_STATE.DEVELOPING]:      BADGE_EMPHASIS.STRONG,
+  [INSIGHT_STATE.SUPPORTED]:       BADGE_EMPHASIS.MEDIUM,
+  [INSIGHT_STATE.HIGH_CONFIDENCE]: BADGE_EMPHASIS.SUBTLE,
+  [INSIGHT_STATE.ESTABLISHED]:     BADGE_EMPHASIS.SUBTLE,
+}
+
+/**
+ * Everything a badge needs for one state, or null when there is nothing
+ * honest to render.
+ *
+ * Returns null for an unknown/absent state — which is what a component gets
+ * while intelligence is still loading. A loading dashboard must render NO
+ * badge rather than "Not available yet", because an absent measurement and a
+ * measurement that found nothing are different claims.
+ *
+ * NOT_AVAILABLE returns null for the same reason: the canonical layer uses it
+ * for "no data of this kind exists", and a card that is on screen showing a
+ * number is not in that position. A card that genuinely has nothing to show
+ * is handled by the lock layer (lib/intelligence/locks.js), not by a badge.
+ *
+ * @param {string} state - an INSIGHT_STATE
+ * @returns {{state, label, short, emoji, tone, blurb, emphasis}|null}
+ */
+export function badgeFor(state) {
+  const meta = STATE_META[state]
+  if (!meta) return null
+  if (state === INSIGHT_STATE.NOT_AVAILABLE) return null
+  return {
+    state,
+    label: meta.label,
+    short: meta.short,
+    emoji: meta.emoji,
+    tone: meta.tone,
+    blurb: meta.blurb,
+    emphasis: BADGE_EMPHASIS_BY_STATE[state] || BADGE_EMPHASIS.SUBTLE,
+  }
+}
+
+/**
+ * The badge for one insight id inside a computeIntelligence() result.
+ * Null when intelligence is absent (loading) or the insight is unknown, so a
+ * caller can always write {badgeForInsight(intel, 'peak_window')} directly.
+ */
+export function badgeForInsight(intelligence, insightId) {
+  const state = intelligence?.insights?.[insightId]?.state
+  if (!state) return null
+  return badgeFor(state)
 }
 
 // ── EVIDENCE KIND ───────────────────────────────────────────────────────────

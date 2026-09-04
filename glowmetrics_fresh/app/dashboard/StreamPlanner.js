@@ -1,5 +1,7 @@
 "use client"
 import React, { useState, useMemo, useEffect, useCallback } from "react"
+import ConfidenceBadge from "./ConfidenceBadge"
+import { fromConfidenceTier, badgeFor } from "../../lib/intelligence/states"
 import Button from "../../components/ui/Button"
 import {
   ResponsiveContainer, LineChart, Line,
@@ -16,7 +18,7 @@ import { toLocalDow, toLocalHour, toLocalDateStr } from "../../lib/analytics/loc
 // DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
 const BG      = "#0a0e1a"
-const CARD    = "rgba(255,255,255,0.03)"
+const CARD    = "rgba(15,20,32,0.75)"   // the dashboard's authentic card fill
 const BORDER  = "rgba(255,255,255,0.08)"
 const PRIMARY = "#f1f5f9"
 const TEXT    = "#94a3b8"
@@ -36,7 +38,8 @@ const UTC_DAYS    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"
 const MONTHS      = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 const PREFS_KEY   = "cc_planner_prefs"
 
-const cardS = (x = {}) => ({ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20, ...x })
+const cardS = (x = {}) => ({ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 20,
+  backdropFilter: "blur(20px)", boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)", ...x })
 const fmt$  = (v) => `$${Number(v).toFixed(2)}`
 const fmtK  = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round(v))
 const TIP_S = { background: "#0f1726", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: PRIMARY, fontSize: 12 }
@@ -293,17 +296,27 @@ const DEFAULT_PREFS = {
 // wording the Command Center and Performance use. The planner previously had
 // its own high/medium/low vocabulary on its own thresholds, so one bucket
 // could be "Medium" here and "Early signal" there.
-const CONF = {
-  high:         { bg: "rgba(34,211,238,0.1)", color: CYAN,   label: "Strong pattern" },
-  supported:    { bg: "rgba(168,85,247,0.1)", color: PURPLE, label: "Supported pattern" },
-  promising:    { bg: "rgba(245,158,11,0.1)", color: GOLD,   label: "Early signal" },
-  insufficient: { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Not enough data" },
-  untested:     { bg: "rgba(99,102,241,0.1)", color: INDIGO, label: "Untested" },
-}
-
+// 2C-2: the local four-label vocabulary is retired. A row's `confidence` is a
+// canonical bucket tier (lib/analytics/bestTimes.js), and fromConfidenceTier()
+// is the canonical mapper onto the intelligence ladder — so the word this badge
+// prints is now the SAME word the Creator Report, the Command Center and
+// Performance print for the same strength of evidence.
+//
+// "untested" is the one value that is not a confidence tier at all: it means
+// the creator has never streamed that window, so there is no evidence to grade.
+// It keeps a plain neutral chip rather than being forced onto the ladder.
 function ConfBadge({ level }) {
-  const c = CONF[level] || CONF.insufficient
-  return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:c.bg, color:c.color, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{c.label}</span>
+  // A row's `confidence` is a canonical bucket tier, so fromConfidenceTier()
+  // is the mapper. Anything it cannot place — "untested" (never streamed),
+  // "insufficient" (streamed too few times), or an unrecognised value —
+  // degrades to this neutral chip. It never falls through to nothing, and it
+  // can never degrade upward into a confident word.
+  const state = level && level !== "untested" ? fromConfidenceTier(level) : null
+  const badge = state ? badgeFor(state) : null
+  if (!badge) {
+    return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:"rgba(99,102,241,0.1)", color:INDIGO, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{level === "untested" ? "Untested" : "Not enough data"}</span>
+  }
+  return <ConfidenceBadge state={state} showEmoji={false} />
 }
 
 function PlatChip({ name, i = 0 }) {
@@ -604,9 +617,9 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
         </div>
         {!isPro && (
           <div style={{ marginTop:12, textAlign:"center" }}>
-            <a href="/pricing" style={{ fontSize:12, color:PURPLE, fontWeight:600, textDecoration:"none" }}>
-              ✦ Upgrade to Pro to see your full 7-day plan, not just tonight
-            </a>
+            <button onClick={() => onUpgrade?.('stream_planner')} style={{ fontSize:12, color:PURPLE, fontWeight:600, background:"none", border:"none", cursor:"pointer", padding:0 }}>
+              ✦ See your full 7-day plan, not just tonight
+            </button>
           </div>
         )}
       </div>
@@ -617,9 +630,9 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, isPro=true, timezone
       {!isPro ? (
         <div style={{ ...cardS(), textAlign:"center", padding:"32px 24px" }}>
           <div style={{ fontSize:26, marginBottom:8 }}>🔒</div>
-          <div style={{ color:TEXT, fontSize:14, fontWeight:700, marginBottom:6 }}>Untested Opportunities &amp; the full Opportunity Grid are Creator Pro features</div>
+          <div style={{ color:TEXT, fontSize:14, fontWeight:700, marginBottom:6 }}>See every day and time block worth testing</div>
           <div style={{ color:MUTED, fontSize:12, marginBottom:16 }}>See every day/time block worth testing, not just tonight's window.</div>
-          <Button as="a" href="/pricing" style={{ padding:"9px 22px", fontSize:13 }}>Upgrade to Pro</Button>
+          <Button onClick={() => onUpgrade?.('stream_planner')} style={{ padding:"9px 22px", fontSize:13 }}>See the full weekly plan</Button>
         </div>
       ) : hidden.length > 0 && (
         <div style={cardS()}>
@@ -1025,13 +1038,13 @@ const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id
 
 // Whales/Progress stay Pro-only — free's "somewhat useful" slice on this
 // tool is Tonight's Brief + today's row in the Plan tab (see PlanTab).
-function LockedPlannerTab({ title, body }) {
+function LockedPlannerTab({ title, body, onUpgrade }) {
   return (
     <div style={{ ...cardS(), textAlign:"center", padding:"48px 32px" }}>
       <div style={{ fontSize:32, marginBottom:12 }}>🔒</div>
-      <div style={{ color:PRIMARY, fontSize:16, fontWeight:700, marginBottom:8 }}>{title} is a Creator Pro feature</div>
+      <div style={{ color:PRIMARY, fontSize:16, fontWeight:700, marginBottom:8 }}>{title}</div>
       <div style={{ color:TEXT, fontSize:13, lineHeight:1.6, marginBottom:20 }}>{body}</div>
-      <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:14 }}>Upgrade to Pro</Button>
+      <Button onClick={() => onUpgrade?.('stream_planner')} style={{ padding:"10px 24px", fontSize:14 }}>See the full weekly plan</Button>
     </div>
   )
 }
@@ -1071,8 +1084,8 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC', analytics=null
       </div>
 
       {tab === "plan"     && <PlanTab tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} isPro={isPro} timezone={timezone} />}
-      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} timezone={timezone} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." />)}
-      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} analytics={analytics} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." />)}
+      {tab === "whales"   && (isPro ? <WhalesTab tips={tips} whales={whales} timezone={timezone} /> : <LockedPlannerTab title="Whale Windows" body="See exactly when your top fans historically show up, so you can be live when they are." onUpgrade={onUpgrade} />)}
+      {tab === "progress" && (isPro ? <ProgressTab tips={tips} windows={windows} prefs={prefs} timezone={timezone} analytics={analytics} /> : <LockedPlannerTab title="Plan Progress" body="Track how closely you're sticking to your recommended schedule over time." onUpgrade={onUpgrade} />)}
     </div>
   )
 }
@@ -1080,7 +1093,7 @@ function StreamPlannerContent({ tips, isPro=true, timezone='UTC', analytics=null
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC', analytics = null }) {
+export default function StreamPlanner({ tips = [], isPro = false, timezone = 'UTC', analytics = null, onUpgrade }) {
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>

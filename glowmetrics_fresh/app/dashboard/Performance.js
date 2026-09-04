@@ -1,5 +1,9 @@
 "use client"
 import { useMemo } from "react"
+import ConfidenceBadge from "./ConfidenceBadge"
+import PlatformOpportunity from "./PlatformOpportunity"
+import PlatformROI from "./PlatformROI"
+import { fromConfidenceTier } from "../../lib/intelligence/states"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts"
@@ -34,6 +38,7 @@ const C = {
 }
 const glassCard = {
   background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
 }
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
@@ -51,7 +56,9 @@ const fmtMonth = (ym) => { const [y, m] = ym.split("-"); return new Date(Number(
 const DAY_ABBR = { Sunday: "Sun", Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", Saturday: "Sat" }
 const DAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
-const TIER_COPY = { high: "Strong pattern", supported: "Supported pattern", promising: "Early signal" }
+// 2C-2: the local three-tier vocabulary is retired. Confidence words come from
+// the canonical ladder via <ConfidenceBadge>. This file still performs no
+// aggregation; the badge only decides which WORD sits beside a claim.
 
 function BrandButton({ children, onClick, style }) {
   return (
@@ -148,6 +155,9 @@ function HourlyRateTrend({ monthlyData }) {
 
 export default function Performance({
   analytics,
+  // computeIntelligence() output. Presentation only — never gates a card,
+  // never changes a number, renders nothing while loading.
+  intelligence = null,
   isPro = false,
   onUpgrade,
   earningsTrend = null, // pre-rendered <DashboardGrowthCharts/> element — see app/dashboard/page.js. It needs raw tips/sessions for its daily/weekly/hourly-of-day modes, which this analytics-only component never receives.
@@ -243,6 +253,7 @@ export default function Performance({
         const ratio = Math.round((aboveMedian.avgUsdPerHour / belowOrAtMedian.avgUsdPerHour) * 10) / 10
         if (ratio >= 1.5) {
           out.push({
+            insight: "session_length",
             what: `Your strongest ${aboveMedian.count} sessions earn ${ratio}x more per hour than your weaker ${belowOrAtMedian.count}`,
             why: `$${aboveMedian.avgUsdPerHour}/hr vs $${belowOrAtMedian.avgUsdPerHour}/hr — what's different about the strong ones is worth repeating.`,
           })
@@ -252,6 +263,7 @@ export default function Performance({
     if (platformEfficiencyGap && platformEfficiencyGap.multiple >= 1.5) {
       const { top, bottom, multiple } = platformEfficiencyGap
       out.push({
+        insight: "platform_profitability",
         what: `${top.platform} earns ${multiple.toFixed(1)}x more per hour than ${bottom.platform}`,
         why: `${fmtUsd(top.usdPerHour)}/hr vs ${fmtUsd(bottom.usdPerHour)}/hr — shifting time toward ${top.platform} compounds.`,
       })
@@ -259,6 +271,7 @@ export default function Performance({
     const overlap = analytics?.bestWindowFanOverlap
     if (bestWindow && overlap?.count > 0) {
       out.push({
+        insight: "fan_behaviour",
         what: `${overlap.count} of your highest-value supporters overlap with your strongest window`,
         why: `${fmtUsd0(overlap.totalUSD)} in combined lifetime value shows up specifically in ${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)}.`,
       })
@@ -266,12 +279,14 @@ export default function Performance({
     const dep = analytics?.dependencyRisk
     if (dep && dep.level !== "low") {
       out.push({
+        insight: "dependency_risk",
         what: `${dep.top1Pct}% of your revenue comes from a single fan`,
         why: `If they stop tipping, you'd lose ${fmtUsd0(dep.lossIfTopFanLeaves)} — worth building a second and third relationship to the same size.`,
       })
     }
     if (bestWindow && bestWindow.tier === "high") {
       out.push({
+        insight: "peak_window",
         what: `${bestWindow.localDay}s ${fmtWindow(bestWindow.localHour)} is a strong, repeatable pattern`,
         why: `${bestWindow.sessionCount} qualifying sessions back it — this is your most reliable window, not a lucky night.`,
       })
@@ -297,9 +312,13 @@ export default function Performance({
         <SnapshotStat value={fanCount.toLocaleString()} label="Fans" accent={C.indigo} />
       </div>
 
-      {/* ── 2. WHAT CHANGED ────────────────────────────────────────── */}
+      {/* ── 2. WHAT'S WORKING — platform ROI cards + day-of-week heatmap.
+             Restored treatment; canonical figures. See PlatformROI.jsx. ─── */}
+      <PlatformROI analytics={analytics} />
+
+      {/* ── 3. WHAT CHANGED ────────────────────────────────────────── */}
       <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>What changed</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}><div style={sectionLabel}>What changed</div><ConfidenceBadge intelligence={intelligence} insight="growth_trend" /></div>
         {!hasChange ? (
           <div style={{ fontSize: 14, color: C.text }}>Not enough month-over-month history yet — this fills in after your second active month.</div>
         ) : (
@@ -321,7 +340,7 @@ export default function Performance({
 
       {/* ── 3. WHAT DROVE THE CHANGE ───────────────────────────────── */}
       <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 12 }}>What drove the change</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}><div style={sectionLabel}>What drove the change</div><ConfidenceBadge intelligence={intelligence} insight="cross_platform" /></div>
         {!canAttribute ? (
           <div style={{ fontSize: 14, color: C.muted }}>
             {delta && delta.platforms.length < 2
@@ -349,20 +368,20 @@ export default function Performance({
              (needs raw tips/sessions this component never receives) ──── */}
       {earningsTrend && (
         <div style={card({ padding: 20 })}>
-          <div style={{ ...sectionLabel, marginBottom: 14 }}>Earnings trend</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><div style={sectionLabel}>Earnings trend</div><ConfidenceBadge intelligence={intelligence} insight="growth_trend" /></div>
           {earningsTrend}
         </div>
       )}
 
       {/* ── 5. $/HOUR TREND ────────────────────────────────────────── */}
       <div style={card({ padding: 20 })}>
-        <div style={{ ...sectionLabel, marginBottom: 6 }}>$/hour trend</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}><div style={sectionLabel}>$/hour trend</div><ConfidenceBadge intelligence={intelligence} insight="hourly_rate" /></div>
         <HourlyRateTrend monthlyData={monthlyData} />
       </div>
 
       {/* ── 6. SESSION PERFORMANCE ─────────────────────────────────── */}
       <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Session performance</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><div style={sectionLabel}>Session performance</div><ConfidenceBadge intelligence={intelligence} insight="session_length" /></div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 20 }}>
           <SnapshotStat value={sessionCount.toLocaleString()} label="Meaningful sessions" />
           <SnapshotStat value={lowSignalCount.toLocaleString()} label="Low-signal sessions" accent={C.muted} />
@@ -380,9 +399,26 @@ export default function Performance({
         )}
       </div>
 
+      {/* ── 6b. CROSS-PLATFORM OPPORTUNITY (2C-6) ──────────────────
+          The comparison the platform-confidence gate makes safe to state, plus
+          the action it earns. Reads analytics.rankablePlatforms — the same set
+          bestPlatformByRate comes from — so this can never disagree with the
+          per-platform cards below it. Renders the evidence-building state
+          instead when fewer than two platforms are rankable, and sells nothing
+          in that case. */}
+      <PlatformOpportunity
+        analytics={analytics}
+        intelligence={intelligence}
+        isPro={isPro}
+        onComparePlatforms={() => {
+          document.getElementById('platform-performance')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+        onUpgrade={(src) => onUpgrade?.(src)}
+      />
+
       {/* ── 7. PLATFORM PERFORMANCE ────────────────────────────────── */}
-      <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Platform performance</div>
+      <div style={card()} id="platform-performance">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><div style={sectionLabel}>Platform performance</div><ConfidenceBadge intelligence={intelligence} insight="platform_profitability" /></div>
         {platforms.length === 0 ? (
           <div style={{ fontSize: 13, color: C.muted }}>Import your tip history to see how your platforms compare.</div>
         ) : (
@@ -413,7 +449,16 @@ export default function Performance({
                   <div style={{ fontSize: 11.5, color: C.muted, marginBottom: p.bestLocalDay != null ? 8 : 0 }}>{p.sessions} sessions · {fmtHours(p.hours)} streamed</div>
                   {p.bestLocalDay != null && p.bestLocalHour != null && (
                     <div style={{ fontSize: 11.5, padding: "5px 9px", borderRadius: 8, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.24)", color: C.gold, display: "inline-block" }}>
-                      Best: {p.bestLocalDay}s {fmtHour(p.bestLocalHour)}{p.bestWindowConfidence && p.bestWindowConfidence !== "high" ? ` (${TIER_COPY[p.bestWindowConfidence] || p.bestWindowConfidence})` : ""}
+                      Best: {p.bestLocalDay}s {fmtHour(p.bestLocalHour)}
+                    </div>
+                  )}
+                  {p.bestLocalDay != null && p.bestWindowConfidence && p.bestWindowConfidence !== "high" && (
+                    /* This platform's own best-window tier, in the canonical
+                       vocabulary. Same signal as before 2C-2 — it used to be
+                       spelled by a local three-tier table — now mapped onto the
+                       one ladder by fromConfidenceTier(). */
+                    <div style={{ marginTop: 6 }}>
+                      <ConfidenceBadge state={fromConfidenceTier(p.bestWindowConfidence)} showEmoji={false} />
                     </div>
                   )}
                 </div>
@@ -425,14 +470,12 @@ export default function Performance({
 
       {/* ── 8. DAY / TIME ANALYSIS ─────────────────────────────────── */}
       <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>When did you perform best</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}><div style={sectionLabel}>When did you perform best</div><ConfidenceBadge intelligence={intelligence} insight="peak_window" /></div>
         {bestWindow ? (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <span style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{bestWindow.localDay}s · {fmtWindow(bestWindow.localHour)}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "3px 10px", borderRadius: 20 }}>
-                {TIER_COPY[bestWindow.tier] || bestWindow.tier}
-              </span>
+              <ConfidenceBadge intelligence={intelligence} insight="peak_window" />
             </div>
             <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 18 }}>{bestWindow.sessionCount} qualifying sessions · local time</div>
             <CompareBars
@@ -501,7 +544,13 @@ export default function Performance({
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {findings.map((f, i) => (
               <div key={i} style={{ padding: "13px 16px", borderRadius: 10, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, marginBottom: 4, lineHeight: 1.45 }}>{f.what}</div>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, lineHeight: 1.45 }}>{f.what}</div>
+                  {/* Each finding carries its OWN evidence strength — the list
+                      mixes session, platform, fan and window claims, so one
+                      badge for the whole card would misdescribe most rows. */}
+                  <ConfidenceBadge intelligence={intelligence} insight={f.insight} />
+                </div>
                 <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>{f.why}</div>
               </div>
             ))}
@@ -510,22 +559,13 @@ export default function Performance({
       )}
 
       {/* ── 10. PRO STRATEGY ───────────────────────────────────────── */}
-      {!isPro && (bestWindow || platforms.length > 0) && (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap",
-          padding: "20px 24px", borderRadius: 16,
-          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(124,92,255,0.26)",
-        }}>
-          <div style={{ minWidth: 260, flex: 1 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 800, color: C.white }}>Want to turn this history into a strategy?</div>
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: 6, lineHeight: 1.6 }}>
-              Pro connects your best windows, platform performance, high-value fan timing, and a forecast into one personalized weekly schedule — not just more exact numbers.
-            </div>
-          </div>
-          <BrandButton onClick={() => onUpgrade?.("performance_strategy")}>Build My Strategy →</BrandButton>
-        </div>
-      )}
+      {/* 2C-6: the generic "Build My Strategy" CTA that used to sit here is
+          retired. Two things were wrong with it on this tab. It was a second,
+          undifferentiated upsell beneath the contextual platform conversion
+          above — the exact CTA proliferation verify-performance-tab.mjs guards
+          against — and it sold "a forecast", which is held and unshipped. The
+          platform discovery at the top of this tab now carries the conversion,
+          keyed to what the creator's own data actually shows. */}
     </div>
   )
 }

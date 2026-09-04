@@ -29,9 +29,8 @@ function fmtDate(iso) {
   } catch (_) { return null }
 }
 
-export default function Settings({ user, profile, isPro, supabase, onTimezoneSaved }) {
+export default function Settings({ user, profile, isPro, supabase, onTimezoneSaved, onUpgrade }) {
   const [portalLoading, setPortalLoading] = useState(false)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [error, setError] = useState(null)
   const [editingTz, setEditingTz] = useState(false)
   const [tzSaving, setTzSaving] = useState(false)
@@ -84,27 +83,12 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
     }
   }
 
-  const startCheckout = async () => {
-    setError(null)
-    setCheckoutLoading(true)
-    gtmTrack('upgrade_checkout_clicked', { source: 'settings' })
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-        credentials: 'include',
-        body: JSON.stringify({ plan_type: 'standard_monthly' }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) throw new Error(data.error || 'Unable to start checkout.')
-      gtmTrack('checkout_started', { source: 'settings', plan_type: 'standard_monthly' })
-      window.location.assign(data.url)
-    } catch (e) {
-      setError(e?.message || 'Something went wrong starting checkout. Please try again.')
-      setCheckoutLoading(false)
-    }
-  }
+  // 2C-7: the local checkout that used to live here is retired. It was a
+  // second implementation of the same POST /api/stripe/checkout call the
+  // shared ContextualUpgradeModal already owns, and its button hardcoded
+  // "$19.99/mo" in the label — a price string that would silently go stale the
+  // day the real Stripe price changed. Billing management (the portal, below)
+  // stays here; the purchase itself goes through the one shared path.
 
   return (
     <div style={{ animation: 'fadeUp 0.3s ease', maxWidth: 640 }}>
@@ -114,7 +98,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
       </div>
 
       {/* Plan status */}
-      <div style={{ borderRadius: 18, padding: '20px 22px', marginBottom: 16, background: isPro ? 'linear-gradient(135deg,rgba(34,211,238,0.1),rgba(168,85,247,0.08))' : 'rgba(12,16,34,0.78)', border: `1px solid ${isPro ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.09)'}` }}>
+      <div style={{ borderRadius: 18, padding: '20px 22px', marginBottom: 16, background: isPro ? 'linear-gradient(135deg,rgba(34,211,238,0.1),rgba(168,85,247,0.08))' : 'rgba(12,16,34,0.78)', border: `1px solid ${isPro ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.09)'}` , backdropFilter: 'blur(20px)', boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Current Plan</div>
@@ -142,8 +126,8 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
               </div>
             )
           ) : (
-            <button onClick={startCheckout} disabled={checkoutLoading} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', cursor: checkoutLoading ? 'default' : 'pointer', fontWeight: 700, fontSize: 13, color: '#06101A', background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})`, opacity: checkoutLoading ? 0.7 : 1 }}>
-              {checkoutLoading ? 'Redirecting…' : 'Upgrade to Pro — $19.99/mo'}
+            <button onClick={() => onUpgrade?.('default')} style={{ padding: '10px 22px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#06101A', background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.pink})` }}>
+              Upgrade to Creator Pro
             </button>
           )}
         </div>
@@ -158,7 +142,7 @@ export default function Settings({ user, profile, isPro, supabase, onTimezoneSav
       </div>
 
       {/* Account info */}
-      <div style={{ borderRadius: 18, padding: '20px 22px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' }}>
+      <div style={{ borderRadius: 18, padding: '20px 22px', background: 'rgba(12,16,34,0.78)', border: '1px solid rgba(255,255,255,0.09)' , backdropFilter: 'blur(20px)', boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)' }}>
         <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Account</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <span style={{ fontSize: 13, color: C.muted }}>Email</span>

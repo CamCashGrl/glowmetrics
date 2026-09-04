@@ -81,6 +81,11 @@ export const FAN_BEHAVIOUR_MIN_TIPS = 3
  */
 export const RELATIVE_RANK_MIN_FANS = 10
 
+// NOTE: the Top Supporter rule itself lives in lib/analytics.js
+// (TOP_SUPPORTER_PERCENTILE / _MIN_TIPS / _MIN_FANS) and is applied inside
+// identifyWhales(). This module reads the resulting flag. Approved
+// 2026-08-26: top 20% by value AND >= 3 tips AND >= 10 fans in the base.
+
 /** Tips from one fan before their evidence is strong rather than thin. */
 const FAN_EVIDENCE_BANDS = { developing: 6, high: 12 }
 
@@ -159,9 +164,17 @@ export function classifyFan(fan = {}, { uniqueFanCount = 0 } = {}) {
   const tips = Number(fan.tipCount) || 0
   const state = fanEvidenceState(tips)
 
-  // Relative rank is only meaningful against a real audience.
+  // Relative rank is only meaningful against a real audience. The
+  // classification itself is computed once, canonically, by identifyWhales()
+  // (see TOP_SUPPORTER_* in lib/analytics.js) — read here, never re-derived.
+  // The fallback covers a fan object built before that field existed.
   const rankIsMeaningful = uniqueFanCount >= RELATIVE_RANK_MIN_FANS
-  const isTopSupporter = rankIsMeaningful && Boolean(fan.isTopSpender)
+  const isTopSupporter = fan.isTopSupporter ?? (
+    rankIsMeaningful &&
+    tips >= FAN_BEHAVIOUR_MIN_TIPS &&
+    typeof fan.percentileRank === 'number' &&
+    fan.percentileRank <= 0.20
+  )
 
   const meetsValue = usd >= HIGH_VALUE_FAN_USD
   const meetsRepeat = tips >= WHALE_MIN_TIP_COUNT

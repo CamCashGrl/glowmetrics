@@ -65,7 +65,20 @@ function toLocalDow(dateStr, tz) {
   const fs = await import('fs')
   const src = fs.readFileSync(new URL('../app/onboarding/page.js', import.meta.url), 'utf8')
   check('overstated "sweet spot" claim removed from onboarding preview copy', !src.includes("That's your sweet spot"))
-  check('replacement copy frames this as an early, to-be-confirmed signal', src.includes('early signal') && src.includes('will confirm this'))
+  // The guard used to pin the hedged preview copy. Onboarding no longer renders
+  // preview.bestHour at all — it reads the canonical intelligence layer, so it
+  // cannot claim a pattern the engine has not confirmed. That is the stronger
+  // form of the same guarantee, and it is what is checked now.
+  check('onboarding reads the canonical intelligence layer, not a local preview',
+    src.includes("fetch('/api/intelligence'") && src.includes('setAha('))
+  check('it only states a finding when the ladder says it is claimable',
+    src.includes('<OnboardingAha'))
+  // The aha markup now lives in its own renderable component.
+  const aha = fs.readFileSync(new URL('../app/onboarding/OnboardingAha.jsx', import.meta.url), 'utf8')
+  check('below the floor it names the missing evidence instead of claiming',
+    aha.includes('Still calibrating') && aha.includes('discovery.nextMilestone'))
+  check('the unconfirmed preview hour is no longer presented as an insight',
+    !src.includes('This import shows an early signal around'))
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

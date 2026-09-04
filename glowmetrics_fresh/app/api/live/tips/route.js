@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
+import { FREE_MAX_PLATFORMS } from '../../../../lib/planLimits'
 
 export const dynamic = 'force-dynamic';
 
@@ -140,7 +141,7 @@ export async function POST(req) {
       console.error('Supabase insert error:', error);
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
         return Response.json({
-          error: 'Free tier tracks 1 platform. Upgrade to Standard ($19.99/mo) to track multiple platforms.',
+          error: `Free tracks up to ${FREE_MAX_PLATFORMS} platforms and they're all in use. Upgrade to Creator Pro ($19.99/mo) to add more.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402, headers: cors });

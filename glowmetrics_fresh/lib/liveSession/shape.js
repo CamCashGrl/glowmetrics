@@ -1,3 +1,4 @@
+import { FREE_MAX_PLATFORMS } from '../planLimits'
 // Single shared computation of effective paused time and active duration
 // for a live_sessions row, used by every route that returns session data —
 // never reimplemented per-route.
@@ -36,7 +37,7 @@ export function sanitizedErrorResponse(error) {
     return {
       status: 402,
       body: {
-        error: "You're on the free plan, which runs Live Mode on one platform. Upgrade to use Live Mode on multiple platforms.",
+        error: `Your free plan covers Live Mode on up to ${FREE_MAX_PLATFORMS} platforms and they're all in use. Upgrade to add more.`,
         code: 'platform_limit_reached',
         upgradeUrl: '/pricing',
       },

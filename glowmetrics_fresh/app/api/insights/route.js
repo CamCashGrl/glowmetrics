@@ -14,12 +14,14 @@
 // path onto this same canonical JS source is out of Phase 1 scope (SQL
 // can't import Node modules) and is tracked as follow-up work.
 import { NextResponse } from 'next/server'
+import { resolvePlatformEntitlement, filterEntitledRows } from '../../../lib/platformEntitlement'
 import { createSupabaseRouteClient } from '../../../lib/supabase-server'
 import { isProPlan } from '../../../lib/plan'
 import { resolveCreatorTimezone } from '../../../lib/timezone'
 import { aggregateRows } from '../../../lib/analytics'
 import { computeMissedRevenue } from '../../../lib/analytics/missedRevenue'
 import { redact } from '../../../lib/entitlement'
+import { loadUserTips } from '../../../lib/serverTips'
 
 export async function GET() {
   const supabase = createSupabaseRouteClient()
@@ -28,7 +30,7 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('plan, plan_expires_at, timezone')
+    .select('plan, plan_expires_at, timezone, primary_pro_platform')
     .eq('id', user.id)
     .maybeSingle()
   const isPro = isProPlan(profile)
@@ -38,23 +40,9 @@ export async function GET() {
   // always the server-derived auth user, never a client-supplied id, so
   // this route has no IDOR surface analogous to the one fixed in
   // get_user_insights (see supabase/migrations/20260814_restrict_get_user_insights_to_self.sql).
-  const PAGE = 1000
-  let tips = []
-  const { data: firstPage, count } = await supabase
-    .from('tips').select('*', { count: 'exact' }).eq('user_id', user.id)
-    .order('date_time', { ascending: true }).range(0, PAGE - 1)
-  if (firstPage) {
-    tips = firstPage
-    const total = count ?? firstPage.length
-    if (total > PAGE) {
-      const ranges = []
-      for (let from = PAGE; from < total; from += PAGE) ranges.push(from)
-      const pages = await Promise.all(ranges.map(from =>
-        supabase.from('tips').select('*').eq('user_id', user.id).order('date_time', { ascending: true }).range(from, from + PAGE - 1)
-      ))
-      for (const { data } of pages) if (data?.length) tips = tips.concat(data)
-    }
-  }
+  // Paging/ordering moved verbatim to lib/serverTips.js so the intelligence
+  // route reuses the same loader rather than carrying a second copy.
+  const tips = await loadUserTips(supabase, user.id)
 
   if (!tips.length) {
     return NextResponse.json({
@@ -64,7 +52,10 @@ export async function GET() {
     })
   }
 
-  const analytics = aggregateRows(tips, timezone)
+  // The same entitlement boundary the dashboard and /api/intelligence apply.
+  // Access only: stored rows are untouched, free plans filter nothing.
+  const analytics = aggregateRows(filterEntitledRows(
+    resolvePlatformEntitlement({ profile, rows: tips }), tips), timezone)
   const meaningfulSessions = analytics.meaningfulSessions || []
   const missed = computeMissedRevenue(meaningfulSessions, timezone)
 

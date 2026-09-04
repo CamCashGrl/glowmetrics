@@ -22,12 +22,21 @@ const NAV = [
     items: [{ id: "whales", icon: "👑", label: "Top Fans" }]
   },
   {
+    // ONE Sessions destination. Free-chat history, private/paid sessions and
+    // Live Mode session history used to be three separate sidebar entries, so
+    // a creator hunting for "my sessions" had to guess which one she meant —
+    // and "Live Mode Sessions" opened an empty screen for anyone who had never
+    // used Live Mode. They are now sub-tabs inside one page. Live Mode itself
+    // stays its own entry below: it is a tool you go and use, not history.
     group: "SESSIONS",
     items: [
-      { id: "sessions", icon: "🎥", label: "Free Chat Sessions" },
-      { id: "live",     icon: "🔴", label: "Live Mode" },
-      { id: "live-sessions", icon: "📋", label: "Live Mode Sessions" },
-      { id: "private",  icon: "💎", label: "Private Sessions" },
+      { id: "sessions", icon: "🎥", label: "Sessions" },
+    ]
+  },
+  {
+    group: "LIVE",
+    items: [
+      { id: "live", icon: "🔴", label: "Live Mode" },
     ]
   },
   {
@@ -58,7 +67,7 @@ const NAV = [
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, trialEligible = false }) {
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, trialEligible = false, onUpgrade }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -128,7 +137,11 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple }}>Pro plan active</span>
         </div>
       ) : (
-        <Button as="a" href={trialEligible ? "/start-trial" : "/pricing"} style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
+        /* 2C-4: the persistent nav CTA opens the same contextual modal every
+           other in-dashboard upgrade uses, rather than bouncing to /pricing
+           and losing whatever the creator was looking at. /pricing is still
+           one click away inside the modal, as the full comparison. */
+        <Button onClick={() => onUpgrade?.('default')} style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
           {trialEligible ? "✦ Start 7-day free trial" : "✦ Upgrade to Pro"}
         </Button>
       )}

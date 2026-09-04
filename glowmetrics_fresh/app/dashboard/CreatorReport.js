@@ -1,8 +1,17 @@
 "use client"
 
 import { useEffect } from "react"
+import { badgeFor } from "../../lib/intelligence/states"
+import { buildReportFacts } from "../../lib/reportDiscoveries"
+import {
+  ReportHeader, SectionTitle,
+} from "./ReportNarrative"
+import PlatformDataCards from "./PlatformDataCards"
+import UnlockProgress from "./UnlockProgress"
+import { lockedCapabilities, platformProgress } from "../../lib/unlockProgress"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
+import { resolveCurrentMonthGrowth } from "../../lib/analytics"
 
 /*
   CREATOR REPORT
@@ -60,10 +69,51 @@ const C = {
   white: "#F1F5F9",
   muted: "#94A3B8",
   dim: "#64748B",
-  card: "rgba(12,16,34,0.78)",
-  card2: "rgba(15,20,32,0.72)",
-  border: "rgba(255,255,255,0.09)",
+  card: "rgba(15,20,32,0.75)",
+  card2: "#161e2e",
+  border: "rgba(255,255,255,0.08)",
 }
+
+// The dashboard's authentic card treatment — the blue/pink bloom is what
+// makes a card read as a card against the page. The report had been using a
+// bloom-less copy, which is why it read as a flat list of sections.
+const reportCard = {
+  background: C.card,
+  border: `1px solid ${C.border}`,
+  backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+}
+
+// ------------------------------------------------------------
+// CONFIDENCE VOCABULARY
+//
+// The only place this component spells a confidence word. Values are the
+// canonical INSIGHT_STATE ladder from lib/intelligence/states.js — this map
+// is presentation only and introduces no new state, threshold or ordering.
+// ------------------------------------------------------------
+
+// 2C-2: the local confidence-word table is gone. Every confidence word now
+// comes from STATE_META via badgeFor() (lib/intelligence/states.js), so the
+// Creator Report, the Command Center, Performance and the Stream Planner can
+// no longer describe the same state with four different words.
+const stateWord = (state) => badgeFor(state)?.label || null
+
+// The report's three existing bands (computed unchanged below from tip and
+// session counts) expressed in the canonical vocabulary. A PRESENTATION map
+// only — it creates no threshold and moves no band boundary. Before 2C-2 the
+// calibration pill looked the band up in the seven-state table, and because a
+// band is "warming"/"developing"/"rich" rather than an INSIGHT_STATE, the
+// lookup always missed and every account saw "Calibrating".
+const REPORT_BAND_STATE = {
+  warming: "CALIBRATING",
+  developing: "DEVELOPING",
+  rich: "SUPPORTED",
+}
+
+// States at which a finding may be stated as fact rather than hedged. Mirrors
+// CLAIMABLE_FLOOR (SUPPORTED) — below this the copy must never say "best",
+// "peak" or "your strongest".
+const CLAIMABLE = new Set(["SUPPORTED", "HIGH_CONFIDENCE", "ESTABLISHED"])
 
 // ------------------------------------------------------------
 // FORMATTERS
@@ -305,266 +355,14 @@ function ProButton({
 }
 
 // ------------------------------------------------------------
-// WARMING / CALIBRATION HEADER
+// 2C-7 / product redesign: CalibrationCard and PeakWindowCard were removed
+// here. Both became unreachable when the report was rebuilt around
+// ReportNarrative.jsx — the header, calibration figure and peak-window
+// discovery are now rendered from buildReportDiscoveries() instead. Confirmed
+// no remaining callers in app/, lib/, components/ or scripts/ before deleting;
+// the only surviving mentions are historical comments in states.js/index.js.
 // ------------------------------------------------------------
 
-function CalibrationCard({
-  tipsCount,
-  sessionCount,
-  platformCount,
-  isPro,
-  onImport,
-  hasBestWindow,
-  hourlyRateUnlocked,
-}) {
-  /*
-    These are product-progress milestones, not analytics formulas.
-
-    The hourly-rate milestone mirrors the existing dashboard's actual
-    eligibility messaging: 3 eligible sessions + 60 tracked minutes.
-  */
-
-  const tipReady = tipsCount >= 10
-  const sessionReady = sessionCount >= 2
-  const timingReady = Boolean(hasBestWindow)
-  const hourlyReady = Boolean(hourlyRateUnlocked)
-
-  const milestones = [
-    {
-      label: "Earnings",
-      ready: tipsCount > 0,
-    },
-    {
-      label: "Session patterns",
-      ready: sessionReady,
-    },
-    {
-      label: "Timing patterns",
-      ready: timingReady,
-    },
-    {
-      label: "$/hour confidence",
-      ready: hourlyReady,
-    },
-  ]
-
-  const completed = milestones.filter(m => m.ready).length
-
-  const calibration = Math.round(
-    (completed / milestones.length) * 100
-  )
-
-  let headline = "Your Creator Report is warming up"
-  let subhead =
-    "CamCash is learning your earning patterns. Keep importing history and the report will become more precise."
-
-  if (completed >= 4) {
-    headline = "🔥 Creator Report is fully calibrated"
-    subhead =
-      "You have enough history for CamCash to surface your strongest patterns. Pro can take those patterns deeper."
-  } else if (completed >= 3) {
-    headline = "📈 Your report just got smarter"
-    subhead =
-      "CamCash has enough history to identify several meaningful patterns in your streams."
-  } else if (completed >= 2) {
-    headline = "🔮 Your report is finding patterns"
-    subhead =
-      "You've given CamCash enough history to start identifying repeatable behavior."
-  }
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        overflow: "hidden",
-        marginBottom: 18,
-        borderRadius: 20,
-        padding: "18px 20px",
-        background:
-          "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(168,85,247,0.07),rgba(236,72,153,0.05))",
-        border: "1px solid rgba(34,211,238,0.18)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div
-            style={{
-              marginBottom: 5,
-              fontSize: 16,
-              fontWeight: 900,
-              color: C.white,
-            }}
-          >
-            {headline}
-          </div>
-
-          <div
-            style={{
-              maxWidth: 680,
-              fontSize: 12,
-              lineHeight: 1.55,
-              color: C.muted,
-            }}
-          >
-            {subhead}
-          </div>
-        </div>
-
-        <div
-          style={{
-            minWidth: 115,
-            textAlign: "right",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 800,
-              color: C.muted,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
-            Report calibration
-          </div>
-
-          <div
-            style={{
-              marginTop: 2,
-              fontSize: 24,
-              fontWeight: 950,
-              color: calibration >= 75 ? C.green : C.cyan,
-            }}
-          >
-            {calibration}%
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          height: 6,
-          marginTop: 15,
-          overflow: "hidden",
-          borderRadius: 99,
-          background: "rgba(255,255,255,0.06)",
-        }}
-      >
-        <div
-          style={{
-            width: `${Math.max(calibration, 7)}%`,
-            height: "100%",
-            borderRadius: 99,
-            background:
-              "linear-gradient(90deg,#22D3EE,#A855F7,#EC4899)",
-            transition: "width 0.5s ease",
-          }}
-        />
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit,minmax(145px,1fr))",
-          gap: 8,
-          marginTop: 13,
-        }}
-      >
-        {milestones.map((milestone) => (
-          <div
-            key={milestone.label}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 9px",
-              borderRadius: 9,
-              background: milestone.ready
-                ? "rgba(16,185,129,0.07)"
-                : "rgba(255,255,255,0.025)",
-              border: `1px solid ${
-                milestone.ready
-                  ? "rgba(16,185,129,0.18)"
-                  : "rgba(255,255,255,0.06)"
-              }`,
-            }}
-          >
-            <span style={{ fontSize: 12 }}>
-              {milestone.ready ? "✓" : "○"}
-            </span>
-
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: milestone.ready
-                  ? C.green
-                  : C.muted,
-              }}
-            >
-              {milestone.label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {!isPro && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-            marginTop: 15,
-            paddingTop: 13,
-            borderTop: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              lineHeight: 1.5,
-              color: C.muted,
-            }}
-          >
-            {tipReady
-              ? "Your basic report is active. Keep importing to improve pattern confidence."
-              : `Import ${Math.max(1, 10 - tipsCount)} more tip${10 - tipsCount === 1 ? "" : "s"} to unlock more basic report signals.`}
-          </div>
-
-          <button
-            onClick={onImport}
-            style={{
-              border: "1px solid rgba(34,211,238,0.2)",
-              borderRadius: 9,
-              padding: "8px 13px",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 800,
-              color: C.cyan,
-              background: "rgba(34,211,238,0.07)",
-            }}
-          >
-            Import More History
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ------------------------------------------------------------
-// PLATFORM CARDS
 // ------------------------------------------------------------
 
 function PlatformCards({
@@ -1154,8 +952,26 @@ export default function CreatorReport({
   isPro = false,
   onUpgrade,
   engineInsights = null,
+  // The canonical readiness object (computeIntelligence()), passed in by
+  // page.js from the same analytics this component already reads. This
+  // component never computes confidence, progress or thresholds itself.
+  intelligence = null,
+  timezone = "UTC",
+  firstName = null,
+  // Stated preference (profiles.primary_pro_platform) — marks her main
+  // platform in the per-platform cards. Never used to rank anything.
+  primaryPlatform = null,
+  // Roster she named in onboarding, so the report can show a platform she
+  // streams on but has never imported. null = unknown.
+  streamingPlatforms = null,
 }) {
   const safeAnalytics = analytics || {}
+
+  // The report's subject matter: what is still locked, and what has landed
+  // per platform. Both READ from lib/unlockProgress.js, which reads the
+  // engine's own nextMilestone — no requirement is defined here.
+  const lockedCaps = lockedCapabilities(intelligence)
+  const platformRows = platformProgress(safeAnalytics, streamingPlatforms)
 
   // ----------------------------------------------------------
   // EXISTING ANALYTICS — READ ONLY
@@ -1199,19 +1015,26 @@ export default function CreatorReport({
   const hourlyRateTotalMinutes =
     safeAnalytics.hourlyRateTotalMinutes || 0
 
-  // Existing dashboard uses these fields to determine whether
-  // hourly rate is actually eligible.
-  const hourlyRateUnlocked =
-    hourlyRateSessionCount >= 3 &&
-    hourlyRateTotalMinutes >= 60
+  // ── CANONICAL INTELLIGENCE ────────────────────────────────
+  // Every confidence state below is read, never derived. The local
+  // `hourlyRateUnlocked` rule that used to sit here duplicated
+  // canShowHourlyRate() / getModuleLockState('avgHourlyRate'); it now comes
+  // from the one intelligence layer instead.
+  const insightStates = intelligence?.insights || {}
+  const stateOf = (id) => insightStates[id]?.state || "NOT_AVAILABLE"
+  const evidenceOf = (id) => insightStates[id] || null
+  const isClaimable = (id) => CLAIMABLE.has(stateOf(id))
 
-  const latestMonth =
-    monthlyData.length
-      ? monthlyData[monthlyData.length - 1]
-      : null
+  const hourlyRateUnlocked = isClaimable("hourly_rate")
 
-  const monthGrowthPct =
-    latestMonth?.growthPct ?? null
+  // monthlyData only holds months that HAVE data, so its last entry is NOT
+  // necessarily the current calendar month. Reading it directly meant a
+  // creator with no tips yet this month saw LAST month's growth labelled as
+  // this month's. resolveCurrentMonthGrowth() (lib/analytics.js) is the same
+  // answer the dashboard uses, so the two surfaces cannot disagree.
+  const growth = resolveCurrentMonthGrowth(monthlyData, timezone)
+  const monthGrowthPct = growth.growthPct
+  const growthStatus = growth.status
 
   const topSupporter =
     topTippers[0] || null
@@ -1246,8 +1069,35 @@ export default function CreatorReport({
   const hasEnoughSessions =
     meaningfulSessionCount >= 2
 
-  const hasBestWindow =
-    Boolean(canonicalBestWindow)
+  // ── PEAK WINDOW: three honest states, decided by the engine ──────────
+  // SUPPORTED+  -> a real finding, may be called a peak window
+  // below that  -> canonicalBestTimes.earlySignal, the engine's own
+  //                "strongest window so far, not yet reliable" answer.
+  //                Surfacing it is what makes the low-data report feel like a
+  //                system warming up rather than an empty page — and it needs
+  //                no new analytic, only rendering.
+  // neither     -> calibrating, with the exact remaining requirement
+  const peakWindowState = stateOf("peak_window")
+  const peakWindowEvidence = evidenceOf("peak_window")
+  const peakWindowIsClaimable = isClaimable("peak_window")
+
+  const hasBestWindow = Boolean(canonicalBestWindow) && peakWindowIsClaimable
+
+  const earlySignalWindow =
+    !peakWindowIsClaimable
+      ? safeAnalytics.canonicalBestTimes?.earlySignal || canonicalBestWindow || null
+      : null
+
+  // The overall label for the report header — the peak window is the report's
+  // headline insight, so its state is the report's state, with the account's
+  // own calibration as the floor.
+  const overallReportState =
+    (intelligence?.calibration?.establishedCount ?? 0) >= 5 && peakWindowIsClaimable
+      ? "HIGH_CONFIDENCE"
+      : peakWindowState
+
+  // "What would most improve confidence next", ranked by the engine.
+  const nextEvidence = intelligence?.calibration?.nextBestEvidence?.[0] || null
 
   const hasRichData =
     tipCount >= 100 &&
@@ -1266,11 +1116,15 @@ export default function CreatorReport({
   // INSIGHT STATES
   // ----------------------------------------------------------
 
+  // Presence of a value is not permission to call it a finding. Both cards
+  // now require their insight to be at SUPPORTED or above; below that they
+  // show the calibrating copy, which is what stops the report claiming a
+  // "best day" from a single lucky night.
   const bestDayReady =
-    Boolean(canonicalBestWindow?.localDay)
+    Boolean(canonicalBestWindow?.localDay) && isClaimable("peak_day")
 
   const bestTimeReady =
-    Boolean(canonicalBestWindow?.localHour != null)
+    Boolean(canonicalBestWindow?.localHour != null) && peakWindowIsClaimable
 
   const bestDayText =
     bestDayReady
@@ -1357,6 +1211,13 @@ export default function CreatorReport({
         : Number(largestRevenueLeak[1] || 0)
       : 0
 
+  // ── THE REPORT'S OWN DATA ─────────────────────────────────
+  // Findings moved to the Command Center — see lib/unlockProgress.js for
+  // what this page tracks instead. Kept only for the header's fact line.
+  // Read, ordered and gated by lib/reportDiscoveries.js. No metric, threshold
+  // or confidence is computed in this component.
+  const reportFacts = buildReportFacts({ analytics: safeAnalytics, tips })
+
   // ----------------------------------------------------------
   // TRACKING
   // ----------------------------------------------------------
@@ -1417,7 +1278,7 @@ export default function CreatorReport({
       platformCount,
     })
 
-    onUpgrade?.()
+    onUpgrade?.(source)
   }
 
   // ----------------------------------------------------------
@@ -1426,103 +1287,40 @@ export default function CreatorReport({
 
   return (
     <div>
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
+      {/* ══ THE REPORT ═══════════════════════════════════════════════
+          A generated document, not another tab of cards: header naming the
+          creator's own data range, then her discoveries strongest-first, each
+          told as discovery -> evidence -> what it means -> what to do with it.
+          Every value is read from buildReportDiscoveries(), which gates each
+          claim on the canonical ladder. The detailed dashboard sections that
+          used to open this page now sit BELOW it as supporting reference. */}
+      <ReportHeader facts={reportFacts} calibration={intelligence?.calibration} firstName={firstName} />
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 15,
-          marginBottom: 17,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 900,
-                color: C.white,
-              }}
-            >
-              🧾 Your Creator Report
-            </div>
-
-            <div
-              style={{
-                padding: "4px 7px",
-                borderRadius: 20,
-                fontSize: 8,
-                fontWeight: 900,
-                color:
-                  reportState === "rich"
-                    ? C.green
-                    : reportState === "developing"
-                      ? C.cyan
-                      : C.gold,
-                background:
-                  reportState === "rich"
-                    ? "rgba(16,185,129,0.08)"
-                    : reportState === "developing"
-                      ? "rgba(34,211,238,0.08)"
-                      : "rgba(245,158,11,0.08)",
-              }}
-            >
-              {reportState === "rich"
-                ? "HIGH SIGNAL"
-                : reportState === "developing"
-                  ? "DEVELOPING"
-                  : "EARLY SIGNAL"}
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: 4,
-              fontSize: 12,
-              color: C.muted,
-            }}
-          >
-            Your numbers become more useful as CamCash
-            gets more history to work with.
-          </div>
-        </div>
-
-        {!isPro && (
-          <ProButton
-            source="creator_report_header"
-            onClick={() =>
-              handleUpgrade("creator_report_header")
-            }
-          >
-            Unlock Creator Pro
-          </ProButton>
-        )}
-      </div>
-
-      {/* ======================================================
-          CALIBRATION
-      ====================================================== */}
-
-      <CalibrationCard
-        tipsCount={tipCount}
-        sessionCount={meaningfulSessionCount}
-        platformCount={platformCount}
+      {/* ══ WHAT THIS PAGE IS ═══════════════════════════════════════
+          The Creator Report tracks the BUILD, not the findings. Every
+          actionable insight lives in the Command Center; what lives here is
+          how much data CamCash still needs and how close each locked
+          capability is. Rows disappear as they unlock, and the unlock is
+          announced in the Command Center. See lib/unlockProgress.js. */}
+      <SectionTitle>What CamCash still needs</SectionTitle>
+      <UnlockProgress
+        locked={lockedCaps}
+        platforms={platformRows}
         isPro={isPro}
         onImport={handleImport}
-        hasBestWindow={hasBestWindow}
-        hourlyRateUnlocked={hourlyRateUnlocked}
       />
+
+      {/* A snapshot of the schedule the data supports so far. Free sees the
+          shape; Pro opens the full planner. */}
+      <SectionTitle>Your streaming snapshot</SectionTitle>
+      <PlatformDataCards analytics={safeAnalytics} primaryPlatform={primaryPlatform} />
+
+      {/* ══ SUPPORTING DETAIL ════════════════════════════════════════
+          Everything below is the same reference material as before, kept
+          intact and demoted beneath the narrative. */}
+      <div style={{ marginTop: 44, paddingTop: 26, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        <SectionTitle>The numbers behind it</SectionTitle>
+      </div>
 
       {/* ======================================================
           CORE NUMBERS
@@ -1543,9 +1341,11 @@ export default function CreatorReport({
           label="Total Earnings"
           value={fmtUsd(totalUSD)}
           sub={
-            monthGrowthPct !== null
-              ? `${monthGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(monthGrowthPct)}% vs last month`
-              : `${fmtNumber(tipCount)} tips tracked`
+            growthStatus === "current" && monthGrowthPct !== null
+              ? `${monthGrowthPct >= 0 ? "↑" : "↓"} ${Math.abs(monthGrowthPct)}% this month vs last`
+              : growthStatus === "no_current_month"
+                ? "No earnings recorded yet this month"
+                : `${fmtNumber(tipCount)} tips tracked`
           }
         />
 
@@ -1642,698 +1442,20 @@ export default function CreatorReport({
         />
       </div>
 
-      {/* ======================================================
-          PLATFORM INTELLIGENCE
-      ====================================================== */}
+      {/* ══ WHAT USED TO BE HERE ═══════════════════════════════════
+          Eight sections lived below this point and every one of them was a
+          FINDING or an ACTION: Platform Intelligence, What Your Data Is
+          Saying, We Found Something, Revenue Opportunity, Fan/VIP
+          Intelligence, Recommended Actions, What Should I Do Tonight, and a
+          Power User conversion block.
 
-      <div
-        style={{
-          marginBottom: 19,
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <SectionHeader
-          eyebrow="Your data by platform"
-          title="🌐 Platform Performance"
-          description="Each platform builds its own history as you import it. Pro adds deeper cross-platform analysis."
-        />
+          By the split we agreed, all of that is the Command Center's job. The
+          report keeps only what answers "how much data does CamCash have, and
+          what is it still missing": the core numbers above, the unlock
+          progress and the per-platform progress. Platform Intelligence in
+          particular was a straight duplicate of UnlockProgress's "Data by
+          platform" card, stating the same figures twice on one page. ═════ */}
 
-        <PlatformCards
-          platforms={platforms}
-          tips={tips}
-          isPro={isPro}
-          onUpgrade={() =>
-            handleUpgrade("creator_report_multi_platform")
-          }
-        />
-      </div>
-
-      {/* ======================================================
-          WHAT YOUR DATA IS SAYING
-      ====================================================== */}
-
-      <div
-        style={{
-          marginBottom: 19,
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <SectionHeader
-          eyebrow="Free insights"
-          title="📊 What Your Data Is Saying"
-          description="These insights become more reliable as your history grows."
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit,minmax(235px,1fr))",
-            gap: 10,
-          }}
-        >
-          <InsightState
-            icon="📅"
-            title="Best Day"
-            state={
-              bestDayReady
-                ? "ready"
-                : "warming"
-            }
-            onImport={handleImport}
-          >
-            {bestDayReady
-              ? `Your strongest day so far is ${canonicalBestWindow.localDay}.`
-              : "More variance is needed before CamCash can confidently isolate your strongest day."}
-          </InsightState>
-
-          <InsightState
-            icon="⏰"
-            title="Best Time"
-            state={
-              bestTimeReady
-                ? "ready"
-                : "warming"
-            }
-            onImport={handleImport}
-          >
-            {bestTimeReady
-              ? `Your strongest window currently centers around ${fmtHour(canonicalBestWindow.localHour)}.`
-              : "CamCash is still collecting enough session history to identify a reliable timing pattern."}
-          </InsightState>
-
-          <InsightState
-            icon="💡"
-            title="Opportunity"
-            state={
-              positiveInsight
-                ? "ready"
-                : "warming"
-            }
-            onImport={handleImport}
-          >
-            {positiveInsight?.text ||
-              "As more sessions arrive, CamCash will surface patterns worth acting on."}
-          </InsightState>
-
-          <InsightState
-            icon="⚠️"
-            title="Worth Watching"
-            state={
-              warningInsight
-                ? "ready"
-                : "warming"
-            }
-            onImport={handleImport}
-          >
-            {warningInsight?.text ||
-              (tipCount > 0
-                ? "No major warning has been detected in the current history."
-                : "Import more history and CamCash will begin checking for performance warnings.")}
-          </InsightState>
-        </div>
-      </div>
-
-      {/* ======================================================
-          "WE FOUND SOMETHING"
-      ====================================================== */}
-
-      {positiveInsight && (
-        <div
-          style={{
-            marginBottom: 19,
-            padding: "16px 18px",
-            borderRadius: 17,
-            background:
-              "linear-gradient(135deg,rgba(16,185,129,0.08),rgba(34,211,238,0.04))",
-            border:
-              "1px solid rgba(16,185,129,0.18)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 900,
-              color: C.green,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
-            🔎 CamCash found something
-          </div>
-
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 14,
-              lineHeight: 1.6,
-              color: C.white,
-            }}
-          >
-            {positiveInsight.text}
-          </div>
-
-          {!isPro && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                marginTop: 12,
-                paddingTop: 11,
-                borderTop:
-                  "1px solid rgba(255,255,255,0.06)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  lineHeight: 1.5,
-                  color: C.muted,
-                }}
-              >
-                Pro can turn this pattern into a
-                specific next-stream action.
-              </div>
-
-              <ProButton
-                compact
-                source="creator_report_pattern_found"
-                onClick={() =>
-                  handleUpgrade(
-                    "creator_report_pattern_found"
-                  )
-                }
-              >
-                Show Me What To Do →
-              </ProButton>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ======================================================
-          REVENUE OPPORTUNITY
-      ====================================================== */}
-
-      {largestRevenueLeakAmount > 0 ? (
-        <ProPreview
-          icon="⚡"
-          eyebrow="Revenue opportunity"
-          title={`Potential ${fmtUsd(largestRevenueLeakAmount, 2)} opportunity detected`}
-          description={`CamCash already has platform-level revenue opportunity data in your report.`}
-          preview={`🔒 Pro can break down where that opportunity is coming from and what change is most likely to address it.`}
-          source="creator_report_revenue_opportunity"
-          onUpgrade={() =>
-            handleUpgrade(
-              "creator_report_revenue_opportunity"
-            )
-          }
-        />
-      ) : (
-        !isPro &&
-        hasRichData && (
-          <ProPreview
-            icon="⚡"
-            eyebrow="Advanced opportunity analysis"
-            title="Your history is rich enough for deeper opportunity analysis"
-            description="You have enough historical sessions for CamCash to go beyond basic reporting."
-            preview="🔒 Pro adds deeper platform, timing and revenue-opportunity analysis."
-            source="creator_report_advanced_opportunity"
-            onUpgrade={() =>
-              handleUpgrade(
-                "creator_report_advanced_opportunity"
-              )
-            }
-          />
-        )
-      )}
-
-      {/* ======================================================
-          FAN / VIP INTELLIGENCE
-      ====================================================== */}
-
-      <div
-        style={{
-          marginTop: 19,
-          marginBottom: 19,
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <SectionHeader
-          eyebrow="Supporter intelligence"
-          title="👑 Your Highest-Value Supporters"
-          description="Your top supporter is available in Free. Pro goes deeper into who needs attention."
-        />
-
-        {topSupporter ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit,minmax(235px,1fr))",
-              gap: 10,
-            }}
-          >
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 13,
-                background:
-                  "rgba(245,158,11,0.06)",
-                border:
-                  "1px solid rgba(245,158,11,0.16)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 900,
-                  color: C.gold,
-                  textTransform: "uppercase",
-                }}
-              >
-                👑 Top supporter
-              </div>
-
-              <div
-                style={{
-                  marginTop: 7,
-                  fontSize: 15,
-                  fontWeight: 850,
-                  color: C.white,
-                }}
-              >
-                {topSupporter.username}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 3,
-                  fontSize: 12,
-                  color: C.muted,
-                }}
-              >
-                {fmtUsd(
-                  topSupporter.usd ||
-                    topSupporter.totalUSD ||
-                    0,
-                  2
-                )} lifetime
-              </div>
-            </div>
-
-            {!isPro ? (
-              <ProPreview
-                icon="👑"
-                eyebrow="VIP intelligence"
-                title="Find supporters who are cooling off"
-                description="Your top spender is only part of the picture."
-                preview="🔒 Pro can surface deeper supporter patterns and help identify who deserves attention next."
-                source="creator_report_vip"
-                onUpgrade={() =>
-                  handleUpgrade(
-                    "creator_report_vip"
-                  )
-                }
-              />
-            ) : (
-              <div
-                style={{
-                  padding: 14,
-                  borderRadius: 13,
-                  background:
-                    "rgba(16,185,129,0.05)",
-                  border:
-                    "1px solid rgba(16,185,129,0.14)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 900,
-                    color: C.green,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  VIP signals
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 7,
-                    fontSize: 12,
-                    lineHeight: 1.55,
-                    color: C.muted,
-                  }}
-                >
-                  {topFanDependency
-                    ? "Your supporter-dependency analytics are available from your existing data."
-                    : returningVsNew
-                      ? "Returning-vs-new supporter data is available."
-                      : "Keep importing history to strengthen supporter signals."}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: 15,
-              borderRadius: 12,
-              background:
-                "rgba(255,255,255,0.025)",
-              border:
-                "1px dashed rgba(255,255,255,0.08)",
-              fontSize: 11,
-              color: C.muted,
-            }}
-          >
-            Keep importing tips and CamCash will
-            start building your supporter intelligence.
-          </div>
-        )}
-      </div>
-
-      {/* ======================================================
-          RECOMMENDED ACTIONS
-      ====================================================== */}
-
-      <div
-        style={{
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <SectionHeader
-          eyebrow="Your next move"
-          title="🎯 Recommended For Your Next Stream"
-          description={
-            isPro
-              ? "These recommendations are based on your existing analytics."
-              : "Free shows you the first useful action. Pro unlocks the deeper action layer."
-          }
-        />
-
-        {nextMoves.length > 0 ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 9,
-            }}
-          >
-            {nextMoves
-              .slice(0, 3)
-              .map((move, index) => {
-                const unlocked =
-                  isPro || index === 0
-
-                if (unlocked) {
-                  return (
-                    <div
-                      key={index}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 11,
-                        padding: "11px 12px",
-                        borderRadius: 11,
-                        background:
-                          "rgba(16,185,129,0.045)",
-                        border:
-                          "1px solid rgba(16,185,129,0.13)",
-                      }}
-                    >
-                      <span style={{ fontSize: 16 }}>
-                        {move.icon || "🎯"}
-                      </span>
-
-                      <div
-                        style={{
-                          flex: 1,
-                          fontSize: 12,
-                          lineHeight: 1.55,
-                          color: C.white,
-                        }}
-                      >
-                        {move.text}
-                      </div>
-                    </div>
-                  )
-                }
-
-                return (
-                  <LockedAction
-                    key={index}
-                    icon={move.icon || "🔒"}
-                    title={
-                      index === 1
-                        ? "Reveal your next personalized action"
-                        : "Reveal your advanced next-stream action"
-                    }
-                    description={
-                      index === 1
-                        ? "Pro turns your history into a specific recommendation."
-                        : "Unlock the remaining recommendation from your data."
-                    }
-                    source={
-                      index === 1
-                        ? "creator_report_action_2"
-                        : "creator_report_action_3"
-                    }
-                    onUpgrade={() =>
-                      handleUpgrade(
-                        index === 1
-                          ? "creator_report_action_2"
-                          : "creator_report_action_3"
-                      )
-                    }
-                  />
-                )
-              })}
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 11,
-              background:
-                "rgba(255,255,255,0.025)",
-              border:
-                "1px dashed rgba(255,255,255,0.07)",
-              fontSize: 11,
-              lineHeight: 1.5,
-              color: C.muted,
-            }}
-          >
-            Your recommendation engine is warming up.
-            Import more session history and CamCash will
-            have more patterns to work with.
-          </div>
-        )}
-
-        {!isPro && nextMoves.length > 1 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              marginTop: 14,
-              padding: "12px 13px",
-              borderRadius: 12,
-              background:
-                "linear-gradient(90deg,rgba(236,72,153,0.07),rgba(168,85,247,0.07))",
-              border:
-                "1px solid rgba(236,72,153,0.14)",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 850,
-                  color: C.white,
-                }}
-              >
-                Want the full action plan?
-              </div>
-
-              <div
-                style={{
-                  marginTop: 3,
-                  fontSize: 10,
-                  color: C.muted,
-                }}
-              >
-                Unlock the remaining recommendations
-                generated from your history.
-              </div>
-            </div>
-
-            <ProButton
-              compact
-              source="creator_report_recommended_actions"
-              onClick={() =>
-                handleUpgrade(
-                  "creator_report_recommended_actions"
-                )
-              }
-            >
-              Unlock All Actions →
-            </ProButton>
-          </div>
-        )}
-      </div>
-
-      {/* ======================================================
-          "WHAT SHOULD I DO TONIGHT?"
-      ====================================================== */}
-
-      {!isPro && (
-        <div
-          style={{
-            marginTop: 19,
-            borderRadius: 18,
-            padding: "17px 18px",
-            background:
-              "linear-gradient(135deg,rgba(34,211,238,0.06),rgba(168,85,247,0.07),rgba(236,72,153,0.06))",
-            border:
-              "1px solid rgba(34,211,238,0.14)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 900,
-              color: C.cyan,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
-            🎯 Before your next stream
-          </div>
-
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 15,
-              fontWeight: 850,
-              color: C.white,
-            }}
-          >
-            Want CamCash to build your next-stream plan?
-          </div>
-
-          <div
-            style={{
-              marginTop: 5,
-              maxWidth: 650,
-              fontSize: 11,
-              lineHeight: 1.55,
-              color: C.muted,
-            }}
-          >
-            Pro can combine your historical timing,
-            platform performance and supporter signals
-            into a personalized action plan instead of
-            leaving you to interpret the numbers yourself.
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <ProButton
-              source="creator_report_next_stream_plan"
-              onClick={() =>
-                handleUpgrade(
-                  "creator_report_next_stream_plan"
-                )
-              }
-            >
-              Build My Next-Stream Plan →
-            </ProButton>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================
-          POWER USER CONVERSION
-      ====================================================== */}
-
-      {!isPro && hasRichData && (
-        <div
-          style={{
-            marginTop: 19,
-            padding: "19px 20px",
-            borderRadius: 19,
-            textAlign: "center",
-            background:
-              "linear-gradient(135deg,rgba(236,72,153,0.09),rgba(168,85,247,0.09))",
-            border:
-              "1px solid rgba(236,72,153,0.19)",
-          }}
-        >
-          <div style={{ fontSize: 21 }}>
-            🚀
-          </div>
-
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 17,
-              fontWeight: 900,
-              color: C.white,
-            }}
-          >
-            You've given CamCash enough data to go deeper.
-          </div>
-
-          <div
-            style={{
-              maxWidth: 580,
-              margin: "6px auto 0",
-              fontSize: 11,
-              lineHeight: 1.55,
-              color: C.muted,
-            }}
-          >
-            {fmtNumber(tipCount)} tips ·{" "}
-            {fmtNumber(meaningfulSessionCount)} sessions
-            {platformCount
-              ? ` · ${platformCount} platform${platformCount === 1 ? "" : "s"}`
-              : ""}
-            . Your history is now rich enough for
-            advanced intelligence beyond the basic report.
-          </div>
-
-          <div style={{ marginTop: 13 }}>
-            <ProButton
-              source="creator_report_power_user"
-              onClick={() =>
-                handleUpgrade(
-                  "creator_report_power_user"
-                )
-              }
-            >
-              Unlock Creator Pro →
-            </ProButton>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

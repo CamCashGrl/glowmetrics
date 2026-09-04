@@ -1,5 +1,9 @@
 "use client"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
+import ConfidenceBadge from "./ConfidenceBadge"
+import WindowFanOverlap from "./WindowFanOverlap"
+import { EnvelopeHeartIcon } from "./icons"
+import FanRoster from "./FanRoster"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FANS
@@ -35,9 +39,14 @@ const C = {
 }
 const glassCard = {
   background: "rgba(15,20,32,0.75)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(20px)",
+  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
 }
 const CTA_GRADIENT = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, padding: 22, ...extra })
+// How many roster rows render before "Show more". A rendering budget, not a
+// plan limit — every fan is present in the list for free users and Pro alike.
+const ROSTER_PAGE_SIZE = 25
+
 const sectionLabel = { fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: C.text }
 
 const fmtUsd = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -112,7 +121,7 @@ const PRIORITY_RULES = [
   },
 ]
 
-function FanRow({ fan, rule, ctx, onMessage }) {
+function FanRow({ fan, rule, ctx, onMessage, pulse = false }) {
   return (
     // flexWrap + a flex-basis on the text column, so the action button drops
     // to its own line on narrow screens instead of squeezing the text. Without
@@ -154,24 +163,40 @@ function FanRow({ fan, rule, ctx, onMessage }) {
         </div>
       </div>
 
+      {/* The message action carries the envelope-heart glyph, as it always has
+          on every other Message surface. `heart-envelope-btn-idle` is the slow
+          breathing animation defined in page.js — it is applied to one row at
+          a time (the highest-priority fan) because animating every row of a
+          long list pegs the compositor. */}
       <button
         onClick={() => onMessage?.(fan.username)}
+        className={pulse ? "heart-envelope-btn-idle" : "heart-envelope-btn"}
+        aria-label={`Message ${fan.username}`}
         style={{
-          flexShrink: 0, padding: "9px 14px", borderRadius: 10, cursor: "pointer",
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          padding: "9px 14px", borderRadius: 10, cursor: "pointer",
           background: `${rule.color}1a`, border: `1px solid ${rule.color}40`,
           color: rule.color, fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-        }}>{rule.action}</button>
+        }}>
+        <EnvelopeHeartIcon size={15} />{rule.action}
+      </button>
     </div>
   )
 }
 
 export default function Fans({
   analytics,
+  // computeIntelligence() output. Used ONLY by the intelligence sections
+  // below. The full supporter roster stays unbadged: those rows are recorded
+  // events, not inferences, and a confidence word on a recorded tip would be
+  // meaningless (see the roster comment further down).
+  intelligence = null,
   isPro = false,
   freeFanLimit = 3,
   onMessageFan,
   onUpgrade,
   onPlanStream,
+  onSearchFans,
 }) {
   const whales = analytics?.whales || []
   const bestWindow = analytics?.canonicalBestTimes?.bestWindow || null
@@ -220,13 +245,45 @@ export default function Fans({
 
   const hasAnyFans = whales.length > 0
 
+  // ── FULL ROSTER (free) ────────────────────────────────────────────
+  // Ranked once by lifetime value so #1 is stable regardless of the search
+  // term, then filtered. isTopSupporter is read from the canonical fan
+  // fields (identifyWhales) — never recomputed here.
+  const [fanQuery, setFanQuery] = useState("")
+  const [rosterPage, setRosterPage] = useState(1)
+  const ranked = useMemo(
+    () => [...whales]
+      .sort((a, b) => (b.totalUSD || 0) - (a.totalUSD || 0))
+      .map((f, i) => ({ ...f, rank: i + 1 })),
+    [whales]
+  )
+  const roster = useMemo(() => {
+    const q = fanQuery.trim().toLowerCase()
+    return q ? ranked.filter(f => f.username.toLowerCase().includes(q)) : ranked
+  }, [ranked, fanQuery])
+  const visibleRosterCount = rosterPage * ROSTER_PAGE_SIZE
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
       {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>Fans</div>
-        <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5 }}>Who deserves your attention, and what to do about it.</div>
+      {/* The Search Fan pill is the original control, in its original styling.
+          The modal it opens survived the redesign but lost every trigger, so
+          it had become unreachable dead code. */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.02em" }}>Fans</div>
+          <div style={{ fontSize: 13.5, color: C.muted, marginTop: 5 }}>Who deserves your attention, and what to do about it.</div>
+        </div>
+        {onSearchFans && (
+          <button onClick={onSearchFans} style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 9,
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+            color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0,
+          }}>
+            🔍 Search Fan
+          </button>
+        )}
       </div>
 
       {/* ── SNAPSHOT ───────────────────────────────────────────────── */}
@@ -255,7 +312,10 @@ export default function Fans({
 
       {/* ── PRIORITY FANS ──────────────────────────────────────────── */}
       <div style={card()}>
-        <div style={{ ...sectionLabel, marginBottom: 14 }}>Priority fans</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={sectionLabel}>Priority fans</div>
+          <ConfidenceBadge intelligence={intelligence} insight="churn_risk" />
+        </div>
 
         {!hasAnyFans ? (
           <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
@@ -267,8 +327,8 @@ export default function Fans({
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-            {visible.map(({ fan, rule }) => (
-              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} />
+            {visible.map(({ fan, rule }, i) => (
+              <FanRow key={fan.username} fan={fan} rule={rule} ctx={ctx} onMessage={onMessageFan} pulse={i === 0} />
             ))}
 
             {/* The two blurred "locked" fan rows that used to sit here are
@@ -294,42 +354,56 @@ export default function Fans({
               {hiddenSummary.overdue > 0 && <>, and <strong style={{ color: C.pink }}>{hiddenSummary.overdue}</strong> {hiddenSummary.overdue === 1 ? "is" : "are"} already past their usual return window</>}
               {hiddenSummary.inBestWindow > 0 && <>, with <strong style={{ color: C.cyan }}>{hiddenSummary.inBestWindow}</strong> who {hiddenSummary.inBestWindow === 1 ? "tips" : "tip"} during your best hours</>}.
             </div>
-            <BrandButton onClick={() => onUpgrade?.("fans_priority_locked")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
-              Find My Highest-Value Fans →
+            {/* 2C-7: was source "fans_priority_locked", which is not in the
+                upgrade catalogue and therefore fell back to the generic
+                default context — losing the very discovery stated above it.
+                Routed to whales_cutoff, whose context is built from the
+                creator's real Top Supporter count. The label also dropped
+                "Highest-Value", which implied a value tier the engine does not
+                assert here. */}
+            <BrandButton onClick={() => onUpgrade?.("whales_cutoff")} style={{ padding: "11px 20px", fontSize: 13.5 }}>
+              Follow these fans with Pro →
             </BrandButton>
           </div>
         )}
       </div>
 
-      {/* ── BEST-WINDOW OVERLAP ────────────────────────────────────── */}
+      {/* ── BEST-WINDOW OVERLAP (2C-3) ─────────────────────────────
+          Replaced the local restatement of the same figures with the shared
+          discovery block, so the Command Center and the Fans tab can no longer
+          describe the same overlap differently. The old copy called every
+          overlapping fan one of the creator's "highest-value supporters",
+          which conflated the 3-tip repeat-fan filter with the Top Supporter
+          classification — two different things. The shared block reports them
+          separately, from the canonical counts. */}
+      {/* Gated on real overlap, unchanged from before 2C-3: the Command Center
+          already states the zero-overlap case, and a second "nobody yet" card
+          on this tab would be noise rather than information. */}
       {bestWindow && overlap?.count > 0 && (
-        <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Who shows up in your best window</div>
-          <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>
-            <strong style={{ color: C.white }}>{overlap.count}</strong> of your highest-value supporters tip during{" "}
-            <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtHour(bestWindow.localHour)}</strong> — {fmtUsd0(overlap.totalUSD)} in combined lifetime value.
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-            {(overlap.fans || []).map(f => (
-              <span key={f.username} style={{
-                fontSize: 12, padding: "6px 12px", borderRadius: 20,
-                background: "rgba(34,211,238,0.1)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan,
-                overflowWrap: "anywhere",
-              }}>{f.username} · {fmtUsd0(f.totalUSD)}</span>
-            ))}
-          </div>
-          <button onClick={onPlanStream} style={{
-            padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-            background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
-            color: C.white, fontSize: 12.5, fontWeight: 700,
-          }}>Plan a stream in this window →</button>
-        </div>
+        <WindowFanOverlap
+          analytics={analytics}
+          intelligence={intelligence}
+          isPro={isPro}
+          // Already on the Fans tab, so there is no "open these fans in Fans"
+          // action here — the Pro detail is the chips themselves.
+          onUpgrade={onUpgrade}
+        />
+      )}
+      {bestWindow && overlap?.count > 0 && onPlanStream && (
+        <button onClick={onPlanStream} style={{
+          padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+          background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+          color: C.white, fontSize: 12.5, fontWeight: 700, alignSelf: "flex-start",
+        }}>Plan a stream in this window →</button>
       )}
 
       {/* ── DEPENDENCY RISK ────────────────────────────────────────── */}
       {dependencyRisk && dependencyRisk.level !== "low" && (
         <div style={card({ border: `1px solid ${dependencyRisk.level === "high" ? "rgba(248,113,113,0.3)" : "rgba(245,158,11,0.3)"}` })}>
-          <div style={{ ...sectionLabel, marginBottom: 12 }}>Concentration risk</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={sectionLabel}>Concentration risk</div>
+            <ConfidenceBadge intelligence={intelligence} insight="dependency_risk" />
+          </div>
           <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>{dependencyRisk.message}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {[
@@ -347,26 +421,38 @@ export default function Fans({
         </div>
       )}
 
-      {/* ── ALL SUPPORTERS ─────────────────────────────────────────── */}
+      {/* ── ALL SUPPORTERS — the full roster, free ──────────────────
+          Every fan the creator has, searchable, with the observed facts
+          about each: platform, first and last interaction, tip count,
+          lifetime value. These are all recorded events, not predictions —
+          which is why they carry no confidence state and are not gated.
+
+          What stays Pro is the INTELLIGENCE above (cadence, churn, timing,
+          re-engagement), not the creator's ability to see her own fans.
+          Approved 2026-08-26. */}
       {hasAnyFans && (
         <div style={card()}>
-          <div style={{ ...sectionLabel, marginBottom: 6 }}>All supporters</div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
-            Ranked by lifetime tips{!isPro && whales.length > freeFanLimit ? ` · showing your top ${freeFanLimit}` : ""}
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+            <div style={sectionLabel}>All supporters</div>
+            <div style={{ fontSize: 11.5, color: C.muted }}>
+              {roster.length === whales.length
+                ? `${whales.length.toLocaleString()} total`
+                : `${roster.length.toLocaleString()} of ${whales.length.toLocaleString()}`}
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {(isPro ? whales : whales.slice(0, freeFanLimit)).map((f, i) => (
-              <div key={f.username} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 10,
-                background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`,
-              }}>
-                <span style={{ fontSize: 11.5, color: C.muted, width: 22, flexShrink: 0 }}>#{i + 1}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.white, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{f.username}</span>
-                <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>{f.tipCount} tips</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>{fmtUsd(f.totalUSD)}</span>
-              </div>
-            ))}
+          <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
+            Ranked by lifetime tips · searchable, grouped by platform and tier
           </div>
+
+          {/* Full roster with the original two actions, tier chips and the
+              teaser layer. Nobody is walled out of seeing her own supporters;
+              what free samples is the DEPTH. See FanRoster.jsx. */}
+          <FanRoster
+            fans={ranked}
+            isPro={isPro}
+            onMessage={onMessageFan}
+            onUpgrade={onUpgrade}
+          />
         </div>
       )}
     </div>

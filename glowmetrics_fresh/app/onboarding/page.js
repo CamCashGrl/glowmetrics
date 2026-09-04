@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import OnboardingAha from './OnboardingAha'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
+import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { isProPlan } from '../../lib/plan'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
@@ -399,7 +401,7 @@ function ProUpsellModal({platform,onSkip}){
         <div style={{textAlign:'center',marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:'#a78bfa',marginBottom:8}}>Unlock All Platforms</div>
           <h2 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>You're adding {platform.label}</h2>
-          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Multi-platform tracking is a Pro feature. Upgrade to sync all platforms and see your full earnings picture.</p>
+          <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6}}>Your free plan already tracks {FREE_MAX_PLATFORMS} platforms. Upgrade to add every platform you work and see your full earnings picture.</p>
         </div>
         <div style={{marginBottom:16}}>
           <div style={{background:'rgba(167,139,250,0.08)',border:'1.5px solid rgba(167,139,250,0.4)',borderRadius:14,padding:16,position:'relative'}}>
@@ -413,7 +415,7 @@ function ProUpsellModal({platform,onSkip}){
         <div style={{background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.15)',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'rgba(148,163,184,0.8)',textAlign:'center'}}>
           ✅ <span style={{color:'#fff'}}>Nothing is locked during your trial</span> — every platform and every insight is included for 7 days.
         </div>
-        <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — continue with one platform</button></div>
+        <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(100,116,139,0.7)',cursor:'pointer',textDecoration:'underline'}}>Skip for now — keep my current platforms</button></div>
       </div>
     </div>
   )
@@ -612,12 +614,33 @@ export default function OnboardingPage(){
 
   const[step,setStep]=useState('platform')
   const[platformId,setPlatformId]=useState('chaturbate')
+  // ── PLATFORM ROSTER ──────────────────────────────────────────────────────
+  // Onboarding used to ask for ONE platform, which is not how a creator
+  // works: she streams on several and thinks of one of them as her main. She
+  // now names all of them up front and marks the primary, so CamCash knows
+  // the shape of her business before the first import rather than inferring
+  // it from whichever file she happened to paste first.
+  //
+  // `selectedPlatforms` drives the import queue below — the primary is
+  // imported first, then the rest are offered in turn. It is selection state,
+  // not a claim about her data: a platform is only ever counted as measured
+  // once its tips actually land.
+  const[selectedPlatforms,setSelectedPlatforms]=useState(['chaturbate'])
+  const[primaryPlatform,setPrimaryPlatform]=useState('chaturbate')
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
   const[preview,setPreview]=useState(null)
   const[parseError,setParseError]=useState('')
   const[importResult,setImportResult]=useState(null)
+  // ── FIRST AHA ────────────────────────────────────────────────────────────
+  // Read from the canonical intelligence layer AFTER the import lands, so the
+  // onboarding screen and the dashboard cannot disagree, and onboarding can
+  // never claim a pattern the engine has not confirmed.
+  const[aha,setAha]=useState(null)
+  const[ahaLoading,setAhaLoading]=useState(false)
+  const[ahaFans,setAhaFans]=useState(0)
+  const[ahaTopSupporters,setAhaTopSupporters]=useState(0)
   const[importError,setImportError]=useState('')
   const[upgradeBlocked,setUpgradeBlocked]=useState(null)
   const[isFirstImport,setIsFirstImport]=useState(true)
@@ -659,7 +682,22 @@ export default function OnboardingPage(){
     // Named distinctly from the generic step_viewed event so the funnel's
     // "first useful insight" step is directly queryable, per the funnel
     // instrumentation checklist, without filtering step_viewed by 'done'.
-    if(step==='done')track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
+    if(step==='done'){
+      track('first_insight_viewed',{platform:platformId,tipsImported:importResult?.inserted??0})
+      setAhaLoading(true)
+      fetch('/api/intelligence',{credentials:'include'})
+        .then(r=>r.ok?r.json():null)
+        .then(data=>{
+          // primaryDiscovery, not discoveries[0]: the strongest finding is often
+          // the hourly rate, which has no action, and an aha with no next move
+          // is not an aha.
+          setAha(data?.primaryDiscovery||null)
+          setAhaFans(data?.fanOverlap?.count||0)
+          setAhaTopSupporters(data?.fanOverlap?.topSupporterCount||0)
+        })
+        .catch(()=>setAha(null))
+        .finally(()=>setAhaLoading(false))
+    }
   },[step,user])
 
   async function markDone(){
@@ -668,9 +706,39 @@ export default function OnboardingPage(){
   }
 
   function selectPlatform(id){
-    if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
+    if(userPlan!=='pro'&&importedPlatforms.length>=FREE_MAX_PLATFORMS&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
     setPlatformId(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
+  }
+
+  // Toggle a platform in the roster. The primary can never be left dangling:
+  // removing it promotes whichever platform remains first.
+  function togglePlatform(id){
+    setSelectedPlatforms(prev=>{
+      const next=prev.includes(id)?prev.filter(p=>p!==id):[...prev,id]
+      if(!next.length)return prev            // never allow an empty roster
+      if(!next.includes(primaryPlatform))setPrimaryPlatform(next[0])
+      return next
+    })
+  }
+
+  // Confirmed roster → persist the primary, then start with it. Storing it
+  // uses the existing profiles.primary_pro_platform column and its
+  // normalizing trigger; no new column and no new platform naming rule.
+  async function confirmPlatformRoster(){
+    const primary=selectedPlatforms.includes(primaryPlatform)?primaryPlatform:selectedPlatforms[0]
+    track('onboarding_platforms_selected',{count:selectedPlatforms.length,primary,platforms:selectedPlatforms.join(',')})
+    if(user){
+      // Two separate writes on purpose. The primary column exists today; the
+      // roster column ships with 20260827a and may not be applied yet, so its
+      // write is isolated — a missing column must never cost her the primary
+      // or block onboarding. Both are preferences, not gates.
+      try{await supabase.from('profiles').upsert({id:user.id,primary_pro_platform:PLATFORMS[primary]?.label||primary},{onConflict:'id'})}
+      catch{/* preference only — onboarding proceeds */}
+      try{await supabase.from('profiles').update({streaming_platforms:selectedPlatforms.map(p=>PLATFORMS[p]?.label||p)}).eq('id',user.id)}
+      catch{/* column not migrated yet — the roster still drives this session */}
+    }
+    selectPlatform(primary)
   }
 
   async function handleUsernameSubmit(){
@@ -873,23 +941,33 @@ export default function OnboardingPage(){
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:400,margin:'0 auto'}}>Select every platform you stream on, then tell CamCash which one is your main. You will import them one at a time, starting with your primary.</p>
               </div>
-              <div style={{marginBottom:22}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
+
+              {/* ── PLATFORM ROSTER CARD ──────────────────────────────────
+                  A solid, high-contrast panel rather than a translucent wash,
+                  so the selected tiles read as selected. Multi-select: a
+                  creator names her whole business here, not one site. */}
+              <div style={{
+                background:'#121826',border:'1px solid #1e2d45',borderRadius:18,padding:'18px 16px 16px',marginBottom:18,
+                boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05),0 10px 30px rgba(0,0,0,0.5)',
+              }}>
+                <div style={{fontSize:10,fontWeight:800,color:'rgba(166,168,189,0.75)',marginBottom:11,letterSpacing:'0.12em',textTransform:'uppercase'}}>Platforms you stream on</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
-                    const sel=platformId===key
+                    const sel=selectedPlatforms.includes(key)
                     return(
-                      <button key={key} onClick={()=>setPlatformId(key)} style={{
+                      <button key={key} onClick={()=>togglePlatform(key)}
+                        aria-pressed={sel}
+                        style={{
                         flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
-                        background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
-                        border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
+                        background:sel?'rgba(33,230,243,0.11)':'#161e2e',
+                        border:sel?'1.5px solid rgba(33,230,243,0.85)':'1px solid #2a3f5f',
                         boxShadow:sel?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
                         cursor:'pointer',transition:'all 0.22s',position:'relative',
                       }}
-                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
-                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
+                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)'}}}
+                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='#2a3f5f'}}}
                       >
                         {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
                         <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
@@ -898,8 +976,37 @@ export default function OnboardingPage(){
                     )
                   })}
                 </div>
+
+                {/* PRIMARY — only meaningful once there is something to choose
+                    between, so it appears when a second platform is added. */}
+                {selectedPlatforms.length>1&&(
+                  <div style={{marginTop:16,paddingTop:14,borderTop:'1px solid #1e2d45',animation:'fadeUp 0.25s ease both'}}>
+                    <div style={{fontSize:10,fontWeight:800,color:'rgba(166,168,189,0.75)',marginBottom:9,letterSpacing:'0.12em',textTransform:'uppercase'}}>Your primary platform</div>
+                    <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+                      {selectedPlatforms.map(key=>{
+                        const p=PLATFORMS[key];const on=primaryPlatform===key
+                        return(
+                          <button key={key} onClick={()=>setPrimaryPlatform(key)} aria-pressed={on} style={{
+                            padding:'7px 14px',borderRadius:100,cursor:'pointer',fontSize:12,fontWeight:800,
+                            background:on?'rgba(255,59,110,0.14)':'#161e2e',
+                            border:on?'1.5px solid rgba(255,59,110,0.75)':'1px solid #2a3f5f',
+                            color:on?'#fff':'rgba(255,255,255,0.55)',transition:'all 0.2s',
+                          }}>{on?'★ ':''}{p.label}</button>
+                        )
+                      })}
+                    </div>
+                    <div style={{fontSize:11.5,color:'rgba(166,168,189,0.7)',marginTop:10,lineHeight:1.6}}>
+                      Your primary is the platform CamCash leads with — it is imported first and anchors your comparisons.
+                    </div>
+                  </div>
+                )}
               </div>
-              <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
+
+              <OBBtn onClick={confirmPlatformRoster} style={{marginBottom:10}}>
+                {selectedPlatforms.length>1
+                  ?`Start with ${PLATFORMS[primaryPlatform]?.label||''} — ${selectedPlatforms.length} platforms →`
+                  :`Continue with ${PLATFORMS[selectedPlatforms[0]]?.label||''} →`}
+              </OBBtn>
             </div>
           )}
 
@@ -1066,6 +1173,36 @@ export default function OnboardingPage(){
             </div>
           )}
 
+          {/* ══ REMAINING PLATFORMS ═══════════════════════════════════════
+              The roster she named at step 1 is only worth asking for if
+              CamCash acts on it. After an import lands, whatever she selected
+              and has not yet imported is offered here, one at a time. It is a
+              prompt, never a block — Continue always leads onward. */}
+          {(step==='live'||step==='done')&&(()=>{
+            const remaining=selectedPlatforms.filter(p=>!importedPlatforms.includes(p))
+            if(!remaining.length)return null
+            const nextId=remaining[0];const nextP=PLATFORMS[nextId]
+            return(
+              <div style={{
+                background:'#121826',border:'1px solid #2a3f5f',borderRadius:16,padding:'14px 16px',marginBottom:14,
+                display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',
+                boxShadow:'inset 0 1px 0 rgba(255,255,255,0.05)',
+              }}>
+                <div style={{width:36,height:36,borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,flexShrink:0,...nextP.iconStyle}}>{nextP.short}</div>
+                <div style={{flex:'1 1 180px',minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800,color:'#fff'}}>{nextP.label} is still waiting</div>
+                  <div style={{fontSize:11.5,color:'rgba(166,168,189,0.75)',marginTop:2}}>
+                    You told CamCash you stream there. Import it and your comparisons cover {importedPlatforms.length+1} platforms.
+                  </div>
+                </div>
+                <button onClick={()=>selectPlatform(nextId)} style={{
+                  flexShrink:0,padding:'9px 16px',borderRadius:100,cursor:'pointer',fontSize:12,fontWeight:800,
+                  background:'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)',border:'none',color:'#06101A',
+                }}>Import {nextP.label} →</button>
+              </div>
+            )
+          })()}
+
           {/* ══ LIVE MODE ══ */}
           {step==='live'&&(
             <LiveModeDemo
@@ -1092,8 +1229,8 @@ export default function OnboardingPage(){
               <div style={{position:'absolute',inset:0,animation:'flashPulse 1s ease-out 1',background:'rgba(33,230,243,0)',pointerEvents:'none'}}/>
               <div style={{width:64,height:64,borderRadius:22,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,fontWeight:900,color:'#fff',margin:'0 auto 16px',boxShadow:'0 0 55px rgba(255,47,174,0.45),0 0 100px rgba(33,230,243,0.3)',animation:'glowPulse 2.5s ease-in-out infinite'}}>✓</div>
               <div style={EYE}>First Insights</div>
-              <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Your first insights are ready</h1>
-              <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>Here's a beautiful preview of what we found.</p>
+              <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>{aha&&aha.claimable?'CamCash found a pattern in your history':'Your data is ready'}</h1>
+              <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,marginBottom:20}}>{aha&&aha.claimable?'Read from the sessions you just imported — nothing estimated on your behalf.':'Here is exactly what CamCash read from your import.'}</p>
               <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:14}}>
                 {[
                   {label:'Tips Imported',value:tipsDisplayed,color:CYAN,prefix:'',suffix:' tips',delay:'0s'},
@@ -1119,27 +1256,17 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <div style={{borderRadius:14,border:`1px solid ${PINK}33`,background:`rgba(255,47,174,0.05)`,padding:'13px 15px',marginBottom:14,textAlign:'left',display:'flex',gap:10}}>
-                <span style={{fontSize:18,flexShrink:0}}>⚡</span>
-                <div>
-                  <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
-                  {preview?.bestHour?(
-                    // preview.bestHour is the single hour with the highest total
-                    // token sum across the just-parsed rows (buildPreview() above)
-                    // — no minimum-sample or confidence-tier requirement, unlike
-                    // the dashboard's canonical bestWindow (session-based, median,
-                    // requires 4+ sessions before it's shown as "your best time" at
-                    // all). This preview can legitimately be one or two rows'
-                    // worth of signal. "Your sweet spot" overstated that as a
-                    // settled fact; framing it as an early read from this import
-                    // — confirmed or revised once the dashboard has full session
-                    // data — matches what this number actually is.
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>This import shows an early signal around <strong style={{color:PINK}}>{preview.bestHour}</strong> — your dashboard will confirm this once it has more sessions to work with.</p>
-                  ):(
-                    <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
-                  )}
-                </div>
-              </div>
+              {/* ══ FIRST AHA ═════════════════════════════════════════════
+                  Extracted to ./OnboardingAha so it renders without a Supabase
+                  client and can be verified in the render suite. It reads the
+                  canonical intelligence layer and states a pattern only when
+                  the ladder says it is claimable. */}
+              <OnboardingAha
+                discovery={aha}
+                fanCount={ahaFans}
+                topSupporters={ahaTopSupporters}
+                loading={ahaLoading}
+              />
 
               <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',padding:'12px 14px',marginBottom:16,textAlign:'left',display:'flex',alignItems:'flex-start',gap:10}}>
                 <div style={{fontSize:18,flexShrink:0}}>📧</div>

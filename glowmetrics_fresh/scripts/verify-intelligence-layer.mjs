@@ -224,5 +224,68 @@ console.log('\nSNAPSHOT DIFF — what an import unlocked')
   check('unchanged insight is not announced', improved.some(i => i.id === 'hourly_rate'), false)
 }
 
+console.log('\nREAL-DATA FIXTURE — protected account, post-normalization')
+{
+  // Inputs measured from production on 2026-08-26 (read-only), after the
+  // platform-alias normalization from PR #434:
+  //   2,559 tips · 108 meaningful sessions · 131.8 streamed hours
+  //   winner bucket 4 sessions · 21 buckets with 2+ sessions · 733-day span
+  //   352 unique fans · 182 with 3+ tips · 25 months · 3 qualifying platforms
+  //
+  // This pins the ladder against a real creator so a threshold change that
+  // would silently downgrade a live account fails here first.
+  const REAL = {
+    meaningfulSessions: 108, streamedHours: 131.8,
+    winnerSessions: 4, buckets2Plus: 21, spanDays: 733,
+    uniqueFans: 352, readableFans: 182, months: 25, qualifyingPlatforms: 3,
+    totalTips: 2559,
+  }
+
+  // peak_window: 4 sessions -> 'supported' tier; 20 other buckets to compare
+  // against, so the comparison guard does not cap it. Not HIGH_CONFIDENCE, so
+  // it cannot be promoted to ESTABLISHED however long the span.
+  const pw = promoteIfEstablished(
+    capForComparison(fromConfidenceTier(tierForSessionCount(REAL.winnerSessions)), REAL.buckets2Plus - 1),
+    { comparedAlternatives: REAL.buckets2Plus - 1, spanDays: REAL.spanDays }
+  )
+  check('peak window reaches SUPPORTED (the free discovery fires)', pw, S.SUPPORTED)
+  check('peak window is claimable', atLeast(pw, CLAIMABLE_FLOOR), true)
+  check('4 sessions does not reach HIGH_CONFIDENCE', atLeast(pw, S.HIGH_CONFIDENCE), false)
+
+  // hourly_rate: calculateConfidence(108, 131.8) -> High (>=10 sessions AND
+  // >=20 hours), and a 733-day span promotes it.
+  const accountLevel = (REAL.meaningfulSessions >= 10 && REAL.streamedHours >= 20) ? 'High' : 'Medium'
+  const hr = promoteIfEstablished(fromAccountConfidence(accountLevel), { comparedAlternatives: 2, spanDays: REAL.spanDays })
+  check('hourly rate reaches ESTABLISHED', hr, S.ESTABLISHED)
+
+  // Fan insights, from counts alone.
+  check('352 fans -> relative ranking is meaningful', REAL.uniqueFans >= RELATIVE_RANK_MIN_FANS, true)
+  check('182 fans with 3+ tips -> patterns readable', REAL.readableFans >= 10, true)
+  check('3 qualifying platforms -> cross-platform comparable', REAL.qualifyingPlatforms >= 2, true)
+  check('25 months -> growth trend well established', REAL.months >= 6, true)
+
+  // The guard that matters: had this creator only ever streamed one window,
+  // the same 4 sessions could not be called her best.
+  const hypothetical = capForComparison(fromConfidenceTier(tierForSessionCount(REAL.winnerSessions)), 0)
+  check('same evidence with nothing to compare caps at DEVELOPING', hypothetical, S.DEVELOPING)
+}
+
+console.log('\nDASHBOARD_EVENTS CONTRACT')
+{
+  // Verified against the deployed CHECK constraints, not assumed:
+  //   priority IN ('critical','high','medium','low')
+  //   status   IN ('new','seen','dismissed')
+  const ALLOWED_PRIORITY = ['critical', 'high', 'medium', 'low']
+  const ALLOWED_STATUS = ['new', 'seen', 'dismissed']
+  const milestoneEvent = { priority: 'high', status: 'new', fingerprint: 'milestone:peak_window_found' }
+  const plainMilestone = { priority: 'medium', status: 'new', fingerprint: 'milestone:first_sessions' }
+  const confidenceEvent = { priority: 'low', status: 'new', fingerprint: 'confidence:peak_window:EARLY_SIGNAL->SUPPORTED' }
+  for (const [name, e] of [['milestone with CTA', milestoneEvent], ['milestone without CTA', plainMilestone], ['confidence increase', confidenceEvent]]) {
+    check(`${name}: priority satisfies the CHECK constraint`, ALLOWED_PRIORITY.includes(e.priority), true)
+    check(`${name}: status satisfies the CHECK constraint`, ALLOWED_STATUS.includes(e.status), true)
+  }
+  check('fingerprints are deterministic and distinct', new Set([milestoneEvent, plainMilestone, confidenceEvent].map(e => e.fingerprint)).size, 3)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

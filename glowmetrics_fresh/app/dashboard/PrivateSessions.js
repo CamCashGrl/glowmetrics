@@ -7,7 +7,7 @@ import {
 } from "recharts"
 import { computePaidSessionAnalytics } from "../../lib/analytics"
 
-const CARD   = "rgba(255,255,255,0.03)"
+const CARD   = "rgba(15,20,32,0.75)"   // the dashboard's authentic card fill
 const BORDER = "rgba(255,255,255,0.08)"
 const CYAN   = "#22d3ee"
 const PURPLE = "#a855f7"
@@ -27,7 +27,8 @@ function daysAgo(iso) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
 }
 
-const cardStyle = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px" }
+const cardStyle = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px",
+  backdropFilter: "blur(20px)", boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)" }
 
 function StatCard({ label, value, color = TEXT, sub }) {
   return (

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform } from '../../../lib/analytics'
 import { canonicalPlatform } from '../../../lib/constants'
+import { FREE_MAX_PLATFORMS } from '../../../lib/planLimits'
 
 // canonicalPlatform() maps empty input to 'Unknown', but an absent form field
 // must stay falsy here so the `|| detectPlatform(raw)` fallback below still
@@ -202,7 +203,7 @@ export async function POST(req) {
         // indistinguishable from a request that never ran at all.
         await logCsvUpload('blocked')
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `Your free plan tracks up to ${FREE_MAX_PLATFORMS} platforms and they're all in use. Upgrade to add ${detectedPlatform} alongside them.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -253,7 +254,7 @@ export async function POST(req) {
         // the paid-session half, same as onboarding's two independent
         // requests would behave if the paid-sessions call failed on its own.
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: `Your free plan tracks up to ${FREE_MAX_PLATFORMS} platforms and they're all in use. Upgrade to add ${detectedPlatform} alongside them.`,
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })

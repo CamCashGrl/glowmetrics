@@ -4,9 +4,9 @@
 // DashboardPreview.js
 //
 // Exports:
-//   getDashboardReadiness()  — 4-state readiness system
+//   getDashboardReadiness()  — compat wrapper over the canonical intelligence ladder
 //   getPlanAccess()          — free/pro plan logic
-//   getFeatureLockState()    — per-feature lock type (data vs plan)
+//   getFeatureLockState()    — compat wrapper: plan gate + canonical insight floor
 //   getDashboardStage()      — legacy compat (empty/preview/ready)
 //   EmptyDashboard           — no_data state
 //   DashboardPreview         — very_low/partial/full_data state
@@ -18,6 +18,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { isProPlan } from '../../lib/plan'
+import { FREE_MAX_PLATFORMS } from '../../lib/planLimits'
+import { GATE_MAP, gateOpen, lockMessage, resolveIntelligence, resolveReadiness } from '../../lib/intelligence/locks'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -105,13 +107,12 @@ function LockChip({ type }) {
 // HELPER FUNCTIONS
 // ============================================================
 
-export function getDashboardReadiness({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, dateRangeDays = 0, streamDays = 0 }) {
-  if (!totalTips || totalTips === 0) return 'setup'
-  if (totalTips < 25 || totalSessions < 3 || totalFans < 5 || totalEarnings < 10) return 'building'
-  if (totalTips < 50 || totalSessions < 5 || totalFans < 10 || totalEarnings < 25) return 'starter'
-  if (totalTips < 100 || totalSessions < 8 || totalFans < 20 || totalEarnings < 50) return 'warming'
-  if (dateRangeDays < 7 && streamDays < 3) return 'warming'
-  return 'ready'
+export function getDashboardReadiness({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, dateRangeDays = 0, streamDays = 0, intelligence = null, analytics = null }) {
+  // COMPAT WRAPPER (2C-1). The old 5-branch counter ladder is retired; the word
+  // now comes from where the canonical insights sit on the intelligence ladder.
+  // dateRangeDays / streamDays are accepted for signature compatibility and are
+  // no longer used — span and coverage are already inside the canonical states.
+  return resolveReadiness(resolveIntelligence({ intelligence, analytics, totalTips, totalSessions, totalFans }))
 }
 
 // Legacy compat — page.js now uses getDashboardReadiness directly; real dashboard always renders
@@ -126,106 +127,152 @@ export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0, planE
     canTrackMultiplePlatforms: isPro,
     canComparePlatforms: isPro,
     canUseCrossPlatformInsights: isPro,
-    freePlatformLimitReached: !isPro && trackedPlatformCount >= 1,
+    // Matches what the database enforces (enforce_free_tier_platform_limit):
+    // free tracks up to FREE_MAX_PLATFORMS, not one.
+    freePlatformLimitReached: !isPro && trackedPlatformCount >= FREE_MAX_PLATFORMS,
   }
 }
 
-export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt = null, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0 }) {
+// ── PLAN-ONLY GATES ───────────────────────────────────────────────────────────
+// The only rules below that are NOT canonical-intelligence gates. They are
+// commercial (plan) or a one-off fact (has this creator ever run Live Mode),
+// never analytics thresholds.
+function planLock(key, { isPro, platformCount }) {
+  if (key === 'multiPlatformTracking' && !isPro && platformCount >= FREE_MAX_PLATFORMS) {
+    return { locked: true, lockType: 'requires_pro', message: `Free tracks up to ${FREE_MAX_PLATFORMS} platforms. Upgrade to Pro to add more.` }
+  }
+  if ((key === 'platformComparison' || key === 'platformROI' || key === 'crossPlatformBestTimes') && !isPro) {
+    return { locked: true, lockType: 'requires_pro', message: 'Upgrade to Pro to compare earnings across platforms.' }
+  }
+  return null
+}
+
+function liveScoreLock(liveModeSessions) {
+  return liveModeSessions < 1
+    ? { locked: true, lockType: 'needs_data', message: 'Unlocks after your first Live Mode stream.' }
+    : { locked: false, lockType: null, message: null }
+}
+
+/**
+ * COMPAT WRAPPER (2C-1). Signature unchanged. The 11 counter rules that used to
+ * live here are gone; the data half of every answer is now a floor on the
+ * canonical ladder (see GATE_MAP in lib/intelligence/locks.js).
+ */
+export function getFeatureLockState({ feature, userPlan = 'free', planExpiresAt = null, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0, intelligence = null, analytics = null }) {
   const isPro = isProPlan({ plan: userPlan, plan_expires_at: planExpiresAt })
   const platformCount = importedPlatforms?.length || 0
-  const rules = {
-    bestStreamingTimes:    { needsData: totalSessions < 3 || totalTips < 25, requiresPro: false, dataMessage: 'Unlocks after 3+ sessions with timestamps.', proMessage: null },
-    topFans:               { needsData: totalFans < 5 || totalTips < 10, requiresPro: false, dataMessage: 'Unlocks after more fan and tip activity.', proMessage: null },
-    whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
-    platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
-    multiPlatformTracking: { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to track more than one platform.' },
-    crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
-    sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
-    averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
-    liveScore:             { needsData: liveModeSessions < 1, requiresPro: false, dataMessage: 'Unlocks after your first Live Mode stream.', proMessage: null },
-    retention:             { needsData: totalSessions < 5 || totalFans < 20, requiresPro: false, dataMessage: 'Unlocks after more repeat fan activity.', proMessage: null },
-    forecasting:           { needsData: totalSessions < 8 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after more earnings history.', proMessage: null },
-  }
-  const rule = rules[feature]
-  if (!rule) return { locked: false, lockType: null, message: null }
-  if (rule.requiresPro) return { locked: true, lockType: 'requires_pro', message: rule.proMessage }
-  if (rule.needsData) return { locked: true, lockType: 'needs_data', message: rule.dataMessage }
-  return { locked: false, lockType: null, message: null }
+  if (feature === 'liveScore') return liveScoreLock(liveModeSessions)
+  const pro = planLock(feature, { isPro, platformCount })
+  if (pro) return pro
+  if (feature === 'multiPlatformTracking') return { locked: false, lockType: null, message: null }
+  if (!GATE_MAP[feature]) return { locked: false, lockType: null, message: null }
+  const intel = resolveIntelligence({ intelligence, analytics, totalTips, totalSessions, totalFans, totalStreamMinutes })
+  if (gateOpen(intel, feature)) return { locked: false, lockType: null, message: null }
+  return { locked: true, lockType: 'needs_data', message: lockMessage(intel, feature) }
 }
 
-// Readiness checks for full dashboard use
-export const canShowBestHours    = ({ tipCount, sessionCount }) => tipCount >= 25 && sessionCount >= 3
-export const canShowWhales       = ({ uniqueFanCount, totalEarnings }) => uniqueFanCount >= 5 && totalEarnings >= 50
-export const canShowPlatformComp = ({ platformCount, sessionCount }) => platformCount >= 2 && sessionCount >= 4
-export const canShowSessionPerf  = ({ sessionCount }) => sessionCount >= 3
-export const canShowRetention    = ({ uniqueFanCount, dateRangeDays }) => uniqueFanCount >= 10 && dateRangeDays >= 7
-export const canShowHourlyRate   = ({ sessionCount, totalStreamMinutes }) => sessionCount >= 3 && totalStreamMinutes >= 60
+// Readiness checks for full dashboard use.
+// COMPAT WRAPPERS (2C-1) — each is now one floor on the canonical ladder.
+// Callers may pass `intelligence` (preferred) or `analytics`; the counter
+// arguments are still accepted so no call site had to change.
+const canShow = (key) => ({ intelligence = null, analytics = null, tipCount = 0, sessionCount = 0, uniqueFanCount = 0, totalStreamMinutes = 0, platformCount = 0, dateRangeDays = 0, totalEarnings = 0 } = {}) =>
+  gateOpen(resolveIntelligence({
+    intelligence, analytics,
+    totalTips: tipCount, totalSessions: sessionCount,
+    totalFans: uniqueFanCount, totalStreamMinutes,
+  }), key)
+
+export const canShowBestHours    = canShow('bestStreamingTimes')
+export const canShowWhales       = canShow('whales')
+export const canShowPlatformComp = canShow('platformComparison')
+export const canShowSessionPerf  = canShow('sessionPerformance')
+export const canShowRetention    = canShow('retention')
+export const canShowHourlyRate   = canShow('avgHourlyRate')
 
 // ── MODULE LOCK STATE ─────────────────────────────────────────────────────────
-// Single source of truth for per-module data thresholds.
-// Only platformROI and multiPlatformTracking are ever Pro-gated.
-// Money Map and Stream Planner are data-gated only — never paywalled.
-export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatformCount = 0, isPro = false, liveModeSessions = 0 }) {
-  const rules = {
-    bestStreamingTimes:   { needsData: totalTips < 25 || totalSessions < 3,          message: 'Peak Earning Windows unlock after 25+ tips and 3+ meaningful sessions.' },
-    avgHourlyRate:        { needsData: totalSessions < 3 || totalStreamMinutes < 60,  message: 'Average $/Hour unlocks after 3+ sessions and 60+ tracked minutes.' },
-    topFans:              { needsData: totalTips < 10 || totalFans < 5,               message: 'Top Fans unlock after more fan and tip activity.' },
-    whales:               { needsData: totalFans < 10 || totalEarnings < 50,          message: 'Whale detection unlocks after enough repeat fan history.' },
-    sessionBreakdown:     { needsData: totalSessions < 3,                             message: 'Session Breakdown unlocks after multiple completed sessions.' },
-    platformROI:          { needsData: importedPlatformCount < 2, requiresPro: !isPro && importedPlatformCount >= 1, message: !isPro ? 'Platform ROI unlocks after upgrading to Pro and importing at least 2 platforms.' : 'Import at least 2 platforms to compare earnings.' },
-    multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
-    fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
-    moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
-    streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
-    forecasting:          { needsData: totalSessions < 8 || totalEarnings < 50,       message: 'Forecasting unlocks after more earnings history.' },
-    liveScore:            { needsData: liveModeSessions < 1,                          message: 'Live Mode Score unlocks after your first Live Mode stream.' },
-  }
-  const rule = rules[module]
-  if (!rule) return { locked: false, lockType: null, message: null }
-  if (rule.requiresPro) return { locked: true, lockType: 'requires_pro', message: rule.message }
-  if (rule.needsData)   return { locked: true, lockType: 'needs_data',   message: rule.message }
-  return { locked: false, lockType: null, message: null }
+/**
+ * COMPAT WRAPPER (2C-1). Signature unchanged. The 12 counter rules are gone.
+ * Money Map and Stream Planner remain data-gated only — never paywalled.
+ */
+export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatformCount = 0, isPro = false, liveModeSessions = 0, intelligence = null, analytics = null }) {
+  if (module === 'liveScore') return liveScoreLock(liveModeSessions)
+  const pro = planLock(module, { isPro, platformCount: importedPlatformCount })
+  if (pro) return pro
+  if (module === 'multiPlatformTracking') return { locked: false, lockType: null, message: null }
+  if (!GATE_MAP[module]) return { locked: false, lockType: null, message: null }
+  const intel = resolveIntelligence({ intelligence, analytics, totalTips, totalSessions, totalFans, totalStreamMinutes })
+  if (gateOpen(intel, module)) return { locked: false, lockType: null, message: null }
+  return { locked: true, lockType: 'needs_data', message: lockMessage(intel, module) }
 }
 
 // ── UNLOCK PROGRESS ───────────────────────────────────────────────────────────
-export function getUnlockProgress({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, dateRangeDays = 0, streamDays = 0 }) {
-  const p = (v, t) => Math.min(100, Math.round(v / Math.max(t, 1) * 100))
+/**
+ * COMPAT WRAPPER (2C-1). The two invented target tiers (25/3/5/$10 and
+ * 100/8/20/$50) are retired. Progress is now the canonical calibration figure
+ * plus the canonical "what would help most next" list — the same numbers the
+ * Creator Report's CalibrationCard shows, so the two can no longer disagree.
+ *
+ * The legacy `starter`/`full` keys are kept so any caller outside this file
+ * keeps working, but each slot now reports a canonical insight's own
+ * observations against that insight's own requirement.
+ */
+const PROGRESS_SLOTS = {
+  tips:     { insight: 'money_map',       label: 'Tips' },
+  sessions: { insight: 'session_history', label: 'Sessions' },
+  fans:     { insight: 'top_supporters',  label: 'Fans' },
+  windows:  { insight: 'peak_window',     label: 'Windows' },
+}
+
+export function getUnlockProgress({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, dateRangeDays = 0, streamDays = 0, intelligence = null, analytics = null }) {
+  const intel = resolveIntelligence({ intelligence, analytics, totalTips, totalSessions, totalFans })
+  const slot = (key) => {
+    const def = PROGRESS_SLOTS[key]
+    const e = intel?.insights?.[def.insight] || {}
+    const current = e.observations || 0
+    const target = e.required || null
+    const pct = target ? Math.min(100, Math.round((current / target) * 100)) : (e.claimable ? 100 : 0)
+    return { current, target, pct, label: def.label, state: e.state }
+  }
+  const slots = Object.fromEntries(Object.keys(PROGRESS_SLOTS).map(k => [k, slot(k)]))
+  const cal = intel?.calibration || {}
   return {
-    starter: {
-      tips:     { current: totalTips,     target: 25,   pct: p(totalTips, 25) },
-      sessions: { current: totalSessions, target: 3,    pct: p(totalSessions, 3) },
-      fans:     { current: totalFans,     target: 5,    pct: p(totalFans, 5) },
-      earnings: { current: `$${Math.floor(totalEarnings)}`, target: '$10', pct: p(totalEarnings, 10) },
-    },
-    full: {
-      tips:       { current: totalTips,     target: 100,  pct: p(totalTips, 100) },
-      sessions:   { current: totalSessions, target: 8,    pct: p(totalSessions, 8) },
-      fans:       { current: totalFans,     target: 20,   pct: p(totalFans, 20) },
-      earnings:   { current: `$${Math.floor(totalEarnings)}`, target: '$50', pct: p(totalEarnings, 50) },
-      dateDays:   { current: dateRangeDays, target: 7,    pct: p(dateRangeDays, 7) },
-      streamDays: { current: streamDays,    target: 3,    pct: p(streamDays, 3) },
-    },
+    // canonical, preferred
+    pct: cal.pct ?? 0,
+    establishedCount: cal.establishedCount ?? 0,
+    buildingCount: cal.buildingCount ?? 0,
+    totalCount: cal.totalCount ?? 0,
+    nextBestEvidence: cal.nextBestEvidence || [],
+    evidence: cal.evidence || {},
+    slots,
+    // legacy shape
+    starter: slots,
+    full: slots,
   }
 }
 
 // ── DASHBOARD PROGRESS CARD ───────────────────────────────────────────────────
 // Shown inside the real dashboard when data is still warming up.
 // Never shown when readiness === 'ready'.
-export function DashboardProgressCard({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, readiness = 'building', onImport }) {
+export function DashboardProgressCard({ totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, readiness = 'building', intelligence = null, analytics = null, onImport }) {
   const grad = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
-  const progress = getUnlockProgress({ totalTips, totalSessions, totalFans, totalEarnings })
-  const isEarly  = readiness === 'setup' || readiness === 'building'
-  const target   = isEarly ? progress.starter : progress.full
-  const overall  = Math.round((target.tips.pct + target.sessions.pct + target.fans.pct + target.earnings.pct) / 4)
+  // 2C-1: the card no longer runs its own percentage. `overall` is the canonical
+  // calibration figure the Creator Report shows, and the per-slot bars are the
+  // canonical insights' own observations against their own requirements.
+  const progress = getUnlockProgress({ totalTips, totalSessions, totalFans, totalEarnings, intelligence, analytics })
+  const overall  = progress.pct
   const stageLabel = { setup: 'Setup', building: 'Building', starter: 'Starter insights unlocked', warming: 'Warming up', ready: 'Full confidence' }[readiness] || readiness
-  const nextTarget = isEarly ? 'starter insights (25 tips · 3 sessions · 5 fans · $10)' : 'full confidence (100 tips · 8 sessions · 20 fans · $50)'
+  const nextEvidence = progress.nextBestEvidence?.[0]
+  const nextTarget = nextEvidence
+    ? `${nextEvidence.insightLabel} — ${nextEvidence.label}`
+    : 'stronger evidence behind every insight'
 
-  const items = [
-    { label: 'Tips',     pct: target.tips.pct,     cur: target.tips.current,     tgt: target.tips.target,     unit: ' tips' },
-    { label: 'Sessions', pct: target.sessions.pct, cur: target.sessions.current, tgt: target.sessions.target, unit: ' sessions' },
-    { label: 'Fans',     pct: target.fans.pct,     cur: target.fans.current,     tgt: target.fans.target,     unit: ' fans' },
-    { label: 'Earnings', pct: target.earnings.pct, cur: target.earnings.current, tgt: target.earnings.target, unit: '' },
-  ]
+  const items = Object.entries(progress.slots).map(([, slot]) => ({
+    label: slot.label,
+    pct: slot.pct,
+    cur: slot.current,
+    tgt: slot.target ?? '—',
+    unit: '',
+  }))
 
   return (
     <div className="dpc-ambient-glow" style={{ borderRadius: 22, border: '1px solid rgba(255,255,255,0.09)', background: 'rgba(12,16,34,0.78)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', padding: '18px 22px', marginBottom: 20, position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 12px 32px rgba(0,0,0,0.28)' }}>
@@ -245,7 +292,7 @@ export function DashboardProgressCard({ totalTips = 0, totalSessions = 0, totalF
           <div style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF', marginBottom: 2 }}>
             Dashboard warming up — <span style={{ color: '#16F4FF' }}>{stageLabel}</span>
           </div>
-          <div style={{ fontSize: 11, color: '#8D93AA' }}>Progress toward {nextTarget} · {overall}% complete</div>
+          <div style={{ fontSize: 11, color: '#8D93AA' }}>{overall}% calibrated · Next: {nextTarget}</div>
         </div>
         {onImport && (
           <button onClick={onImport} style={{ padding: '8px 18px', borderRadius: 100, background: grad, border: 'none', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 20px rgba(22,244,255,0.2)', whiteSpace: 'nowrap' }}>
@@ -406,7 +453,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
   const topByCount = Object.entries(fanCounts).sort((a, b) => b[1] - a[1])[0]
 
   // Readiness + plan
-  const readiness = getDashboardReadiness({ totalTips, totalSessions, totalFans, totalEarnings })
+  const readiness = getDashboardReadiness({ totalTips, totalSessions, totalFans, totalEarnings, analytics })
   const plan      = getPlanAccess(userPlan, platformCount, planExpiresAt)
   const isPro     = plan.isPro
 
@@ -434,17 +481,26 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
       note: null,
     },
   }
-  const hero = heroConfig[readiness] || heroConfig.very_low_data
+  // getDashboardReadiness() returns setup/building/starter/warming/ready; this
+  // component's copy is written in three bands. Mapped here rather than keeping
+  // a second readiness vocabulary alive.
+  const stage = (readiness === 'setup' || readiness === 'building') ? 'very_low_data'
+    : readiness === 'ready' ? 'full_data'
+    : 'partial_data'
+  const hero = heroConfig[stage] || heroConfig.very_low_data
 
   // Progress checklist
+  const checklistArgs = { userPlan, planExpiresAt, totalTips, totalSessions, totalFans, totalEarnings, totalStreamMinutes, importedPlatforms: platforms, liveModeSessions, analytics }
   const progressItems = [
     { label: 'Account created', done: true },
     { label: 'Onboarding completed', done: true },
     { label: 'Track your first platform', done: platformCount >= 1 },
-    { label: 'Import at least 3 sessions', done: totalSessions >= 3 },
-    { label: 'Add 25+ tips', done: totalTips >= 25 },
+    // Canonical: these are the intelligence layer's own session/tip facts, not a
+    // second set of counters (2C-1).
+    { label: 'Build a readable session history', done: !getFeatureLockState({ feature: 'sessionPerformance', ...checklistArgs }).locked },
+    { label: 'Identify your top supporters', done: !getFeatureLockState({ feature: 'topFans', ...checklistArgs }).locked },
     { label: 'Start your first Live Mode session', done: liveModeSessions >= 1 },
-    { label: 'Unlock full insights', done: readiness === 'full_data' },
+    { label: 'Unlock full insights', done: stage === 'full_data' },
     isPro
       ? { label: 'Pro multi-platform tracking enabled', done: true }
       : { label: 'Upgrade to Pro for multi-platform tracking', done: false, isPro: true },
@@ -452,7 +508,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
   const progressPct = Math.round((progressItems.filter(i => i.done).length / progressItems.length) * 100)
 
   // Feature locks
-  const lockArgs = { userPlan, planExpiresAt, totalTips, totalSessions, totalFans, totalEarnings, totalStreamMinutes, importedPlatforms: platforms, liveModeSessions }
+  const lockArgs = { userPlan, planExpiresAt, totalTips, totalSessions, totalFans, totalEarnings, totalStreamMinutes, importedPlatforms: platforms, liveModeSessions, analytics }
   const locks = {
     bestTimes:    getFeatureLockState({ feature: 'bestStreamingTimes', ...lockArgs }),
     topFans:      getFeatureLockState({ feature: 'topFans', ...lockArgs }),
@@ -466,11 +522,11 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
   // Next action
   function getNextAction() {
     if (platformCount === 0) return { text: 'Next best step: choose your first platform and import your first tips.', primary: 'Choose Platform', onPrimary: onAddHistory }
-    if (readiness === 'very_low_data') return { text: 'Next best step: add at least 2 more sessions so CamCash can calculate your best times.', primary: 'Import More Sessions', onPrimary: onAddHistory }
-    if (readiness === 'partial_data' && !isPro) return { text: "Next best step: keep building your first platform dashboard, or upgrade to Pro when you're ready to compare multiple cam sites.", primary: 'Import More Data', secondary: 'Upgrade to Pro', onPrimary: onAddHistory, onSecondary: onUpgrade }
-    if (readiness === 'partial_data' && isPro) return { text: 'Next best step: add another platform or start Live Mode so CamCash can compare your performance across sites.', primary: 'Add Platform', onPrimary: onAddHistory }
-    if (readiness === 'full_data' && !isPro) return { text: 'Next best step: review your current platform insights. Upgrade to Pro to compare more platforms.', primary: 'View My Insights', secondary: 'Upgrade to Pro', onPrimary: onContinue, onSecondary: onUpgrade }
-    if (readiness === 'full_data' && isPro) return { text: 'Next best step: review your top fans and plan your next stream around your best earning window.', primary: 'View Top Fans', onPrimary: onContinue }
+    if (stage === 'very_low_data') return { text: 'Next best step: add at least 2 more sessions so CamCash can calculate your best times.', primary: 'Import More Sessions', onPrimary: onAddHistory }
+    if (stage === 'partial_data' && !isPro) return { text: "Next best step: keep building your first platform dashboard, or upgrade to Pro when you're ready to compare multiple cam sites.", primary: 'Import More Data', secondary: 'Upgrade to Pro', onPrimary: onAddHistory, onSecondary: onUpgrade }
+    if (stage === 'partial_data' && isPro) return { text: 'Next best step: add another platform or start Live Mode so CamCash can compare your performance across sites.', primary: 'Add Platform', onPrimary: onAddHistory }
+    if (stage === 'full_data' && !isPro) return { text: 'Next best step: review your current platform insights. Upgrade to Pro to compare more platforms.', primary: 'View My Insights', secondary: 'Upgrade to Pro', onPrimary: onContinue, onSecondary: onUpgrade }
+    if (stage === 'full_data' && isPro) return { text: 'Next best step: review your top fans and plan your next stream around your best earning window.', primary: 'View Top Fans', onPrimary: onContinue }
     return { text: 'Next best step: import your first tips from your platform.', primary: 'Import Tips', onPrimary: onAddHistory }
   }
   const nextAction = getNextAction()
@@ -497,7 +553,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 180 }}>
               <button onClick={onAddHistory} style={primaryBtn({ width: '100%' })}>{hero.primaryLabel} →</button>
-              <button onClick={readiness === 'full_data' ? onContinue : onLiveMode} style={secondaryBtn({ width: '100%' })}>{hero.secondaryLabel}</button>
+              <button onClick={stage === 'full_data' ? onContinue : onLiveMode} style={secondaryBtn({ width: '100%' })}>{hero.secondaryLabel}</button>
             </div>
           </div>
 
@@ -529,11 +585,11 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
               ) : platformCount === 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track 1 platform for free. Choose your first platform to start building your dashboard.</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track up to {FREE_MAX_PLATFORMS} platforms for free. Choose your first platform to start building your dashboard.</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · 1 platform active</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} of {FREE_MAX_PLATFORMS} platforms active</div>
                   <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. Upgrade to Pro when you're ready to track more platforms and compare where you earn best.</div>
                 </>
               )}
@@ -551,7 +607,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           </div>
           {!isPro && (
             <div style={{ marginTop: 12, fontSize: 11, color: C.muted, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              Your free plan includes 1 active platform. Pro unlocks multi-platform tracking and comparisons. You can keep tracking 1 platform for free forever.
+              Your free plan includes up to {FREE_MAX_PLATFORMS} active platforms. Pro unlocks unlimited platforms and the full cross-platform comparison. Your free platforms stay free forever.
             </div>
           )}
         </div>
@@ -621,14 +677,14 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           />
           <SnapshotMetricCard
             label="Avg $/Hour"
-            value={canShowHourlyRate({ sessionCount: totalSessions, totalStreamMinutes }) ? fmt$(analytics?.avgPerHour || 0) : 'Needs more data'}
-            helper={!canShowHourlyRate({ sessionCount: totalSessions, totalStreamMinutes }) ? 'Unlocks after 60+ tracked minutes' : undefined}
-            status={canShowHourlyRate({ sessionCount: totalSessions, totalStreamMinutes }) ? 'ready' : 'needs_data'}
+            value={canShowHourlyRate({ sessionCount: totalSessions, totalStreamMinutes, analytics }) ? fmt$(analytics?.avgPerHour || 0) : 'Needs more data'}
+            helper={!canShowHourlyRate({ sessionCount: totalSessions, totalStreamMinutes, analytics }) ? 'Unlocks after 60+ tracked minutes' : undefined}
+            status={canShowHourlyRate({ sessionCount: totalSessions, totalStreamMinutes, analytics }) ? 'ready' : 'needs_data'}
           />
           <SnapshotMetricCard
             label="Platforms"
             value={platformCount > 0 ? platforms.join(', ') : 'None yet'}
-            helper={isPro ? 'Pro multi-platform tracking enabled' : 'Free plan tracks 1 platform'}
+            helper={isPro ? 'Pro multi-platform tracking enabled' : `Free plan tracks up to ${FREE_MAX_PLATFORMS} platforms`}
             status={platformCount > 0 ? 'ready' : 'locked'}
           />
         </div>
@@ -719,7 +775,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', plan
           <TopAccent color="rgba(124,92,255,0.4)" />
           {platformCount === 0 ? (
             <>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose 1 platform to track for free</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose up to {FREE_MAX_PLATFORMS} platforms to track for free</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginTop: 14 }}>
                 {ALL_PLATFORMS.map(p => (
                   <button key={p} onClick={onAddHistory} style={{ padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(34,211,238,0.05)', color: C.white, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
