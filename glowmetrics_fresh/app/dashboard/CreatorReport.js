@@ -826,6 +826,30 @@ function PlatformCards({
   )
 }
 
+// Mini visualization helpers — decorative, not analytical
+const generateDayBars = (day) => {
+  // Decorative week distribution (not real data)
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  const idx = days.indexOf(day.slice(0, 3))
+  const heights = [3, 5, 4, 7, 5, 6, 4] // arbitrary for visual interest
+  return heights
+}
+
+const generateHourBars = (hour) => {
+  // Decorative hour distribution around the peak
+  const peak = parseInt(hour)
+  const spread = [1, 2, 3, 5, 7, 6, 4, 2, 1] // bell curve around peak
+  return spread
+}
+
+// Accent colors per insight type
+const INSIGHT_ACCENTS = {
+  "Best Day": { accent: C.cyan, glow: "rgba(34,211,238,0.16)", edge: "rgba(34,211,238,0.24)" },
+  "Best Time": { accent: C.pink, glow: "rgba(236,72,153,0.14)", edge: "rgba(236,72,153,0.22)" },
+  "Opportunity": { accent: C.gold, glow: "rgba(255,184,28,0.12)", edge: "rgba(255,184,28,0.20)" },
+  "Worth Watching": { accent: C.blue, glow: "rgba(96,165,250,0.12)", edge: "rgba(96,165,250,0.18)" },
+}
+
 // ------------------------------------------------------------
 // INSIGHT STATE CARD
 // ------------------------------------------------------------
@@ -837,45 +861,93 @@ function InsightState({
   children,
   footer,
   onImport,
+  visualData = null,
 }) {
   const isWarming = state === "warming"
+  const colors = INSIGHT_ACCENTS[title] || INSIGHT_ACCENTS["Opportunity"]
 
   return (
     <div
       style={{
-        minHeight: 118,
+        position: "relative",
+        overflow: "hidden",
+        minHeight: 140,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: 15,
-        borderRadius: 15,
+        padding: 16,
+        borderRadius: 16,
         background: isWarming
-          ? "rgba(255,255,255,0.025)"
-          : "rgba(16,185,129,0.045)",
+          ? "rgba(12,16,34,0.6)"
+          : "rgba(15,20,32,0.7)",
         border: `1px solid ${
           isWarming
-            ? "rgba(255,255,255,0.07)"
-            : "rgba(16,185,129,0.15)"
+            ? "rgba(255,255,255,0.08)"
+            : colors.edge
         }`,
+        backdropFilter: "blur(16px)",
+        boxShadow: isWarming
+          ? "0 4px 20px rgba(0,0,0,0.2)"
+          : `0 0 28px ${colors.glow}, 0 4px 16px rgba(0,0,0,0.15)`,
+        transition: "all 0.3s ease",
       }}
     >
+      {/* Top accent line */}
+      {!isWarming && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 2,
+            background: `linear-gradient(90deg,${colors.accent},${colors.accent}00)`,
+          }}
+        />
+      )}
+
       <div>
+        {/* Header: Icon + Title + Status */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
           }}
         >
-          <span style={{ fontSize: 16 }}>{icon}</span>
+          {/* Icon container with subtle glow */}
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 10,
+              background: isWarming
+                ? "rgba(255,255,255,0.04)"
+                : `${colors.accent}12`,
+              border: isWarming
+                ? "1px solid rgba(255,255,255,0.08)"
+                : `1px solid ${colors.edge}`,
+              fontSize: 18,
+              boxShadow: !isWarming
+                ? `0 0 16px ${colors.glow}`
+                : "none",
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </div>
 
           <span
             style={{
-              fontSize: 10,
-              fontWeight: 850,
+              fontSize: 11,
+              fontWeight: 900,
               color: C.muted,
               textTransform: "uppercase",
-              letterSpacing: "0.06em",
+              letterSpacing: "0.08em",
+              flex: 1,
             }}
           >
             {title}
@@ -883,33 +955,172 @@ function InsightState({
 
           <span
             style={{
-              marginLeft: "auto",
-              padding: "3px 6px",
+              padding: "4px 8px",
               borderRadius: 20,
               fontSize: 8,
               fontWeight: 900,
               color: isWarming ? C.gold : C.green,
               background: isWarming
-                ? "rgba(245,158,11,0.08)"
-                : "rgba(16,185,129,0.08)",
+                ? "rgba(245,158,11,0.10)"
+                : "rgba(16,185,129,0.10)",
+              border: isWarming
+                ? "1px solid rgba(245,158,11,0.24)"
+                : "1px solid rgba(16,185,129,0.22)",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             {isWarming ? "WARMING UP" : "READY"}
           </span>
         </div>
 
+        {/* Main insight text */}
         <div
           style={{
-            marginTop: 11,
+            marginTop: 13,
             fontSize: 13,
-            lineHeight: 1.5,
-            color: isWarming ? C.muted : C.white,
+            lineHeight: 1.55,
+            color: isWarming ? C.dim : C.white,
+            fontWeight: isWarming ? 400 : 500,
           }}
         >
           {children}
         </div>
       </div>
 
+      {/* Visualization area — decorative small bars */}
+      {!isWarming && title === "Best Day" && visualData && (
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: `1px solid rgba(255,255,255,0.06)`,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 2,
+              height: 24,
+              margin: "0 -1px",
+            }}
+          >
+            {generateDayBars(visualData).map((h, i) => (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: `${(h / 7) * 100}%`,
+                  borderRadius: "3px 3px 0 0",
+                  background: i === 3
+                    ? `linear-gradient(180deg,${colors.accent},${colors.accent}88)`
+                    : `linear-gradient(180deg,${colors.accent}44,${colors.accent}22)`,
+                  boxShadow: i === 3
+                    ? `0 0 12px ${colors.glow}`
+                    : "none",
+                  transition: "all 0.2s ease",
+                }}
+              />
+            ))}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 9,
+              color: C.dim,
+              textAlign: "center",
+            }}
+          >
+            Weekly pattern
+          </div>
+        </div>
+      )}
+
+      {!isWarming && title === "Best Time" && visualData && (
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: `1px solid rgba(255,255,255,0.06)`,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 1.5,
+              height: 20,
+              margin: "0 -1px",
+            }}
+          >
+            {generateHourBars(visualData).map((h, i) => (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: `${(h / 7) * 100}%`,
+                  borderRadius: "2px 2px 0 0",
+                  background: i === 4
+                    ? `linear-gradient(180deg,${colors.accent},${colors.accent}88)`
+                    : `linear-gradient(180deg,${colors.accent}44,${colors.accent}22)`,
+                  boxShadow: i === 4
+                    ? `0 0 10px ${colors.glow}`
+                    : "none",
+                  transition: "all 0.2s ease",
+                }}
+              />
+            ))}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 9,
+              color: C.dim,
+              textAlign: "center",
+            }}
+          >
+            Hourly distribution
+          </div>
+        </div>
+      )}
+
+      {!isWarming && title === "Opportunity" && visualData && (
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: `1px solid rgba(255,255,255,0.06)`,
+          }}
+        >
+          <button
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: `1px solid ${colors.edge}`,
+              background: `${colors.accent}14`,
+              color: colors.accent,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = `${colors.accent}24`
+              e.target.style.boxShadow = `0 0 16px ${colors.glow}`
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = `${colors.accent}14`
+              e.target.style.boxShadow = "none"
+            }}
+          >
+            View Best Times →
+          </button>
+        </div>
+      )}
+
+      {/* Footer info or import button */}
       {footer && (
         <div
           style={{
@@ -927,16 +1138,24 @@ function InsightState({
           onClick={onImport}
           style={{
             alignSelf: "flex-start",
-            marginTop: 9,
-            padding: "6px 9px",
-            borderRadius: 7,
+            marginTop: 12,
+            padding: "7px 11px",
+            borderRadius: 8,
             cursor: "pointer",
-            border:
-              "1px solid rgba(34,211,238,0.14)",
+            border: "1px solid rgba(34,211,238,0.18)",
             color: C.cyan,
-            background: "rgba(34,211,238,0.05)",
-            fontSize: 9,
+            background: "rgba(34,211,238,0.06)",
+            fontSize: 10,
             fontWeight: 800,
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.background = "rgba(34,211,238,0.12)"
+            e.target.style.boxShadow = "0 0 12px rgba(34,211,238,0.24)"
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.background = "rgba(34,211,238,0.06)"
+            e.target.style.boxShadow = "none"
           }}
         >
           Import more history →
@@ -1695,7 +1914,7 @@ export default function CreatorReport({
             display: "grid",
             gridTemplateColumns:
               "repeat(auto-fit,minmax(235px,1fr))",
-            gap: 10,
+            gap: 11,
           }}
         >
           <InsightState
@@ -1707,6 +1926,7 @@ export default function CreatorReport({
                 : "warming"
             }
             onImport={handleImport}
+            visualData={bestDayReady ? canonicalBestWindow?.localDay : null}
           >
             {bestDayReady
               ? `Your strongest day so far is ${canonicalBestWindow.localDay}.`
@@ -1722,6 +1942,7 @@ export default function CreatorReport({
                 : "warming"
             }
             onImport={handleImport}
+            visualData={bestTimeReady ? canonicalBestWindow?.localHour : null}
           >
             {bestTimeReady
               ? `Your strongest window currently centers around ${fmtHour(canonicalBestWindow.localHour)}.`
@@ -1737,6 +1958,7 @@ export default function CreatorReport({
                 : "warming"
             }
             onImport={handleImport}
+            visualData={positiveInsight ? true : null}
           >
             {positiveInsight?.text ||
               "As more sessions arrive, CamCash will surface patterns worth acting on."}
