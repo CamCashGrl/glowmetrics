@@ -625,6 +625,24 @@ html, body { overflow-x: hidden; max-width: 100vw; }
   .fan-list-row { min-width: 650px; }
 }
 
+/* ─── CREATOR REPORT — dark luxury analytics with ambient lighting ──────── */
+.creator-report-page {
+  min-height: 100%;
+  padding: 32px 42px 70px;
+  background:
+    radial-gradient(
+      ellipse 70% 60% at 5% 20%,
+      rgba(36, 139, 255, 0.16),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 65% 60% at 95% 35%,
+      rgba(255, 43, 174, 0.14),
+      transparent 65%
+    ),
+    #050713;
+}
+
 /* ─── SESSIONS — SESSION INTELLIGENCE ───────────────────────────────────── */
 .sessions-page {
   min-height: 100%;

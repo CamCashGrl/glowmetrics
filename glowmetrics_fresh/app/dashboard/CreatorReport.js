@@ -1644,7 +1644,7 @@ export default function CreatorReport({
   // ----------------------------------------------------------
 
   return (
-    <div>
+    <div className="creator-report-page">
       {/* ======================================================
           HEADER
       ====================================================== */}
@@ -1868,10 +1868,13 @@ export default function CreatorReport({
       <div
         style={{
           marginBottom: 19,
-          borderRadius: 18,
+          borderRadius: "var(--cc-card-radius)",
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          background: "var(--cc-card-bg-quiet)",
+          border: "1px solid var(--cc-card-border)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow: "var(--cc-card-drop)",
         }}
       >
         <SectionHeader
@@ -1897,10 +1900,13 @@ export default function CreatorReport({
       <div
         style={{
           marginBottom: 19,
-          borderRadius: 18,
+          borderRadius: "var(--cc-card-radius)",
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          background: "var(--cc-card-bg-quiet)",
+          border: "1px solid var(--cc-card-border)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow: "var(--cc-card-drop)",
         }}
       >
         <SectionHeader
@@ -2107,10 +2113,13 @@ export default function CreatorReport({
         style={{
           marginTop: 19,
           marginBottom: 19,
-          borderRadius: 18,
+          borderRadius: "var(--cc-card-radius)",
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          background: "var(--cc-card-bg-quiet)",
+          border: "1px solid var(--cc-card-border)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow: "var(--cc-card-drop)",
         }}
       >
         <SectionHeader
@@ -2254,10 +2263,13 @@ export default function CreatorReport({
 
       <div
         style={{
-          borderRadius: 18,
+          borderRadius: "var(--cc-card-radius)",
           padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          background: "var(--cc-card-bg-quiet)",
+          border: "1px solid var(--cc-card-border)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          boxShadow: "var(--cc-card-drop)",
         }}
       >
         <SectionHeader
