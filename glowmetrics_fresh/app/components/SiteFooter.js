@@ -11,9 +11,9 @@ function FooterLink({ href, children }) {
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'block',
-        fontSize: '13px',
-        lineHeight: '1.6',
-        marginBottom: '6px',
+        fontSize: '11px',
+        lineHeight: '1.2',
+        marginBottom: '1px',
         color: hovered ? '#a855f7' : '#64748b',
         textDecoration: 'none',
         transition: 'color 0.15s ease',
@@ -25,12 +25,12 @@ function FooterLink({ href, children }) {
 }
 
 const HEADING_STYLE = {
-  fontSize: '11px',
+  fontSize: '9px',
   fontWeight: '700',
   letterSpacing: '0.1em',
   textTransform: 'uppercase',
   color: '#a855f7',
-  marginBottom: '16px',
+  marginBottom: '3px',
   marginTop: '0',
 }
 
@@ -57,7 +57,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
   const footerStyle = {
     background: '#050810',
     borderTop: '1px solid rgba(168,85,247,0.15)',
-    padding: variant === 'simple' ? '48px 40px 96px' : '48px 40px 32px',
+    padding: variant === 'simple' ? '12px 40px 8px' : '12px 40px 8px',
     marginTop: 'auto',
     marginLeft: sidebarOffset,
     boxSizing: 'border-box',
@@ -69,11 +69,11 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
     <div
       style={{
         maxWidth: '100%',
-        margin: '40px auto 0',
-        paddingTop: '24px',
+        margin: '4px auto 0',
+        paddingTop: '4px',
         borderTop: '1px solid rgba(168,85,247,0.08)',
         textAlign: 'center',
-        fontSize: '12px',
+        fontSize: '10px',
         color: '#64748b',
       }}
     >
@@ -90,7 +90,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
             margin: '0 auto',
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '40px',
+            gap: '8px',
           }}
         >
           <div>
@@ -127,12 +127,12 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
         <div>
           <h4
             style={{
-              fontSize: '11px',
+              fontSize: '9px',
               fontWeight: '700',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: '#a855f7',
-              marginBottom: '16px',
+              marginBottom: '3px',
               marginTop: '0',
             }}
           >
@@ -158,12 +158,12 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
         <div>
           <h4
             style={{
-              fontSize: '11px',
+              fontSize: '9px',
               fontWeight: '700',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: '#a855f7',
-              marginBottom: '16px',
+              marginBottom: '3px',
               marginTop: '0',
             }}
           >
@@ -186,12 +186,12 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
         <div>
           <h4
             style={{
-              fontSize: '11px',
+              fontSize: '9px',
               fontWeight: '700',
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: '#a855f7',
-              marginBottom: '16px',
+              marginBottom: '3px',
               marginTop: '0',
             }}
           >
