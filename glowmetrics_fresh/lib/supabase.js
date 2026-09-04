@@ -5,14 +5,27 @@ import { createBrowserClient } from '@supabase/ssr'
 // createServerClient (lib/supabase-server.js) — localStorage-only sessions
 // are invisible to /api/stripe/checkout, /api/stripe/portal, and /api/track,
 // which all read auth from cookies.
-export const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+// Only initialize in browser to prevent build-time failures when env vars are unavailable.
+let _supabase = null
+
+export const supabase =
+  typeof window !== 'undefined' && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ? createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+    : {
+        auth: {
+          getUser: async () => ({ data: null }),
+          signOut: async () => {},
+          onAuthStateChange: () => () => {},
+        },
+        from: () => ({ select: () => ({}) }),
+      }
 
 // Global handler — catches the refresh_token_not_found 400 loop
 // that was hammering auth logs and locking out returning users
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && supabase?.auth?.onAuthStateChange) {
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') return
     if (!session && event !== 'INITIAL_SESSION') {

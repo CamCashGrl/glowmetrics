@@ -1,16 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { track } from '../../../lib/track'
 
+export const dynamic = 'force-dynamic'
+
 export default function ChaturbateOnboardingPage() {
   const router = useRouter()
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  )
+  const supabaseRef = useRef(null)
+  const [supabase, setSupabase] = useState(null)
 
   const [step, setStep] = useState(1) // 1 = Stats, 2 = Tips (CSV), 3 = Done
   const [broadcasterType, setBroadcasterType] = useState('female')
@@ -24,15 +24,25 @@ export default function ChaturbateOnboardingPage() {
   const [user, setUser] = useState(null)
 
   useEffect(() => {
+    // Initialize Supabase only in browser
+    if (!supabaseRef.current) {
+      supabaseRef.current = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+    }
+    const sb = supabaseRef.current
+    setSupabase(sb)
+
     // onAuthStateChange fires first if there's a session in the URL hash (magic link / PKCE)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(session.user)
         setAuthLoading(false)
       }
     })
     // Fallback: read existing cookie-based session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    sb.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) setUser(session.user)
       setAuthLoading(false)
     })
@@ -69,6 +79,7 @@ export default function ChaturbateOnboardingPage() {
 
   async function handleConnect() {
     if (!validateStep1()) return
+    if (!supabase) return
     setLoading(true)
     try {
       const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
