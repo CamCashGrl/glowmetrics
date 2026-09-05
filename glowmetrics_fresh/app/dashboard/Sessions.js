@@ -251,6 +251,93 @@ export default function Sessions({
         </div>
       </div>
 
+      {/* ── MONTHLY EARNINGS CHART ── */}
+      {monthlyData && monthlyData.length > 0 && (() => {
+        const maxBarUSD = Math.max(...monthlyData.map(m => m.usd || 0), 1)
+        const C = { white: "#F1F5F9", muted: "#94A3B8", indigo: "#7C5CFF", cyan: "#22D3EE", green: "#10B981", gold: "#F59E0B", orange: "#FB923C" }
+        const fmtMonth = (key) => { const [y, m] = key.split('-'); const mo = new Date(y, parseInt(m) - 1, 1).toLocaleDateString('en-US', { month: 'short' }); return mo + " '" + String(y).slice(-2) }
+        const [hoveredMonth, setHoveredMonth] = useState(null)
+        const hoveredData = hoveredMonth ? monthlyData.find(m => m.month === hoveredMonth) : null
+
+        return (
+          <div className="glass-panel" style={{ borderRadius: 18, padding: 24, marginBottom: 24 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 4 }}>📊 Monthly Earnings</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>{monthlyData.length} months of tracked data</div>
+
+            <div style={{ overflowX: "auto", position: "relative" }}>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, minWidth: Math.max(monthlyData.length * 50, 400), height: 200, paddingBottom: 24, position: "relative" }}>
+                {/* Grid lines */}
+                {[0.25, 0.5, 0.75, 1].map(pct => (
+                  <div key={pct} style={{ position: "absolute", left: 0, right: 0, bottom: pct * 180 + 24 + "px", borderTop: "1px solid rgba(255,255,255,0.05)", pointerEvents: "none" }}>
+                    <span style={{ fontSize: 9, color: C.muted, position: "absolute", left: 0, top: -9 }}>${Math.round(maxBarUSD * pct)}</span>
+                  </div>
+                ))}
+
+                {/* Bars */}
+                {monthlyData.map((m, i) => {
+                  const h = Math.max(4, Math.round((m.usd / maxBarUSD) * 160))
+                  const isHovered = m.month === hoveredMonth
+                  return (
+                    <div
+                      key={m.month}
+                      onMouseEnter={() => setHoveredMonth(m.month)}
+                      onMouseLeave={() => setHoveredMonth(null)}
+                      style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer" }}
+                    >
+                      <div style={{ fontSize: 9, color: C.muted, fontWeight: 600, opacity: m.usd > maxBarUSD * 0.1 ? 1 : 0 }}>${m.usd >= 100 ? Math.round(m.usd) : m.usd.toFixed(0)}</div>
+                      <div style={{
+                        width: "100%", height: h, borderRadius: "4px 4px 0 0",
+                        background: `linear-gradient(180deg,${C.cyan},${C.indigo})`,
+                        boxShadow: isHovered ? `0 0 16px ${C.cyan}60` : "none",
+                        transition: "all 0.2s ease",
+                        transform: isHovered ? "scaleY(1.1)" : "scaleY(1)",
+                        transformOrigin: "bottom"
+                      }} />
+                      <div style={{ fontSize: 9, color: isHovered ? C.cyan : C.muted, fontWeight: isHovered ? 700 : 400, whiteSpace: "nowrap" }}>{fmtMonth(m.month)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Hover tooltip */}
+            {hoveredData && (
+              <div style={{ marginTop: 20, padding: 16, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.cyan}40` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 12 }}>
+                  {fmtMonth(hoveredData.month)} Breakdown
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Total Earnings</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>${hoveredData.usd.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Tips</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>{hoveredData.tips.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Unique Fans</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{hoveredData.fans.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Sessions</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{hoveredData.sessions}</div>
+                  </div>
+                  {hoveredData.growthPct !== null && (
+                    <div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Growth vs Last Month</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: hoveredData.growthPct >= 0 ? C.green : C.orange }}>
+                        {hoveredData.growthPct >= 0 ? "+" : ""}{hoveredData.growthPct}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       <div className="session-filters">
         <div className="session-pill-group">{TYPES.map(t => <button key={t.id} className={`session-pill${typeFilter === t.id ? " active" : ""}`} onClick={() => { setTypeFilter(t.id); setPage(1) }}>{t.label}</button>)}</div>
         <div className="session-pill-group">{RANGES.map(r => <button key={r.id} className={`session-pill${range === r.id ? " active" : ""}`} onClick={() => setRange(r.id)}>{r.label}</button>)}</div>

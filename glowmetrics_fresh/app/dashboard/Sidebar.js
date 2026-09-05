@@ -33,7 +33,6 @@ const NAV = [
     group: "ANALYTICS",
     items: [
       { id: "platforms", icon: "🎯", label: "Platforms" },
-      { id: "monthly",   icon: "📈", label: "Monthly" },
     ]
   },
   {
