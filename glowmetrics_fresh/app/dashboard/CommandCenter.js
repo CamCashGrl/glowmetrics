@@ -56,17 +56,30 @@ const C = {
   muted:   "#475569",
 }
 
-// Same glass treatment the rest of the dashboard uses.
+// Glass cards: gradient border with glow effect (like Go Live hero card)
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
-  border: "1px solid rgba(255,255,255,0.08)",
   backdropFilter: "blur(20px)",
+  border: "1px solid rgba(34,211,238,0.28)",
+  borderRadius: 16,
   boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+  position: "relative",
+  overflow: "hidden",
+}
+
+// Dark cards: dark background with cyan-pink gradient top border (like Getting Started)
+const darkCard = {
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(12,16,34,0.7)",
+  position: "relative",
+  overflow: "hidden",
 }
 
 // The CamCash brand gradient (branding spec): cyan -> purple -> pink.
 const CTA_GRADIENT  = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
+const TOP_GRADIENT  = "linear-gradient(90deg,#22D3EE,#a855f7,#EC4899)"
 
 const fmtUsd  = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtUsd0 = (n) => {
@@ -99,6 +112,16 @@ const TIER_COPY = {
 }
 
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
+
+// Dark card wrapper with gradient top border (for analytics sections like CreatorReport)
+function DarkCard({ children, style = {} }) {
+  return (
+    <div style={{ ...darkCard, ...style }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: TOP_GRADIENT, opacity: 0.85 }} />
+      {children}
+    </div>
+  )
+}
 
 const label = {
   fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
@@ -679,6 +702,62 @@ export default function CommandCenter({
       {/* Chart moved into the hero (above). The standalone "Why this is your
           best move" card was removed: it duplicated the same distribution in a
           second card while the hero sat half-empty. */}
+
+      {/* ── WHAT'S WORKING ────────────────────────────────────────── */}
+      <DarkCard style={{ padding: 22, marginBottom: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 18 }}>📊 What's Working</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Total Earnings</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtUsd(totalUSD)}</div>
+            {momentum && momentum.label !== "No data" && (
+              <div style={{ fontSize: 11, color: momentum.pct >= 0 ? C.green : C.gold, marginTop: 4 }}>
+                {momentum.pct >= 0 ? "↑" : "↓"} {Math.abs(Math.round(momentum.pct))}% vs last month
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Per Hour Average</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtUsd(hourlyRate)}</div>
+            <div style={{ fontSize: 11, color: C.cyan, marginTop: 4 }}>Based on {sessionCount} sessions</div>
+          </div>
+
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Best Streaming Day</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{bestWindow?.localDay || "Warming up"}</div>
+            {bestWindow?.sessionCount && (
+              <div style={{ fontSize: 11, color: C.cyan, marginTop: 4 }}>{bestWindow.sessionCount} sessions</div>
+            )}
+          </div>
+
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Best Streaming Time</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{bestWindow ? fmtHour(bestWindow.localHour) : "Warming up"}</div>
+            {bestWindow?.medianUsdPerHour && (
+              <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</div>
+            )}
+          </div>
+        </div>
+      </DarkCard>
+
+      {/* ── PLATFORM BREAKDOWN ────────────────────────────────────────── */}
+      {platforms && platforms.length > 0 && (
+        <DarkCard style={{ padding: 22, marginBottom: 18 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 18 }}>🌐 Your Top Earners</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            {platforms.slice(0, 4).map((p, i) => (
+              <div key={i} style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>
+                  {p.platform || `Platform ${i + 1}`}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>{fmtUsd(p.usdPerHour || 0)}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{p.sessions || 0} sessions</div>
+              </div>
+            ))}
+          </div>
+        </DarkCard>
+      )}
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>

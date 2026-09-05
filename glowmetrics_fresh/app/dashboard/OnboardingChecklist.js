@@ -25,7 +25,6 @@ export default function OnboardingChecklist({ tips = [], isPro = false, visitedT
   const items = [
     { id: 'account', label: 'Create your account', done: true, tab: null },
     { id: 'upload',  label: 'Import your first tips', done: tips.length > 0, tab: 'upload' },
-    { id: 'report',  label: 'Check your Creator Report', done: visitedTabs.includes('report'), tab: 'report' },
     { id: 'whales',  label: 'See your Top Fans', done: visitedTabs.includes('whales'), tab: 'whales' },
     { id: 'live',    label: 'Try Live Mode', done: visitedTabs.includes('live'), tab: 'live' },
   ]
