@@ -122,13 +122,13 @@ export async function POST(req) {
   // Computed once, shared by the csv_uploads audit log and the JSON response
   // (the response uses these so the importer UI can show a real summary —
   // rows/earnings/platform/date range — instead of just a row count).
-  // Tip-only, same as csv_uploads' columns (which log the tip import, not
-  // paid sessions) and the response fields the importer UI already reads.
-  const summaryDates = tipRows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
+  // Must include BOTH tipRows AND paidSessionRows for complete revenue calculation.
+  const allRows = tipRows.concat(paidSessionRows)
+  const summaryDates = allRows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
   const summaryDateFrom = summaryDates.length ? new Date(Math.min(...summaryDates)) : null
   const summaryDateTo   = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
-  const summaryTotalUsd = parseFloat(tipRows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
-  const summaryTotalTokens = tipRows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+  const summaryTotalUsd = parseFloat(allRows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
+  const summaryTotalTokens = allRows.reduce((sum, r) => sum + (r.tokens || 0), 0)
 
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
