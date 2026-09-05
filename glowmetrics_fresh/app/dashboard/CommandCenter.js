@@ -2,6 +2,17 @@
 import { useEffect, useMemo, useState } from "react"
 import { toLocalDow } from "../../lib/analytics"
 
+const isWindowPassed = (windowHour) => {
+  const now = new Date()
+  const currentHour = now.getHours()
+  const windowEndHour = (windowHour + 2) % 24
+  if (windowHour < windowEndHour) {
+    return currentHour >= windowEndHour
+  } else {
+    return currentHour >= windowEndHour && currentHour < windowHour
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
 //
@@ -92,6 +103,13 @@ const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
 const label = {
   fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
   textTransform: "uppercase", color: C.muted,
+}
+
+if (typeof window !== 'undefined' && !document.getElementById('cc-spin-anim')) {
+  const style = document.createElement('style')
+  style.id = 'cc-spin-anim'
+  style.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`
+  document.head.appendChild(style)
 }
 
 function BrandButton({ children, onClick, style }) {
@@ -410,6 +428,17 @@ export default function CommandCenter({
   const oppHigh = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS * 1.5 : null
 
   const hasWindow = !!bestWindow
+  const windowPassed = hasWindow && isWindowPassed(bestWindow.localHour)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  useEffect(() => {
+    if (windowPassed && !isRefreshing) {
+      setIsRefreshing(true)
+      const timer = setTimeout(() => setIsRefreshing(false), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [windowPassed, isRefreshing])
+
   const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
 
   // Pro creators go straight to the Stream Planner. Free creators hit the
@@ -451,13 +480,19 @@ export default function CommandCenter({
 
             {hasWindow ? (
               <>
+                {isRefreshing && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>🔄</span>
+                    <span style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Refreshing recommendations...</span>
+                  </div>
+                )}
                 <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.15 }}>
-                  Go live {fmtWindow(bestWindow.localHour)}
-                  {bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
+                  {isRefreshing ? "Finding next best window" : `Go live ${fmtWindow(bestWindow.localHour)}`}
+                  {!isRefreshing && bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "4px 10px", borderRadius: 20 }}>
-                    {TIER_COPY[bestWindow.tier] || "Pattern"}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isRefreshing ? C.muted : C.gold, background: isRefreshing ? "rgba(255,255,255,0.05)" : "rgba(245,158,11,0.12)", border: `1px solid ${isRefreshing ? "rgba(255,255,255,0.10)" : "rgba(245,158,11,0.28)"}`, padding: "4px 10px", borderRadius: 20 }}>
+                    {isRefreshing ? "Analyzing..." : (TIER_COPY[bestWindow.tier] || "Pattern")}
                   </span>
                   <span style={{ fontSize: 11, color: C.text }}>
                     based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} sessions</strong>
