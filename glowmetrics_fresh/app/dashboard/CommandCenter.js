@@ -113,6 +113,16 @@ const TIER_COPY = {
 
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
 
+// Dark card wrapper with gradient top border (for analytics sections like CreatorReport)
+function DarkCard({ children, style = {} }) {
+  return (
+    <div style={{ ...darkCard, ...style }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: TOP_GRADIENT, opacity: 0.85 }} />
+      {children}
+    </div>
+  )
+}
+
 const label = {
   fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
   textTransform: "uppercase", color: C.muted,
