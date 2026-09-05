@@ -451,78 +451,34 @@ export default function CommandCenter({
 
             {hasWindow ? (
               <>
-                <div style={{ fontSize: 38, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.12 }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.15 }}>
                   Go live {fmtWindow(bestWindow.localHour)}
                   {bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
                 </div>
-                {/* Confidence + sample sit directly under the recommendation
-                    instead of being buried in a chip further down the page. */}
-                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "5px 12px", borderRadius: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "4px 10px", borderRadius: 20 }}>
                     {TIER_COPY[bestWindow.tier] || "Pattern"}
                   </span>
-                  <span style={{ fontSize: 13, color: C.text }}>
-                    based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} qualifying session{bestWindow.sessionCount === 1 ? "" : "s"}</strong> in this window
+                  <span style={{ fontSize: 11, color: C.text }}>
+                    based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} sessions</strong>
                   </span>
-                </div>
-                <div style={{ fontSize: 16, color: C.text, marginTop: 16, lineHeight: 1.62, maxWidth: 500 }}>
-                  {bestWindow.localDay}s are your highest-earning window. You average{" "}
-                  <strong style={{ color: C.cyan }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</strong> here
-                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical hour</>}.
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
-                  {earlySignal ? "A pattern is starting to form" : "Not enough history for a reliable window yet"}
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
+                  {earlySignal ? "A pattern is forming" : "Need more history"}
                 </div>
-                <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 480 }}>
+                <div style={{ fontSize: 12, color: C.text, marginTop: 6, lineHeight: 1.5, maxWidth: 400 }}>
                   {earlySignal
-                    ? <>{earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is your strongest so far, but only {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} back it up. A few more streams will confirm or replace it.</>
-                    : <>CamCash needs a handful of qualifying sessions before it can tell a real earning window apart from one good night. Keep importing and this fills in.</>}
+                    ? <>{earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is strongest, {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} so far.</>
+                    : <>Keep importing data for reliable recommendations.</>}
                 </div>
               </>
             )}
 
-            <div style={{ marginTop: 26 }}>
-              <BrandButton onClick={handlePlanStreamClick} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
-            </div>
-
-            {/* ── YOUR BEST WINDOW TODAY ─────────────────────────────
-                Compact, deliberately smaller than the hero CTA above it —
-                answers "if I go live TODAY, when's historically best?"
-                which the hero's headline (ranked across ALL days) doesn't. */}
-            <div style={{
-              marginTop: 16, padding: "13px 16px", borderRadius: 12, maxWidth: 380,
-              background: bestWindowToday ? "rgba(34,211,238,0.06)" : "rgba(255,255,255,0.03)",
-              border: `1px solid ${bestWindowToday ? "rgba(34,211,238,0.22)" : C.border}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: bestWindowToday ? C.cyan : C.muted }}>✨</span>
-                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: bestWindowToday ? C.cyan : C.muted }}>
-                  Your best window today
-                </span>
-              </div>
-              {bestWindowToday ? (
-                <>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: "-0.01em" }}>{fmtWindow(bestWindowToday.localHour)}</span>
-                    <button onClick={handlePlanStreamClick} style={{
-                      background: "transparent", border: "none", color: C.cyan, fontSize: 12, fontWeight: 700,
-                      cursor: "pointer", padding: 0,
-                    }}>Go Live →</button>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text, marginTop: 5, lineHeight: 1.5 }}>
-                    {todayLiftPct != null && todayLiftPct > 0
-                      ? <>You typically earn <strong style={{ color: C.cyan }}>{todayLiftPct}% more</strong> per hour during this window.</>
-                      : <>Based on {bestWindowToday.sessionCount} qualifying session{bestWindowToday.sessionCount === 1 ? "" : "s"} on {todayLocalDay}s.</>}
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-                  Not enough {todayLocalDay} history yet for a reliable recommendation — keep streaming and this fills in.
-                </div>
-              )}
+            <div style={{ marginTop: 12 }}>
+              <BrandButton onClick={handlePlanStreamClick} style={{ padding: "12px 24px", fontSize: 14, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
             </div>
           </div>
 
