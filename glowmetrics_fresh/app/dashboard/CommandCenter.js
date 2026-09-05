@@ -56,17 +56,30 @@ const C = {
   muted:   "#475569",
 }
 
-// Same glass treatment the rest of the dashboard uses.
+// Glass cards: gradient border with glow effect (like Go Live hero card)
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
-  border: "1px solid rgba(255,255,255,0.08)",
   backdropFilter: "blur(20px)",
+  border: "1px solid rgba(34,211,238,0.28)",
+  borderRadius: 16,
   boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+  position: "relative",
+  overflow: "hidden",
+}
+
+// Dark cards: dark background with cyan-pink gradient top border (like Getting Started)
+const darkCard = {
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(12,16,34,0.7)",
+  position: "relative",
+  overflow: "hidden",
 }
 
 // The CamCash brand gradient (branding spec): cyan -> purple -> pink.
 const CTA_GRADIENT  = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
+const TOP_GRADIENT  = "linear-gradient(90deg,#22D3EE,#a855f7,#EC4899)"
 
 const fmtUsd  = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtUsd0 = (n) => {
