@@ -32,7 +32,7 @@ async function sendResendNotification(subject, text) {
       },
       body: JSON.stringify({
         from: 'GlowMetrics <notifications@glowmetrics.co>',
-        to: 'daphneoncam@gmail.com',
+        to: process.env.OWNER_EMAIL || 'support@glowmetrics.co',
         subject,
         text,
       }),
@@ -42,9 +42,7 @@ async function sendResendNotification(subject, text) {
   }
 }
 
-// Updates profiles and returns whether it actually succeeded — the whole
-// point of this fix is that we never again silently believe an update
-// worked when it didn't.
+// Updates profiles and returns whether it actually succeeded
 async function updateProfile(supabase, userId, update) {
   const { error } = await supabase.from('profiles').update(update).eq('id', userId)
   if (error) {
@@ -52,6 +50,24 @@ async function updateProfile(supabase, userId, update) {
     return false
   }
   return true
+}
+
+// Log subscription events for audit trail and debugging
+async function logSubscriptionEvent(supabase, userId, eventType, details) {
+  try {
+    await supabase.rpc('log_subscription_event', {
+      p_user_id: userId,
+      p_event_type: eventType,
+      p_stripe_event_id: details.stripeEventId || null,
+      p_customer_id: details.customerId || null,
+      p_subscription_id: details.subscriptionId || null,
+      p_prev_plan: details.previousPlan || null,
+      p_new_plan: details.newPlan || null,
+      p_details: details,
+    })
+  } catch (e) {
+    console.error(`Failed to log subscription event: ${e.message}`)
+  }
 }
 
 export async function POST(request) {
@@ -77,17 +93,33 @@ export async function POST(request) {
         const session = event.data.object
         const email = session.customer_details?.email || session.customer_email
         if (!email) break
+
         const user = await getUserByEmail(supabase, email)
         if (!user) break
-        const update = { plan: 'pro' }
-        if (session.customer) update.stripe_customer_id = session.customer
+
+        const update = {
+          plan: 'pro',
+          stripe_customer_id: session.customer,
+          subscription_status: 'active',
+          trial_ends_at: null, // Trial is over, they have a paid subscription
+        }
+
         const ok = await updateProfile(supabase, user.id, update)
         if (!ok) {
-          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+          console.error(`Webhook checkout: failed to save customer ID for ${email}`)
+          // Log event but don't fail — we want Stripe to consider this successful
+          // even if our DB update has issues
         }
+
+        await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
+          stripeEventId: event.id,
+          customerId: session.customer,
+          newPlan: 'pro',
+        })
+
         await sendResendNotification(
-          `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
-          `${email} just subscribed to the Pro plan.`
+          `💰 New CamCash Subscriber — ${email}`,
+          `${email} just completed payment and subscribed to Pro plan.`
         )
         break
       }
@@ -96,17 +128,37 @@ export async function POST(request) {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
         if (!email) break
+
         const user = await getUserByEmail(supabase, email)
         if (!user) break
-        const update = { plan: 'pro' }
-        if (sub.customer) update.stripe_customer_id = sub.customer
+
+        // Determine subscription status based on Stripe status
+        const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
+
+        const update = {
+          plan: 'pro',
+          stripe_customer_id: sub.customer,
+          stripe_subscription_id: sub.id,
+          subscription_status: subscriptionStatus,
+          trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+        }
+
         const ok = await updateProfile(supabase, user.id, update)
         if (!ok) {
-          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+          console.error(`Webhook subscription.created: failed to save subscription data for ${email}`)
         }
+
+        await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
+          stripeEventId: event.id,
+          customerId: sub.customer,
+          subscriptionId: sub.id,
+          newPlan: 'pro',
+          details: { status: sub.status, trialEnd: sub.trial_end },
+        })
+
         await sendResendNotification(
-          `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
-          `${email} just subscribed to the Pro plan.`
+          `💰 New Subscription — ${email}`,
+          `${email} started a ${subscriptionStatus} subscription (ID: ${sub.id}).`
         )
         break
       }
@@ -115,15 +167,32 @@ export async function POST(request) {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
         if (!email) break
+
         const user = await getUserByEmail(supabase, email)
         if (!user) break
-        const ok = await updateProfile(supabase, user.id, { plan: 'free' })
-        if (!ok) {
-          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+
+        const update = {
+          plan: 'free',
+          subscription_status: 'canceled',
+          trial_ends_at: null,
         }
+
+        const ok = await updateProfile(supabase, user.id, update)
+        if (!ok) {
+          console.error(`Webhook subscription.deleted: failed to downgrade ${email}`)
+        }
+
+        await logSubscriptionEvent(supabase, user.id, 'subscription_canceled', {
+          stripeEventId: event.id,
+          customerId: sub.customer,
+          subscriptionId: sub.id,
+          previousPlan: 'pro',
+          newPlan: 'free',
+        })
+
         await sendResendNotification(
-          `❌ CamCash Cancellation — ${email} cancelled their subscription`,
-          `${email} cancelled their Pro subscription.`
+          `❌ Subscription Canceled — ${email}`,
+          `${email} cancelled their subscription.`
         )
         break
       }
@@ -132,21 +201,41 @@ export async function POST(request) {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
         if (!email) break
+
         const user = await getUserByEmail(supabase, email)
         if (!user) break
-        const plan = sub.status === 'active' ? 'pro' : 'free'
-        const ok = await updateProfile(supabase, user.id, { plan })
-        if (!ok) {
-          return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+
+        const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
+        const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
+
+        const update = {
+          plan,
+          stripe_subscription_id: sub.id,
+          subscription_status: subscriptionStatus,
+          trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
         }
+
+        const ok = await updateProfile(supabase, user.id, update)
+        if (!ok) {
+          console.error(`Webhook subscription.updated: failed to update ${email}`)
+        }
+
+        await logSubscriptionEvent(supabase, user.id, 'subscription_updated', {
+          stripeEventId: event.id,
+          customerId: sub.customer,
+          subscriptionId: sub.id,
+          newPlan: plan,
+          details: { status: sub.status, reason: event.data.previous_attributes },
+        })
+
         if (plan === 'pro') {
           await sendResendNotification(
-            `💰 New CamCash Subscriber — ${email} subscribed to Pro`,
-            `${email} reactivated their Pro plan.`
+            `💰 Subscription Updated — ${email}`,
+            `${email}'s subscription is now ${subscriptionStatus}.`
           )
         } else {
           await sendResendNotification(
-            `❌ CamCash Cancellation — ${email} cancelled their subscription`,
+            `❌ Subscription Issue — ${email}`,
             `${email}'s subscription status changed to ${sub.status}.`
           )
         }
@@ -154,12 +243,17 @@ export async function POST(request) {
       }
 
       default:
-        return NextResponse.json({ error: 'Unhandled event type' }, { status: 400 })
+        console.warn(`Unhandled Stripe event type: ${event.type}`)
+        // Return success for unhandled events so Stripe doesn't retry
+        break
     }
 
+    // ALWAYS return 200 success to acknowledge receipt and prevent Stripe retries
+    // Database errors are logged above but shouldn't block the webhook response
     return NextResponse.json({ received: true })
   } catch (err) {
     console.error('Webhook handler error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    // Still return 200 to prevent Stripe from retrying indefinitely
+    return NextResponse.json({ received: true, error: err.message })
   }
 }

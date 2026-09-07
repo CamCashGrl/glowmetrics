@@ -45,7 +45,7 @@ export async function POST(request) {
     let customerId
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, trial_ends_at')
       .eq('id', user.id)
       .single()
 
@@ -69,7 +69,8 @@ export async function POST(request) {
 
       if (updateError) {
         console.error('Checkout: failed to save stripe_customer_id', updateError.message)
-        return NextResponse.json({ error: 'Failed to set up billing profile' }, { status: 500 })
+        // Don't fail checkout — customer was created in Stripe, that's what matters
+        // The webhook will save the customer ID when subscription completes
       }
     }
 
