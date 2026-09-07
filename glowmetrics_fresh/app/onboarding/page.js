@@ -336,36 +336,6 @@ function ProUpsellModal({platform,onSkip}){
   )
 }
 
-// ── Live Mode Demo ─────────────────────────────────────────────
-function LiveModeDemo({onInstall,onSkip}){
-  const PROMPTS=[{icon:'🐋',title:'Greet Returning Fan',body:'whaleking99 just entered. He tipped $180 last stream. Say hi by name.',impact:'+$40 avg when acknowledged'},{icon:'💡',title:'Mention Your Tip Menu',body:'22 active viewers, no tip in 7 min. Mention your toy or wheel menu.',impact:'+34% tip rate after prompt'},{icon:'🎯',title:'Refresh the Room Goal',body:'Tips slowed down. Try a smaller, faster goal to restart momentum.',impact:'Recovers dead zones in ~4 min'}]
-  const[idx,setIdx]=useState(0)
-  useEffect(()=>{const t=setInterval(()=>setIdx(i=>(i+1)%PROMPTS.length),3500);return()=>clearInterval(t)},[])
-  const cur=PROMPTS[idx]
-  return(
-    <div style={{animation:'fadeUp 0.3s ease both'}}>
-      <div style={{textAlign:'center',marginBottom:22}}>
-        <div style={EYE}>Live Mode Preview</div>
-        <h1 style={{fontSize:20,fontWeight:900,color:'#fff',letterSpacing:'-0.02em',marginBottom:6}}>CamCash during your stream</h1>
-        <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.6}}>While you stream, CamCash watches your room and tells you exactly what to do to earn more.</p>
-      </div>
-      <div style={{background:'rgba(4,6,18,0.9)',border:'1px solid rgba(33,230,243,0.2)',borderRadius:16,padding:16,marginBottom:16,position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#21E6F3,#6C5CFF,#FF2FAE,transparent)',animation:'shimmer 2.5s linear infinite'}}/>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:12}}>
-          {[{label:'Live Score',value:'82/100',color:'#21E6F3'},{label:'Earnings/hr',value:'$124/hr',color:'#4ade80'},{label:'Prompts',value:'5/7',color:'#a78bfa'}].map(s=>(<div key={s.label} style={{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'8px 10px'}}><div style={{fontSize:9,color:'rgba(148,163,184,0.5)',marginBottom:3,textTransform:'uppercase',letterSpacing:'0.06em'}}>{s.label}</div><div style={{fontSize:14,fontWeight:800,color:s.color}}>{s.value}</div></div>))}
-        </div>
-        <div style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(33,230,243,0.25)',borderRadius:12,padding:14}}>
-          <div style={{display:'flex',gap:10,marginBottom:8}}><div style={{width:36,height:36,borderRadius:10,background:'rgba(33,230,243,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{cur.icon}</div><div><div style={{fontSize:9,fontWeight:700,color:'#21E6F3',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>Coach Prompt</div><div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:2}}>{cur.title}</div><div style={{fontSize:11,color:'rgba(148,163,184,0.8)',lineHeight:1.5}}>{cur.body}</div></div></div>
-          <div style={{fontSize:10,color:'rgba(74,222,128,0.8)',marginBottom:8}}>📈 {cur.impact}</div>
-          <div style={{display:'flex',gap:6}}>{['✓ Done','⏸ Snooze','✕ Ignore'].map((l,i)=>(<button key={l} style={{flex:i===0?2:1,padding:'6px',borderRadius:7,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,background:i===0?'linear-gradient(90deg,#21E6F3,#6C5CFF)':'rgba(255,255,255,0.06)',color:i===0?'#04101b':'rgba(148,163,184,0.7)'}}>{l}</button>))}</div>
-        </div>
-        <div style={{display:'flex',justifyContent:'center',gap:5,marginTop:10}}>{PROMPTS.map((_,i)=>(<div key={i} onClick={()=>setIdx(i)} style={{width:i===idx?16:5,height:5,borderRadius:3,background:i===idx?'#21E6F3':'rgba(255,255,255,0.15)',transition:'all 0.3s',cursor:'pointer'}}/>))}</div>
-      </div>
-      <OBBtn onClick={onInstall} style={{marginBottom:10}}>Install Live Tracker — it's free →</OBBtn>
-      <div style={{textAlign:'center'}}><button onClick={onSkip} style={{background:'none',border:'none',fontSize:12,color:'rgba(33,230,243,0.7)',cursor:'pointer'}}>Skip — go to dashboard first</button></div>
-    </div>
-  )
-}
 
 // ── Feedback bubble ────────────────────────────────────────────
 function FeedbackBubble(){
@@ -549,8 +519,8 @@ export default function OnboardingPage(){
   const csvRef=useRef()
 
   const platform=PLATFORMS[platformId]
-  const stepNum={platform:1,username:1,paste:2,csv:2,loading:3,live:3,step4:3,done:3}[step]||1
-  const showProgress=!['loading','live'].includes(step)
+  const stepNum={platform:1,username:1,paste:2,csv:2,loading:3,trial:3,step4:3,done:3}[step]||1
+  const showProgress=!['loading'].includes(step)
 
   useEffect(()=>{
     ;(async()=>{
@@ -991,14 +961,6 @@ export default function OnboardingPage(){
               </div>
               <div style={{textAlign:'center',marginTop:10,fontSize:10,color:'rgba(100,116,139,0.45)'}}>⚡ Almost there! Crunching the good stuff…</div>
             </div>
-          )}
-
-          {/* ══ LIVE MODE ══ */}
-          {step==='live'&&(
-            <LiveModeDemo
-              onInstall={()=>{window.open('https://www.camcashgrl.com/extension','_blank');setStep('trial')}}
-              onSkip={()=>setStep('trial')}
-            />
           )}
 
           {/* ══ TRIAL UPSELL ══ */}
