@@ -728,7 +728,7 @@ export default function OnboardingPage(){
       setImportResult({inserted,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'csv'})
-      if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('live')}
+      if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('trial')}
       else setStep('step4')
     }catch(e){
       setCsvError(e.message||'Upload failed')
