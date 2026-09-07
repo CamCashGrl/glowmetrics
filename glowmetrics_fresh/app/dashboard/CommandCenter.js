@@ -669,61 +669,6 @@ export default function CommandCenter({
           best move" card was removed: it duplicated the same distribution in a
           second card while the hero sat half-empty. */}
 
-      {/* ── WHAT'S WORKING ────────────────────────────────────────── */}
-      <DarkCard style={{ padding: 22, marginBottom: 18 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 18 }}>📊 What's Working</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Total Earnings</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtUsd(totalUSD)}</div>
-            {momentum && momentum.label !== "No data" && (
-              <div style={{ fontSize: 11, color: momentum.pct >= 0 ? C.green : C.gold, marginTop: 4 }}>
-                {momentum.pct >= 0 ? "↑" : "↓"} {Math.abs(Math.round(momentum.pct))}% vs last month
-              </div>
-            )}
-          </div>
-
-          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Per Hour Average</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtUsd(hourlyRate)}</div>
-            <div style={{ fontSize: 11, color: C.cyan, marginTop: 4 }}>Based on {sessionCount} sessions</div>
-          </div>
-
-          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Best Streaming Day</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{bestWindow?.localDay || "Warming up"}</div>
-            {bestWindow?.sessionCount && (
-              <div style={{ fontSize: 11, color: C.cyan, marginTop: 4 }}>{bestWindow.sessionCount} sessions</div>
-            )}
-          </div>
-
-          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Best Streaming Time</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{bestWindow ? fmtHour(bestWindow.localHour) : "Warming up"}</div>
-            {bestWindow?.medianUsdPerHour && (
-              <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</div>
-            )}
-          </div>
-        </div>
-      </DarkCard>
-
-      {/* ── PLATFORM BREAKDOWN ────────────────────────────────────────── */}
-      {platforms && platforms.length > 0 && (
-        <DarkCard style={{ padding: 22, marginBottom: 18 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 18 }}>🌐 Your Top Earners</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-            {platforms.slice(0, 4).map((p, i) => (
-              <div key={i} style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
-                <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>
-                  {p.platform || `Platform ${i + 1}`}
-                </div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>{fmtUsd(p.usdPerHour || 0)}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{p.sessions || 0} sessions</div>
-              </div>
-            ))}
-          </div>
-        </DarkCard>
-      )}
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
