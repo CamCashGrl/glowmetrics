@@ -3,35 +3,31 @@
 import { useEffect } from "react"
 import { track as gtmTrack } from "../../lib/track"
 import { PLATFORM_TOKEN_RATES } from "../../lib/constants"
+import {
+  COLORS,
+  TYPOGRAPHY,
+  SPACING,
+  SHADOWS,
+  BORDERS,
+  RADIUS,
+  TRANSITIONS,
+  BACKDROP,
+} from "../../lib/designTokens"
 
 /*
-  CREATOR REPORT
-  ------------------------------------------------------------
-  Progressive report experience:
+  CREATOR REPORT — LUXURY PROFESSIONAL REDESIGN
+  ============================================================
+  Progressive report experience with enhanced visual design.
 
-  EARLY DATA
-  -> report is warming up
-  -> real earnings/platform information still visible
-  -> tells creator exactly what more data unlocks
+  EARLY DATA → report warming up, real earnings visible
+  DEVELOPING DATA → more insights available, selective Pro previews
+  RICH DATA → advanced opportunities visible, deeper action layer
 
-  DEVELOPING DATA
-  -> more insights become available
-  -> contextual Pro previews appear after useful discoveries
-
-  RICH DATA
-  -> advanced opportunities become visible
-  -> Pro becomes the deeper action layer
-
-  IMPORTANT:
-  This component intentionally does NOT create a second analytics engine.
-  It reads values already calculated by analytics.js / existing dashboard
-  analytics and only controls presentation, confidence states and conversion.
+  This component uses centralized design tokens (lib/designTokens.js)
+  for consistency across the platform.
 */
 
-// ------------------------------------------------------------
-// PLATFORM DISPLAY NAMES
-// ------------------------------------------------------------
-
+// Platform display names
 const PLATFORM_DISPLAY_NAMES = Object.fromEntries(
   Object.keys(PLATFORM_TOKEN_RATES).map(name => [
     name.toLowerCase(),
@@ -44,26 +40,6 @@ const displayPlatform = (platform) =>
     PLATFORM_DISPLAY_NAMES[String(platform).toLowerCase()]) ||
   platform ||
   "Unknown"
-
-// ------------------------------------------------------------
-// COLORS
-// ------------------------------------------------------------
-
-const C = {
-  cyan: "#22D3EE",
-  pink: "#EC4899",
-  purple: "#A855F7",
-  gold: "#F59E0B",
-  green: "#10B981",
-  red: "#F87171",
-  blue: "#60A5FA",
-  white: "#F1F5F9",
-  muted: "#94A3B8",
-  dim: "#64748B",
-  card: "rgba(12,16,34,0.78)",
-  card2: "rgba(15,20,32,0.72)",
-  border: "rgba(255,255,255,0.09)",
-}
 
 // ------------------------------------------------------------
 // FORMATTERS
@@ -110,15 +86,15 @@ const formatDuration = (minutes) => {
     : `${hours}h`
 }
 
-// ------------------------------------------------------------
-// STAT CARD
-// ------------------------------------------------------------
+// ============================================================
+// STAT CARD — Luxury Professional Design
+// ============================================================
 
 const STAT_ACCENTS = [
-  { accent: "#F472B6", glow: "rgba(244,114,182,0.12)" },
-  { accent: "#22D3EE", glow: "rgba(34,211,238,0.12)" },
-  { accent: "#A78BFA", glow: "rgba(167,139,250,0.12)" },
-  { accent: "#FBBF24", glow: "rgba(251,191,36,0.12)" },
+  COLORS.pink,
+  COLORS.cyan,
+  COLORS.purple,
+  COLORS.gold,
 ]
 
 function StatCard({
@@ -129,7 +105,7 @@ function StatCard({
   index = 0,
   status = null,
 }) {
-  const style = STAT_ACCENTS[index % STAT_ACCENTS.length]
+  const accentColor = STAT_ACCENTS[index % STAT_ACCENTS.length]
 
   return (
     <div
@@ -137,58 +113,47 @@ function StatCard({
         position: "relative",
         overflow: "hidden",
         minWidth: 0,
-        borderRadius: 16,
-        padding: "15px 16px",
-        background: C.card2,
-        border: `1px solid ${C.border}`,
-        backdropFilter: "blur(20px)",
+        borderRadius: RADIUS.lg,
+        padding: `${SPACING.lg} ${SPACING.xl}`,
+        background: COLORS.bgCard,
+        border: BORDERS.card,
+        backdropFilter: BACKDROP.blur,
+        boxShadow: SHADOWS.sm,
+        borderTop: `2px solid ${accentColor}`,
         animation: `fadeUp 0.3s ease ${index * 0.05}s both`,
-        boxShadow: `0 10px 35px ${style.glow}`,
+        transition: `all ${TRANSITIONS.normal}`,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = SHADOWS.md
+        e.currentTarget.style.transform = 'translateY(-2px)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = SHADOWS.sm
+        e.currentTarget.style.transform = 'translateY(0)'
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          background: `linear-gradient(90deg,${style.accent}90,${style.accent}10)`,
-        }}
-      />
-
+      {/* Header: Label + Icon */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
-          marginBottom: 7,
+          gap: SPACING.md,
+          marginBottom: SPACING.xl,
         }}
       >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 800,
-            color: C.muted,
-            textTransform: "uppercase",
-            letterSpacing: "0.07em",
-          }}
-        >
+        <span style={{ ...TYPOGRAPHY.labelSm, color: COLORS.textTertiary }}>
           {label}
         </span>
-
-        <span style={{ fontSize: 16, opacity: 0.8 }}>
-          {icon}
-        </span>
+        <span style={{ fontSize: 20, opacity: 0.8 }}>{icon}</span>
       </div>
 
+      {/* Main Value */}
       <div
         style={{
-          fontSize: "clamp(18px, 2vw, 23px)",
-          lineHeight: 1.15,
-          fontWeight: 900,
-          color: status === "warming" ? C.muted : style.accent,
+          ...TYPOGRAPHY.dataLg,
+          color: status === "warming" ? COLORS.textSecondary : accentColor,
+          marginBottom: SPACING.sm,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -197,13 +162,13 @@ function StatCard({
         {value}
       </div>
 
+      {/* Sub-text */}
       {sub && (
         <div
           style={{
-            marginTop: 5,
-            fontSize: 11,
+            ...TYPOGRAPHY.bodySm,
+            color: COLORS.textSecondary,
             lineHeight: 1.45,
-            color: C.dim,
           }}
         >
           {sub}
@@ -213,9 +178,9 @@ function StatCard({
   )
 }
 
-// ------------------------------------------------------------
+// ============================================================
 // SECTION HEADER
-// ------------------------------------------------------------
+// ============================================================
 
 function SectionHeader({
   eyebrow,
@@ -223,40 +188,24 @@ function SectionHeader({
   description,
 }) {
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div style={{ marginBottom: SPACING.xl }}>
       {eyebrow && (
-        <div
-          style={{
-            marginBottom: 4,
-            fontSize: 10,
-            fontWeight: 900,
-            letterSpacing: "0.09em",
-            textTransform: "uppercase",
-            color: C.cyan,
-          }}
-        >
+        <div style={{ ...TYPOGRAPHY.labelSm, color: COLORS.cyan, marginBottom: SPACING.md }}>
           {eyebrow}
         </div>
       )}
 
-      <div
-        style={{
-          fontSize: 16,
-          fontWeight: 850,
-          color: C.white,
-        }}
-      >
+      <div style={{ ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.sm }}>
         {title}
       </div>
 
       {description && (
         <div
           style={{
-            marginTop: 4,
+            ...TYPOGRAPHY.bodySm,
+            color: COLORS.textSecondary,
             maxWidth: 680,
-            fontSize: 12,
-            lineHeight: 1.55,
-            color: C.muted,
+            marginTop: SPACING.md,
           }}
         >
           {description}
@@ -266,9 +215,9 @@ function SectionHeader({
   )
 }
 
-// ------------------------------------------------------------
-// PRO CTA
-// ------------------------------------------------------------
+// ============================================================
+// PRO BUTTON — Consistent Gradient CTA
+// ============================================================
 
 function ProButton({
   children,
@@ -282,21 +231,36 @@ function ProButton({
         try {
           gtmTrack("creator_report_upgrade_click", { source })
         } catch (_) {}
-
         onClick?.()
       }}
       style={{
-        border: "1px solid rgba(236,72,153,0.25)",
-        borderRadius: compact ? 9 : 11,
-        padding: compact ? "8px 13px" : "10px 17px",
+        border: "1px solid rgba(236, 72, 153, 0.3)",
+        borderRadius: compact ? RADIUS.sm : RADIUS.md,
+        padding: compact ? `${SPACING.sm} ${SPACING.md}` : `${SPACING.md} ${SPACING.xl}`,
         cursor: "pointer",
         fontSize: compact ? 11 : 12,
-        fontWeight: 850,
-        color: "#fff",
-        background:
-          "linear-gradient(90deg,#EC4899,#A855F7)",
-        boxShadow: "0 8px 25px rgba(236,72,153,0.18)",
+        fontWeight: 800,
+        color: "#FFF",
+        background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)",
+        boxShadow: SHADOWS.md,
         whiteSpace: "nowrap",
+        transition: `all ${TRANSITIONS.normal}`,
+        outline: 'none',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = SHADOWS.lg
+        e.currentTarget.style.transform = 'translateY(-2px)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = SHADOWS.md
+        e.currentTarget.style.transform = 'translateY(0)'
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.outline = `2px solid ${COLORS.cyan}`
+        e.currentTarget.style.outlineOffset = '2px'
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.outline = 'none'
       }}
     >
       {children}
@@ -304,9 +268,9 @@ function ProButton({
   )
 }
 
-// ------------------------------------------------------------
-// WARMING / CALIBRATION HEADER
-// ------------------------------------------------------------
+// ============================================================
+// CALIBRATION CARD — Report Warming Up Progress
+// ============================================================
 
 function CalibrationCard({
   tipsCount,
@@ -317,59 +281,33 @@ function CalibrationCard({
   hasBestWindow,
   hourlyRateUnlocked,
 }) {
-  /*
-    These are product-progress milestones, not analytics formulas.
-
-    The hourly-rate milestone mirrors the existing dashboard's actual
-    eligibility messaging: 3 eligible sessions + 60 tracked minutes.
-  */
-
   const tipReady = tipsCount >= 10
   const sessionReady = sessionCount >= 2
   const timingReady = Boolean(hasBestWindow)
   const hourlyReady = Boolean(hourlyRateUnlocked)
 
   const milestones = [
-    {
-      label: "Earnings",
-      ready: tipsCount > 0,
-    },
-    {
-      label: "Session patterns",
-      ready: sessionReady,
-    },
-    {
-      label: "Timing patterns",
-      ready: timingReady,
-    },
-    {
-      label: "$/hour confidence",
-      ready: hourlyReady,
-    },
+    { label: "Earnings", ready: tipsCount > 0 },
+    { label: "Session patterns", ready: sessionReady },
+    { label: "Timing patterns", ready: timingReady },
+    { label: "$/hour confidence", ready: hourlyReady },
   ]
 
   const completed = milestones.filter(m => m.ready).length
-
-  const calibration = Math.round(
-    (completed / milestones.length) * 100
-  )
+  const calibration = Math.round((completed / milestones.length) * 100)
 
   let headline = "Your Creator Report is warming up"
-  let subhead =
-    "CamCash is learning your earning patterns. Keep importing history and the report will become more precise."
+  let subhead = "CamCash is learning your earning patterns. Keep importing history and the report will become more precise."
 
   if (completed >= 4) {
     headline = "🔥 Creator Report is fully calibrated"
-    subhead =
-      "You have enough history for CamCash to surface your strongest patterns. Pro can take those patterns deeper."
+    subhead = "You have enough history for CamCash to surface your strongest patterns. Pro can take those patterns deeper."
   } else if (completed >= 3) {
     headline = "📈 Your report just got smarter"
-    subhead =
-      "CamCash has enough history to identify several meaningful patterns in your streams."
+    subhead = "CamCash has enough history to identify several meaningful patterns in your streams."
   } else if (completed >= 2) {
     headline = "🔮 Your report is finding patterns"
-    subhead =
-      "You've given CamCash enough history to start identifying repeatable behavior."
+    subhead = "You've given CamCash enough history to start identifying repeatable behavior."
   }
 
   return (
@@ -377,140 +315,43 @@ function CalibrationCard({
       style={{
         position: "relative",
         overflow: "hidden",
-        marginBottom: 18,
-        borderRadius: 20,
-        padding: "18px 20px",
-        background:
-          "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(168,85,247,0.07),rgba(236,72,153,0.05))",
-        border: "1px solid rgba(34,211,238,0.18)",
+        marginBottom: SPACING.xxl,
+        borderRadius: RADIUS.xl,
+        padding: `${SPACING.lg} ${SPACING.xl}`,
+        background: "linear-gradient(135deg,rgba(34,211,238,0.08),rgba(168,85,247,0.07),rgba(236,72,153,0.05))",
+        border: BORDERS.cardAccent,
+        boxShadow: SHADOWS.sm,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: SPACING.xl, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <div
-            style={{
-              marginBottom: 5,
-              fontSize: 16,
-              fontWeight: 900,
-              color: C.white,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.h2, color: COLORS.textPrimary, marginBottom: SPACING.sm }}>
             {headline}
           </div>
-
-          <div
-            style={{
-              maxWidth: 680,
-              fontSize: 12,
-              lineHeight: 1.55,
-              color: C.muted,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary, maxWidth: 680 }}>
             {subhead}
           </div>
         </div>
 
-        <div
-          style={{
-            minWidth: 115,
-            textAlign: "right",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 800,
-              color: C.muted,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
+        <div style={{ minWidth: 115, textAlign: "right" }}>
+          <div style={{ ...TYPOGRAPHY.labelSm, color: COLORS.textTertiary }}>
             Report calibration
           </div>
-
-          <div
-            style={{
-              marginTop: 2,
-              fontSize: 24,
-              fontWeight: 950,
-              color: calibration >= 75 ? C.green : C.cyan,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.dataLg, color: calibration >= 75 ? COLORS.green : COLORS.cyan, marginTop: SPACING.sm }}>
             {calibration}%
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          height: 6,
-          marginTop: 15,
-          overflow: "hidden",
-          borderRadius: 99,
-          background: "rgba(255,255,255,0.06)",
-        }}
-      >
-        <div
-          style={{
-            width: `${Math.max(calibration, 7)}%`,
-            height: "100%",
-            borderRadius: 99,
-            background:
-              "linear-gradient(90deg,#22D3EE,#A855F7,#EC4899)",
-            transition: "width 0.5s ease",
-          }}
-        />
+      <div style={{ height: 6, marginTop: SPACING.xl, overflow: "hidden", borderRadius: RADIUS.full, background: "rgba(255,255,255,0.06)" }}>
+        <div style={{ width: `${Math.max(calibration, 7)}%`, height: "100%", borderRadius: RADIUS.full, background: "linear-gradient(90deg,#22D3EE,#A855F7,#EC4899)", transition: `width 0.5s ease` }} />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit,minmax(145px,1fr))",
-          gap: 8,
-          marginTop: 13,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(145px,1fr))", gap: SPACING.md, marginTop: SPACING.lg }}>
         {milestones.map((milestone) => (
-          <div
-            key={milestone.label}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 9px",
-              borderRadius: 9,
-              background: milestone.ready
-                ? "rgba(16,185,129,0.07)"
-                : "rgba(255,255,255,0.025)",
-              border: `1px solid ${
-                milestone.ready
-                  ? "rgba(16,185,129,0.18)"
-                  : "rgba(255,255,255,0.06)"
-              }`,
-            }}
-          >
-            <span style={{ fontSize: 12 }}>
-              {milestone.ready ? "✓" : "○"}
-            </span>
-
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: milestone.ready
-                  ? C.green
-                  : C.muted,
-              }}
-            >
+          <div key={milestone.label} style={{ display: "flex", alignItems: "center", gap: SPACING.md, padding: `${SPACING.sm} ${SPACING.md}`, borderRadius: RADIUS.md, background: milestone.ready ? "rgba(16,185,129,0.07)" : "rgba(255,255,255,0.025)", border: `1px solid ${milestone.ready ? "rgba(16,185,129,0.18)" : "rgba(255,255,255,0.06)"}` }}>
+            <span style={{ fontSize: 12 }}>{milestone.ready ? "✓" : "○"}</span>
+            <span style={{ ...TYPOGRAPHY.labelSm, color: milestone.ready ? COLORS.green : COLORS.textSecondary }}>
               {milestone.label}
             </span>
           </div>
@@ -518,43 +359,11 @@ function CalibrationCard({
       </div>
 
       {!isPro && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-            marginTop: 15,
-            paddingTop: 13,
-            borderTop: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              lineHeight: 1.5,
-              color: C.muted,
-            }}
-          >
-            {tipReady
-              ? "Your basic report is active. Keep importing to improve pattern confidence."
-              : `Import ${Math.max(1, 10 - tipsCount)} more tip${10 - tipsCount === 1 ? "" : "s"} to unlock more basic report signals.`}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: SPACING.lg, flexWrap: "wrap", marginTop: SPACING.xl, paddingTop: SPACING.lg, borderTop: BORDERS.divider }}>
+          <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary }}>
+            {tipReady ? "Your basic report is active. Keep importing to improve pattern confidence." : `Import ${Math.max(1, 10 - tipsCount)} more tip${10 - tipsCount === 1 ? "" : "s"} to unlock more basic report signals.`}
           </div>
-
-          <button
-            onClick={onImport}
-            style={{
-              border: "1px solid rgba(34,211,238,0.2)",
-              borderRadius: 9,
-              padding: "8px 13px",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 800,
-              color: C.cyan,
-              background: "rgba(34,211,238,0.07)",
-            }}
-          >
+          <button onClick={onImport} style={{ border: BORDERS.cardAccent, borderRadius: RADIUS.sm, padding: `${SPACING.sm} ${SPACING.md}`, cursor: "pointer", ...TYPOGRAPHY.labelSm, color: COLORS.cyan, background: "rgba(34,211,238,0.07)", transition: `all ${TRANSITIONS.normal}`, outline: 'none' }} onFocus={(e) => { e.currentTarget.style.outline = `2px solid ${COLORS.cyan}`; e.currentTarget.style.outlineOffset = '2px' }} onBlur={(e) => { e.currentTarget.style.outline = 'none' }}>
             Import More History
           </button>
         </div>
@@ -826,9 +635,9 @@ function PlatformCards({
   )
 }
 
-// ------------------------------------------------------------
-// INSIGHT STATE CARD
-// ------------------------------------------------------------
+// ============================================================
+// INSIGHT STATE CARD — Simplified Design
+// ============================================================
 
 function InsightState({
   icon,
@@ -843,81 +652,56 @@ function InsightState({
   return (
     <div
       style={{
-        minHeight: 118,
+        minHeight: 120,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: 15,
-        borderRadius: 15,
-        background: isWarming
-          ? "rgba(255,255,255,0.025)"
-          : "rgba(16,185,129,0.045)",
-        border: `1px solid ${
-          isWarming
-            ? "rgba(255,255,255,0.07)"
-            : "rgba(16,185,129,0.15)"
-        }`,
+        padding: SPACING.lg,
+        borderRadius: RADIUS.lg,
+        background: COLORS.bgCard,
+        border: BORDERS.card,
+        backdropFilter: BACKDROP.blur,
+        boxShadow: SHADOWS.sm,
+        transition: `all ${TRANSITIONS.normal}`,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = SHADOWS.md
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = SHADOWS.sm
       }}
     >
       <div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 16 }}>{icon}</span>
-
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 850,
-              color: C.muted,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            {title}
-          </span>
-
-          <span
-            style={{
-              marginLeft: "auto",
-              padding: "3px 6px",
-              borderRadius: 20,
-              fontSize: 8,
-              fontWeight: 900,
-              color: isWarming ? C.gold : C.green,
-              background: isWarming
-                ? "rgba(245,158,11,0.08)"
-                : "rgba(16,185,129,0.08)",
-            }}
-          >
-            {isWarming ? "WARMING UP" : "READY"}
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: SPACING.md }}>
+          <span style={{ fontSize: 20, opacity: isWarming ? 0.5 : 1 }}>{icon}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ ...TYPOGRAPHY.labelSm, color: COLORS.textTertiary }}>
+              {title}
+            </div>
+            <span
+              style={{
+                display: "inline-block",
+                marginTop: SPACING.sm,
+                padding: `2px ${SPACING.md}`,
+                borderRadius: RADIUS.full,
+                fontSize: 8,
+                fontWeight: 800,
+                color: isWarming ? COLORS.gold : COLORS.green,
+                background: isWarming ? "rgba(245,158,11,0.15)" : "rgba(16,185,129,0.15)",
+              }}
+            >
+              {isWarming ? "WARMING" : "READY"}
+            </span>
+          </div>
         </div>
 
-        <div
-          style={{
-            marginTop: 11,
-            fontSize: 13,
-            lineHeight: 1.5,
-            color: isWarming ? C.muted : C.white,
-          }}
-        >
+        <div style={{ ...TYPOGRAPHY.body, color: isWarming ? COLORS.textSecondary : COLORS.textPrimary, marginTop: SPACING.lg, lineHeight: 1.55 }}>
           {children}
         </div>
       </div>
 
       {footer && (
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 10,
-            color: C.dim,
-          }}
-        >
+        <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textTertiary, marginTop: SPACING.lg }}>
           {footer}
         </div>
       )}
@@ -927,16 +711,30 @@ function InsightState({
           onClick={onImport}
           style={{
             alignSelf: "flex-start",
-            marginTop: 9,
-            padding: "6px 9px",
-            borderRadius: 7,
+            marginTop: SPACING.lg,
+            padding: `${SPACING.sm} ${SPACING.md}`,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            border:
-              "1px solid rgba(34,211,238,0.14)",
-            color: C.cyan,
-            background: "rgba(34,211,238,0.05)",
+            border: BORDERS.cardAccent,
+            color: COLORS.cyan,
+            background: "rgba(34,211,238,0.07)",
             fontSize: 9,
             fontWeight: 800,
+            transition: `all ${TRANSITIONS.normal}`,
+            outline: 'none',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(34,211,238,0.12)"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(34,211,238,0.07)"
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.outline = `2px solid ${COLORS.cyan}`
+            e.currentTarget.style.outlineOffset = '2px'
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.outline = 'none'
           }}
         >
           Import more history →
@@ -946,9 +744,9 @@ function InsightState({
   )
 }
 
-// ------------------------------------------------------------
-// PRO PREVIEW
-// ------------------------------------------------------------
+// ============================================================
+// PRO PREVIEW — Premium Locked Feature Preview
+// ============================================================
 
 function ProPreview({
   icon = "🔒",
@@ -964,101 +762,41 @@ function ProPreview({
       style={{
         position: "relative",
         overflow: "hidden",
-        borderRadius: 16,
-        padding: 17,
-        background:
-          "linear-gradient(135deg,rgba(168,85,247,0.07),rgba(236,72,153,0.055))",
-        border:
-          "1px solid rgba(168,85,247,0.18)",
+        borderRadius: RADIUS.lg,
+        padding: SPACING.xl,
+        background: "linear-gradient(135deg,rgba(168,85,247,0.07),rgba(236,72,153,0.055))",
+        border: BORDERS.cardPink,
+        boxShadow: SHADOWS.sm,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            width: 34,
-            height: 34,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flex: "0 0 auto",
-            borderRadius: 10,
-            background: "rgba(168,85,247,0.10)",
-            border:
-              "1px solid rgba(168,85,247,0.18)",
-            fontSize: 16,
-          }}
-        >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: SPACING.lg }}>
+        <div style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", borderRadius: RADIUS.md, background: "rgba(168,85,247,0.10)", border: BORDERS.cardPink, fontSize: 16 }}>
           {icon}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 9,
-              fontWeight: 900,
-              color: C.purple,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.labelSm, color: COLORS.purple }}>
             {eyebrow}
           </div>
 
-          <div
-            style={{
-              marginTop: 3,
-              fontSize: 13,
-              fontWeight: 850,
-              color: C.white,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginTop: SPACING.sm }}>
             {title}
           </div>
 
           {description && (
-            <div
-              style={{
-                marginTop: 5,
-                fontSize: 11,
-                lineHeight: 1.5,
-                color: C.muted,
-              }}
-            >
+            <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary, marginTop: SPACING.md }}>
               {description}
             </div>
           )}
 
           {preview && (
-            <div
-              style={{
-                marginTop: 10,
-                padding: "9px 10px",
-                borderRadius: 9,
-                background:
-                  "rgba(0,0,0,0.15)",
-                border:
-                  "1px solid rgba(255,255,255,0.05)",
-                fontSize: 11,
-                lineHeight: 1.5,
-                color: C.white,
-              }}
-            >
+            <div style={{ marginTop: SPACING.lg, padding: SPACING.md, borderRadius: RADIUS.md, background: "rgba(0,0,0,0.15)", border: BORDERS.divider, ...TYPOGRAPHY.bodySm, color: COLORS.textPrimary }}>
               {preview}
             </div>
           )}
 
-          <div style={{ marginTop: 11 }}>
-            <ProButton
-              compact
-              source={source}
-              onClick={onUpgrade}
-            >
+          <div style={{ marginTop: SPACING.xl }}>
+            <ProButton compact source={source} onClick={onUpgrade}>
               Unlock with Pro →
             </ProButton>
           </div>
@@ -1068,9 +806,9 @@ function ProPreview({
   )
 }
 
-// ------------------------------------------------------------
-// LOCKED ACTION
-// ------------------------------------------------------------
+// ============================================================
+// LOCKED ACTION — Inline Pro Feature Lock
+// ============================================================
 
 function LockedAction({
   icon = "🔒",
@@ -1084,60 +822,36 @@ function LockedAction({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 11,
-        padding: "11px 12px",
-        borderRadius: 11,
+        gap: SPACING.lg,
+        padding: `${SPACING.md} ${SPACING.lg}`,
+        borderRadius: RADIUS.md,
         background: "rgba(168,85,247,0.045)",
-        border:
-          "1px solid rgba(168,85,247,0.12)",
+        border: BORDERS.cardPink,
+        transition: `all ${TRANSITIONS.normal}`,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(168,85,247,0.08)"
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "rgba(168,85,247,0.045)"
       }}
     >
-      <div
-        style={{
-          width: 30,
-          height: 30,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flex: "0 0 auto",
-          borderRadius: 8,
-          background: "rgba(168,85,247,0.08)",
-          fontSize: 13,
-        }}
-      >
+      <div style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto", borderRadius: RADIUS.sm, background: "rgba(168,85,247,0.08)", fontSize: 13 }}>
         {icon}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 800,
-            color: C.white,
-          }}
-        >
+        <div style={{ ...TYPOGRAPHY.label, color: COLORS.textPrimary }}>
           {title}
         </div>
-
         {description && (
-          <div
-            style={{
-              marginTop: 2,
-              fontSize: 10,
-              lineHeight: 1.4,
-              color: C.muted,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary, marginTop: SPACING.sm }}>
             {description}
           </div>
         )}
       </div>
 
-      <ProButton
-        compact
-        source={source}
-        onClick={onUpgrade}
-      >
+      <ProButton compact source={source} onClick={onUpgrade}>
         Reveal
       </ProButton>
     </div>
@@ -1430,81 +1144,34 @@ export default function CreatorReport({
           HEADER
       ====================================================== */}
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 15,
-          marginBottom: 17,
-          flexWrap: "wrap",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: SPACING.xl, marginBottom: SPACING.xxxl, flexWrap: "wrap" }}>
         <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 900,
-                color: C.white,
-              }}
-            >
+          <div style={{ display: "flex", alignItems: "center", gap: SPACING.md }}>
+            <div style={{ ...TYPOGRAPHY.h1, color: COLORS.textPrimary }}>
               🧾 Your Creator Report
             </div>
 
             <div
               style={{
-                padding: "4px 7px",
-                borderRadius: 20,
+                padding: `4px ${SPACING.md}`,
+                borderRadius: RADIUS.full,
                 fontSize: 8,
                 fontWeight: 900,
-                color:
-                  reportState === "rich"
-                    ? C.green
-                    : reportState === "developing"
-                      ? C.cyan
-                      : C.gold,
-                background:
-                  reportState === "rich"
-                    ? "rgba(16,185,129,0.08)"
-                    : reportState === "developing"
-                      ? "rgba(34,211,238,0.08)"
-                      : "rgba(245,158,11,0.08)",
+                color: reportState === "rich" ? COLORS.green : reportState === "developing" ? COLORS.cyan : COLORS.gold,
+                background: reportState === "rich" ? "rgba(16,185,129,0.08)" : reportState === "developing" ? "rgba(34,211,238,0.08)" : "rgba(245,158,11,0.08)",
               }}
             >
-              {reportState === "rich"
-                ? "HIGH SIGNAL"
-                : reportState === "developing"
-                  ? "DEVELOPING"
-                  : "EARLY SIGNAL"}
+              {reportState === "rich" ? "HIGH SIGNAL" : reportState === "developing" ? "DEVELOPING" : "EARLY SIGNAL"}
             </div>
           </div>
 
-          <div
-            style={{
-              marginTop: 4,
-              fontSize: 12,
-              color: C.muted,
-            }}
-          >
-            Your numbers become more useful as CamCash
-            gets more history to work with.
+          <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary, marginTop: SPACING.md }}>
+            Your numbers become more useful as CamCash gets more history to work with.
           </div>
         </div>
 
         {!isPro && (
-          <ProButton
-            source="creator_report_header"
-            onClick={() =>
-              handleUpgrade("creator_report_header")
-            }
-          >
+          <ProButton source="creator_report_header" onClick={() => handleUpgrade("creator_report_header")}>
             Unlock Creator Pro
           </ProButton>
         )}
@@ -1525,16 +1192,15 @@ export default function CreatorReport({
       />
 
       {/* ======================================================
-          CORE NUMBERS
+          CORE NUMBERS (KPI CARDS)
       ====================================================== */}
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit,minmax(175px,1fr))",
-          gap: 11,
-          marginBottom: 19,
+          gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
+          gap: SPACING.lg,
+          marginBottom: SPACING.xxxl,
         }}
       >
         <StatCard
@@ -1648,11 +1314,12 @@ export default function CreatorReport({
 
       <div
         style={{
-          marginBottom: 19,
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          marginBottom: SPACING.xxxl,
+          borderRadius: RADIUS.xl,
+          padding: SPACING.xl,
+          background: COLORS.bgCard,
+          border: BORDERS.card,
+          boxShadow: SHADOWS.sm,
         }}
       >
         <SectionHeader
@@ -1672,16 +1339,17 @@ export default function CreatorReport({
       </div>
 
       {/* ======================================================
-          WHAT YOUR DATA IS SAYING
+          WHAT YOUR DATA IS SAYING (INSIGHTS)
       ====================================================== */}
 
       <div
         style={{
-          marginBottom: 19,
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          marginBottom: SPACING.xxxl,
+          borderRadius: RADIUS.xl,
+          padding: SPACING.xl,
+          background: COLORS.bgCard,
+          border: BORDERS.card,
+          boxShadow: SHADOWS.sm,
         }}
       >
         <SectionHeader
@@ -1693,9 +1361,8 @@ export default function CreatorReport({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit,minmax(235px,1fr))",
-            gap: 10,
+            gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+            gap: SPACING.lg,
           }}
         >
           <InsightState
@@ -1761,78 +1428,34 @@ export default function CreatorReport({
       </div>
 
       {/* ======================================================
-          "WE FOUND SOMETHING"
+          CamCash FOUND SOMETHING (Discovery Alert)
       ====================================================== */}
 
       {positiveInsight && (
         <div
           style={{
-            marginBottom: 19,
-            padding: "16px 18px",
-            borderRadius: 17,
-            background:
-              "linear-gradient(135deg,rgba(16,185,129,0.08),rgba(34,211,238,0.04))",
-            border:
-              "1px solid rgba(16,185,129,0.18)",
+            marginBottom: SPACING.xxxl,
+            padding: SPACING.xl,
+            borderRadius: RADIUS.lg,
+            background: "linear-gradient(135deg,rgba(16,185,129,0.08),rgba(34,211,238,0.04))",
+            border: BORDERS.card,
+            boxShadow: SHADOWS.sm,
           }}
         >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 900,
-              color: C.green,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.labelSm, color: COLORS.green }}>
             🔎 CamCash found something
           </div>
 
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 14,
-              lineHeight: 1.6,
-              color: C.white,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.body, color: COLORS.textPrimary, marginTop: SPACING.md, lineHeight: 1.6 }}>
             {positiveInsight.text}
           </div>
 
           {!isPro && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
-                marginTop: 12,
-                paddingTop: 11,
-                borderTop:
-                  "1px solid rgba(255,255,255,0.06)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  lineHeight: 1.5,
-                  color: C.muted,
-                }}
-              >
-                Pro can turn this pattern into a
-                specific next-stream action.
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: SPACING.lg, flexWrap: "wrap", marginTop: SPACING.lg, paddingTop: SPACING.lg, borderTop: BORDERS.divider }}>
+              <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary }}>
+                Pro can turn this pattern into a specific next-stream action.
               </div>
-
-              <ProButton
-                compact
-                source="creator_report_pattern_found"
-                onClick={() =>
-                  handleUpgrade(
-                    "creator_report_pattern_found"
-                  )
-                }
-              >
+              <ProButton compact source="creator_report_pattern_found" onClick={() => handleUpgrade("creator_report_pattern_found")}>
                 Show Me What To Do →
               </ProButton>
             </div>
@@ -1841,54 +1464,34 @@ export default function CreatorReport({
       )}
 
       {/* ======================================================
-          REVENUE OPPORTUNITY
+          REVENUE OPPORTUNITY (Pro-Only Advanced Analysis)
       ====================================================== */}
 
-      {largestRevenueLeakAmount > 0 ? (
+      {largestRevenueLeakAmount > 0 && !isPro && (
         <ProPreview
           icon="⚡"
           eyebrow="Revenue opportunity"
-          title={`Potential ${fmtUsd(largestRevenueLeakAmount, 2)} opportunity detected`}
-          description={`CamCash already has platform-level revenue opportunity data in your report.`}
-          preview={`🔒 Pro can break down where that opportunity is coming from and what change is most likely to address it.`}
+          title={`Potential ${fmtUsd(largestRevenueLeakAmount, 2)} opportunity`}
+          description="CamCash detected revenue patterns in your platform performance."
+          preview="Pro breaks down where opportunities are and what changes matter most."
           source="creator_report_revenue_opportunity"
-          onUpgrade={() =>
-            handleUpgrade(
-              "creator_report_revenue_opportunity"
-            )
-          }
+          onUpgrade={() => handleUpgrade("creator_report_revenue_opportunity")}
         />
-      ) : (
-        !isPro &&
-        hasRichData && (
-          <ProPreview
-            icon="⚡"
-            eyebrow="Advanced opportunity analysis"
-            title="Your history is rich enough for deeper opportunity analysis"
-            description="You have enough historical sessions for CamCash to go beyond basic reporting."
-            preview="🔒 Pro adds deeper platform, timing and revenue-opportunity analysis."
-            source="creator_report_advanced_opportunity"
-            onUpgrade={() =>
-              handleUpgrade(
-                "creator_report_advanced_opportunity"
-              )
-            }
-          />
-        )
       )}
 
       {/* ======================================================
-          FAN / VIP INTELLIGENCE
+          SUPPORTER INTELLIGENCE
       ====================================================== */}
 
       <div
         style={{
-          marginTop: 19,
-          marginBottom: 19,
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          marginTop: SPACING.xxxl,
+          marginBottom: SPACING.xxxl,
+          borderRadius: RADIUS.xl,
+          padding: SPACING.xl,
+          background: COLORS.bgCard,
+          border: BORDERS.card,
+          boxShadow: SHADOWS.sm,
         }}
       >
         <SectionHeader
@@ -2027,15 +1630,16 @@ export default function CreatorReport({
       </div>
 
       {/* ======================================================
-          RECOMMENDED ACTIONS
+          RECOMMENDED ACTIONS (Next Stream Plan)
       ====================================================== */}
 
       <div
         style={{
-          borderRadius: 18,
-          padding: "17px 18px",
-          background: C.card,
-          border: `1px solid ${C.border}`,
+          borderRadius: RADIUS.xl,
+          padding: SPACING.xl,
+          background: COLORS.bgCard,
+          border: BORDERS.card,
+          boxShadow: SHADOWS.sm,
         }}
       >
         <SectionHeader
@@ -2202,133 +1806,33 @@ export default function CreatorReport({
       </div>
 
       {/* ======================================================
-          "WHAT SHOULD I DO TONIGHT?"
-      ====================================================== */}
-
-      {!isPro && (
-        <div
-          style={{
-            marginTop: 19,
-            borderRadius: 18,
-            padding: "17px 18px",
-            background:
-              "linear-gradient(135deg,rgba(34,211,238,0.06),rgba(168,85,247,0.07),rgba(236,72,153,0.06))",
-            border:
-              "1px solid rgba(34,211,238,0.14)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 900,
-              color: C.cyan,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-            }}
-          >
-            🎯 Before your next stream
-          </div>
-
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 15,
-              fontWeight: 850,
-              color: C.white,
-            }}
-          >
-            Want CamCash to build your next-stream plan?
-          </div>
-
-          <div
-            style={{
-              marginTop: 5,
-              maxWidth: 650,
-              fontSize: 11,
-              lineHeight: 1.55,
-              color: C.muted,
-            }}
-          >
-            Pro can combine your historical timing,
-            platform performance and supporter signals
-            into a personalized action plan instead of
-            leaving you to interpret the numbers yourself.
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <ProButton
-              source="creator_report_next_stream_plan"
-              onClick={() =>
-                handleUpgrade(
-                  "creator_report_next_stream_plan"
-                )
-              }
-            >
-              Build My Next-Stream Plan →
-            </ProButton>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================
-          POWER USER CONVERSION
+          FINAL CTA: Rich Data Upgrade Prompt (Single, Strategic)
       ====================================================== */}
 
       {!isPro && hasRichData && (
         <div
           style={{
-            marginTop: 19,
-            padding: "19px 20px",
-            borderRadius: 19,
+            marginTop: SPACING.xxxl,
+            padding: `${SPACING.xxl} ${SPACING.xl}`,
+            borderRadius: RADIUS.xl,
             textAlign: "center",
-            background:
-              "linear-gradient(135deg,rgba(236,72,153,0.09),rgba(168,85,247,0.09))",
-            border:
-              "1px solid rgba(236,72,153,0.19)",
+            background: "linear-gradient(135deg,rgba(236,72,153,0.09),rgba(168,85,247,0.09))",
+            border: BORDERS.cardPink,
+            boxShadow: SHADOWS.sm,
           }}
         >
-          <div style={{ fontSize: 21 }}>
-            🚀
-          </div>
+          <div style={{ fontSize: 24, marginBottom: SPACING.md }}>🚀</div>
 
-          <div
-            style={{
-              marginTop: 5,
-              fontSize: 17,
-              fontWeight: 900,
-              color: C.white,
-            }}
-          >
+          <div style={{ ...TYPOGRAPHY.h2, color: COLORS.textPrimary }}>
             You've given CamCash enough data to go deeper.
           </div>
 
-          <div
-            style={{
-              maxWidth: 580,
-              margin: "6px auto 0",
-              fontSize: 11,
-              lineHeight: 1.55,
-              color: C.muted,
-            }}
-          >
-            {fmtNumber(tipCount)} tips ·{" "}
-            {fmtNumber(meaningfulSessionCount)} sessions
-            {platformCount
-              ? ` · ${platformCount} platform${platformCount === 1 ? "" : "s"}`
-              : ""}
-            . Your history is now rich enough for
-            advanced intelligence beyond the basic report.
+          <div style={{ ...TYPOGRAPHY.bodySm, color: COLORS.textSecondary, maxWidth: 600, margin: `${SPACING.lg} auto 0` }}>
+            {fmtNumber(tipCount)} tips · {fmtNumber(meaningfulSessionCount)} sessions{platformCount ? ` · ${platformCount} platform${platformCount === 1 ? "" : "s"}` : ""}. Your history is now rich enough for advanced intelligence beyond the basic report.
           </div>
 
-          <div style={{ marginTop: 13 }}>
-            <ProButton
-              source="creator_report_power_user"
-              onClick={() =>
-                handleUpgrade(
-                  "creator_report_power_user"
-                )
-              }
-            >
+          <div style={{ marginTop: SPACING.xl }}>
+            <ProButton source="creator_report_power_user" onClick={() => handleUpgrade("creator_report_power_user")}>
               Unlock Creator Pro →
             </ProButton>
           </div>
