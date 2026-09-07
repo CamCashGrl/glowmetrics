@@ -16,6 +16,19 @@ import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
+import { CARD_SURFACE } from "../../components/ui/Card"
+import GradientText from "../../components/ui/GradientText"
+import FeatureCard from "../../components/ui/cards/FeatureCard"
+import { identifyWhales } from '../../lib/analytics';
+import { isProPlan } from '../../lib/plan';
+import { track as gtmTrack } from '../../lib/track';
+
+// Same free-tier constant SHAPE as FREE_FAN_LIMIT (app/dashboard/page.js) —
+// no canonical Live Mode entitlement existed before this pass (confirmed:
+// Live Mode was a flat Pro/free binary lock at the dashboard-tab boundary,
+// no usage counter anywhere). This is new, real policy, backed by a real
+// count query against live_sessions — never a fabricated number.
+const FREE_LIVE_SESSIONS_PER_MONTH = 3
 
 const C = {
   bg: '#040812', card: 'rgba(15,20,32,0.75)', border: 'rgba(168,85,247,0.2)',
@@ -24,12 +37,9 @@ const C = {
   pink: '#ec4899', gold: '#f59e0b', red: '#f87171', orange: '#f97316',
 };
 
-const glassCard = {
-  background: 'rgba(15,20,32,0.75)',
-  border: '1px solid rgba(255,255,255,0.08)',
-  backdropFilter: 'blur(20px)',
-  boxShadow: '0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)',
-};
+// Card surface comes from the shared system (components/ui/Card.jsx),
+// which is the one place a glass surface is defined.
+const glassCard = CARD_SURFACE
 
 // embedded=true when rendered inside the dashboard's Live Mode tab
 // (app/dashboard/page.js) instead of the standalone /live route. Suppresses
@@ -38,7 +48,13 @@ const glassCard = {
 // visitor — none of that makes sense for someone already inside the
 // dashboard. The actual engine (status bar, room hero, coaching, tip feed,
 // stats) renders identically either way — same component, same hook.
-export default function LivePage({ embedded = false } = {}) {
+export default function LivePage({ embedded = false, onUpgradeClick, onViewSessions } = {}) {
+  const [isPro, setIsPro] = useState(false);
+  // Real count of this creator's live_sessions rows started this calendar
+  // month — the entitlement source of truth for the usage banner and the
+  // free-limit screen below. null while unknown (not yet fetched / no user).
+  const [sessionsThisMonth, setSessionsThisMonth] = useState(null);
+  const impressionFiredRef = useRef(false);
   const [user, setUser]               = useState(null);
   const [authStatus, setAuthStatus]   = useState('connecting');
   const [liveActive, setLiveActive]   = useState(false);
@@ -54,6 +70,7 @@ export default function LivePage({ embedded = false } = {}) {
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
+  const [whaleTierMap, setWhaleTierMap] = useState({});
   // Canonical bestHour/bestDay — computeCanonicalBestTimes() (lib/analytics/
   // bestTimes.js), the same session-based, median-$/hour, confidence-tiered
   // engine Overview and Creator Report use — computed over this page's own
@@ -124,12 +141,31 @@ export default function LivePage({ embedded = false } = {}) {
   const phaseChangeLog    = useRef([]);
   const firedAlertsLog    = useRef([]);
   const prevPhaseRef      = useRef(null);
+  const prevEnginePhaseRef = useRef(null);
   const liveTipsChannelRef = useRef(null);
   const liveTickerRef     = useRef(null);
 
   // The single canonical Live Mode session engine. Its own restore/
   // heartbeat/lifecycle — every account uses exactly this path.
   const engine = useLiveSessionEngine();
+
+  // Funnel step: a session genuinely completed. 'still_live' (the
+  // "actually I'm still streaming" resolution to a false inactivity flag)
+  // is deliberately excluded — that session hasn't ended.
+  useEffect(() => {
+    const phase = engine.phase;
+    if (phase !== prevEnginePhaseRef.current) {
+      const justCompleted = (phase === 'resolved' || phase === 'justEnded')
+        && engine.lastResolution?.choice !== 'still_live';
+      if (justCompleted) {
+        gtmTrack('live_mode_completed', {
+          resolution: engine.lastResolution?.choice || 'ended',
+          active_duration_seconds: engine.duration?.active_duration_seconds ?? null,
+        });
+      }
+      prevEnginePhaseRef.current = phase;
+    }
+  }, [engine.phase, engine.lastResolution]);
 
   // Mirrors the real engine state into liveActive/liveStartTime, which the
   // rest of this component (computeState, the room-state hero, AI coach,
@@ -202,6 +238,25 @@ export default function LivePage({ embedded = false } = {}) {
           setCreatorTz(resolveCreatorTimezone(prof?.timezone).timezone);
         });
 
+      // Pro access — same canonical source every other surface reads
+      // (lib/plan.js's isProPlan), fetched here because this page previously
+      // never needed to know: it was only ever mounted for Pro users
+      // (dashboard-tab gate) or, on the standalone /live route, not gated at
+      // all. Now it decides the usage banner / free-limit screen below.
+      supabase.from('profiles').select('plan, plan_expires_at').eq('id', u.id).single()
+        .then(({ data: prof }) => setIsPro(isProPlan(prof)));
+
+      // Real monthly Live Mode usage — the entitlement source of truth for
+      // FREE_LIVE_SESSIONS_PER_MONTH above. Counts live_sessions rows this
+      // creator has STARTED this calendar month, in the creator's own
+      // timezone-naive UTC month boundary (consistent with how every other
+      // "this month" figure in the product is bucketed — calendar month,
+      // not a rolling 30 days).
+      const startOfMonth = new Date(); startOfMonth.setUTCDate(1); startOfMonth.setUTCHours(0, 0, 0, 0);
+      supabase.from('live_sessions').select('id', { count: 'exact', head: true })
+        .eq('user_id', u.id).gte('started_at', startOfMonth.toISOString())
+        .then(({ count }) => setSessionsThisMonth(count ?? 0));
+
       // Load last 12h of tips as history
       const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
       supabase.from('live_tips').select('*').eq('user_id', u.id).gte('received_at', since)
@@ -252,6 +307,14 @@ export default function LivePage({ embedded = false } = {}) {
         .then(({ data }) => {
           if (data) {
             setSessions(detectSessions(data));
+            // Same canonical whale classification Fans.js and Sessions.js
+            // use (lib/analytics.js identifyWhales) — a lowercase username
+            // -> tier map, so "who's driving it right now" can say WHALE
+            // without a second tier system. Scoped to this page's own
+            // 90-day window like everything else it loads.
+            const tierMap = {};
+            identifyWhales(data, creatorTzRef.current).forEach(w => { tierMap[String(w.username).toLowerCase()] = w.tier; });
+            setWhaleTierMap(tierMap);
             // Shimmed to the {bestHour:{hour,avg}} shape peakHourData below
             // already expects — same adaptation app/dashboard/page.js and
             // CreatorReport.js use for their own bestWindow migration, so
@@ -330,7 +393,19 @@ export default function LivePage({ embedded = false } = {}) {
       else if (sUPM < fUPM * 0.75) pace = 'below';
       else                          pace = 'on_track';
     }
-    const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0];
+    const rankedTippers = Object.entries(tipperMap).sort((a, b) => b[1] - a[1]);
+    const topEntry = rankedTippers[0];
+    // Top 3 with each one's share of the session's own total — the "who's
+    // driving it" list. Whale tier comes from the same account-wide
+    // identifyWhales() classification every other whale count in the
+    // product uses (see whaleTierMap above), joined here only by username —
+    // nothing about who counts as a whale is decided in this file.
+    const topTippers = rankedTippers.slice(0, 3).map(([username, revenue]) => ({
+      username, revenue: parseFloat(revenue.toFixed(2)),
+      pct: totalRevenue > 0 ? Math.round((revenue / totalRevenue) * 100) : 0,
+      isWhale: whaleTierMap[username.toLowerCase()] === 'Whale',
+    }));
+    const whaleCount = Object.keys(tipperMap).filter(u => whaleTierMap[u.toLowerCase()] === 'Whale').length;
     return {
       totalRevenue:     parseFloat(totalRevenue.toFixed(2)),
       totalTokens,
@@ -342,6 +417,8 @@ export default function LivePage({ embedded = false } = {}) {
       paceStatus:       pace,
       liveOnlyCount:    liveOnly.length,
       topTipper:        topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
+      topTippers,
+      whaleCount,
       firstHalfUPM:     parseFloat(fUPM.toFixed(3)),
       secondHalfUPM:    parseFloat(sUPM.toFixed(3)),
       currentUPM:       parseFloat((totalRevenue / elapsedMins).toFixed(3)),
@@ -427,6 +504,11 @@ export default function LivePage({ embedded = false } = {}) {
           lastLoggedCoachingEventId.current = prompt.id;
           firedAlertsLog.current.unshift({ icon: TRIGGER_ICON[prompt.type] || 'ℹ️', text: prompt.compact_message || prompt.message, ts: Date.parse(prompt.shown_at) || Date.now() });
           if (firedAlertsLog.current.length > 20) firedAlertsLog.current.length = 20;
+          // Funnel step: a coaching prompt was actually shown. Reuses the
+          // same track()/gtmTrack() mechanism as every other event in the
+          // product — one row per real fired prompt, keyed to the same
+          // coaching_events.id the "acted on" event below references.
+          gtmTrack('live_mode_coaching_shown', { event_id: prompt.id, type: prompt.type, category: prompt.category });
         }
         setCoachingPrompt(prompt);
       } catch (_) { /* one failed poll is never surfaced — the next tick retries */ }
@@ -463,9 +545,19 @@ export default function LivePage({ embedded = false } = {}) {
   // — never for one discovered via a page refresh (that's the pull effect
   // above's job).
   const handleGoLive = async () => {
+    // Defense in depth — the free-limit screen already replaces this
+    // button's own render path once the allowance is spent; this guards
+    // the same real count directly in case of a stale render.
+    if (!isPro && sessionsThisMonth != null && sessionsThisMonth >= FREE_LIVE_SESSIONS_PER_MONTH) return;
     const session = await engine.goLive(livePlatform);
     if (!session) return;
     justStartedSessionId.current = session.id;
+    // Real funnel step, same track()/gtmTrack() mechanism every other
+    // conversion event in the product already uses (lib/track.js) — not a
+    // new tracking system. Optimistic +1 on the usage count so the banner
+    // reflects this session immediately rather than waiting on a refetch.
+    gtmTrack('live_mode_started', { platform: livePlatform, is_pro: isPro });
+    setSessionsThisMonth(n => (n == null ? n : n + 1));
     fetch('/api/live/session/coaching-strategy', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ strategy: liveStrategy }),
@@ -480,6 +572,7 @@ export default function LivePage({ embedded = false } = {}) {
     if (!coachingPrompt) return;
     const eventId = coachingPrompt.id;
     const previous = coachingPrompt;
+    gtmTrack('live_mode_coaching_acted', { event_id: eventId, type: coachingPrompt.type, status });
     // Optimistic update — rolled back below if the request fails. The
     // server response is always canonical: a conflicting/late response
     // just returns the already-stored state, which the next poll picks up
@@ -917,6 +1010,44 @@ export default function LivePage({ embedded = false } = {}) {
         )}
 
 
+        {/* ── LIVE MODE USAGE / FREE STATUS ──────────────────────────
+              New — no entitlement UI existed for Live Mode before this
+              pass (it was a flat Pro/free lock at the dashboard-tab
+              boundary). Real monthly count against a real column
+              (live_sessions.started_at), same shape as FREE_FAN_LIMIT.
+              Canonical gradient/glow system for the progress fill; copy
+              matches the brief's EXPERIENCE -> VALUE -> LIMIT -> UPGRADE
+              shape without hiding the feature behind the banner. */}
+        {user && !isPro && sessionsThisMonth != null && (() => {
+          const used = Math.min(sessionsThisMonth, FREE_LIVE_SESSIONS_PER_MONTH);
+          const remaining = Math.max(0, FREE_LIVE_SESSIONS_PER_MONTH - sessionsThisMonth);
+          const pct = Math.round((used / FREE_LIVE_SESSIONS_PER_MONTH) * 100);
+          const atLimit = sessionsThisMonth >= FREE_LIVE_SESSIONS_PER_MONTH;
+          return (
+            <div style={{ ...glassCard, borderRadius: 14, padding: '16px 20px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, color: C.muted, textTransform: 'uppercase' }}>Live Mode</div>
+                  <div style={{ fontSize: 13, color: C.text, marginTop: 2 }}>Real-time coaching &amp; stream intelligence</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <GradientText style={{ fontSize: 15, fontWeight: 800 }}>{used} of {FREE_LIVE_SESSIONS_PER_MONTH} free sessions used</GradientText>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    {atLimit
+                      ? "You've experienced Live Mode — upgrade for unlimited sessions."
+                      : remaining === 1
+                        ? "1 Live Mode session remaining this month."
+                        : `${remaining} Live Mode sessions remaining this month.`}
+                  </div>
+                </div>
+              </div>
+              <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: 'var(--cc-gradient, linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE))', transition: 'width .4s ease' }} />
+              </div>
+            </div>
+          );
+        })()}
+
         <EventsSync onNewTip={(events) => {
           const mapped = events.map(e => normalizeTip({
             username: e.object?.user?.username ?? 'anonymous',
@@ -1114,6 +1245,63 @@ export default function LivePage({ embedded = false } = {}) {
                     ✅ Session ended — active time {fmtDuration(engine.duration?.active_duration_seconds)}
                   </span>
                 )}
+                {/* ── END-OF-SESSION -> SESSIONS HANDOFF ─────────────────
+                      Values read straight off the live_sessions row —
+                      session_earnings_usd/tip_count — the same columns
+                      Sessions.js's live-row rowRevenue()/tip count already
+                      trust, not a recomputed figure. Deliberately NOT a
+                      second Sessions report — three numbers and a link,
+                      because Sessions is where the deeper analysis lives. ── */}
+                {(engine.phase === 'resolved' || engine.phase === 'justEnded')
+                  && engine.lastResolution?.choice !== 'mark_invalid'
+                  && engine.lastResolution?.choice !== 'still_live' && (() => {
+                  const earned = engine.serverSession?.session_earnings_usd || 0;
+                  const activeSecs = engine.duration?.active_duration_seconds || 0;
+                  const hrs = activeSecs / 3600;
+                  const perHr = hrs > 0 ? earned / hrs : null;
+                  const tips = engine.serverSession?.tip_count ?? null;
+                  return (
+                    <div style={{ ...glassCard, borderRadius: 14, padding: '16px 20px', marginTop: 14, width: '100%' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.8, color: C.muted, textTransform: 'uppercase', marginBottom: 10 }}>Session Complete</div>
+                      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 10 }}>
+                        <div>
+                          <GradientText style={{ fontSize: 24, fontWeight: 900 }}>${earned.toFixed(2)}</GradientText>
+                          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Earned</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtDuration(activeSecs)}</div>
+                          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Active time</div>
+                        </div>
+                        {perHr != null && (
+                          <div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>${perHr.toFixed(0)}/hr</div>
+                            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Rate</div>
+                          </div>
+                        )}
+                        {tips != null && (
+                          <div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{tips}</div>
+                            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Tips</div>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.muted, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                        <span>Your Live Mode data has been added to Sessions.</span>
+                        {embedded && onViewSessions ? (
+                          <button onClick={onViewSessions} style={{ background: 'none', border: 0, padding: 0, color: C.cyan, fontWeight: 700, cursor: 'pointer', fontSize: 11.5, flexShrink: 0 }}>
+                            View in Sessions →
+                          </button>
+                        ) : (
+                          <a href="/dashboard"
+                            onClick={() => { try { localStorage.setItem('camcash_tab', 'sessions'); } catch (_) {} }}
+                            style={{ color: C.cyan, fontWeight: 700, textDecoration: 'none', flexShrink: 0 }}>
+                            View in Sessions →
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {engine.actionError && (
                   <span style={{ fontSize: 11, color: C.red }}>
                     {engine.actionError}
@@ -1165,20 +1353,56 @@ export default function LivePage({ embedded = false } = {}) {
         </div>
 
         {/* ── NOT STARTED ───────────────────────────────────────────── */}
-        {!liveActive && !liveEvents.length && (
-          <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.06), rgba(34,211,238,0.05))', position: 'relative', overflow: 'hidden', animation: 'cc-bar 4s ease infinite alternate' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'cc-bar 2s ease infinite alternate' }} />
-            <div style={{ fontSize: 56, marginBottom: 16 }}>🔴</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Command Center</div>
-            <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
-              Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
+        {(() => {
+          const atFreeLimit = !isPro && sessionsThisMonth != null && sessionsThisMonth >= FREE_LIVE_SESSIONS_PER_MONTH;
+          if (!liveActive && !liveEvents.length && atFreeLimit) {
+            // Experience -> value -> limit -> upgrade: this only ever
+            // replaces the START screen for the NEXT session, once the real
+            // monthly count says the free allowance is spent — an
+            // already-running or already-recorded session is never
+            // interrupted or hidden by this. Fired once per mount.
+            if (!impressionFiredRef.current) {
+              impressionFiredRef.current = true;
+              gtmTrack('pro_preview_viewed', { feature: 'live_mode' });
+              gtmTrack('live_mode_free_limit_reached', { sessions_this_month: sessionsThisMonth });
+              gtmTrack('live_mode_upgrade_cta_shown', { source: 'live_mode_free_limit' });
+            }
+            return (
+              <FeatureCard
+                eyebrow="CREATOR PRO"
+                headline="You've experienced Live Mode."
+                glow="pink"
+                style={{ marginBottom: 24 }}
+                bullets={[
+                  'Unlimited real-time coaching sessions, every month',
+                  'Room-health, pace and whale alerts while you stream',
+                  'Every session automatically becomes Sessions intelligence',
+                ]}
+                cta="Unlock Unlimited Live Mode"
+                onCta={() => {
+                  gtmTrack('live_mode_upgrade_cta_clicked', { source: 'live_mode_free_limit' });
+                  if (onUpgradeClick) onUpgradeClick(); else window.location.href = '/pricing';
+                }}
+              >
+                Unlock unlimited real-time coaching and session intelligence with Creator Pro.
+              </FeatureCard>
+            );
+          }
+          return !liveActive && !liveEvents.length && (
+            <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.06), rgba(34,211,238,0.05))', position: 'relative', overflow: 'hidden', animation: 'cc-bar 4s ease infinite alternate' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'cc-bar 2s ease infinite alternate' }} />
+              <div style={{ fontSize: 56, marginBottom: 16 }}>🔴</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Command Center</div>
+              <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
+                Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
+              </div>
+              <button disabled={engine.actionPending} onClick={handleGoLive}
+                style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
+                {engine.actionPending ? 'Starting…' : '▶ Start Streaming'}
+              </button>
             </div>
-            <button disabled={engine.actionPending} onClick={handleGoLive}
-              style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
-              {engine.actionPending ? 'Starting…' : '▶ Start Streaming'}
-            </button>
-          </div>
-        )}
+          );
+        })()}
 
         {(liveActive || liveEvents.length > 0) && (
           <div>
@@ -1606,6 +1830,40 @@ export default function LivePage({ embedded = false } = {}) {
                     <div style={{ fontSize: 11, color: C.gold, fontWeight: 700, lineHeight: 1.5 }}>
                       → Thank them publicly and offer something exclusive for their next tip
                     </div>
+                  </div>
+                )}
+
+                {/* WHO'S DRIVING IT — ranked, not just the single top tipper
+                    the alert above already covers. Whale tier comes from
+                    the account-wide identifyWhales() classification, joined
+                    against this session's own tippers only — the exact
+                    "which of my whales are in the room right now" question,
+                    answered from data that already exists (live_tips'
+                    per-tip usernames + the canonical whale list), not a new
+                    engagement metric. */}
+                {liveActive && state?.topTippers?.length > 0 && (
+                  <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>🏆 Who's Driving It</div>
+                      {state.whaleCount > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 800, color: C.gold }}>🐋 {state.whaleCount} whale{state.whaleCount === 1 ? '' : 's'} tracked</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {state.topTippers.map((t, i) => (
+                        <div key={t.username} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: C.muted, width: 14, flexShrink: 0 }}>{i + 1}.</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: C.white, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {t.username}{t.isWhale ? ' 🐋' : ''}
+                          </span>
+                          <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{t.pct}%</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.cyan, flexShrink: 0, minWidth: 44, textAlign: 'right' }}>${t.revenue.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {state.whaleCount === 0 && (
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 10 }}>No whale-tier fans tracked in this session yet.</div>
+                    )}
                   </div>
                 )}
 

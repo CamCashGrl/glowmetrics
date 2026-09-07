@@ -4,6 +4,18 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { getSessionBreakdown, SESSION_PERF_BADGE } from "../../lib/analytics/session-insights"
 import { computePaidSessionAnalytics } from "../../lib/analytics"
 import SessionDrawer from "./SessionDrawer"
+// Approved master card templates. Every card surface on this page is one of
+// them; nothing here defines its own glass, border, radius or glow. The
+// specialised displays that genuinely need their own structure — the session
+// history table, the Recharts trend, the SessionDrawer — keep it, and sit
+// inside a template rather than defining a surface of their own.
+import Card from "../../components/ui/Card"
+import { StandardCard } from "../../components/ui/cards"
+// Shared platform list/selector — the same one Performance.js's colours are
+// now sourced from (lib/platforms.js), so a platform reads the same name
+// and colour on both tabs instead of two separate copies drifting apart.
+import { PLATFORM_NAMES, styleForPlatform } from "../../lib/platforms"
+import PlatformFilter from "../../components/ui/PlatformFilter"
 
 const TYPE_META = {
   free: { label: "Free Chat", icon: "🎥", color: "#22D3EE" },
@@ -13,7 +25,6 @@ const TYPE_META = {
 // Keyed by paid_sessions.session_type, matching PrivateSessions.js so the
 // same session type is the same colour wherever it is shown.
 const PAID_TYPE_COLORS = { "Private Chat": "#22d3ee", "Full-Private Chat": "#a855f7", "Group Chat": "#f59e0b", "Spy Mode": "#f472b6" }
-const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams", "Stripchat", "CamSoda"]
 const RANGES = [{ id: "7d", label: "7D", days: 7 }, { id: "30d", label: "30D", days: 30 }, { id: "90d", label: "90D", days: 90 }, { id: "all", label: "ALL", days: null }]
 const TYPES = [{ id: "all", label: "All Sessions" }, { id: "free", label: "Free Chat" }, { id: "live", label: "Live Mode" }, { id: "paid", label: "Paid Session" }]
 
@@ -49,84 +60,198 @@ function QualityBadge({ perf }) {
   return <span className="session-card-quality" style={{ color: b.color, background: b.bg, border: `1px solid ${b.border}` }}>{b.label}</span>
 }
 
-// ── Recent session intelligence card — the primary experience ───────────
-function RecentCard({ row, onOpen, comparablePopulation = [], timezone = "UTC" }) {
+// One cell of the summary strip. Deliberately NOT a MetricCard: the six of
+// them share a single surface, and a MetricCard inside that surface would be
+// a card inside a card. MetricCard is reserved for a true headline metric,
+// and none of these six is the headline — together they are the summary.
+// Uses the page's existing KPI type classes, so nothing about the type scale
+// or the density changes.
+function SessionKpi({ label, value, color, sub }) {
+  return (
+    <div className="session-kpi-cell">
+      <div className="session-kpi-label">{label}</div>
+      <div className="session-kpi-value" style={color ? { color } : undefined}>{value}</div>
+      {sub && <div className="session-kpi-sub">{sub}</div>}
+    </div>
+  )
+}
+
+// ── WHALE INTERSECTION ────────────────────────────────────────────────────
+// No function anywhere already answers "which whales tipped in THIS
+// session" — identifyWhales() (lib/analytics.js) computes tiers across the
+// WHOLE account, and no session object carries a tier. This joins the two
+// real outputs: a lowercase username -> tier map from the account's already-
+// computed whale list, checked against the session's own tip usernames.
+// Nothing is classified here that identifyWhales() didn't already classify.
+function buildWhaleTierMap(whales) {
+  const map = {}
+  for (const w of whales) if (w?.username) map[String(w.username).toLowerCase()] = w.tier
+  return map
+}
+// Only meaningful where a session actually carries tipper identities.
+// Free-chat sessions do: each tip has a username. Live Mode sessions don't —
+// live_sessions stores aggregate counts only (tip_count, unique_tipper_count),
+// never who tipped, so "whales tracked" cannot be calculated for them and is
+// not shown, rather than guessed at or shown as a false 0. Paid sessions carry
+// exactly one identity (the client on that booking).
+function whalesInSession(type, s, tierMap) {
+  if (type === "free") {
+    const seen = new Set()
+    let count = 0
+    for (const t of (s.tips || [])) {
+      const u = String(t.username || "").toLowerCase()
+      if (!u || seen.has(u)) continue
+      seen.add(u)
+      if (tierMap[u] === "Whale") count++
+    }
+    return count
+  }
+  if (type === "paid" && s.username) {
+    return tierMap[String(s.username).toLowerCase()] === "Whale" ? 1 : 0
+  }
+  return null // not trackable for this session type
+}
+
+// ── Session bucket — the old Sessions information architecture, redrawn on
+// the current CamCashGrl system at far higher density. ───────────────────
+// The previous version of this page put "what happened" and "who drove it"
+// one click away in SessionDrawer; that buried the exact intelligence a
+// creator opens Sessions to see. This card surfaces it directly:
+//   SNAPSHOT        — earnings, duration, tips, $/hr, platform, type
+//   WHO DROVE IT     — real top tippers with $ and % share; whales tracked
+//   WHAT DROVE IT    — the engine's own timing/concentration/audience
+//                       insights (session-insights.js) — the same real
+//                       signals that answer both "what influenced this
+//                       session" and "what drove it": there is one insights
+//                       array, not two, so this reads as one honest section
+//                       instead of two headers repeating the same sentence
+// The full per-tip timeline, spike detail and coaching thread stay in
+// SessionDrawer — genuinely deep detail, not the summary intelligence above.
+function SessionBucket({ row, onOpen, onViewFan, comparablePopulation = [], tierMap = {}, timezone = "UTC" }) {
   const { type, session: s } = row
   const meta = TYPE_META[type]
   const revenue = rowRevenue(type, s)
   const usdPerHr = rowUsdPerHr(type, s)
-  // Passing [] here left allAvg at 0, so performance fell through to
-  // "average" for every session and the quality badge on this card — the
-  // primary experience — was a fixed label rather than a real verdict.
   const bd = type === "free" ? getSessionBreakdown(s, comparablePopulation, timezone) : null
   const perf = bd?.performance
+  const platform = rowPlatform(type, s)
+  const pStyle = styleForPlatform(platform)
+  const whaleCount = whalesInSession(type, s, tierMap)
 
-  let whatWorked = null, whoDrove = [], opportunity = null
-  if (type === "free" && bd) {
-    whatWorked = bd.insights.slice(0, 2)
-    whoDrove = bd.topTippers
-    opportunity = bd.recommendations[0] || null
+  // Who drove it — real identities where the session type carries them.
+  let whoDrove = []
+  let tipsCount = null
+  if (type === "free") {
+    tipsCount = s.tipCount ?? (s.tips || []).length
+    whoDrove = bd?.topTippers || []
   } else if (type === "live") {
-    whatWorked = (s.tip_count || 0) > 0 ? [`${s.unique_tipper_count || 0} supporters tipped, ${s.tip_count} total tips`] : []
-    if (s.largest_tip_usd) whoDrove = [{ username: "Largest tip", usd: s.largest_tip_usd, count: null }]
+    tipsCount = s.tip_count ?? null
+    // No usernames in live_sessions — the honest "who drove it" here is the
+    // real aggregate the table does carry, not an invented name.
   } else if (type === "paid") {
-    whatWorked = [`${s.session_type || "Paid session"} — ${fmtUsd(s.usd)} for ${s.tokens || 0} tokens`]
-    if (s.username) whoDrove = [{ username: s.username, usd: parseFloat(s.usd) || 0, count: 1, pct: 100 }]
+    tipsCount = 1
+    if (s.username) whoDrove = [{ username: s.username, usd: parseFloat(s.usd) || 0, pct: 100 }]
+  }
+
+  // What drove it — the engine's own insights, not a re-derivation. Kept to
+  // the two most substantive lines so the card stays dense; the rest is in
+  // the drawer.
+  const droveLines = type === "free" && bd ? bd.insights.slice(0, 2) : []
+
+  // Performance-vs-average — the same real allAvg getSessionBreakdown
+  // already computes, shown as one prominent line rather than buried in the
+  // insights paragraph. "average" tier gets no banner, same as the drawer.
+  let perfBanner = null
+  if (type === "free" && bd && bd.performance !== "average" && bd.allAvg) {
+    const diff = s.totalUSD - bd.allAvg
+    const pct = Math.round((Math.abs(diff) / bd.allAvg) * 100)
+    perfBanner = bd.performance === "high"
+      ? { good: true, text: `$${diff.toFixed(0)} above your avg session — top ${pct}% performance` }
+      : { good: false, text: `$${Math.abs(diff).toFixed(0)} below your avg session ($${bd.allAvg.toFixed(0)}) — ${pct}% shortfall` }
   }
 
   return (
-    <div className="session-card">
-      <div className="session-card-top">
-        <div>
-          <div className="session-card-meta" style={{ color: meta.color }}>
-            {meta.icon} {meta.label.toUpperCase()}
-            <span style={{ color: "#687696", fontWeight: 600 }}>· {rowPlatform(type, s)}</span>
-            <QualityBadge perf={perf} />
-          </div>
-          <div className="session-card-date">{fmtDateTime(rowDate(type, s))}</div>
+    <StandardCard variant="glass" padding="md" className="session-bucket">
+      <div className="bucket-head">
+        <div className="bucket-type" style={{ color: meta.color }}>
+          {meta.icon} {meta.label}
+          <span className="bucket-platform" style={{ color: pStyle.accent }} title={platform}>· {platform}</span>
         </div>
-        <div className="session-money">
-          <strong>{fmtUsd(revenue)}</strong>
-          <span>{usdPerHr != null ? `${fmtUsd(usdPerHr)}/hr` : "—/hr"}</span>
+        <QualityBadge perf={perf} />
+      </div>
+      <div className="bucket-date">{fmtDateTime(rowDate(type, s))}</div>
+
+      {perfBanner && (
+        <div className={`bucket-perf-banner ${perfBanner.good ? "is-good" : "is-low"}`}>
+          {perfBanner.good ? "✅" : "⚠️"} {perfBanner.text}
         </div>
+      )}
+
+      {/* SNAPSHOT */}
+      <div className="bucket-snapshot">
+        <div><span>Earnings</span><strong>{fmtUsd(revenue)}</strong></div>
+        <div><span>$/hr</span><strong>{usdPerHr != null ? fmtUsd(usdPerHr) : "—"}</strong></div>
+        <div><span>Duration</span><strong>{fmtDur(rowDurationMinutes(type, s))}</strong></div>
+        <div><span>Tips</span><strong>{tipsCount != null ? tipsCount : "—"}</strong></div>
       </div>
 
-      <div className="session-stats">
-        <div className="session-stat-box"><div className="session-stat-label">Duration</div><div className="session-stat-value">{fmtDur(rowDurationMinutes(type, s))}</div></div>
-        <div className="session-stat-box"><div className="session-stat-label">Tips</div><div className="session-stat-value">{type === "free" ? (s.tipCount ?? (s.tips || []).length) : type === "live" ? (s.tip_count ?? "—") : 1}</div></div>
-        <div className="session-stat-box"><div className="session-stat-label">Quality</div><div className="session-stat-value">{perf ? SESSION_PERF_BADGE[perf].label.replace(/^[^\s]+\s/, "") : "—"}</div></div>
-      </div>
+      {/* Peak-time callout — bd.peakTime/peakBucket, the same values the
+          drawer's earnings-timeline chart is built from. */}
+      {type === "free" && bd?.peakBucket?.usd > 0 && (
+        <div className="bucket-meta-line" style={{ marginTop: 8 }}>
+          🔥 Peaked at {new Date(bd.peakTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })} — {fmtUsd(bd.peakBucket.usd)} in 5 minutes
+        </div>
+      )}
 
-      <div className="session-insight-grid">
-        <div>
-          <div className="insight-block-title" style={{ color: "#22D3EE" }}>💡 What Worked</div>
-          {whatWorked && whatWorked.length > 0 ? whatWorked.map((w, i) => (
-            <div className="insight-line positive" key={i}><span>→</span>{w}</div>
-          )) : <div className="insight-line">Not enough data yet.</div>}
-          {opportunity && (
-            <>
-              <div className="insight-block-title" style={{ color: "#ffc43d", marginTop: 14 }}>🚀 Next Opportunity</div>
-              <div className="insight-line opportunity"><span>•</span>{opportunity}</div>
-            </>
+      {/* WHO DROVE IT */}
+      {(whoDrove.length > 0 || whaleCount != null || (type === "live" && s.unique_tipper_count != null)) && (
+        <div className="bucket-section">
+          <div className="bucket-label">Who drove it</div>
+          {whoDrove.length > 0 && (
+            <div className="bucket-tippers">
+              {whoDrove.map((t, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className="bucket-tipper-row"
+                  disabled={!onViewFan}
+                  onClick={onViewFan ? (e) => { e.stopPropagation(); onViewFan(t.username) } : undefined}
+                >
+                  <span className="bucket-tipper-name">{t.username}</span>
+                  <span className="bucket-tipper-pct">{t.pct != null ? `${t.pct}%` : ""}</span>
+                  <strong>{fmtUsd(t.usd)}</strong>
+                </button>
+              ))}
+            </div>
+          )}
+          {type === "live" && s.unique_tipper_count != null && (
+            <div className="bucket-meta-line">
+              {s.unique_tipper_count} supporter{s.unique_tipper_count === 1 ? "" : "s"} tipped
+              {s.largest_tip_usd ? ` · largest tip ${fmtUsd(s.largest_tip_usd)}` : ""}
+            </div>
+          )}
+          {whaleCount != null && (
+            <div className="bucket-meta-line">
+              🐋 {whaleCount} whale{whaleCount === 1 ? "" : "s"} tracked this session
+            </div>
           )}
         </div>
-        <div>
-          <div className="insight-block-title" style={{ color: "#EC4899" }}>Who Drove The Session</div>
-          <div className="who-drove-list">
-            {whoDrove.length === 0 && <div className="insight-line">Not enough data yet.</div>}
-            {whoDrove.map((t, i) => (
-              <div className="top-tipper" key={i}>
-                <span className="tipper-name">{t.username}</span>
-                <span>{t.count != null ? `${t.count} tip${t.count === 1 ? "" : "s"}` : ""}</span>
-                <strong>{fmtUsd(t.usd)}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
 
-      <button className="gradient-button" onClick={onOpen}>View Session →</button>
-    </div>
+      {/* WHAT DROVE IT — real engine insights (timing, concentration,
+          audience) doing double duty as "what influenced" and "what drove"
+          this session, since both ask the same real signal. */}
+      {droveLines.length > 0 && (
+        <div className="bucket-section">
+          <div className="bucket-label">What drove it</div>
+          {droveLines.map((line, i) => <div key={i} className="bucket-drove-line">→ {line}</div>)}
+        </div>
+      )}
+
+      <button type="button" className="bucket-foot-link" onClick={onOpen}>
+        View full session →
+      </button>
+    </StandardCard>
   )
 }
 
@@ -143,6 +268,12 @@ export default function Sessions({
   recentCoachingLoading = false,
   monthlyData = [],
   timezone = "UTC",
+  // Account-wide whale tiers (analytics.whales — identifyWhales() output),
+  // reused for the per-session "who drove it" / "whales tracked" join. Not
+  // a second whale calculation — the tiers are already computed; this page
+  // only checks which of them tipped in a given session.
+  whales = [],
+  onViewFan,
 }) {
   const [range, setRange] = useState("30d")
   const [typeFilter, setTypeFilter] = useState("all")
@@ -209,7 +340,11 @@ export default function Sessions({
     }
   }, [visible])
 
+  // Session buckets carry real "who drove it" detail now, not just a
+  // scannable summary, so 4 — not the interim design's 6 — is the right
+  // count for the space they need.
   const recent = useMemo(() => [...visible].sort((a, b) => new Date(rowDate(b.type, b.session)) - new Date(rowDate(a.type, a.session))).slice(0, 4), [visible])
+  const whaleTierMap = useMemo(() => buildWhaleTierMap(whales), [whales])
 
   const typePerf = useMemo(() => {
     const build = (rows, type, revFn) => {
@@ -341,19 +476,19 @@ export default function Sessions({
       <div className="session-filters">
         <div className="session-pill-group">{TYPES.map(t => <button key={t.id} className={`session-pill${typeFilter === t.id ? " active" : ""}`} onClick={() => { setTypeFilter(t.id); setPage(1) }}>{t.label}</button>)}</div>
         <div className="session-pill-group">{RANGES.map(r => <button key={r.id} className={`session-pill${range === r.id ? " active" : ""}`} onClick={() => setRange(r.id)}>{r.label}</button>)}</div>
-        <select className="session-platform-select" value={platform} onChange={e => setPlatform(e.target.value)}>
-          <option value="all">All Platforms</option>
-          {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
+        {/* Shared selector (components/ui/PlatformFilter.jsx) — the same
+            component Money Map/other tabs can reuse rather than each
+            building their own platform picker. */}
+        <PlatformFilter platforms={PLATFORM_NAMES} value={platform} onChange={(p) => { setPlatform(p); setPage(1) }} />
       </div>
 
       {!hasFilteredData ? (
-        <div className="glass-panel session-empty">
+        <StandardCard className="session-empty" padding="lg">
           <div className="session-empty-icon">🎥</div>
           <div className="session-empty-title">No recent sessions</div>
           <div className="session-empty-body">Once you stream, CamCash will start showing what worked, who held the room, and where your next session can improve.</div>
           {hasAnyHistory && <button className="gradient-button" style={{ maxWidth: 220, margin: "16px auto 0" }} onClick={() => setRange("all")}>View historical data</button>}
-        </div>
+        </StandardCard>
       ) : (
         <>
           {usingFallbackPopulation && (
@@ -362,29 +497,38 @@ export default function Sessions({
             </div>
           )}
 
-          <div className="session-kpis">
-            <div className="glass-panel session-kpi">
-              <div className="session-kpi-label">Total Sessions</div>
-              <div className="session-kpi-value">{summary.totalSessions}</div>
-              <div className="session-kpi-sub">{summary.streamCount} stream{summary.streamCount === 1 ? "" : "s"}{summary.paidBookings > 0 ? ` · ${summary.paidBookings} paid booking${summary.paidBookings === 1 ? "" : "s"}` : ""}</div>
-            </div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Stream Time</div><div className="session-kpi-value" style={{ color: "#22D3EE" }}>{fmtHrs(summary.totalHours)}</div></div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Total Revenue</div><div className="session-kpi-value" style={{ color: "#21d99a" }}>{fmtUsd0(summary.totalRevenue)}</div><div className="session-kpi-sub">All streams and paid bookings</div></div>
-            <div className="glass-panel session-kpi">
-              <div className="session-kpi-label">Avg $/hr</div>
-              <div className="session-kpi-value" style={{ color: "#ffc43d" }}>{summary.avgPerHr != null ? fmtUsd(summary.avgPerHr) : "—"}</div>
+          {/* ── SUMMARY ────────────────────────────────────────────────
+                One compact intelligence strip, not six competing boxes. A
+                master template is a composition, not a mandatory wrapper:
+                six MetricCards side by side made six equal surfaces out of
+                what is really one summary, so the KPIs now share a single
+                surface and the strip reads as one object. Every value,
+                colour and qualifier is the one that was already here. ── */}
+          <Card variant="glass" glow="cyan" padding="md" className="session-summary">
+            <div className="session-kpis" style={{ margin: 0 }}>
+              <SessionKpi label="Total Sessions" value={summary.totalSessions}
+                sub={`${summary.streamCount} stream${summary.streamCount === 1 ? "" : "s"}${summary.paidBookings > 0 ? ` · ${summary.paidBookings} paid booking${summary.paidBookings === 1 ? "" : "s"}` : ""}`} />
+              <SessionKpi label="Stream Time" value={fmtHrs(summary.totalHours)} color="#22D3EE" />
+              <SessionKpi label="Total Revenue" value={fmtUsd0(summary.totalRevenue)} color="#21d99a" sub="All streams and paid bookings" />
               {/* Paid bookings carry no duration, so they are outside this rate
                   entirely while still counting toward Total Revenue above. */}
-              <div className="session-kpi-sub">{summary.untimedCount > 0 ? `Timed sessions only · ${summary.untimedCount} excluded` : "Timed sessions only"}</div>
+              <SessionKpi label="Avg $/hr" value={summary.avgPerHr != null ? fmtUsd(summary.avgPerHr) : "—"} color="#ffc43d"
+                sub={summary.untimedCount > 0 ? `Timed sessions only · ${summary.untimedCount} excluded` : "Timed sessions only"} />
+              <SessionKpi label="Avg Session" value={summary.avgSession != null ? fmtUsd(summary.avgSession) : "—"} color="#EC4899" sub="Streams only" />
+              <SessionKpi label="Best Session" value={summary.best ? fmtUsd(rowRevenue(summary.best.type, summary.best.session)) : "—"} color="#A855F7"
+                sub={summary.best ? TYPE_META[summary.best.type].label : "—"} />
             </div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Avg Session</div><div className="session-kpi-value" style={{ color: "#EC4899" }}>{summary.avgSession != null ? fmtUsd(summary.avgSession) : "—"}</div><div className="session-kpi-sub">Streams only</div></div>
-            <div className="glass-panel session-kpi"><div className="session-kpi-label">Best Session</div><div className="session-kpi-value" style={{ color: "#A855F7" }}>{summary.best ? fmtUsd(rowRevenue(summary.best.type, summary.best.session)) : "—"}</div><div className="session-kpi-sub">{summary.best ? TYPE_META[summary.best.type].label : "—"}</div></div>
-          </div>
+          </Card>
 
-          {/* ── EARNINGS BREAKDOWN — free chat vs Live Mode vs each paid
-                 session type. Everything here is rendered from figures that
-                 are already computed (typePerf, paidStats.sessionTypeBreakdown);
-                 no revenue is re-derived. ── */}
+          {/* ── ANALYSIS ───────────────────────────────────────────────
+                One analytical area, not two cards. "Where the money came
+                from" and "how the rate moved" are halves of the same
+                question, so they share a surface with a rule between them
+                instead of competing as separate containers. Everything is
+                rendered from figures that are already computed (typePerf,
+                paidStats.sessionTypeBreakdown, monthlyData); no revenue and
+                no rate is re-derived here. The Recharts figure keeps its own
+                structure — a chart genuinely needs it. ── */}
           {(() => {
             const rows = [
               { key: "free", label: "Free Chat", color: TYPE_META.free.color, usd: typePerf.free.revenue, count: typePerf.free.count, note: "Public tips in open chat" },
@@ -395,115 +539,186 @@ export default function Sessions({
               })),
             ].filter(r => r.usd > 0)
             const total = rows.reduce((a, r) => a + r.usd, 0)
-            if (!rows.length || total <= 0) return null
+            const hasSplit = rows.length > 0 && total > 0
+            const hasTrend = trendData.length > 1
+            if (!hasSplit && !hasTrend) return null
             const withPct = rows.map(r => ({ ...r, pct: (r.usd / total) * 100 })).sort((a, b) => b.usd - a.usd)
             return (
-              <div className="glass-panel" style={{ padding: 20, marginTop: 22 }}>
-                <div className="section-label">💰 Where your money came from</div>
-                <div style={{ display: "flex", height: 30, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 16 }}>
-                  {withPct.map(r => (
-                    <div key={r.key} title={`${r.label}: ${fmtUsd(r.usd)} (${r.pct.toFixed(1)}%)`}
-                      style={{ width: `${r.pct}%`, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.35s" }}>
-                      {r.pct >= 11 && <span style={{ fontSize: 10, fontWeight: 800, color: "rgba(8,12,24,0.85)" }}>{Math.round(r.pct)}%</span>}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-                  {withPct.map(r => (
-                    <div key={r.key}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 4, background: r.color, flexShrink: 0 }} />
-                        <span className="session-kpi-label" style={{ marginBottom: 0 }}>{r.label}</span>
-                      </div>
-                      <div style={{ fontSize: 17, fontWeight: 800, color: r.color }}>{fmtUsd(r.usd)}</div>
-                      <div className="session-kpi-sub">{Math.round(r.pct)}% · {r.count} session{r.count === 1 ? "" : "s"}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 10.5, color: "#687696", marginTop: 12, lineHeight: 1.5 }}>
-                  Free chat, Live Mode and paid sessions are stored separately and each counted once — these add up, they never overlap.
-                </div>
-              </div>
-            )
-          })()}
-
-          <div className="section-label">✨ Recent Session Intelligence</div>
-          <div className="recent-session-grid">
-            {recent.map((r, i) => <RecentCard key={i} row={r} onOpen={() => openDrawer(r)} comparablePopulation={filteredFree} timezone={timezone} />)}
-          </div>
-
-          {trendData.length > 1 && (
-            <div style={{ marginTop: 22 }}>
-              <div className="glass-panel" style={{ padding: 20 }}>
-                <div className="section-label">Session Performance — $/hr over time</div>
-                <ResponsiveContainer width="100%" height={140}>
-                  <LineChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="month" tick={{ fill: "#687696", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#687696", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.1)" }} formatter={v => fmtUsd(v)} />
-                    <Line type="monotone" dataKey="usdPerHour" stroke="#22D3EE" strokeWidth={2} dot={{ r: 3, fill: "#A855F7" }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          )}
-
-          {(typeFilter === "all" || typeFilter === "live" || typeFilter === "paid") && (
-            <div className="session-two-col" style={{ marginTop: 22 }}>
-              {(typeFilter === "all" || typeFilter === "live") && (
-                <div className="glass-panel" style={{ padding: 20 }}>
-                  <div className="section-label" style={{ color: "#FB923C" }}>🔴 Live Mode Intelligence</div>
-                  {liveSessionsLoading ? (
-                    <div className="insight-line">Loading Live Mode history…</div>
-                  ) : typePerf.live.count === 0 ? (
-                    <div className="insight-line">No Live Mode sessions in this period.</div>
-                  ) : (
-                    <div className="session-kpis" style={{ gridTemplateColumns: "repeat(4,1fr)", margin: "0 0 18px" }}>
-                      <div><div className="session-kpi-label">Live Sessions</div><div className="session-kpi-value" style={{ fontSize: 16 }}>{typePerf.live.count}</div></div>
-                      <div><div className="session-kpi-label">Live Hours</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#22D3EE" }}>{fmtHrs(typePerf.live.hours)}</div></div>
-                      <div><div className="session-kpi-label">Revenue</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#21d99a" }}>{fmtUsd0(typePerf.live.revenue)}</div></div>
-                      <div><div className="session-kpi-label">$/hr</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#ffc43d" }}>{typePerf.live.usdPerHr != null ? fmtUsd(typePerf.live.usdPerHr) : "—"}</div></div>
-                    </div>
-                  )}
-                  <div className="drawer-section-label" style={{ marginTop: 4 }}>🎯 Coaching History</div>
-                  {recentCoachingLoading && <div className="insight-line">Loading coaching history…</div>}
-                  {!recentCoachingLoading && recentCoachingEvents.length === 0 && <div className="insight-line">Not enough coaching history yet.</div>}
-                  {!recentCoachingLoading && recentCoachingEvents.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 220, overflowY: "auto" }}>
-                      {recentCoachingEvents.slice(0, 10).map(e => (
-                        <div key={e.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 12 }}>
-                          <span style={{ color: "#687696", minWidth: 70, fontVariantNumeric: "tabular-nums" }}>{fmtDateShort(e.shown_at)}</span>
-                          <span style={{ color: "#aeb9d5", flex: 1 }}>{e.title || e.message}</span>
-                          <span style={{
-                            fontWeight: 700, fontSize: 10.5,
-                            color: e.action_status === "performed" ? "#21d99a" : e.action_status === "skipped" ? "#687696" : "#ffc43d",
-                          }}>{e.action_status === "performed" ? "✓ Performed" : e.action_status === "skipped" ? "↩ Skipped" : "— Unmarked"}</span>
+              <Card variant="glass" glow="purple" padding="lg" style={{ marginTop: 22 }}>
+                {hasSplit && (
+                  <>
+                    <div className="section-label">💰 Session type breakdown</div>
+                    <div style={{ display: "flex", height: 30, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", marginBottom: 16 }}>
+                      {withPct.map(r => (
+                        <div key={r.key} title={`${r.label}: ${fmtUsd(r.usd)} (${r.pct.toFixed(1)}%)`}
+                          style={{ width: `${r.pct}%`, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", transition: "width 0.35s" }}>
+                          {r.pct >= 11 && <span style={{ fontSize: 10, fontWeight: 800, color: "rgba(8,12,24,0.85)" }}>{Math.round(r.pct)}%</span>}
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              )}
-              {(typeFilter === "all" || typeFilter === "paid") && (
-                <div className="glass-panel" style={{ padding: 20 }}>
-                  <div className="section-label" style={{ color: "#A855F7" }}>💎 Paid Session Intelligence</div>
-                  {!paidStats ? (
-                    <div className="insight-line">Not enough data yet.</div>
-                  ) : (
-                    <div className="session-kpis" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
-                      <div><div className="session-kpi-label">Sessions</div><div className="session-kpi-value" style={{ fontSize: 16 }}>{paidStats.totalCount}</div></div>
-                      <div><div className="session-kpi-label">Revenue</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#21d99a" }}>{fmtUsd0(paidStats.totalUSD)}</div></div>
-                      <div><div className="session-kpi-label">Avg Session</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#EC4899" }}>{fmtUsd(paidStats.avgSessionUSD)}</div></div>
-                      <div><div className="session-kpi-label">Unique Clients</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#A855F7" }}>{paidStats.uniqueClients}</div></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+                      {withPct.map(r => (
+                        <div key={r.key}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 4, background: r.color, flexShrink: 0 }} />
+                            <span className="session-kpi-label" style={{ marginBottom: 0 }}>{r.label}</span>
+                          </div>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: r.color }}>{fmtUsd(r.usd)}</div>
+                          <div className="session-kpi-sub">{Math.round(r.pct)}% · {r.count} session{r.count === 1 ? "" : "s"}</div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                    <div style={{ fontSize: 10.5, color: "#687696", marginTop: 12, lineHeight: 1.5 }}>
+                      Free chat, Live Mode and paid sessions are stored separately and each counted once — these add up, they never overlap.
+                    </div>
+                  </>
+                )}
+
+                {hasSplit && hasTrend && (
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "20px 0 16px" }} />
+                )}
+
+                {hasTrend && (
+                  <>
+                    <div className="section-label">Session performance — $/hr over time</div>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <LineChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="month" tick={{ fill: "#687696", fontSize: 11 }} />
+                        <YAxis tick={{ fill: "#687696", fontSize: 11 }} />
+                        <Tooltip contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.1)" }} formatter={v => fmtUsd(v)} />
+                        <Line type="monotone" dataKey="usdPerHour" stroke="#22D3EE" strokeWidth={2} dot={{ r: 3, fill: "#A855F7" }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </>
+                )}
+              </Card>
+            )
+          })()}
+
+          {/* ── BREAKDOWN BY SESSION TYPE ──────────────────────────────
+                Live Mode and Paid Session intelligence answer the same
+                question — "how does each kind of session perform?" — so they
+                are two columns of one section rather than two independent
+                cards. Each column keeps its own specialised content: the
+                Live column's coaching history is a scrolling log, not a
+                metric grid, and stays one. ── */}
+          {(typeFilter === "all" || typeFilter === "live" || typeFilter === "paid") && (
+            <StandardCard eyebrow="Breakdown by session type" style={{ marginTop: 22 }}>
+              <div className="session-two-col" style={{ marginTop: 14 }}>
+                {(typeFilter === "all" || typeFilter === "live") && (
+                  <div>
+                    <div className="section-label" style={{ color: "#FB923C" }}>🔴 Live Mode Intelligence</div>
+                    {liveSessionsLoading ? (
+                      <div className="insight-line">Loading Live Mode history…</div>
+                    ) : typePerf.live.count === 0 ? (
+                      <div className="insight-line">No Live Mode sessions in this period.</div>
+                    ) : (
+                      <div className="session-kpis" style={{ gridTemplateColumns: "repeat(4,1fr)", margin: "0 0 18px" }}>
+                        <div><div className="session-kpi-label">Live Sessions</div><div className="session-kpi-value" style={{ fontSize: 16 }}>{typePerf.live.count}</div></div>
+                        <div><div className="session-kpi-label">Live Hours</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#22D3EE" }}>{fmtHrs(typePerf.live.hours)}</div></div>
+                        <div><div className="session-kpi-label">Revenue</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#21d99a" }}>{fmtUsd0(typePerf.live.revenue)}</div></div>
+                        <div><div className="session-kpi-label">$/hr</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#ffc43d" }}>{typePerf.live.usdPerHr != null ? fmtUsd(typePerf.live.usdPerHr) : "—"}</div></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(typeFilter === "all" || typeFilter === "paid") && (
+                  <div>
+                    <div className="section-label" style={{ color: "#A855F7" }}>💎 Paid Session Intelligence</div>
+                    {!paidStats ? (
+                      <div className="insight-line">Not enough data yet.</div>
+                    ) : (
+                      <div className="session-kpis" style={{ gridTemplateColumns: "repeat(2,1fr)", margin: 0 }}>
+                        <div><div className="session-kpi-label">Sessions</div><div className="session-kpi-value" style={{ fontSize: 16 }}>{paidStats.totalCount}</div></div>
+                        <div><div className="session-kpi-label">Revenue</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#21d99a" }}>{fmtUsd0(paidStats.totalUSD)}</div></div>
+                        <div><div className="session-kpi-label">Avg Session</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#EC4899" }}>{fmtUsd(paidStats.avgSessionUSD)}</div></div>
+                        <div><div className="session-kpi-label">Unique Clients</div><div className="session-kpi-value" style={{ fontSize: 16, color: "#A855F7" }}>{paidStats.uniqueClients}</div></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </StandardCard>
           )}
 
-          <div className="glass-panel" style={{ padding: 20, marginTop: 22 }}>
+          {/* ── LIVE MODE COACHING REPORT ──────────────────────────────
+                NOT the raw prompt feed — that lives in the Live Mode tab,
+                unintrusively, while a creator is streaming. This is a
+                summary: how much of what fired was actually actionable, and
+                whether it got acted on. "Actionable" is a real distinction
+                already encoded in lib/coaching/triggers.js's own priority
+                scale (1-2 = called for a behavior change: dead air, pace
+                dropping, fatigue; 3-4 = positive reinforcement / FYI: pace
+                is good, goal hit, a whale is near). Priority 3-4 events are
+                excluded here rather than padding the count with "you're
+                doing great" notices.
+                A true outcomes report — which specific prompts measurably
+                helped — needs coaching_events.estimated_impact, a column
+                that exists in the schema but that no trigger populates yet.
+                Until that's wired up, this stays a count, not a claim. ── */}
+          {(typeFilter === "all" || typeFilter === "live") && (
+            <StandardCard eyebrow="🎯 Live Mode coaching report" style={{ marginTop: 22 }}>
+              {recentCoachingLoading && <div className="insight-line">Loading coaching history…</div>}
+              {!recentCoachingLoading && recentCoachingEvents.length === 0 && (
+                <div className="insight-line">Not enough Live Mode coaching history yet — this fills in as you stream with Live Mode on.</div>
+              )}
+              {!recentCoachingLoading && recentCoachingEvents.length > 0 && (() => {
+                const actionable = recentCoachingEvents.filter(e => (e.priority ?? 99) <= 2)
+                if (actionable.length === 0) {
+                  return <div className="insight-line">Nothing actionable fired in your recent Live Mode sessions — a quiet stream, in a good way.</div>
+                }
+                const performed = actionable.filter(e => e.action_status === "performed").length
+                const skipped = actionable.filter(e => e.action_status === "skipped").length
+                const unmarked = actionable.length - performed - skipped
+                return (
+                  <>
+                    <div className="bucket-snapshot" style={{ borderTop: 0, paddingTop: 0 }}>
+                      <div><span>Actionable prompts</span><strong>{actionable.length}</strong></div>
+                      <div><span>Performed</span><strong style={{ color: "#21d99a" }}>{performed}</strong></div>
+                      <div><span>Skipped</span><strong style={{ color: "#687696" }}>{skipped}</strong></div>
+                      <div><span>Unmarked</span><strong style={{ color: "#ffc43d" }}>{unmarked}</strong></div>
+                    </div>
+                    <div className="insight-line" style={{ color: "#687696", fontSize: 11.5 }}>
+                      Across your last {new Set(actionable.map(e => e.session_id)).size} Live Mode session{new Set(actionable.map(e => e.session_id)).size === 1 ? "" : "s"} with coaching history. A full performance report — which prompts actually moved the numbers — needs more Live Mode session history to build reliably; this sharpens as you stream more with it on.
+                    </div>
+                  </>
+                )
+              })()}
+            </StandardCard>
+          )}
+
+          {/* Streaming/hourly statistics for this page are the KPI strip's
+              Stream Time + Avg $/hr and the analysis card's $/hr-over-time
+              trend above — real historical performance, not a ranked
+              recommendation. A ranked "best hours to stream" pick already
+              exists elsewhere in the product (Overview / Platforms); adding
+              a second one here would be the exact duplicate the brief
+              called out, so it was removed rather than kept alongside it. */}
+
+          {/* ── INDIVIDUAL SESSIONS ────────────────────────────────────
+                These stay cards, because here the card IS the content: each
+                one is a single session, and the surface is what separates
+                one from the next. This is the only place on the page where
+                a repeated card is the right answer. ── */}
+          <div className="section-label" style={{ marginTop: 26 }}>✨ Recent Session Intelligence</div>
+          <div className="recent-session-grid">
+            {recent.map((r, i) => (
+              <SessionBucket
+                key={i} row={r} onOpen={() => openDrawer(r)} onViewFan={onViewFan}
+                comparablePopulation={filteredFree} tierMap={whaleTierMap} timezone={timezone}
+              />
+            ))}
+          </div>
+
+          {/* ── HISTORY ────────────────────────────────────────────────
+                A real interactive table — sorting, pagination and a per-row
+                drawer — which is why it is not a ComparisonCard: that
+                template's static cell model would strip all three. It sits
+                on a plain page section rather than another card, so the end
+                of the page reads as the record rather than as one more
+                container competing with the analysis above it. ── */}
+          <div className="session-history" style={{ marginTop: 26 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
               <div className="section-label" style={{ marginBottom: 0 }}>SESSION HISTORY</div>
               <select className="session-platform-select" style={{ marginLeft: 0 }} value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }}>

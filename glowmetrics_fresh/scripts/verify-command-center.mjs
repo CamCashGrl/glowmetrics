@@ -85,7 +85,16 @@ check('Free still sees real totals', src.includes('fmtUsd(totalUSD)'))
 // ══════════════════════════════════════════════════════════════════════
 check('inherits the dashboard palette values', src.includes('"#05070f"') && src.includes('"#22D3EE"') && src.includes('"#7C5CFF"'))
 check('uses the CamCash cyan->purple->pink gradient', src.includes('#22D3EE 0%,#7C5CFF 48%,#EC4899 100%'))
-check('uses the shared glass card treatment', src.includes('rgba(15,20,32,0.75)'))
+// The surface literal this used to assert (rgba(15,20,32,0.75)) no longer
+// appears here: card glass moved into the shared Card system
+// (components/ui/Card.jsx + the CAMCASHGRL CARD SYSTEM block in globals.css),
+// which is a stronger form of the same property — this file now cannot define
+// a card surface of its own. Checked as "uses the shared Card, defines no
+// surface" rather than as a copy of one value.
+check('uses the shared glass card treatment',
+  src.includes('from "../../components/ui/Card"') &&
+  !/backdropFilter:\s*["']blur/.test(src) &&
+  !src.includes('const glassCard ='))
 
 // ══════════════════════════════════════════════════════════════════════
 // 7. WIRING — mounted on Overview, old sections replaced not duplicated.

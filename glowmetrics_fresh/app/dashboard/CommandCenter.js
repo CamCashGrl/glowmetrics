@@ -1,6 +1,13 @@
 "use client"
 import { useEffect, useMemo, useState } from "react"
 import { toLocalDow } from "../../lib/analytics"
+// Approved master card templates. Every card surface on this page is one of
+// them; nothing here defines its own glass, border, radius or glow.
+import Card from "../../components/ui/Card"
+import GradientText from "../../components/ui/GradientText"
+import {
+  StandardCard, MetricCard, InsightCard, FeatureCard, HeroCard,
+} from "../../components/ui/cards"
 
 const isWindowPassed = (windowHour) => {
   const now = new Date()
@@ -56,18 +63,9 @@ const C = {
   muted:   "#475569",
 }
 
-// Glass cards: gradient border with glow effect (like Go Live hero card)
-const glassCard = {
-  background: "rgba(15,20,32,0.75)",
-  backdropFilter: "blur(20px)",
-  border: "1px solid rgba(34,211,238,0.28)",
-  borderRadius: 16,
-  boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
-  position: "relative",
-  overflow: "hidden",
-}
-
-// Dark cards: dark background with cyan-pink gradient top border (like Getting Started)
+// Most card surfaces come from the shared system (components/ui/Card.jsx).
+// darkCard/DarkCard below is still used directly for the CreatorReport-style
+// gradient-top-border sections further down this file.
 const darkCard = {
   borderRadius: 16,
   border: "1px solid rgba(255,255,255,0.08)",
@@ -111,7 +109,6 @@ const TIER_COPY = {
   promising: "Pattern emerging",
 }
 
-const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
 
 // Dark card wrapper with gradient top border (for analytics sections like CreatorReport)
 function DarkCard({ children, style = {} }) {
@@ -165,32 +162,34 @@ function GhostButton({ children, onClick }) {
 // One measured fact. Never a claim without a number behind it.
 function Chip({ icon, title, value, sub, accent = C.pink }) {
   return (
-    <div style={card({ padding: "18px 20px", display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 })}>
-      <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{title}</div>
-        {/* wraps rather than truncating — at 2-up on a 390px screen these
-            were clipping to "8:00 AM - 1..." and "4 high-valu..." */}
-        <div style={{ fontSize: 17, fontWeight: 800, color: accent, marginTop: 5, lineHeight: 1.3 }}>{value}</div>
-        {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 5, lineHeight: 1.45 }}>{sub}</div>}
+    <Card variant="flat" padding="sm">
+      <div style={{ display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 }}>
+        <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{title}</div>
+          {/* wraps rather than truncating — at 2-up on a 390px screen these
+              were clipping to "8:00 AM - 1..." and "4 high-valu..." */}
+          <div style={{ fontSize: 17, fontWeight: 800, color: accent, marginTop: 5, lineHeight: 1.3 }}>{value}</div>
+          {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 5, lineHeight: 1.45 }}>{sub}</div>}
+        </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
 function Stat({ value, label: l, delta, accent = C.white }) {
   return (
-    <div style={card({ padding: "18px 16px" })}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, color: C.muted }}>{l}</span>
-        {delta != null && (
-          <span style={{ fontSize: 11, fontWeight: 700, color: delta >= 0 ? C.green : "#F87171" }}>
-            {delta >= 0 ? "+" : ""}{delta}%
-          </span>
-        )}
-      </div>
-    </div>
+    <MetricCard
+      variant="flat"
+      padding="sm"
+      eyebrow={l}
+      // 26px, not the template's default 34px: these six tiles sit inside a
+      // card in a 132px-minimum grid, and the larger size clipped figures
+      // like "$2,088.54". Density is preserved rather than the type scale.
+      value={<span style={{ color: accent, fontSize: 26 }}>{value}</span>}
+      delta={delta != null ? `${delta >= 0 ? "+" : ""}${delta}%` : undefined}
+      deltaDirection={delta != null && delta < 0 ? "down" : "up"}
+    />
   )
 }
 
@@ -490,14 +489,8 @@ export default function CommandCenter({
       </div>
 
       {/* ── HERO: YOUR NEXT BEST MOVE ──────────────────────────────── */}
-      <div style={{
-        background: hasWindow ? HERO_GRADIENT : "rgba(15,20,32,0.75)",
-        backdropFilter: "blur(20px)",
-        border: hasWindow ? "1px solid rgba(34,211,238,0.28)" : `1px solid ${C.border}`,
-        borderRadius: 22, padding: 38, position: "relative", overflow: "hidden",
-      }}>
-        {hasWindow && <div style={{ position: "absolute", right: -70, top: -70, width: 300, height: 300, borderRadius: "50%", background: "rgba(34,211,238,0.12)", filter: "blur(80px)", pointerEvents: "none" }} />}
-        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
+      <Card variant={hasWindow ? "accent" : "glass"} glow="cyan" padding="lg" className={hasWindow ? "cc-card--lum-max" : undefined}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 420px", minWidth: 0 }}>
             <div style={{ ...label, fontSize: 12, color: hasWindow ? C.cyan : C.muted, marginBottom: 14 }}>Your next best move</div>
 
@@ -569,7 +562,7 @@ export default function CommandCenter({
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* ── CAMCASH NOTICED ────────────────────────────────────────────
           Sits directly beneath the hero, same as the reference: a slim,
@@ -577,7 +570,7 @@ export default function CommandCenter({
           reason to check back, without competing with the hero's single
           headline recommendation above it. */}
       {activeNotice && (
-        <div style={card({ padding: "18px 22px", position: "relative", overflow: "hidden" })}>
+        <Card variant="glass" glow="pink" padding="md">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 320px", minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -646,7 +639,7 @@ export default function CommandCenter({
               </div>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* ── EVIDENCE CHIPS ─────────────────────────────────────────── */}
@@ -669,7 +662,7 @@ export default function CommandCenter({
           the next few minutes. Time-sensitive and capped at three, so it
           stays an action list rather than the alert wall it replaced. */}
       {nowActions.length > 0 && (
-        <div style={card({ padding: 20 })}>
+        <Card variant="glass" padding="md">
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
             <span style={{ fontSize: 17 }}>⚡</span>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Right now</div>
@@ -696,7 +689,7 @@ export default function CommandCenter({
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Chart moved into the hero (above). The standalone "Why this is your
@@ -761,7 +754,7 @@ export default function CommandCenter({
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
-        <div style={card({ padding: 20 })}>
+        <Card variant="glass" padding="md">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Who deserves your attention</div>
           </div>
@@ -792,9 +785,9 @@ export default function CommandCenter({
             </div>
           )}
           <div style={{ marginTop: 14 }}><GhostButton onClick={onViewFans}>See all fans →</GhostButton></div>
-        </div>
+        </Card>
 
-        <div style={card({ padding: 20 })}>
+        <Card variant="glass" padding="md">
           <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 14 }}>Your money story</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 10 }}>
             <Stat value={fmtUsd(totalUSD)} label="Total earnings" accent={C.white} />
@@ -807,43 +800,28 @@ export default function CommandCenter({
             )}
           </div>
           <div style={{ marginTop: 14 }}><GhostButton onClick={onSeePerformance}>View full performance →</GhostButton></div>
-        </div>
+        </Card>
       </div>
 
       {/* ── PRO STRATEGY FOOTER ────────────────────────────────────────
           One contextual upsell, not a paywall on every section. Only
           rendered when there is a real, personalized thing being held back. */}
       {!isPro && hasWindow && (
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 22, flexWrap: "wrap",
-          padding: "24px 26px", borderRadius: 18,
-          background: "linear-gradient(115deg, rgba(124,92,255,0.10), rgba(236,72,153,0.08))",
-          border: "1px solid rgba(124,92,255,0.26)",
-        }}>
-          <div style={{ minWidth: 280, flex: 1 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: "-0.015em" }}>
-              You found the window. Pro builds the week around it.
-            </div>
-            <div style={{ fontSize: 14, color: C.text, marginTop: 8, lineHeight: 1.65 }}>
-              You already know <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtWindow(bestWindow.localHour)}</strong> is where you earn most
-              {topGap ? <> and that the gap there is worth <strong style={{ color: C.green }}>{fmtUsd(topGap.rateGapUsdPerHour)}/hr</strong></> : null}.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 13 }}>
-              {[
-                `Every ranked window for the week, not just the top one`,
-                topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
-                overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
-                `A forecast you can hold next week's schedule against`,
-              ].map((line, i) => (
-                <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>
-                  <span style={{ color: C.indigo, fontWeight: 800, flexShrink: 0 }}>→</span>
-                  <span>{line}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <BrandButton onClick={() => onUpgrade?.("command_center_strategy")} style={{ padding: "14px 26px", fontSize: 15.5, borderRadius: 12, flexShrink: 0 }}>Build My Strategy →</BrandButton>
-        </div>
+        <FeatureCard
+          eyebrow="Creator Pro"
+          headline="You found the window. Pro builds the week around it."
+          bullets={[
+            `Every ranked window for the week, not just the top one`,
+            topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
+            overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
+            `A forecast you can hold next week's schedule against`,
+          ]}
+          cta="Build My Strategy →"
+          onCta={() => onUpgrade?.("command_center_strategy")}
+        >
+          You already know <strong style={{ color: C.cyan }}>{bestWindow.localDay}s {fmtWindow(bestWindow.localHour)}</strong> is where you earn most
+          {topGap ? <> and that the gap there is worth <strong style={{ color: C.green }}>{fmtUsd(topGap.rateGapUsdPerHour)}/hr</strong></> : null}.
+        </FeatureCard>
       )}
     </div>
   )

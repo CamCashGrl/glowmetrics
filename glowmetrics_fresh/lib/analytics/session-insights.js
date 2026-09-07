@@ -149,7 +149,11 @@ export function getSessionBreakdown(s, comparablePopulation = [], timezone = 'UT
 
   return {
     buckets, peakTime, peakBucket, firstHalfPct,
-    topTippers, spikes, topSpike, performance, revenuePerMin,
+    // allAvg was already computed above to classify `performance` — exposed
+    // here so callers (the performance-vs-average banner) can show the real
+    // number and percentage without recomputing the same average a second
+    // time from comparablePopulation.
+    topTippers, spikes, topSpike, performance, allAvg, revenuePerMin,
     insights, recommendations,
   }
 }

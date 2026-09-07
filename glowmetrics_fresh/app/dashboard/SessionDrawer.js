@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { getSessionBreakdown, SESSION_PERF_BADGE } from "../../lib/analytics/session-insights"
+import GradientText from "../../components/ui/GradientText"
 
 const C = {
   cyan: "#22D3EE", indigo: "#7C5CFF", pink: "#EC4899", gold: "#F59E0B",
@@ -29,6 +30,31 @@ const TYPE_COLOR = { free: C.cyan, live: "#FB923C", paid: C.indigo }
 
 function SectionLabel({ children }) {
   return <div className="drawer-section-label">{children}</div>
+}
+
+// Performance-vs-average banner — the same real numbers getSessionBreakdown
+// already classifies (`performance`, `allAvg`) as one prominent line instead
+// of buried mid-paragraph in the insights list. Only rendered for high/low:
+// "average" isn't a claim worth a banner, same as the reference design.
+function PerformanceBanner({ bd, totalUSD }) {
+  if (!bd || bd.performance === "average" || !bd.allAvg) return null
+  const diff = totalUSD - bd.allAvg
+  const pct = Math.round((Math.abs(diff) / bd.allAvg) * 100)
+  const isHigh = bd.performance === "high"
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10, marginBottom: 14,
+      background: isHigh ? "rgba(16,185,129,0.08)" : "rgba(248,113,113,0.08)",
+      border: `1px solid ${isHigh ? "rgba(16,185,129,0.28)" : "rgba(248,113,113,0.28)"}`,
+    }}>
+      <span style={{ fontSize: 14 }}>{isHigh ? "✅" : "⚠️"}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: isHigh ? C.green : C.red }}>
+        {isHigh
+          ? `$${diff.toFixed(0)} above your avg session — top ${pct}% performance`
+          : `$${Math.abs(diff).toFixed(0)} below your avg session ($${bd.allAvg.toFixed(0)}) — ${pct}% shortfall`}
+      </span>
+    </div>
+  )
 }
 
 function StatChip({ label, value, color = C.white }) {
@@ -104,9 +130,23 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
             </span>
           )}
         </div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 2 }}>{platform}</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 16 }}>
-          {fmtDate(startTime)} · {fmtTime(startTime, timezone)}{endTime && endTime !== startTime ? ` → ${fmtTime(endTime, timezone)}` : ""}
+        {/* Date/platform on the left, the session's headline number on the
+            right in the signature gradient — the number a creator opens
+            this drawer to see gets the same treatment as every other
+            primary metric in the product. */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 2 }}>{platform}</div>
+            <div style={{ fontSize: 12.5, color: C.muted }}>
+              {fmtDate(startTime)} · {fmtTime(startTime, timezone)}{endTime && endTime !== startTime ? ` → ${fmtTime(endTime, timezone)}` : ""}
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <GradientText style={{ fontSize: 26, display: "block" }}>{fmtUsd(revenue)}</GradientText>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              {fmtDuration(durationMinutes)}{usdPerHr != null ? ` · $${usdPerHr}/hr` : ""}
+            </div>
+          </div>
         </div>
 
         <div className="drawer-overview-grid">
@@ -115,6 +155,8 @@ export default function SessionDrawer({ row, onClose, coachingEvents, coachingLo
           <StatChip label="$/hr" value={usdPerHr != null ? `$${usdPerHr}` : "—"} color={C.cyan} />
           <StatChip label="Tips" value={type === "free" ? (s.tipCount ?? (s.tips || []).length) : type === "live" ? (s.tip_count ?? "—") : 1} color={C.pink} />
         </div>
+
+        {type === "free" && <PerformanceBanner bd={bd} totalUSD={s.totalUSD} />}
 
         {/* ── WHAT WORKED / COULD IMPROVE ── */}
         {type === "free" && bd && (

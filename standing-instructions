@@ -294,7 +294,13 @@ color: white;
 box-shadow: 0 0 26px rgba(22,244,255,0.28), 0 0 36px rgba(255,43,174,0.26);
 ```
 
-**Never use:** bright pink, neon purple, loud gradients, white cards, flat gray, default Tailwind, confetti.
+**Never use:** white cards, flat gray, default Tailwind, confetti.
+
+> The former "bright pink, neon purple, loud gradients" prohibition was removed: it
+> contradicted the palette and primary gradient specified directly above, which are
+> the brand. Pink, purple and the signature gradient are correct — used as ambient
+> light, luminous edges and gradient-filled figures against a near-black canvas,
+> never as large opaque fills.
 
 ---
 
