@@ -669,7 +669,6 @@ export default function CommandCenter({
           best move" card was removed: it duplicated the same distribution in a
           second card while the hero sat half-empty. */}
 
-
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>
         <div style={card({ padding: 20 })}>
