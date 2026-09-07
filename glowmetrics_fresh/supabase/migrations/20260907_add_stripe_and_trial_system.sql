@@ -1,7 +1,16 @@
 -- Add Stripe customer ID tracking and free trial system to profiles
 -- This fixes critical data integrity issue where stripe_customer_id was created
 -- but never persisted, breaking subscription tracking and cancellations.
--- Also implements free trial functionality for new signups.
+--
+-- TRIAL FLOW:
+-- 1. User signs up → plan='free'
+-- 2. User clicks "Upgrade" → Goes to checkout
+-- 3. User enters card in checkout → Stripe creates subscription with trial_period_days=7
+-- 4. Card is immediately on file but NOT charged yet
+-- 5. After 7 days → Stripe automatically charges the card
+-- 6. Webhook updates profile: plan='pro', subscription_status='active'
+--
+-- Stripe handles all trial logic; we track trial_ends_at from webhook data
 
 -- 1. Add stripe_customer_id column
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT UNIQUE;
@@ -16,18 +25,18 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'none'; -- none, trialing, active, past_due, canceled
 CREATE INDEX IF NOT EXISTS idx_profiles_subscription_status ON profiles(subscription_status);
 
--- 4. Update handle_new_user trigger to set trial_ends_at for new users
--- Users now start with a 7-day trial on the 'pro' plan
+-- 4. Update handle_new_user trigger
+-- Users start on free plan, upgrade to pro only after entering card in checkout
+-- Stripe handles the 7-day trial with subscription_data.trial_period_days
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, display_name, plan, trial_ends_at, trial_days)
+  INSERT INTO public.profiles (id, display_name, plan, trial_days)
   VALUES (
     new.id,
     COALESCE(new.raw_user_meta_data->>'display_name', new.email),
-    'pro',  -- Start new users on pro plan (trial)
-    NOW() + INTERVAL '7 days',  -- 7-day trial
-    7
+    'free',  -- Start on free plan until they enter card
+    7  -- Default trial length if they upgrade (configured in checkout)
   );
   RETURN new;
 END;

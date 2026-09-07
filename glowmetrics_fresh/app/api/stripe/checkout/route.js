@@ -97,13 +97,21 @@ export async function POST(request) {
       )
     }
 
-    // Create checkout session
+    // Create checkout session with 7-day trial
+    // Card is collected immediately but not charged until after 7 days
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${request.headers.get('origin')}/dashboard?success=true&plan=${planType}`,
+      subscription_data: {
+        trial_period_days: 7,  // Card on file, charge after 7 days
+        metadata: {
+          userId: user.id,
+          plan_type: planType,
+        }
+      },
+      success_url: `${request.headers.get('origin')}/dashboard?success=true&trial=7days&plan=${planType}`,
       cancel_url: `${request.headers.get('origin')}/dashboard?canceled=true`,
       metadata: {
         userId: user.id,
