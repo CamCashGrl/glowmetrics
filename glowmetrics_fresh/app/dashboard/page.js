@@ -3980,9 +3980,10 @@ const stopImportMessageRotation = () => {
                 Your plan
               </div>
               {isPro ? (() => {
-                // Everyone inside the dashboard has access now (gated app —
-                // see the /start-trial redirect above), so this line's job is
-                // to say WHICH kind of access, not to sell anything.
+                // Freemium model: free users access the dashboard with Pro
+                // features locked. This section displays the subscription state
+                // to show WHICH kind of access the user has (trial, subscriber,
+                // legacy, etc.), not to sell them anything.
                 const state = getAccessState(profile)
                 const daysLeft = trialDaysRemaining(profile)
                 const label = state === 'trialing'
