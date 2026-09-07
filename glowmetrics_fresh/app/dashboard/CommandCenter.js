@@ -9,6 +9,17 @@ import {
   StandardCard, MetricCard, InsightCard, FeatureCard, HeroCard,
 } from "../../components/ui/cards"
 
+const isWindowPassed = (windowHour) => {
+  const now = new Date()
+  const currentHour = now.getHours()
+  const windowEndHour = (windowHour + 2) % 24
+  if (windowHour < windowEndHour) {
+    return currentHour >= windowEndHour
+  } else {
+    return currentHour >= windowEndHour && currentHour < windowHour
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
 //
@@ -52,13 +63,21 @@ const C = {
   muted:   "#475569",
 }
 
-// Same glass treatment the rest of the dashboard uses.
-// Card surface comes from the shared system (components/ui/Card.jsx),
-// which is the one place a glass surface is defined.
+// Most card surfaces come from the shared system (components/ui/Card.jsx).
+// darkCard/DarkCard below is still used directly for the CreatorReport-style
+// gradient-top-border sections further down this file.
+const darkCard = {
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(12,16,34,0.7)",
+  position: "relative",
+  overflow: "hidden",
+}
 
 // The CamCash brand gradient (branding spec): cyan -> purple -> pink.
 const CTA_GRADIENT  = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
 const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
+const TOP_GRADIENT  = "linear-gradient(90deg,#22D3EE,#a855f7,#EC4899)"
 
 const fmtUsd  = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtUsd0 = (n) => {
@@ -91,9 +110,26 @@ const TIER_COPY = {
 }
 
 
+// Dark card wrapper with gradient top border (for analytics sections like CreatorReport)
+function DarkCard({ children, style = {} }) {
+  return (
+    <div style={{ ...darkCard, ...style }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: TOP_GRADIENT, opacity: 0.85 }} />
+      {children}
+    </div>
+  )
+}
+
 const label = {
   fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
   textTransform: "uppercase", color: C.muted,
+}
+
+if (typeof window !== 'undefined' && !document.getElementById('cc-spin-anim')) {
+  const style = document.createElement('style')
+  style.id = 'cc-spin-anim'
+  style.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`
+  document.head.appendChild(style)
 }
 
 function BrandButton({ children, onClick, style }) {
@@ -414,6 +450,17 @@ export default function CommandCenter({
   const oppHigh = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS * 1.5 : null
 
   const hasWindow = !!bestWindow
+  const windowPassed = hasWindow && isWindowPassed(bestWindow.localHour)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  useEffect(() => {
+    if (windowPassed && !isRefreshing) {
+      setIsRefreshing(true)
+      const timer = setTimeout(() => setIsRefreshing(false), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [windowPassed, isRefreshing])
+
   const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
 
   // Pro creators go straight to the Stream Planner. Free creators hit the
@@ -449,78 +496,40 @@ export default function CommandCenter({
 
             {hasWindow ? (
               <>
-                <div style={{ fontSize: 38, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.12 }}>
-                  Go live {fmtWindow(bestWindow.localHour)}
-                  {bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
+                {isRefreshing && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 18, animation: "spin 1s linear infinite" }}>🔄</span>
+                    <span style={{ fontSize: 13, color: C.cyan, fontWeight: 600 }}>Refreshing recommendations...</span>
+                  </div>
+                )}
+                <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: "-0.035em", lineHeight: 1.15 }}>
+                  {isRefreshing ? "Finding next best window" : `Go live ${fmtWindow(bestWindow.localHour)}`}
+                  {!isRefreshing && bestWindow.topPlatform ? <> on {bestWindow.topPlatform}</> : null}
                 </div>
-                {/* Confidence + sample sit directly under the recommendation
-                    instead of being buried in a chip further down the page. */}
-                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 14 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.gold, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", padding: "5px 12px", borderRadius: 20 }}>
-                    {TIER_COPY[bestWindow.tier] || "Pattern"}
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isRefreshing ? C.muted : C.gold, background: isRefreshing ? "rgba(255,255,255,0.05)" : "rgba(245,158,11,0.12)", border: `1px solid ${isRefreshing ? "rgba(255,255,255,0.10)" : "rgba(245,158,11,0.28)"}`, padding: "4px 10px", borderRadius: 20 }}>
+                    {isRefreshing ? "Analyzing..." : (TIER_COPY[bestWindow.tier] || "Pattern")}
                   </span>
-                  <span style={{ fontSize: 13, color: C.text }}>
-                    based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} qualifying session{bestWindow.sessionCount === 1 ? "" : "s"}</strong> in this window
+                  <span style={{ fontSize: 11, color: C.text }}>
+                    based on <strong style={{ color: C.white }}>{bestWindow.sessionCount} sessions</strong>
                   </span>
-                </div>
-                <div style={{ fontSize: 16, color: C.text, marginTop: 16, lineHeight: 1.62, maxWidth: 500 }}>
-                  {bestWindow.localDay}s are your highest-earning window. You average{" "}
-                  <strong style={{ color: C.cyan }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</strong> here
-                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical hour</>}.
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
-                  {earlySignal ? "A pattern is starting to form" : "Not enough history for a reliable window yet"}
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
+                  {earlySignal ? "A pattern is forming" : "Need more history"}
                 </div>
-                <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 480 }}>
+                <div style={{ fontSize: 12, color: C.text, marginTop: 6, lineHeight: 1.5, maxWidth: 400 }}>
                   {earlySignal
-                    ? <>{earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is your strongest so far, but only {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} back it up. A few more streams will confirm or replace it.</>
-                    : <>CamCash needs a handful of qualifying sessions before it can tell a real earning window apart from one good night. Keep importing and this fills in.</>}
+                    ? <>{earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is strongest, {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} so far.</>
+                    : <>Keep importing data for reliable recommendations.</>}
                 </div>
               </>
             )}
 
-            <div style={{ marginTop: 26 }}>
-              <BrandButton onClick={handlePlanStreamClick} style={{ padding: "15px 28px", fontSize: 16, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
-            </div>
-
-            {/* ── YOUR BEST WINDOW TODAY ─────────────────────────────
-                Compact, deliberately smaller than the hero CTA above it —
-                answers "if I go live TODAY, when's historically best?"
-                which the hero's headline (ranked across ALL days) doesn't. */}
-            <div style={{
-              marginTop: 16, padding: "13px 16px", borderRadius: 12, maxWidth: 380,
-              background: bestWindowToday ? "rgba(34,211,238,0.06)" : "rgba(255,255,255,0.03)",
-              border: `1px solid ${bestWindowToday ? "rgba(34,211,238,0.22)" : C.border}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: bestWindowToday ? C.cyan : C.muted }}>✨</span>
-                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase", color: bestWindowToday ? C.cyan : C.muted }}>
-                  Your best window today
-                </span>
-              </div>
-              {bestWindowToday ? (
-                <>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: "-0.01em" }}>{fmtWindow(bestWindowToday.localHour)}</span>
-                    <button onClick={handlePlanStreamClick} style={{
-                      background: "transparent", border: "none", color: C.cyan, fontSize: 12, fontWeight: 700,
-                      cursor: "pointer", padding: 0,
-                    }}>Go Live →</button>
-                  </div>
-                  <div style={{ fontSize: 12, color: C.text, marginTop: 5, lineHeight: 1.5 }}>
-                    {todayLiftPct != null && todayLiftPct > 0
-                      ? <>You typically earn <strong style={{ color: C.cyan }}>{todayLiftPct}% more</strong> per hour during this window.</>
-                      : <>Based on {bestWindowToday.sessionCount} qualifying session{bestWindowToday.sessionCount === 1 ? "" : "s"} on {todayLocalDay}s.</>}
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-                  Not enough {todayLocalDay} history yet for a reliable recommendation — keep streaming and this fills in.
-                </div>
-              )}
+            <div style={{ marginTop: 12 }}>
+              <BrandButton onClick={handlePlanStreamClick} style={{ padding: "12px 24px", fontSize: 14, borderRadius: 12 }}>{hasWindow ? "Plan My Stream" : "Open Stream Planner"}</BrandButton>
             </div>
           </div>
 
@@ -686,6 +695,62 @@ export default function CommandCenter({
       {/* Chart moved into the hero (above). The standalone "Why this is your
           best move" card was removed: it duplicated the same distribution in a
           second card while the hero sat half-empty. */}
+
+      {/* ── WHAT'S WORKING ────────────────────────────────────────── */}
+      <DarkCard style={{ padding: 22, marginBottom: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 18 }}>📊 What's Working</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Total Earnings</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtUsd(totalUSD)}</div>
+            {momentum && momentum.label !== "No data" && (
+              <div style={{ fontSize: 11, color: momentum.pct >= 0 ? C.green : C.gold, marginTop: 4 }}>
+                {momentum.pct >= 0 ? "↑" : "↓"} {Math.abs(Math.round(momentum.pct))}% vs last month
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Per Hour Average</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{fmtUsd(hourlyRate)}</div>
+            <div style={{ fontSize: 11, color: C.cyan, marginTop: 4 }}>Based on {sessionCount} sessions</div>
+          </div>
+
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Best Streaming Day</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{bestWindow?.localDay || "Warming up"}</div>
+            {bestWindow?.sessionCount && (
+              <div style={{ fontSize: 11, color: C.cyan, marginTop: 4 }}>{bestWindow.sessionCount} sessions</div>
+            )}
+          </div>
+
+          <div style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>Best Streaming Time</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>{bestWindow ? fmtHour(bestWindow.localHour) : "Warming up"}</div>
+            {bestWindow?.medianUsdPerHour && (
+              <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>{fmtUsd(bestWindow.medianUsdPerHour)}/hr</div>
+            )}
+          </div>
+        </div>
+      </DarkCard>
+
+      {/* ── PLATFORM BREAKDOWN ────────────────────────────────────────── */}
+      {platforms && platforms.length > 0 && (
+        <DarkCard style={{ padding: 22, marginBottom: 18 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 18 }}>🌐 Your Top Earners</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            {platforms.slice(0, 4).map((p, i) => (
+              <div key={i} style={{ padding: 12, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 6 }}>
+                  {p.platform || `Platform ${i + 1}`}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>{fmtUsd(p.usdPerHour || 0)}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{p.sessions || 0} sessions</div>
+              </div>
+            ))}
+          </div>
+        </DarkCard>
+      )}
 
       {/* ── FANS + PERFORMANCE ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 14, alignItems: "start" }}>

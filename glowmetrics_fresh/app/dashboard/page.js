@@ -1783,8 +1783,7 @@ export default function Dashboard() {
     const next = [...visitedTabs, activeTab]
     setVisitedTabs(next)
     try { localStorage.setItem('camcash_visited_tabs', JSON.stringify(next)) } catch (_) {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
+  }, [activeTab, visitedTabs])
 
   // Counter bump when new tips arrive
   useEffect(() => {

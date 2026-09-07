@@ -243,6 +243,8 @@ export function detectPlatform(text) {
   // Structural detection — platform-unique data format when no platform name appears in the text
   if (/^\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}/m.test(text)) return 'BongaCams'
   if (/^\d{10,13}\t/m.test(text)) return 'MyFreeCams'
+  // MFC CSV format: Reference ID (10-13 digits) followed by comma
+  if (/^\d{10,13},/m.test(text)) return 'MyFreeCams'
   return 'Unknown'
 }
 
