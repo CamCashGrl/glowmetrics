@@ -4145,6 +4145,7 @@ const stopImportMessageRotation = () => {
             const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
             const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
             const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
+            const fmtLocalHour = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`
 
             // For best day: compute avg per active day (not raw total which is misleading)
             const dayData = platformTimes[p.platform]?.days || {}
@@ -4168,7 +4169,7 @@ const stopImportMessageRotation = () => {
             if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
             if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
             if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
-            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${fmtLocalHour(parseInt(bHour[0]))} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
             if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
             return insights
           }
