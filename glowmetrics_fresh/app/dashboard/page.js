@@ -1463,6 +1463,7 @@ export default function Dashboard() {
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [engineInsights, setEngineInsights] = useState(null)
+  const [nextMoveCarouselIdx, setNextMoveCarouselIdx] = useState(0)
 
   // ── ANIMATION STATE ──────────────────────────────────────
   const [counterBumping, setCounterBumping] = useState(false)
@@ -3278,6 +3279,108 @@ const stopImportMessageRotation = () => {
               </div>
 
               <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* ═══ YOUR NEXT BEST MOVE CAROUSEL ═══ */}
+                {(() => {
+                  const moveList = nextMoves || []
+                  const move = moveList[nextMoveCarouselIdx] || null
+
+                  if (!move || !bhLabel) return null
+
+                  const bgColor = atPeak ? '#10B981' : bhLabel && hoursUntilPeak <= 3 ? '#FB923C' : '#22D3EE'
+                  const displayRange = `$${Math.round(displayAvg * 0.7)}–$${Math.round(displayAvg * 1.3)}`
+                  const comparison = `$${displayAvg.toFixed(0)}/hr`
+                  const typicalHour = `$${(displayAvg / 3 || 10).toFixed(0)}/hr` // approx 1/3 of peak hour
+
+                  return (
+                    <div style={{
+                      padding: '18px 16px',
+                      borderRadius: 14,
+                      background: `linear-gradient(135deg,${bgColor}18,${bgColor}08)`,
+                      border: `1.5px solid ${bgColor}45`,
+                      boxShadow: `0 0 20px ${bgColor}15`,
+                      animation: 'fadeUp 0.4s ease both'
+                    }}>
+                      {/* Carousel header */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                          YOUR NEXT BEST MOVE
+                        </div>
+                        {moveList.length > 1 && (
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                              onClick={() => setNextMoveCarouselIdx((nextMoveCarouselIdx - 1 + moveList.length) % moveList.length)}
+                              style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(255,255,255,0.1)', border: 'none', color: C.white, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>←</button>
+                            <div style={{ fontSize: 11, color: C.muted, minWidth: 30, textAlign: 'center' }}>{nextMoveCarouselIdx + 1}/{moveList.length}</div>
+                            <button
+                              onClick={() => setNextMoveCarouselIdx((nextMoveCarouselIdx + 1) % moveList.length)}
+                              style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(255,255,255,0.1)', border: 'none', color: C.white, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>→</button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Main recommendation */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <span style={{ fontSize: 28 }}>{atPeak ? '🔥' : hoursUntilPeak <= 3 ? '⚡' : '🕐'}</span>
+                          <div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: C.white, lineHeight: 1.3 }}>
+                              {atPeak
+                                ? `Go live RIGHT NOW on ${displayPlat}`
+                                : `Go live ${bhLabel} on ${displayPlat}`
+                              }
+                            </div>
+                            <div style={{ fontSize: 11, color: bgColor, fontWeight: 600, marginTop: 3 }}>
+                              {atPeak ? '🟢 PEAK WINDOW IS LIVE' : hoursUntilPeak === 1 ? '⏰ Starting in ~1 hour' : `⏰ In ${hoursUntilPeak} hours`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Estimated opportunity vs typical hour */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                        <div style={{ padding: '10px 12px', borderRadius: 10, background: `${bgColor}12`, border: `1px solid ${bgColor}35` }}>
+                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Estimated Opportunity</div>
+                          <div style={{ fontSize: 16, fontWeight: 900, color: bgColor }}>+{displayRange}</div>
+                          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>if you stream 2h</div>
+                        </div>
+                        <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)' }}>
+                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, fontWeight: 600, textTransform: 'uppercase' }}>Your Typical Hour</div>
+                          <div style={{ fontSize: 16, fontWeight: 900, color: C.cyan }}>{comparison}</div>
+                          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>baseline</div>
+                        </div>
+                      </div>
+
+                      {/* Supporting stat */}
+                      <div style={{ padding: '8px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, color: C.text }}>
+                          Based on <span style={{ fontWeight: 700, color: C.white }}>4 qualifying sessions</span> — <span style={{ color: C.gold }}>supported pattern</span>
+                        </div>
+                      </div>
+
+                      {/* CTA */}
+                      <button
+                        onClick={() => handleTabChange('plans')}
+                        style={{
+                          width: '100%',
+                          padding: '12px 14px',
+                          borderRadius: 10,
+                          background: `linear-gradient(135deg,${bgColor},${bgColor}dd)`,
+                          border: 'none',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: `0 4px 12px ${bgColor}30`
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = `0 6px 16px ${bgColor}45` }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 12px ${bgColor}30` }}>
+                        Plan My Stream
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
                 {bhLabel && (
