@@ -930,7 +930,7 @@ export function aggregateRows(tips, tz = null) {
     return {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
-      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [], resurfacingFans: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
@@ -996,12 +996,13 @@ export function aggregateRows(tips, tz = null) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales      = identifyWhales(tips, meaningfulSessions)
-  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
-  const predictions = predictRevenue(tips, meaningfulSessions)
-  const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
+  const whales           = identifyWhales(tips, meaningfulSessions)
+  const resurfacingFans  = detectResurfacing(whales)
+  const insights         = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
+  const predictions      = predictRevenue(tips, meaningfulSessions)
+  const whaleAlerts      = generateWhaleAlerts(whales)
+  const lossAlerts       = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
+  const nextMoves        = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -1279,7 +1280,7 @@ export function aggregateRows(tips, tz = null) {
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
     topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
-    predictions, whaleAlerts, lossAlerts, nextMoves, whales,
+    predictions, whaleAlerts, lossAlerts, nextMoves, whales, resurfacingFans,
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
