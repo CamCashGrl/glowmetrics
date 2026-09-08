@@ -8,8 +8,8 @@
  * 4. Archive/dismissal non-destructiveness
  */
 
-import { detectSessions } from '../sessions.js'
-import { identifyWhales, detectResurfacing } from '../analytics.js'
+import { detectSessions } from '../../analytics/sessions.js'
+import { identifyWhales, detectResurfacing } from '../../analytics.js'
 import { archiveFan, unarchiveFan, isArchived, dismissDiscovery, restoreDiscovery, isDismissed, filterDismissedAlerts, getActiveFans } from '../fanManagement.js'
 
 describe('Canonical Session Detection', () => {
@@ -94,18 +94,23 @@ describe('Tier Classification', () => {
 
 describe('Resurfacing — Personal Historical Behavior', () => {
   test('should use 2x avgDaysBetweenTips as gap threshold (no universal minimum)', () => {
-    // Scenario: fan tips daily (avg 1 day), then 3-day gap, then tips again
+    // Scenario: WHALE tips daily (avg 1 day), then 3-day gap, then tips again
     const tips = [
-      // Tips every day for 5 days
-      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-01T10:00:00Z', usd: 1, tokens: 10 },
-      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-02T10:00:00Z', usd: 1, tokens: 10 },
-      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-03T10:00:00Z', usd: 1, tokens: 10 },
-      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-04T10:00:00Z', usd: 1, tokens: 10 },
-      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-05T10:00:00Z', usd: 1, tokens: 10 },
-      // 3-day gap
-      // Return with 2 tips (pattern resumption)
+      // Tips every day for 10 days (establishes daily pattern)
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-01T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-02T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-03T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-04T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-05T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-06T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-07T10:00:00Z', usd: 5, tokens: 50 },
       { platform: 'twitch', username: 'daily', dateRaw: '2024-01-08T10:00:00Z', usd: 5, tokens: 50 },
-      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-09T10:00:00Z', usd: 5, tokens: 50 }
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-09T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-10T10:00:00Z', usd: 5, tokens: 50 },
+      // 3-day gap (exceeds 2x their daily average)
+      // Return with 2 tips (pattern resumption)
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-13T10:00:00Z', usd: 5, tokens: 50 },
+      { platform: 'twitch', username: 'daily', dateRaw: '2024-01-14T10:00:00Z', usd: 5, tokens: 50 }
     ]
 
     const sessions = detectSessions(tips)
@@ -113,7 +118,7 @@ describe('Resurfacing — Personal Historical Behavior', () => {
     const resurfacing = detectResurfacing(whales)
 
     const dailyFan = resurfacing.find(r => r.username === 'daily')
-    expect(dailyFan).toBeDefined() // Should be resurfacing (3-day gap > 2x avg of 1 day)
+    expect(dailyFan).toBeDefined() // Should be resurfacing (3-day gap > 2x avg of 1 day), and is Whale ($50+ lifetime)
     expect(dailyFan.dormancyDays).toBe(3)
   })
 
@@ -241,15 +246,15 @@ describe('Pro Live Mode Resurfacing Notifications', () => {
     const now = Date.now()
     const sixMonthsAgo = now - (180 * 24 * 60 * 60 * 1000)
 
-    // Create regular (11+ sessions)
+    // Create regular (11+ sessions, total < $50 to NOT be Whale)
     const tips = []
     for (let i = 0; i < 11; i++) {
       tips.push({
         platform: 'twitch',
         username: 'regular',
         dateRaw: new Date(sixMonthsAgo + i * 10 * 24 * 60 * 60 * 1000).toISOString(),
-        usd: 5,
-        tokens: 50
+        usd: 3,  // $3 per tip: 11 tips = $33, plus 2 return tips = $39 (< $50)
+        tokens: 30
       })
     }
     // 40-day gap (4x average of 10 days)
@@ -258,15 +263,15 @@ describe('Pro Live Mode Resurfacing Notifications', () => {
       platform: 'twitch',
       username: 'regular',
       dateRaw: new Date(now - 1000).toISOString(),
-      usd: 10,
-      tokens: 100
+      usd: 3,
+      tokens: 30
     })
     tips.push({
       platform: 'twitch',
       username: 'regular',
       dateRaw: new Date(now - 500).toISOString(),
-      usd: 10,
-      tokens: 100
+      usd: 3,
+      tokens: 30
     })
 
     const sessions = detectSessions(tips)
