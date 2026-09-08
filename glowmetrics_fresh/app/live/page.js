@@ -12,6 +12,8 @@ import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
+import { useResurfacingNotifications } from './useResurfacingNotifications';
+import ResurfacingNotification from '../components/ResurfacingNotification';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
 
 const C = {
@@ -47,6 +49,10 @@ export default function LivePage() {
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
+  // ── PRO LIVE MODE RESURFACING ───────────────────────────────────────
+  const [isPro, setIsPro]             = useState(false);
+  const [resurfacingNotifications, setResurfacingNotifications] = useState([]);
+
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
   const [demoRevenue, setDemoRevenue]     = useState(0);
@@ -79,6 +85,23 @@ export default function LivePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone);
   }, [liveTimezone]);
+
+  // ── PRO LIVE MODE: Resurfacing Notifications ────────────────────────
+  const handleResurfacingNotification = useCallback((notification) => {
+    // Add calculated metrics from the hook's full fan object
+    const fullNotification = {
+      ...notification,
+      resurfacingType: notification.priority === 'critical' ? 'whale' : notification.priority === 'high' ? 'regular' : 'highValue',
+      dormancyDays: notification.fan?.dormancyDays || 0,
+      gapDeviation: notification.fan?.gapDeviation || 1,
+      evidenceQuality: notification.fan?.evidenceQuality
+    }
+
+    setResurfacingNotifications(prev => [...prev, fullNotification])
+  }, [])
+
+  // Call the Pro Live Mode resurfacing hook
+  useResurfacingNotifications(isPro && liveActive, liveEvents, handleResurfacingNotification)
 
   const processedTipIds   = useRef(new Set());
   const isHydratingHistory = useRef(false);
@@ -1610,6 +1633,22 @@ export default function LivePage() {
                   </div>
                 );
               })()}
+
+              {/* Resurfacing Notifications (Pro Live Mode) */}
+              {isPro && liveActive && resurfacingNotifications.length > 0 && (
+                <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
+                  <div style={{ fontSize: 9, color: C.cyan, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>🔄 Returning Fans</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 360, overflowY: 'auto' }}>
+                    {resurfacingNotifications.slice(-5).map((notification, i) => (
+                      <ResurfacingNotification
+                        key={notification.id || i}
+                        notification={notification}
+                        isHighPriority={notification.priority === 'critical'}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Alert History */}
               {liveActive && firedAlertsLog.current.length > 0 && (
