@@ -2482,9 +2482,9 @@ const stopImportMessageRotation = () => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getHours() // local hour — analytics hours are already local
+    const utcHour = getCurrentCreatorHour(userTz) // creator's local hour
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const todayName = DAYS[now.getDay()] // local day of week
+    const todayName = DAYS[getCurrentCreatorDay(userTz)] // creator's local day of week
 
     // Best hour: today-specific per platform first, then all-time fallback
     // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
@@ -2608,14 +2608,15 @@ const stopImportMessageRotation = () => {
       .slice(0, 5)
 
     // Likely online right now
+    const creatorNowHour = getCurrentCreatorHour(userTz)
     const likelyOnline = (whales || [])
       .filter(w => {
         if (!w.tips || w.tips.length < 3) return false
         if (w.totalUSD < 3) return false
         const hc = {}
-        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
+        w.tips.forEach(t => { const h = getCreatorHour(t.date_time || t.dateRaw, userTz); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
-        return (peakH - utcHour + 24) % 24 <= 1
+        return (peakH - creatorNowHour + 24) % 24 <= 1
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
@@ -3466,8 +3467,8 @@ const stopImportMessageRotation = () => {
                 const gl = engineInsights.go_live_status
                 const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
                 const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
-                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
+                const localHour = getCurrentCreatorHour(userTz)
+                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${localHour} AM` : localHour === 12 ? '12 PM' : `${localHour - 12} PM`
                 const glText = gl.multiplier
                   ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
                   : `Go-live signal: ${gl.status} — check your stream timing`
@@ -3528,7 +3529,7 @@ const stopImportMessageRotation = () => {
 
               {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _lh=Math.round(h); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
                 const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
                 const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
                 if (!allPlats.length) return null
@@ -3551,7 +3552,7 @@ const stopImportMessageRotation = () => {
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} total · {(p.hours || 0).toFixed(0)}h streamed</div>
                             {(() => {
-                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][getCurrentCreatorDay(userTz)]
                             const ptimes = analytics?.platformBestTimes?.[p.platform]
                             const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
                             const bestDayEntry = ptimes?.bestDay
@@ -3605,8 +3606,10 @@ const stopImportMessageRotation = () => {
                 const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
                 const platDayUSD = {}; const platDayDates = {}
                 tips.forEach(t => {
-                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
-                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
+                  const p = t.platform
+                  const dateStr = t.date_time || t.dateRaw
+                  const shortDay = UTC_DAYS[getCreatorDay(dateStr, userTz)]
+                  const dateKey = getCreatorDateString(dateStr, userTz)
                   if (!platDayUSD[p]) platDayUSD[p] = {}
                   if (!platDayDates[p]) platDayDates[p] = {}
                   platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
@@ -3623,8 +3626,8 @@ const stopImportMessageRotation = () => {
                 })
                 const platList = Object.keys(platDayAvg)
                 if (platList.length < 1) return null
-                const todayShort = UTC_DAYS[new Date().getUTCDay()]
-                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                const todayShort = UTC_DAYS[getCurrentCreatorDay(userTz)]
+                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][getCurrentCreatorDay(userTz)]
                 return (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -3674,15 +3677,15 @@ const stopImportMessageRotation = () => {
                 A. Likely Online Now  B. Milestones  C. At Risk
             ═══════════════════════════════════════ */}
             {(() => {
-              const currentUTCHourTE = new Date().getUTCHours()
-              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+              const currentUTCHourTE = getCurrentCreatorHour(userTz)
+              const labelH = h => { const _lh=Math.round(h); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
 
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
-                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  fanTips.forEach(t => { const h = getCreatorHour(t.date_time || t.dateRaw, userTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
@@ -4153,9 +4156,9 @@ const stopImportMessageRotation = () => {
               const activeDates = new Set(
                 tips.filter(t => {
                   if (t.platform !== p.platform) return false
-                  const dt = new Date(t.date_time || t.dateRaw)
-                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
-                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
+                  const dateStr = t.date_time || t.dateRaw
+                  return UTC_DAYS_LONG[getCreatorDay(dateStr, userTz)] === day
+                }).map(t => getCreatorDateString(t.date_time || t.dateRaw, userTz))
               ).size
               return [day, activeDates > 0 ? total / activeDates : 0]
             })
@@ -6780,7 +6783,7 @@ const stopImportMessageRotation = () => {
         const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
         whaleTips.forEach(t => {
-          const d = new Date(t.date_time).getUTCDay()
+          const d = getCreatorDay(t.date_time, userTz)
           const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
           if (key in dayCounts) dayCounts[key]++
         })
