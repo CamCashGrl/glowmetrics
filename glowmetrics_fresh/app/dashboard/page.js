@@ -2610,20 +2610,45 @@ const stopImportMessageRotation = () => {
           sum + s.reduce((t, tip) => t + (tip.tokens || 0), 0), 0) / fanSessions.length
         if (avgTokensPerSession < 50) return false
 
-        // Calculate avg days between sessions
+        // Calculate days between sessions from actual distribution
         const sessionDates = fanSessions.map(s => new Date(s[0].date_time || s[0].dateRaw))
-        let totalGap = 0
+        const sessionIntervals = []
         for (let i = 1; i < sessionDates.length; i++) {
-          totalGap += (sessionDates[i] - sessionDates[i-1]) / 86400000
+          sessionIntervals.push((sessionDates[i] - sessionDates[i-1]) / 86400000)
         }
-        const avgDaysBetweenSessions = fanSessions.length > 1 ? totalGap / (fanSessions.length - 1) : 30
 
-        // Must be overdue — gone longer than 1.5x their normal interval
-        // (accounts for "every 2-3 streams" — if they stream 2-3x/week that's a few days)
         const daysSince = w.daysSinceLastTip
-        const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
-        // Cap at 90 days: beyond that the fan is "At Risk", not "Re-engage"
-        return daysSince >= overdueThreshold && daysSince <= 90
+
+        // Use statistical distribution of session intervals (similar to classifyCurrentGapByDistribution)
+        if (sessionIntervals.length >= 3) {
+          const sorted = [...sessionIntervals].sort((a, b) => a - b)
+          const median = sorted.length % 2 === 0
+            ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2
+            : sorted[Math.floor(sorted.length / 2)]
+          const mean = sessionIntervals.reduce((s, x) => s + x, 0) / sessionIntervals.length
+          const variance = sessionIntervals.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sessionIntervals.length
+          const stddev = Math.sqrt(variance)
+
+          // Calculate z-score for current gap
+          let zScore = 0
+          if (stddev < 0.01) {
+            // Perfect consistency: flag if meaningfully above median
+            zScore = daysSince > median * 1.5 ? 2 : 0
+          } else {
+            zScore = (daysSince - mean) / stddev
+          }
+
+          // Classify: unusual (1σ-2σ) or strongly-unusual (≥2σ) means overdue
+          const isOverdue = zScore >= 1
+          return isOverdue
+        } else {
+          // Fallback for few observations: use simple average-based heuristic
+          const avgDaysBetweenSessions = sessionIntervals.length > 0
+            ? sessionIntervals.reduce((s, x) => s + x, 0) / sessionIntervals.length
+            : 30
+          const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
+          return daysSince >= overdueThreshold
+        }
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)

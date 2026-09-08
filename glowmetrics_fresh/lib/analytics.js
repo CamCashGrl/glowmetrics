@@ -64,10 +64,15 @@ function getTipFrequency(daysBetweenTips) {
 }
 
 function isUserRelevant(user) {
-  if (!user || typeof user !== 'object') return false;
-  if (user.daysSinceLastTip > 90) return false;
-  if ((user.totalTokens || 0) < 100) return false;
-  return true;
+  if (!user || typeof user !== 'object') return false
+  // Instead of hardcoded 90-day cutoff, filter based on:
+  // 1. Minimum engagement (100+ tokens)
+  // 2. Whether we have evidence to make predictions (churnRisk confidence)
+  if ((user.totalTokens || 0) < 100) return false
+  // Only exclude if we have HIGH confidence that they've truly churned (critical churn risk + very recent no activity)
+  // This preserves alerts for fans we're reasonably confident about
+  if (user.churnRisk?.level === 'Critical' && user.daysSinceLastTip > 180 && user.churnRisk?.confidence === 'High') return false
+  return true
 }
 
 function validateInsights(insights = []) {
@@ -517,12 +522,33 @@ export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
       tier = 'Emerging'
     }
 
+    // Calculate daysBetweenTipsArr early so it can be used for status and activity state
+    const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
+    const daysBetweenTipsArr = []
+    for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
+
     // ACTIVITY STATE: separate from Tier (locked)
-    const activityState = daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3) ? 'Dormant' : 'Active'
+    // Classify activity state based on statistical distribution: if current gap is strongly-unusual, mark as Dormant
+    const activityClassification = (() => {
+      if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
+        // Fallback: use 3× average as threshold
+        return daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3) ? 'Dormant' : 'Active'
+      }
+      const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
+      const median = sorted.length % 2 === 0 ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2 : sorted[Math.floor(sorted.length / 2)]
+      const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
+      const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
+      const stddev = Math.sqrt(variance)
+      let zScore = stddev > 0.01 ? (daysSinceLastTip - mean) / stddev : (daysSinceLastTip > median * 1.5 ? 2 : 0)
+      // Mark as Dormant if gap is strongly-unusual (≥2σ) or if median-based z-score indicates extended absence
+      return zScore >= 2 ? 'Dormant' : 'Active'
+    })()
+    const activityState = activityClassification
 
     // STATUS: calculated separately from Tier (locked)
+    // Now using statistical churn risk classification
     let status = 'Healthy'
-    const churnRiskLevel = calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount).level
+    const churnRiskLevel = calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount, daysBetweenTipsArr).level
     if (churnRiskLevel === 'High') status = 'Watch'
     if (churnRiskLevel === 'Critical') status = 'At Risk'
 
@@ -530,9 +556,6 @@ export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
     const hourCounts = {}
     f.tips.forEach(t => { const h = toLocalHour(t.dateRaw || t.date_time, userTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-    const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
-    const daysBetweenTipsArr = []
-    for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
 
     return {
       // Identity (FIVE INDEPENDENT DIMENSIONS)
@@ -574,8 +597,8 @@ export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
       isActiveInLast6Months,
 
       // Predictive Metrics
-      tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips, daysBetweenTipsArr),
+      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount, daysBetweenTipsArr),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
 
@@ -811,21 +834,105 @@ export function classifyCurrentGapByDistribution(fan) {
   }
 }
 
-function calcTipProbability(d, avg) {
-  if (d < avg * 0.5)  return { level: 'High',        percentage: 85 }
-  if (d < avg)        return { level: 'Medium-High',  percentage: 70 }
-  if (d < avg * 1.5)  return { level: 'Medium',       percentage: 50 }
-  if (d < avg * 2)    return { level: 'Low-Medium',   percentage: 30 }
-  return                     { level: 'Low',           percentage: 15 }
+function calcTipProbability(d, avg, daysBetweenTipsArr = []) {
+  if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
+    // Fallback when insufficient distribution data: use simple average-based heuristic
+    if (d < avg * 0.5) return { level: 'High', percentage: 85, confidence: 'Low' }
+    if (d < avg) return { level: 'Medium-High', percentage: 70, confidence: 'Low' }
+    if (d < avg * 1.5) return { level: 'Medium', percentage: 50, confidence: 'Low' }
+    if (d < avg * 2) return { level: 'Low-Medium', percentage: 30, confidence: 'Low' }
+    return { level: 'Low', percentage: 15, confidence: 'Low' }
+  }
+
+  // Calculate z-score from actual distribution
+  const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
+  const median = sorted.length % 2 === 0 ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2 : sorted[Math.floor(sorted.length / 2)]
+  const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
+  const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
+  const stddev = Math.sqrt(variance)
+
+  let zScore = 0
+  if (stddev < 0.01) {
+    // Perfect consistency: any meaningful deviation is significant
+    zScore = d > median * 1.5 ? 2 : 0
+  } else {
+    zScore = (d - mean) / stddev
+  }
+
+  const obsCount = daysBetweenTipsArr.length
+  const confidence = obsCount >= 10 ? 'High' : obsCount >= 5 ? 'Medium' : 'Low'
+
+  // Probability of tipping soon decreases as current gap increases
+  // z-score > 2 means very unlikely to tip soon
+  // z-score < -1 means very likely to tip soon
+  let level, percentage
+  if (zScore < -1) {
+    level = 'High'
+    percentage = 85
+  } else if (zScore < 0) {
+    level = 'Medium-High'
+    percentage = 70
+  } else if (zScore < 1) {
+    level = 'Medium'
+    percentage = 50
+  } else if (zScore < 2) {
+    level = 'Low-Medium'
+    percentage = 30
+  } else {
+    level = 'Low'
+    percentage = 15
+  }
+
+  return { level, percentage, confidence, zScore, obsCount, stddev, median }
 }
 
-function calcChurnRisk(d, avg, count) {
-  if (count < 3) return { level: 'Unknown', risk: 'Insufficient data' }
-  const r = d / avg
-  if (r < 1) return { level: 'Low',      risk: 'Active' }
-  if (r < 2) return { level: 'Medium',   risk: 'Watch closely' }
-  if (r < 3) return { level: 'High',     risk: 'At risk' }
-  return           { level: 'Critical',  risk: 'Likely churned' }
+function calcChurnRisk(d, avg, count, daysBetweenTipsArr = []) {
+  if (count < 3) return { level: 'Unknown', risk: 'Insufficient data', confidence: 'Low' }
+
+  if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
+    // Fallback when insufficient distribution data
+    const r = d / avg
+    if (r < 1) return { level: 'Low', risk: 'Active', confidence: 'Low' }
+    if (r < 2) return { level: 'Medium', risk: 'Watch closely', confidence: 'Low' }
+    if (r < 3) return { level: 'High', risk: 'At risk', confidence: 'Low' }
+    return { level: 'Critical', risk: 'Likely churned', confidence: 'Low' }
+  }
+
+  // Calculate z-score from actual distribution
+  const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
+  const median = sorted.length % 2 === 0 ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2 : sorted[Math.floor(sorted.length / 2)]
+  const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
+  const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
+  const stddev = Math.sqrt(variance)
+
+  let zScore = 0
+  if (stddev < 0.01) {
+    // Perfect consistency: any meaningful deviation is significant
+    zScore = d > median * 1.5 ? 3 : 0
+  } else {
+    zScore = (d - mean) / stddev
+  }
+
+  const obsCount = daysBetweenTipsArr.length
+  const confidence = obsCount >= 10 ? 'High' : obsCount >= 5 ? 'Medium' : 'Low'
+
+  // Churn risk increases as current gap grows relative to distribution
+  let level, risk
+  if (zScore < 1) {
+    level = 'Low'
+    risk = 'Active'
+  } else if (zScore < 2) {
+    level = 'Medium'
+    risk = 'Watch closely'
+  } else if (zScore < 3) {
+    level = 'High'
+    risk = 'At risk'
+  } else {
+    level = 'Critical'
+    risk = 'Likely churned'
+  }
+
+  return { level, risk, confidence, zScore, obsCount, stddev, median }
 }
 
 function calcLifetimeValue(spent, days, count) {
@@ -862,8 +969,16 @@ export function generateWhaleAlerts(whales) {
     if (w.tipProbability.level === 'High' && w.totalUSD >= tipLikelyThreshold)
       alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
     if (w.daysSinceLastTip > 0 && w.daysSinceLastTip <= 3 && w.tipCount > 5) {
-      if (w.daysSinceLastTip > w.avgDaysBetweenTips * 1.5)
-        alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
+      // Check if this return is from an unusual gap (not just regular tipping)
+      // Use statistical classification to determine if the interval they just closed was notable
+      const gapClassification = classifyCurrentGapByDistribution(w)
+      if (gapClassification && gapClassification.stats) {
+        // Alert if the gap they just closed was unusual according to their distribution
+        const prevGapWasUnusual = gapClassification.classification === 'unusual' || gapClassification.classification === 'strongly-unusual'
+        if (prevGapWasUnusual && gapClassification.confidence !== 'low') {
+          alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
+        }
+      }
     }
   })
   alerts = alerts.filter(a => isUserRelevant(a.whale))
