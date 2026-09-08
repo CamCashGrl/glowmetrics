@@ -213,3 +213,89 @@ describe('Discovery Dismissal — Non-Destructive', () => {
     expect(filtered.every(a => a.id !== 'alert_2')).toBe(true)
   })
 })
+
+describe('Pro Live Mode Resurfacing Notifications', () => {
+  test('should fire notification when Returning Whale tips during live stream', () => {
+    const tips = [
+      // Historical tips (whale pattern)
+      { platform: 'twitch', username: 'whale', dateRaw: '2024-01-01T10:00:00Z', usd: 100, tokens: 1000 },
+      { platform: 'twitch', username: 'whale', dateRaw: '2024-01-08T10:00:00Z', usd: 100, tokens: 1000 },
+      { platform: 'twitch', username: 'whale', dateRaw: '2024-01-15T10:00:00Z', usd: 100, tokens: 1000 },
+      // 30-day gap (3x weekly average)
+      // Return tip (just now)
+      { platform: 'twitch', username: 'whale', dateRaw: new Date().toISOString(), usd: 75, tokens: 750 }
+    ]
+
+    const sessions = detectSessions(tips)
+    const whales = identifyWhales(tips, sessions)
+    const resurfacing = detectResurfacing(whales)
+
+    expect(resurfacing.length).toBeGreaterThan(0)
+    const returnedWhale = resurfacing.find(r => r.username === 'whale')
+    expect(returnedWhale).toBeDefined()
+    expect(returnedWhale.tier).toBe('Whale')
+    expect(returnedWhale.resurfacingType).toBe('whale')
+  })
+
+  test('should fire notification when Returning Regular tips during live stream', () => {
+    const now = Date.now()
+    const sixMonthsAgo = now - (180 * 24 * 60 * 60 * 1000)
+
+    // Create regular (11+ sessions)
+    const tips = []
+    for (let i = 0; i < 11; i++) {
+      tips.push({
+        platform: 'twitch',
+        username: 'regular',
+        dateRaw: new Date(sixMonthsAgo + i * 10 * 24 * 60 * 60 * 1000).toISOString(),
+        usd: 5,
+        tokens: 50
+      })
+    }
+    // 40-day gap (4x average of 10 days)
+    // Return with 2 tips (just now)
+    tips.push({
+      platform: 'twitch',
+      username: 'regular',
+      dateRaw: new Date(now - 1000).toISOString(),
+      usd: 10,
+      tokens: 100
+    })
+    tips.push({
+      platform: 'twitch',
+      username: 'regular',
+      dateRaw: new Date(now - 500).toISOString(),
+      usd: 10,
+      tokens: 100
+    })
+
+    const sessions = detectSessions(tips)
+    const whales = identifyWhales(tips, sessions)
+    const resurfacing = detectResurfacing(whales)
+
+    expect(resurfacing.length).toBeGreaterThan(0)
+    const returnedRegular = resurfacing.find(r => r.username === 'regular')
+    expect(returnedRegular).toBeDefined()
+    expect(returnedRegular.tier).toBe('Regular')
+    expect(returnedRegular.resurfacingType).toBe('regular')
+  })
+
+  test('Command Center and Live Mode use same resurfacing engine', () => {
+    // Both surfaces call detectResurfacing(whales) with same input
+    const tips = [
+      { platform: 'twitch', username: 'returning', dateRaw: '2024-01-01T10:00:00Z', usd: 60, tokens: 600 },
+      { platform: 'twitch', username: 'returning', dateRaw: '2024-01-08T10:00:00Z', usd: 60, tokens: 600 },
+      { platform: 'twitch', username: 'returning', dateRaw: '2024-02-20T10:00:00Z', usd: 50, tokens: 500 }
+    ]
+
+    const sessions = detectSessions(tips)
+    const whales = identifyWhales(tips, sessions)
+
+    // Both Command Center and Live Mode call same function
+    const resurfacing1 = detectResurfacing(whales)
+    const resurfacing2 = detectResurfacing(whales)
+
+    expect(resurfacing1).toEqual(resurfacing2) // Deterministic result
+    expect(resurfacing1[0].tier).toBe('Whale')
+  })
+})
