@@ -1,8 +1,9 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { getCreatorHour, getCreatorDay, getCreatorDateString } from "../../lib/timezoneUtils"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -1503,6 +1504,7 @@ export default function Dashboard() {
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
+  const userTz = useMemo(() => profile?.schedule?.timezone || 'UTC', [profile?.schedule?.timezone])
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
@@ -1786,7 +1788,6 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            const userTz = profile?.schedule?.timezone || 'UTC'
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -1866,7 +1867,6 @@ export default function Dashboard() {
             return prev // unchanged since the last engine run — skip the recompute
           }
           try {
-            const userTz = profile?.schedule?.timezone || 'UTC'
             const r = runEngine(prev, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -1981,7 +1981,6 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = profile?.schedule?.timezone || 'UTC'
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -2253,26 +2252,26 @@ const stopImportMessageRotation = () => {
   // so hour/day reflects when money actually came in, not when the session started
   // Use UTC to match the database timestamps
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips, userTz], () => {
     const pt = {}
     tips.forEach(t => {
       if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
-      const dt = new Date(t.date_time || t.dateRaw)
-      const hour = dt.getUTCHours()
-      const day = UTC_DAYS_LONG[dt.getUTCDay()]
+      const dateStr = t.date_time || t.dateRaw
+      const hour = getCreatorHour(dateStr, userTz)
+      const day = UTC_DAYS_LONG[getCreatorDay(dateStr, userTz)]
       pt[t.platform].hours[hour] = (pt[t.platform].hours[hour] || 0) + (t.usd || 0)
       pt[t.platform].days[day]   = (pt[t.platform].days[day]   || 0) + (t.usd || 0)
     })
     return pt
   })
 
-  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips], () => whales.filter(w => {
+  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips, userTz], () => whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
       const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
       const tippedOnDay = fanTips.some(t => {
-        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][getCreatorDay(t.date_time || t.dateRaw, userTz)]
         return dayShort === chartDrillDay
       })
       if (!tippedOnDay) return false
