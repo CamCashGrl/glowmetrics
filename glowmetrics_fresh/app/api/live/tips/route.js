@@ -48,12 +48,24 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { username, amount, platform, timestamp } = body;
+    const { username, amount, platform, timestamp, isTest } = body;
 
     if (!username || !amount || !platform) {
       return Response.json(
         { error: 'Missing required fields: username, amount, platform' },
         { status: 400, headers: cors }
+      );
+    }
+
+    // The popup's "Test Tip" button proves the extension can reach this
+    // route (auth token valid, network path working) without ever writing
+    // anything real — not live_tips (which would inflate a genuinely live
+    // session's earnings-per-hour/tip-count with fake data) and not the
+    // permanent tips history. Short-circuits before any DB access.
+    if (isTest) {
+      return Response.json(
+        { success: true, tip: null, savedToHistory: false, message: `Test tip from ${username} acknowledged (not saved)` },
+        { headers: cors }
       );
     }
 

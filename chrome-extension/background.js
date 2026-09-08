@@ -235,7 +235,7 @@ async function sendExtensionHeartbeat() {
 // history — the data behind the dashboard's historical analytics — is a Pro
 // feature, so the plan check happens server-side in this route rather than
 // here; the extension can't be trusted to gate its own writes.
-async function syncTip({ username, tokens, platform, timestamp }) {
+async function syncTip({ username, tokens, platform, timestamp, isTest }) {
   await restorePromise;
   if (!session) return;
 
@@ -244,6 +244,7 @@ async function syncTip({ username, tokens, platform, timestamp }) {
     amount:    parseInt(tokens, 10),
     platform:  platform ? platform.toLowerCase() : 'extension',
     timestamp: timestamp || new Date().toISOString(),
+    isTest,
   });
 
   const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
@@ -540,7 +541,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.action === 'tip') {
-    const { username, tokens, platform } = msg;
+    const { username, tokens, platform, isTest } = msg;
     lastTipTs = Date.now();
     const usd = parseFloat((tokens * (TOKEN_RATES[platform] || 0.05)).toFixed(2));
     const tip = { username, tokens, usd, platform, ts: lastTipTs };
@@ -560,7 +561,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       if (keys.length > 100) chrome.storage.local.remove(keys.slice(100));
     });
 
-    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString() }).then((result) => {
+    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString(), isTest }).then((result) => {
       chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true, savedToHistory: !!result?.savedToHistory } });
     });
 
