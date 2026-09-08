@@ -8,6 +8,7 @@ import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import { computeCoachingState } from "../../lib/coaching/triggers"
+import { archiveFan, unarchiveFan, isArchived, dismissDiscovery, restoreDiscovery, isDismissed, getActiveFans } from "../../lib/analytics/fanManagement"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
@@ -1394,6 +1395,8 @@ export default function Dashboard() {
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
+  const [archiveState, setArchiveState] = useState({ archivedFans: new Set(), archivedAt: new Map() })
+  const [dismissalState, setDismissalState] = useState({ dismissedDiscoveries: new Set(), dismissedAt: new Map() })
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
@@ -3821,7 +3824,12 @@ const stopImportMessageRotation = () => {
             {(() => {
               const resurfacingFans = analytics?.resurfacingFans || []
               if (!resurfacingFans.length) return null
-              const displayFans = resurfacingFans.slice(0, 5)
+              const activeFans = getActiveFans(resurfacingFans, archiveState)
+              const filteredFans = activeFans.filter(f => {
+                const discoveryId = `resurfacing_${f.platform}_${f.username}`
+                return !isDismissed(discoveryId, dismissalState)
+              })
+              const displayFans = filteredFans.slice(0, 5)
               const tierEmoji = { whale: '🐳', regular: '⭐', highValue: '💎', other: '🎯' }
               return (
                 <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.25)", animation: "fadeUp 0.3s ease 0.24s both" }}>
@@ -3846,8 +3854,24 @@ const stopImportMessageRotation = () => {
                         <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
                           💰 ${f.totalUSD.toFixed(0)} lifetime | Away for {f.dormancyDays} days | Value: #{Math.round(f.relativeValue)}
                         </div>
-                        <div style={{ fontSize: 11, color: C.text }}>
+                        <div style={{ fontSize: 11, color: C.text, marginBottom: 8 }}>
                           {f.returnMessage}
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => {
+                            const fanKey = `${f.platform}:${f.username}`.toLowerCase()
+                            archiveFan(fanKey, archiveState)
+                            setArchiveState({ ...archiveState })
+                          }} style={{ fontSize: 10, padding: "4px 8px", borderRadius: 5, background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.4)", color: C.white, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            📦 Archive
+                          </button>
+                          <button onClick={() => {
+                            const discoveryId = `resurfacing_${f.platform}_${f.username}`
+                            dismissDiscovery(discoveryId, dismissalState)
+                            setDismissalState({ ...dismissalState })
+                          }} style={{ fontSize: 10, padding: "4px 8px", borderRadius: 5, background: "rgba(236,72,153,0.2)", border: "1px solid rgba(236,72,153,0.4)", color: C.white, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            🙈 Dismiss
+                          </button>
                         </div>
                       </div>
                     ))}
