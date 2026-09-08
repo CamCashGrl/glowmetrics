@@ -491,16 +491,17 @@ export function identifyWhales(tips, sessions = null) {
   })
   const sixMonthsAgoMs = latestTipDate.getTime() - (180 * 24 * 60 * 60 * 1000)
 
-  // Build a map of fan → set of session dates they tipped in (for qualifying session count)
-  const fanSessionDates = {}
+  // Build a map of fan → set of CANONICAL SESSION IDs they tipped in (for qualifying session count)
+  // CRITICAL: Use canonical session.id, NOT calendar dates
+  // Two sessions on the same date are TWO distinct canonical sessions and count as 2
+  const fanSessionIds = {}
   if (sessions && sessions.length > 0) {
     sessions.forEach(session => {
       session.tips?.forEach(tip => {
         const fanKey = `${tip.platform}:${tip.username}`.toLowerCase()
-        if (!fanSessionDates[fanKey]) fanSessionDates[fanKey] = new Set()
-        // Add the canonical session start date
-        const sessionDate = new Date(session.startTime).toISOString().split('T')[0]
-        fanSessionDates[fanKey].add(sessionDate)
+        if (!fanSessionIds[fanKey]) fanSessionIds[fanKey] = new Set()
+        // Use canonical session ID (e.g., "session_1694203200000")
+        fanSessionIds[fanKey].add(session.id)
       })
     })
   }
@@ -520,7 +521,7 @@ export function identifyWhales(tips, sessions = null) {
 
     // CANONICAL TIER LOGIC (locked)
     let tier = 'New'
-    const qualifyingSessionCount = fanSessionDates[fanKey]?.size || 0
+    const qualifyingSessionCount = fanSessionIds[fanKey]?.size || 0
     const isActiveInLast6Months = lastTipDate.getTime() >= sixMonthsAgoMs
 
     // WHALE: $50+ lifetime revenue (absolute, no percentile override)
@@ -645,8 +646,9 @@ export function detectResurfacing(fans) {
     }
 
     // Resurfacing criteria:
-    // 1. Largest gap is significantly larger than average (2x or 30 days minimum)
-    const gapThreshold = Math.max(f.avgDaysBetweenTips * 2, 30)
+    // 1. Largest gap is significantly larger than fan's own average pattern (2x personal average)
+    // Use ONLY personal historical behavior, not universal thresholds
+    const gapThreshold = f.avgDaysBetweenTips * 2
     if (maxGapDays < gapThreshold) return
 
     // 2. Tips after the gap exist
@@ -657,8 +659,9 @@ export function detectResurfacing(fans) {
     if (f.daysSinceLastTip > 7) return
 
     // 4. Pattern looks like resumption (not just one random late tip)
-    // At least 2 tips after the gap, or the gap was very large and they just tipped
-    if (tipsAfterGap.length === 1 && maxGapDays < 90) return
+    // Either: 2+ tips after gap (clear pattern resumption)
+    // Or: 1 tip after gap requires gap to be 4x average (dramatic return from extended absence)
+    if (tipsAfterGap.length === 1 && maxGapDays < f.avgDaysBetweenTips * 4) return
 
     // Determine priority based on tier
     let priority = 4
