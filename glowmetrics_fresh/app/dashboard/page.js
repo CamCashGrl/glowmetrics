@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
-import { getCreatorHour, getCreatorDay, getCreatorDateString } from "../../lib/timezoneUtils"
+import { getCreatorHour, getCreatorDay, getCreatorDateString, getCurrentCreatorHour, getCurrentCreatorDay } from "../../lib/timezoneUtils"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -2363,19 +2363,18 @@ const stopImportMessageRotation = () => {
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
-        // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = getCreatorHour(t.date_time || t.dateRaw, userTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
-      const hoursAway = (peakHour - currentUTCHr + 24) % 24
+      const currentCreatorHr = getCurrentCreatorHour(userTz)
+      const hoursAway = (peakHour - currentCreatorHr + 24) % 24
       const _pf0 = bestHour[1] / fanTips.length
       const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
-      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+      const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
@@ -2628,18 +2627,18 @@ const stopImportMessageRotation = () => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const alertCurrentHour = new Date().getUTCHours()
-    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    const alertCurrentHour = getCurrentCreatorHour(userTz)
+    const currentDay = (['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])[getCurrentCreatorDay(userTz)]
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
-    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
+    // Use creator's timezone to match platformTimes calculation
     const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
-      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      const dateStr = t.date_time || t.dateRaw
+      const day = UTC_DAYS_LONG[getCreatorDay(dateStr, userTz)]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -2655,14 +2654,15 @@ const stopImportMessageRotation = () => {
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // FIX: use getUTCHours() — tips are stored in UTC
+    // Use creator's timezone for hour buckets to match analytics
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
+      const dateStr = t.date_time || t.dateRaw
+      const d = new Date(dateStr)
       // Floor to UTC hour-bucket key for deduplication
       const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = d.getUTCHours()
+      const h = getCreatorHour(dateStr, userTz)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
       platHourUSD[p][h] += t.usd || 0
@@ -2679,21 +2679,21 @@ const stopImportMessageRotation = () => {
     })
 
     const platNames = Object.keys(platHourAvg)
-    // Use UTC current hour to match stored data
-    const currentUTCHour = new Date().getUTCHours()
+    // Use creator's current hour for comparison
+    const currentCreatorHour = getCurrentCreatorHour(userTz)
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
-        const hourVal = platHourAvg[plat][currentUTCHour] || 0
+        const hourVal = platHourAvg[plat][currentCreatorHour] || 0
         const otherPlats = platNames.filter(p => p !== plat)
         otherPlats.forEach(other => {
-          const otherVal = platHourAvg[other][currentUTCHour] || 0
+          const otherVal = platHourAvg[other][currentCreatorHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((currentUTCHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+            const fmtLabel = currentCreatorHour === 0 ? '12 AM' : currentCreatorHour < 12 ? `${currentCreatorHour} AM` : currentCreatorHour === 12 ? '12 PM' : `${currentCreatorHour - 12} PM`
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
-              message: `At ${label}, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+              message: `At ${fmtLabel}, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
             })
           }
         })
