@@ -6324,12 +6324,15 @@ const stopImportMessageRotation = () => {
           const bestMo = analytics?.bestMonth
           const totalUSD = analytics?.totalUSD || 0
           const now = new Date()
-          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+          // Get current date in creator's timezone
+          const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(now)
+          const [creatorYear, creatorMonth, creatorDay] = creatorNowStr.split('-').map(Number)
+          const thisMonthKey = `${creatorYear}-${String(creatorMonth).padStart(2,'0')}`
           const thisMonth = monthly.find(m => m.month === thisMonthKey)
           const thisMonthUSD = thisMonth?.usd || 0
           const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
-          const dayOfMonth = now.getUTCDate()
+          const daysInMonth = new Date(creatorYear, creatorMonth, 0).getDate()
+          const dayOfMonth = creatorDay
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
