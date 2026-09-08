@@ -609,6 +609,88 @@ export function identifyWhales(tips, sessions = null) {
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
 
+export function detectResurfacing(fans) {
+  if (!fans || fans.length === 0) return []
+
+  const resurfacing = []
+
+  fans.forEach(f => {
+    // Only consider fans with meaningful history (Whale, Regular, or high relative value)
+    const isMeaningful = f.tier === 'Whale' || f.tier === 'Regular' || f.relativeValue >= 50
+    if (!isMeaningful) return
+
+    // Must have sufficient tip history to detect a gap
+    if (!f.tips || f.tips.length < 4) return
+
+    // Reconstruct tip timeline from fan's tips array
+    const sortedTips = [...f.tips].sort((a, b) => {
+      const aTime = new Date(a.dateRaw || a.date_time).getTime()
+      const bTime = new Date(b.dateRaw || b.date_time).getTime()
+      return aTime - bTime
+    })
+
+    if (sortedTips.length < 4) return
+
+    // Find the largest gap in the tip history
+    let maxGapDays = 0
+    let maxGapIndex = 0
+    for (let i = 0; i < sortedTips.length - 1; i++) {
+      const currentTime = new Date(sortedTips[i].dateRaw || sortedTips[i].date_time).getTime()
+      const nextTime = new Date(sortedTips[i + 1].dateRaw || sortedTips[i + 1].date_time).getTime()
+      const gapDays = (nextTime - currentTime) / (24 * 60 * 60 * 1000)
+      if (gapDays > maxGapDays) {
+        maxGapDays = gapDays
+        maxGapIndex = i
+      }
+    }
+
+    // Resurfacing criteria:
+    // 1. Largest gap is significantly larger than average (2x or 30 days minimum)
+    const gapThreshold = Math.max(f.avgDaysBetweenTips * 2, 30)
+    if (maxGapDays < gapThreshold) return
+
+    // 2. Tips after the gap exist
+    const tipsAfterGap = sortedTips.slice(maxGapIndex + 1)
+    if (tipsAfterGap.length === 0) return
+
+    // 3. Recent activity within last 7 days
+    if (f.daysSinceLastTip > 7) return
+
+    // 4. Pattern looks like resumption (not just one random late tip)
+    // At least 2 tips after the gap, or the gap was very large and they just tipped
+    if (tipsAfterGap.length === 1 && maxGapDays < 90) return
+
+    // Determine priority based on tier
+    let priority = 4
+    let resurfacingType = 'other'
+    if (f.tier === 'Whale') {
+      priority = 1
+      resurfacingType = 'whale'
+    } else if (f.tier === 'Regular') {
+      priority = 2
+      resurfacingType = 'regular'
+    } else if (f.relativeValue >= 75) {
+      priority = 3
+      resurfacingType = 'highValue'
+    }
+
+    resurfacing.push({
+      ...f,
+      resurfacingType,
+      priority,
+      dormancyDays: Math.round(maxGapDays),
+      dormancyEndDate: sortedTips[maxGapIndex + 1] ? new Date(sortedTips[maxGapIndex + 1].dateRaw || sortedTips[maxGapIndex + 1].date_time).toISOString() : null,
+      returnMessage: `${f.username} (${f.platform}) is back after ${Math.round(maxGapDays)} days offline`
+    })
+  })
+
+  // Sort by priority (1 = highest), then by relative value (highest first)
+  return resurfacing.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority
+    return b.relativeValue - a.relativeValue
+  })
+}
+
 function calcTipProbability(d, avg) {
   if (d < avg * 0.5)  return { level: 'High',        percentage: 85 }
   if (d < avg)        return { level: 'Medium-High',  percentage: 70 }
