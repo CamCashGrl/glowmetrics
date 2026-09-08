@@ -166,7 +166,7 @@ export const canShowHourlyRate   = ({ sessionCount, totalStreamMinutes }) => ses
 // Money Map and Stream Planner are data-gated only — never paywalled.
 export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatformCount = 0, isPro = false, liveModeSessions = 0 }) {
   const rules = {
-    bestStreamingTimes:   { needsData: totalTips < 25 || totalSessions < 3,          message: 'Peak Earning Windows unlock after 25+ tips and 3+ meaningful sessions.' },
+    bestStreamingTimes:   { needsData: totalSessions < 1,                            message: 'Peak Earning Windows unlock after first session with timestamps.' },
     avgHourlyRate:        { needsData: totalSessions < 3 || totalStreamMinutes < 60,  message: 'Average $/Hour unlocks after 3+ sessions and 60+ tracked minutes.' },
     topFans:              { needsData: totalTips < 10 || totalFans < 5,               message: 'Top Fans unlock after more fan and tip activity.' },
     whales:               { needsData: totalFans < 10 || totalEarnings < 50,          message: 'Whale detection unlocks after enough repeat fan history.' },
@@ -175,7 +175,7 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
     fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
     moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
-    streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
+    streamPlanner:        { needsData: totalSessions < 1,                            message: 'Stream Planner unlocks after your first session with timestamps.' },
     forecasting:          { needsData: totalSessions < 8 || totalEarnings < 50,       message: 'Forecasting unlocks after more earnings history.' },
     liveScore:            { needsData: liveModeSessions < 1,                          message: 'Live Mode Score unlocks after your first Live Mode stream.' },
   }
