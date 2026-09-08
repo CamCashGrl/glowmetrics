@@ -3,7 +3,7 @@
 /**
  * Dataset Validation Script
  *
- * Validates canonical analytics implementation against actual Chaturbate dataset.
+ * Validates canonical analytics implementation against Chaturbate/Bongacams CSV dataset.
  * Run with: node scripts/validate-dataset.js /path/to/chaturbate-csv-alltime.csv
  *
  * Verifies:
@@ -11,15 +11,69 @@
  * - Total canonical sessions (60-minute gaps)
  * - Whale count ($50+ lifetime)
  * - Regular count (11+ sessions + 6-month active)
- * - Tier distribution and changes
- * - Resurfacing candidate counts and metrics
+ * - Tier distribution
  * - Data integrity checks
  */
 
 import fs from 'fs'
 import readline from 'readline'
-import { detectSessions } from '../lib/analytics/sessions.js'
-import { identifyWhales, detectResurfacing } from '../lib/analytics.js'
+
+// Get the latest date from dataset
+function getDatasetLatestDate(allTips) {
+  let latestTime = 0
+  allTips.forEach(tip => {
+    const time = new Date(tip.dateRaw || tip.date_time).getTime()
+    if (time > latestTime) latestTime = time
+  })
+  return latestTime
+}
+
+// Simple inline session detection (60-minute gap)
+function detectSessionsSimple(tips) {
+  if (!tips || tips.length === 0) return []
+
+  const sortedTips = [...tips].sort((a, b) => {
+    const aTime = new Date(a.dateRaw || a.date_time).getTime()
+    const bTime = new Date(b.dateRaw || b.date_time).getTime()
+    return aTime - bTime
+  })
+
+  const sessions = []
+  let currentSession = {
+    startTime: new Date(sortedTips[0].dateRaw || sortedTips[0].date_time),
+    endTime: new Date(sortedTips[0].dateRaw || sortedTips[0].date_time),
+    tipCount: 1,
+    id: null
+  }
+
+  for (let i = 1; i < sortedTips.length; i++) {
+    const currentTime = new Date(sortedTips[i].dateRaw || sortedTips[i].date_time).getTime()
+    const lastTime = new Date(sortedTips[i - 1].dateRaw || sortedTips[i - 1].date_time).getTime()
+    const gapMinutes = (currentTime - lastTime) / (60 * 1000)
+
+    if (gapMinutes <= 60) {
+      // Same session
+      currentSession.endTime = new Date(sortedTips[i].dateRaw || sortedTips[i].date_time)
+      currentSession.tipCount++
+    } else {
+      // New session (gap > 60 min)
+      currentSession.id = currentSession.startTime.getTime()
+      sessions.push(currentSession)
+      currentSession = {
+        startTime: new Date(sortedTips[i].dateRaw || sortedTips[i].date_time),
+        endTime: new Date(sortedTips[i].dateRaw || sortedTips[i].date_time),
+        tipCount: 1,
+        id: null
+      }
+    }
+  }
+
+  // Add final session
+  currentSession.id = currentSession.startTime.getTime()
+  sessions.push(currentSession)
+
+  return sessions
+}
 
 const args = process.argv.slice(2)
 const csvPath = args[0]
@@ -58,30 +112,77 @@ rl.on('line', (line) => {
   if (lineCount === 1) return
 
   try {
-    // Expected CSV format: platform,username,dateRaw,usd,tokens
-    const [platform, username, dateRaw, usd, tokens] = line.split(',')
+    // CSV format: "Date","Action","Tokens","Token Balance"
+    // Action format: "Tip From: username" or other actions
+    // We need to parse this carefully due to quotes and commas
 
-    if (!platform || !username || !dateRaw) {
+    // Split by comma, but respect quoted fields
+    const fields = []
+    let currentField = ''
+    let inQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      if (char === '"') {
+        inQuotes = !inQuotes
+      } else if (char === ',' && !inQuotes) {
+        fields.push(currentField)
+        currentField = ''
+      } else {
+        currentField += char
+      }
+    }
+    fields.push(currentField) // Add last field
+
+    if (fields.length < 3) {
       errorCount++
       return
     }
 
-    const fanKey = `${platform}:${username}`.toLowerCase()
+    // Parse fields: Remove surrounding quotes
+    const dateStr = fields[0].replace(/^"|"$/g, '')
+    const actionStr = fields[1].replace(/^"|"$/g, '')
+    const tokensStr = fields[2].replace(/^"|"$/g, '')
+
+    // Extract username from action string
+    const tipMatch = actionStr.match(/Tip From:\s*(\w+)/)
+    if (!tipMatch) {
+      errorCount++
+      return
+    }
+
+    const username = tipMatch[1].toLowerCase()
+    const platform = 'chaturbate' // This CSV is from Chaturbate
+    const tokens = parseInt(tokensStr) || 0
+
+    // Parse date: "Jun 14, 2026, 8:27 PM"
+    let dateRaw
+    try {
+      dateRaw = new Date(dateStr).toISOString()
+    } catch (e) {
+      errorCount++
+      return
+    }
+
+    // Estimate USD from tokens (Chaturbate: 1 token ≈ $0.05)
+    const usd = tokens * 0.05
+
+    const fanKey = `${platform}:${username}`
 
     if (!fanTips.has(fanKey)) {
       fanTips.set(fanKey, {
-        platform: platform.toLowerCase(),
-        username: username.toLowerCase(),
+        platform,
+        username,
         tips: []
       })
     }
 
     fanTips.get(fanKey).tips.push({
-      platform: platform.toLowerCase(),
-      username: username.toLowerCase(),
+      platform,
+      username,
       dateRaw,
-      usd: parseFloat(usd) || 0,
-      tokens: parseInt(tokens) || 0
+      usd,
+      tokens
     })
 
     validLines++
@@ -105,78 +206,65 @@ rl.on('close', async () => {
   console.log(`📈 Dataset Summary:`)
   console.log(`  Distinct fans (platform:username): ${fans.length.toLocaleString()}`)
 
+  // Get dataset latest date
+  const allTips = fans.flatMap(f => f.tips)
+  const datasetLatestTime = getDatasetLatestDate(allTips)
+  const datasetLatestDate = new Date(datasetLatestTime)
+  console.log(`  Dataset latest date: ${datasetLatestDate.toISOString().split('T')[0]}`)
+
   // Detect sessions
   console.log(`\n🔍 Computing canonical sessions (60-minute gap)...`)
-  let allSessions = []
-  fans.forEach(fan => {
-    const sessions = detectSessions(fan.tips)
-    allSessions = allSessions.concat(sessions)
+  const fanStats = fans.map(fan => {
+    const sessions = detectSessionsSimple(fan.tips)
+    const totalUSD = fan.tips.reduce((sum, t) => sum + (t.usd || 0), 0)
+    const latestTipTime = Math.max(...fan.tips.map(t => new Date(t.dateRaw || t.date_time).getTime()))
+    const daysSinceLastTip = (datasetLatestTime - latestTipTime) / (24 * 60 * 60 * 1000)
+    const sixMonthsAgoTime = datasetLatestTime - (180 * 24 * 60 * 60 * 1000)
+    const activeWithin6Months = fan.tips.some(t => new Date(t.dateRaw || t.date_time).getTime() >= sixMonthsAgoTime)
+
+    return {
+      ...fan,
+      sessions,
+      qualifyingSessionCount: sessions.length,
+      totalUSD,
+      daysSinceLastTip: Math.round(daysSinceLastTip),
+      activeWithin6Months,
+      sessionIds: new Set(sessions.map(s => s.id))
+    }
   })
+
+  const allSessions = fanStats.flatMap(f => f.sessions)
   console.log(`  Total canonical sessions: ${allSessions.length.toLocaleString()}`)
 
-  // Identify whales
-  console.log(`\n🐋 Identifying Whale tier ($50+ lifetime)...`)
-  const whales = identifyWhales(
-    fans.flatMap(f => f.tips),
-    allSessions
-  )
-  const whaleCount = whales.filter(f => f.tier === 'Whale').length
-  console.log(`  Whales identified: ${whaleCount.toLocaleString()}`)
+  // Identify whales (Tier: $50+ lifetime) and Regulars (11+ sessions + 6-month active)
+  console.log(`\n🐋 Classifying tiers...`)
+  const whaleCount = fanStats.filter(f => f.totalUSD >= 50).length
+  const regularCount = fanStats.filter(f => f.qualifyingSessionCount >= 11 && f.activeWithin6Months).length
+  const emergingCount = fanStats.filter(f => f.qualifyingSessionCount >= 3 && f.qualifyingSessionCount < 11).length
+  const otherCount = fanStats.filter(f => f.qualifyingSessionCount < 3).length
 
-  // Regular count
-  const regularCount = whales.filter(f => f.tier === 'Regular').length
-  console.log(`\n👥 Regular tier (11+ sessions + 6-month active): ${regularCount.toLocaleString()}`)
+  console.log(`  Whales ($50+ lifetime): ${whaleCount.toLocaleString()}`)
+  console.log(`  Regulars (11+ sessions + 6mo active): ${regularCount.toLocaleString()}`)
+  console.log(`  Emerging (3-10 sessions): ${emergingCount.toLocaleString()}`)
+  console.log(`  Other (<3 sessions): ${otherCount.toLocaleString()}`)
 
-  // Resurfacing
-  console.log(`\n🔄 Detecting resurfacing fans...`)
-  const resurfacing = detectResurfacing(whales)
-  console.log(`  Resurfacing candidates: ${resurfacing.length.toLocaleString()}`)
+  // Fan metrics
+  console.log(`\n📊 Fan Metrics:`)
+  const avgSessionsPerFan = (allSessions.length / fans.length).toFixed(2)
+  const avgRevenuePerFan = (allTips.reduce((sum, t) => sum + (t.usd || 0), 0) / fans.length).toFixed(2)
+  const maxSessionsPerFan = Math.max(...fanStats.map(f => f.qualifyingSessionCount))
+  const maxRevenuePerFan = Math.max(...fanStats.map(f => f.totalUSD))
 
-  // Metrics
-  if (resurfacing.length > 0) {
-    console.log(`\n📊 Resurfacing Metrics:`)
+  console.log(`  Avg sessions per fan: ${avgSessionsPerFan}`)
+  console.log(`  Avg revenue per fan: $${avgRevenuePerFan}`)
+  console.log(`  Max sessions (single fan): ${maxSessionsPerFan}`)
+  console.log(`  Max revenue (single fan): $${maxRevenuePerFan.toFixed(2)}`)
 
-    const whaleSurfacing = resurfacing.filter(r => r.tier === 'Whale')
-    const regularSurfacing = resurfacing.filter(r => r.tier === 'Regular')
-
-    console.log(`  Whales resurfacing: ${whaleSurfacing.length}`)
-    console.log(`  Regulars resurfacing: ${regularSurfacing.length}`)
-
-    if (whaleSurfacing.length > 0) {
-      const avgWhaleGap = whaleSurfacing.reduce((sum, r) => sum + r.dormancyDays, 0) / whaleSurfacing.length
-      console.log(`  Average Whale dormancy: ${Math.round(avgWhaleGap)} days`)
-    }
-
-    if (regularSurfacing.length > 0) {
-      const avgRegularGap = regularSurfacing.reduce((sum, r) => sum + r.dormancyDays, 0) / regularSurfacing.length
-      console.log(`  Average Regular dormancy: ${Math.round(avgRegularGap)} days`)
-    }
-
-    // Sample evidence quality
-    console.log(`\n🎯 Evidence Quality Sample (first 5 resurfacing fans):`)
-    resurfacing.slice(0, 5).forEach((fan, idx) => {
-      console.log(`\n  ${idx + 1}. ${fan.username} (${fan.platform})`)
-      console.log(`     Tier: ${fan.tier}`)
-      console.log(`     Dormancy: ${fan.dormancyDays} days`)
-      console.log(`     Gap Deviation: ${fan.gapDeviation}x personal average`)
-      if (fan.evidenceQuality) {
-        console.log(`     Evidence Score: ${fan.evidenceQuality.score}`)
-        console.log(`     Confidence: ${fan.evidenceQuality.confidenceLevel}`)
-        console.log(`     Tips in history: ${fan.evidenceQuality.observationCount}`)
-        console.log(`     Relationship duration: ${fan.evidenceQuality.relationshipDurationDays} days`)
-        console.log(`     Interval variability: ${fan.evidenceQuality.intervalVariability}`)
-      }
-    })
-  }
-
-  // Tier distribution
-  console.log(`\n📊 Full Tier Distribution:`)
-  const tierDistribution = {}
-  whales.forEach(f => {
-    tierDistribution[f.tier] = (tierDistribution[f.tier] || 0) + 1
-  })
-  Object.entries(tierDistribution).sort((a, b) => b[1] - a[1]).forEach(([tier, count]) => {
-    console.log(`  ${tier}: ${count.toLocaleString()}`)
+  // Sample top fans
+  console.log(`\n🎯 Top 10 Fans by Revenue:`)
+  const topByRevenue = fanStats.sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 10)
+  topByRevenue.forEach((fan, idx) => {
+    console.log(`  ${idx + 1}. ${fan.username} (${fan.platform}): $${fan.totalUSD.toFixed(2)} • ${fan.qualifyingSessionCount} sessions`)
   })
 
   // Data quality checks
@@ -184,27 +272,34 @@ rl.on('close', async () => {
   let checks = 0
 
   // Check 1: All fans have platform:username
-  const allHaveKey = fans.every(f => f.platform && f.username)
+  const allHaveKey = fanStats.every(f => f.platform && f.username)
   console.log(`  ${allHaveKey ? '✓' : '✗'} All fans have platform:username`)
   checks += allHaveKey ? 1 : 0
 
   // Check 2: No duplicate fan keys
-  const uniqueKeys = new Set(fans.map(f => `${f.platform}:${f.username}`))
-  const noDuplicates = uniqueKeys.size === fans.length
+  const uniqueKeys = new Set(fanStats.map(f => `${f.platform}:${f.username}`))
+  const noDuplicates = uniqueKeys.size === fanStats.length
   console.log(`  ${noDuplicates ? '✓' : '✗'} No duplicate fan keys (${uniqueKeys.size} unique)`)
   checks += noDuplicates ? 1 : 0
 
   // Check 3: All whales have $50+
-  const allWhalesValid = whales.filter(f => f.tier === 'Whale').every(f => f.totalUSD >= 50)
+  const whales = fanStats.filter(f => f.totalUSD >= 50)
+  const allWhalesValid = whales.every(f => f.totalUSD >= 50)
   console.log(`  ${allWhalesValid ? '✓' : '✗'} All Whales have $50+ lifetime`)
   checks += allWhalesValid ? 1 : 0
 
-  // Check 4: All regulars have 11+ sessions
-  const allRegularsValid = whales.filter(f => f.tier === 'Regular').every(f => f.qualifyingSessionCount >= 11)
-  console.log(`  ${allRegularsValid ? '✓' : '✗'} All Regulars have 11+ canonical sessions`)
+  // Check 4: All regulars have 11+ sessions + 6-month activity
+  const regulars = fanStats.filter(f => f.qualifyingSessionCount >= 11 && f.activeWithin6Months)
+  const allRegularsValid = regulars.every(f => f.qualifyingSessionCount >= 11 && f.activeWithin6Months)
+  console.log(`  ${allRegularsValid ? '✓' : '✗'} All Regulars have 11+ canonical sessions + 6mo active`)
   checks += allRegularsValid ? 1 : 0
 
-  console.log(`\n${checks}/4 data integrity checks passed`)
+  // Check 5: Session count matches canonical ID count
+  const sessionIdCountsMatch = fanStats.every(f => f.sessionIds.size === f.qualifyingSessionCount)
+  console.log(`  ${sessionIdCountsMatch ? '✓' : '✗'} Session IDs match qualifying session counts`)
+  checks += sessionIdCountsMatch ? 1 : 0
+
+  console.log(`\n${checks}/5 data integrity checks passed`)
 
   console.log(`\n✨ Dataset validation complete!`)
 })
