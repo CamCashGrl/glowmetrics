@@ -452,11 +452,23 @@ function parseHeaderless(lines, platform) {
 // detectSessions/finalizeSession live in ./analytics/sessions.js — shared with
 // app/live/page.js. Do not redefine this grouping logic here.
 
-export function identifyWhales(tips) {
+export function identifyWhales(tips, sessions = null) {
   const fanMap = {}
+
+  // CANONICAL FAN IDENTITY: platform:username composite key
   tips.forEach(t => {
-    const key = t.username.toLowerCase()
-    if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
+    const key = `${t.platform}:${t.username}`.toLowerCase()
+    if (!fanMap[key]) {
+      fanMap[key] = {
+        platform: t.platform,
+        username: t.username,
+        totalUSD: 0,
+        totalTokens: 0,
+        tipCount: 0,
+        tips: [],
+        tipNotes: []
+      }
+    }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
     fanMap[key].tipCount += 1
@@ -467,10 +479,34 @@ export function identifyWhales(tips) {
   const allFans = Object.values(fanMap)
   const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
   const totalFans = sorted.length
-  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2))
-  const rankByUsername = new Map(sorted.map((s, i) => [s.username.toLowerCase(), i]))
+
+  // O(1) rank lookup for percentile calculations
+  const rankByKey = new Map(sorted.map((s, i) => [`${s.platform}:${s.username}`.toLowerCase(), i]))
+
+  // Calculate canonical 6-month window from latest tip in dataset
+  let latestTipDate = new Date(0)
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    if (dt > latestTipDate) latestTipDate = dt
+  })
+  const sixMonthsAgoMs = latestTipDate.getTime() - (180 * 24 * 60 * 60 * 1000)
+
+  // Build a map of fan → set of session dates they tipped in (for qualifying session count)
+  const fanSessionDates = {}
+  if (sessions && sessions.length > 0) {
+    sessions.forEach(session => {
+      session.tips?.forEach(tip => {
+        const fanKey = `${tip.platform}:${tip.username}`.toLowerCase()
+        if (!fanSessionDates[fanKey]) fanSessionDates[fanKey] = new Set()
+        // Add the canonical session start date
+        const sessionDate = new Date(session.startTime).toISOString().split('T')[0]
+        fanSessionDates[fanKey].add(sessionDate)
+      })
+    })
+  }
 
   return allFans.map(f => {
+    const fanKey = `${f.platform}:${f.username}`.toLowerCase()
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
     const lastTipDate = new Date(fanSorted[0].dateRaw || fanSorted[0].date_time)
     const firstTipDate = new Date(fanSorted[fanSorted.length - 1].dateRaw || fanSorted[fanSorted.length - 1].date_time)
@@ -478,36 +514,97 @@ export function identifyWhales(tips) {
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-    const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
+    const fanRankIndex = rankByKey.get(fanKey)
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
-    let tier = 'Regular'
-    if (percentileRank <= 0.05) tier = 'Whale'
-    else if (percentileRank <= 0.20) tier = 'Shark'
-    else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+    const relativeValue = Math.round((1 - percentileRank) * 100)
+
+    // CANONICAL TIER LOGIC (locked)
+    let tier = 'New'
+    const qualifyingSessionCount = fanSessionDates[fanKey]?.size || 0
+    const isActiveInLast6Months = lastTipDate.getTime() >= sixMonthsAgoMs
+
+    // WHALE: $50+ lifetime revenue (absolute, no percentile override)
+    if (f.totalUSD >= 50) {
+      tier = 'Whale'
+    }
+    // REGULAR: 11+ qualifying sessions AND active within 6 months
+    else if (qualifyingSessionCount >= 11 && isActiveInLast6Months) {
+      tier = 'Regular'
+    }
+    // EMERGING: 3+ qualifying sessions (for dataset analysis only)
+    else if (qualifyingSessionCount >= 3) {
+      tier = 'Emerging'
+    }
+
+    // ACTIVITY STATE: separate from Tier (locked)
+    const activityState = daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3) ? 'Dormant' : 'Active'
+
+    // STATUS: calculated separately from Tier (locked)
+    let status = 'Healthy'
+    const churnRiskLevel = calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount).level
+    if (churnRiskLevel === 'High') status = 'Watch'
+    if (churnRiskLevel === 'Critical') status = 'At Risk'
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
     f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-    const spendPercentile = Math.round((1 - percentileRank) * 100)
     const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
     const daysBetweenTipsArr = []
     for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
 
     return {
-      username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)), totalTokens: f.totalTokens,
-      tipCount: f.tipCount, avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
-      biggestTip: parseFloat(biggestTip.toFixed(2)), platform: f.platform, tier,
-      lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
-      daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
+      // Identity (FIVE INDEPENDENT DIMENSIONS)
+      platform: f.platform,
+      username: f.username,
+
+      // Financial Metrics
+      totalUSD: parseFloat(f.totalUSD.toFixed(2)),
+      totalTokens: f.totalTokens,
+      tipCount: f.tipCount,
+      avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
+      biggestTip: parseFloat(biggestTip.toFixed(2)),
+
+      // DIMENSION 1: TIER (Whale/Regular/Emerging/New)
+      tier,
+
+      // DIMENSION 2: RELATIVE VALUE (percentile rank)
+      relativeValue,
+      isTopSpender: percentileRank <= 0.05,
+
+      // DIMENSION 3: STATUS (Healthy/Watch/At Risk/Critical)
+      status,
+
+      // DIMENSION 4: ACTIVITY STATE (Active/Dormant)
+      activityState,
+
+      // DIMENSION 5: MANAGEMENT STATE (for future: Unarchived/Archived, dismissal state)
+      // (stored separately in database, not computed here)
+
+      // Temporal Metrics
+      lastTipDate: lastTipDate.toISOString(),
+      firstTipDate: firstTipDate.toISOString(),
+      daysSinceLastTip,
+      avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
+      daysBetweenTipsArr,
+
+      // Session Metrics
+      qualifyingSessionCount,
+      isActiveInLast6Months,
+
+      // Predictive Metrics
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
       churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
-      hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
+
+      // Behavior Metrics
+      hasPrivates: privateTips.length > 0,
+      privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
-      tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
+      tipNotes: f.tipNotes,
+      tips: f.tips
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
@@ -659,7 +756,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
-  const whales = precomputedWhales || identifyWhales(tips)
+  const whales = precomputedWhales || identifyWhales(tips, sessions)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
   const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
@@ -817,7 +914,7 @@ export function aggregateRows(tips, tz = null) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales      = identifyWhales(tips)
+  const whales      = identifyWhales(tips, meaningfulSessions)
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
   const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
