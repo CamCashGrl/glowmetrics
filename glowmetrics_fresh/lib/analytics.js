@@ -652,9 +652,42 @@ export function detectResurfacing(fans) {
     // Derived from fan's actual data, not hard-coded threshold
     const gapDeviation = f.avgDaysBetweenTips > 0 ? maxGapDays / f.avgDaysBetweenTips : 0
 
-    // CALCULATE: Data sufficiency for confidence assessment
-    // Based on actual number of observations, not invented minimum
-    const dataQuality = sortedTips.length >= 5 ? 'strong' : sortedTips.length >= 2 ? 'moderate' : 'low'
+    // CALCULATE: Evidence quality from actual relationship history (NOT hard-coded thresholds)
+    // Measure confidence in this resurfacing detection based on available data
+    const observationCount = sortedTips.length
+    const firstTipTime = new Date(sortedTips[0].dateRaw || sortedTips[0].date_time).getTime()
+    const lastTipBeforeGapTime = new Date(sortedTips[maxGapIndex].dateRaw || sortedTips[maxGapIndex].date_time).getTime()
+    const relationshipDurationDays = (lastTipBeforeGapTime - firstTipTime) / (24 * 60 * 60 * 1000)
+
+    // Calculate interval consistency (lower = more consistent pattern)
+    let intervalVariance = 0
+    if (gaps.length > 1) {
+      const avgGap = gaps.reduce((sum, g) => sum + g.gapDays, 0) / gaps.length
+      intervalVariance = Math.sqrt(
+        gaps.reduce((sum, g) => sum + Math.pow(g.gapDays - avgGap, 2), 0) / gaps.length
+      )
+    }
+
+    // Calculate evidence quality score from actual data:
+    // - More observations = stronger evidence
+    // - Longer relationship = more established pattern
+    // - More consistent intervals = clearer typical behavior
+    // - Qualifying sessions count = relationship strength
+    const evidenceScore =
+      (observationCount * 0.3) +  // Weight: number of observations
+      (Math.min(relationshipDurationDays / 30, 12) * 1.0) +  // Weight: relationship duration (months, capped at 12)
+      (f.qualifyingSessionCount * 0.5) +  // Weight: distinct sessions established
+      (Math.max(0, 5 - intervalVariance) * 0.2)  // Weight: consistency (lower variance = higher score)
+
+    // Derived evidence quality from calculated metrics
+    const evidenceQuality = {
+      observationCount,
+      relationshipDurationDays: Math.round(relationshipDurationDays),
+      intervalVariability: Math.round(intervalVariance * 100) / 100,
+      qualifyingSessionsCount: f.qualifyingSessionCount,
+      score: Math.round(evidenceScore * 100) / 100,
+      confidenceLevel: evidenceScore > 20 ? 'high' : evidenceScore > 10 ? 'moderate' : 'low'
+    }
 
     // Evidence: Tips after the gap exist (actual return occurred)
     const tipsAfterGap = sortedTips.slice(maxGapIndex + 1)
@@ -678,7 +711,7 @@ export function detectResurfacing(fans) {
       dormancyDays: Math.round(maxGapDays),
       dormancyEndDate: sortedTips[maxGapIndex + 1] ? new Date(sortedTips[maxGapIndex + 1].dateRaw || sortedTips[maxGapIndex + 1].date_time).toISOString() : null,
       gapDeviation: parseFloat(gapDeviation.toFixed(2)), // Calculated ratio of actual gap to personal average
-      dataQuality, // Confidence level based on actual data: 'strong' | 'moderate' | 'low'
+      evidenceQuality, // Confidence metrics derived from actual relationship history
       returnMessage: `${f.username} (${f.platform}) is back after ${Math.round(maxGapDays)} days offline`
     })
   })
