@@ -5,6 +5,8 @@ import {
   PieChart, Pie, Cell, Label,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
+import { detectSessions } from "../../lib/analytics/sessions"
+import { identifyWhales } from "../../lib/analytics"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -59,41 +61,21 @@ function normPlatform(raw) {
 }
 
 // ─── Pure data functions ──────────────────────────────────────────────────────
+// CANONICAL SESSION GROUPING (uses lib/analytics/sessions.js)
+// Adapts canonical format to MoneyMap's expected format for backward compatibility
 function groupIntoSessions(tips) {
   if (!tips?.length) return []
-  const sorted = [...tips].sort((a,b)=>new Date(a.date_time)-new Date(b.date_time))
-  const GAP = 4*60*60*1000
-  const sessions = []
-  let cur = null
-  for (const t of sorted) {
-    const ts = new Date(t.date_time).getTime()
-    if (!cur || ts - cur.lastTs > GAP) {
-      if (cur) sessions.push(cur)
-      const d = new Date(t.date_time)
-      cur = {
-        start: d,
-        end: d,
-        lastTs: ts,
-        tokens: 0,
-        usd: 0,
-        tipsCount: 0,
-        tippers: new Set(),
-        platform: normPlatform(t.platform),
-      }
-    }
-    cur.tokens   += Number(t.tokens||0)
-    cur.usd      += Number(t.usd||0)
-    cur.tipsCount++
-    if (t.username) cur.tippers.add(t.username)
-    cur.end    = new Date(t.date_time)
-    cur.lastTs = ts
-  }
-  if (cur) sessions.push(cur)
-  return sessions.map(s => ({
-    ...s,
-    tippers: s.tippers.size,
-    durationMins: (s.end - s.start) / 60000 || 5,
-    localHourStart: localHourDecFromDate(s.start),
+  const canonicalSessions = detectSessions(tips)
+  return canonicalSessions.map(s => ({
+    start: new Date(s.startTime),
+    end: new Date(s.endTime),
+    tokens: s.totalTokens || 0,
+    usd: s.totalUSD || 0,
+    tipsCount: s.tipCount || 0,
+    tippers: s.uniqueFans || 0,
+    platform: s.platform ? normPlatform(s.platform) : null,
+    durationMins: s.durationMinutes || 5,
+    localHourStart: localHourDecFromDate(new Date(s.startTime)),
   }))
 }
 
@@ -135,21 +117,23 @@ function windowStats(tips) {
   return grid
 }
 
+// CANONICAL WHALE/FAN DETECTION (uses lib/analytics.js)
+// Adapts canonical format to MoneyMap's expected format for backward compatibility
 function detectWhales(tips) {
-  const map = {}
-  for (const t of tips) {
-    const u = t.username||"anon"
-    if (!map[u]) map[u] = { username:u, tokens:0, usd:0, count:0, lastSeen:null, platforms:new Set() }
-    map[u].tokens += Number(t.tokens||0)
-    map[u].usd    += Number(t.usd||0)
-    map[u].count++
-    const ts = t.date_time
-    if (!map[u].lastSeen || ts > map[u].lastSeen) map[u].lastSeen = ts
-    if (t.platform) map[u].platforms.add(normPlatform(t.platform))
-  }
-  return Object.values(map)
-    .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=500}))
-    .sort((a,b)=>b.usd-a.usd)
+  const canonicalFans = identifyWhales(tips)
+  return canonicalFans
+    .filter((f) => f.tier === 'Whale' || f.relativeValue >= 50) // Whale or top 50%
+    .map((f) => ({
+      username: f.username,
+      tokens: f.totalTokens,
+      usd: f.totalUSD,
+      count: f.tipCount,
+      lastSeen: f.lastTipDate,
+      platforms: new Set([f.platform]).size,
+      isWhale: f.tier === 'Whale',
+      platform: f.platform,
+    }))
+    .sort((a, b) => b.usd - a.usd)
 }
 
 function monthlyTotals(tips) {

@@ -5,6 +5,8 @@ import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts"
+import { detectSessions } from "../../lib/analytics/sessions"
+import { identifyWhales } from "../../lib/analytics"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -45,35 +47,29 @@ const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "
 // PURE DATA FUNCTIONS (no hooks)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Group tips into sessions — tips within 4hr window = same session
+// CANONICAL SESSION GROUPING (uses lib/analytics/sessions.js)
+// Adapts canonical format to StreamPlanner's expected format for backward compatibility
 function groupIntoSessions(tips) {
   if (!tips?.length) return []
-  const sorted = [...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
-  const raw = []
-  let cur = null
-  sorted.forEach((t) => {
-    const dt = new Date(t.date_time)
-    if (!cur || dt - cur.end > 4 * 3_600_000) {
-      cur = { start: dt, end: dt, tips: [t] }
-      raw.push(cur)
-    } else {
-      cur.end = dt
-      cur.tips.push(t)
-    }
-  })
-  return raw.map((s) => {
-    const durationHrs = Math.max(0.5, (s.end - s.start) / 3_600_000)
-    const totalUsd    = s.tips.reduce((n, t) => n + (parseFloat(t.usd) || 0), 0)
-    const totalTokens = s.tips.reduce((n, t) => n + (parseFloat(t.tokens) || 0), 0)
-    const pc = {}
-    s.tips.forEach((t) => { if (t.platform) pc[t.platform] = (pc[t.platform] || 0) + 1 })
+  const canonicalSessions = detectSessions(tips)
+  return canonicalSessions.map((s) => {
+    const platformCounts = {}
+    s.tips?.forEach((t) => {
+      if (t.platform) platformCounts[t.platform] = (platformCounts[t.platform] || 0) + 1
+    })
+    const startDt = new Date(s.startTime)
     return {
-      start: s.start, end: s.end, durationHrs, totalUsd, totalTokens,
-      usdHr: totalUsd / durationHrs,
-      utcDay: s.start.getUTCDay(), utcHour: s.start.getUTCHours(),
-      platform:  Object.entries(pc).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
-      platforms: Object.keys(pc),
-      tips: s.tips,
+      start: startDt,
+      end: new Date(s.endTime),
+      durationHrs: s.durationHours || 0.5,
+      totalUsd: s.totalUSD || 0,
+      totalTokens: s.totalTokens || 0,
+      usdHr: (s.totalUSD || 0) / (s.durationHours || 0.5),
+      utcDay: startDt.getUTCDay(),
+      utcHour: startDt.getUTCHours(),
+      platform: s.platform || null,
+      platforms: Object.keys(platformCounts),
+      tips: s.tips || [],
     }
   })
 }
@@ -174,36 +170,36 @@ function untestedWindows(tips, allWindows) {
   return out.slice(0, 5)
 }
 
-// Whale = 500+ tokens lifetime
+// CANONICAL WHALE/FAN DETECTION (uses lib/analytics.js)
+// Adapts canonical format to StreamPlanner's expected format for backward compatibility
 function detectWhales(tips) {
-  const byUser = {}
-  tips.forEach((t) => {
-    const u = t.username || "unknown"
-    if (!byUser[u]) byUser[u] = { platform: t.platform, tips: [] }
-    byUser[u].tips.push(t)
-  })
-  return Object.entries(byUser).map(([username, u]) => {
-    const totalTokens = u.tips.reduce((n, t) => n + (parseFloat(t.tokens) || 0), 0)
-    const usdValue    = u.tips.reduce((n, t) => n + (parseFloat(t.usd) || 0), 0)
-    const lastSeen    = new Date(Math.max(...u.tips.map((t) => new Date(t.date_time).getTime())))
-    const slots = {}
-    u.tips.forEach((t) => {
-      const dt = new Date(t.date_time)
-      const k  = `${dt.getUTCDay()}-${dt.getUTCHours()}`
-      slots[k] = (slots[k] || 0) + 1
+  const canonicalFans = identifyWhales(tips)
+  return canonicalFans
+    .filter((f) => f.tier === 'Whale' || f.relativeValue >= 50) // Whale or top 50%
+    .map((f) => {
+      const lastSeenDt = new Date(f.lastTipDate)
+      const slots = {}
+      f.tips?.forEach((t) => {
+        const dt = new Date(t.dateRaw || t.date_time)
+        const k = `${dt.getUTCDay()}-${dt.getUTCHours()}`
+        slots[k] = (slots[k] || 0) + 1
+      })
+      const top = Object.entries(slots).sort((a, b) => b[1] - a[1])[0]
+      const [bd, bh] = top ? top[0].split("-").map(Number) : [0, 0]
+      return {
+        username: f.username,
+        platform: f.platform,
+        totalTokens: f.totalTokens,
+        usdValue: f.totalUSD,
+        lastSeen: lastSeenDt,
+        daysSince: f.daysSinceLastTip,
+        bestUtcDay: bd,
+        bestUtcHour: bh,
+        avgReturnDays: Math.round(f.avgDaysBetweenTips),
+        isWhale: f.tier === 'Whale',
+      }
     })
-    const top      = Object.entries(slots).sort((a, b) => b[1] - a[1])[0]
-    const [bd, bh] = top ? top[0].split("-").map(Number) : [0, 0]
-    const dates    = u.tips.map((t) => new Date(t.date_time)).sort((a, b) => a - b)
-    const avgReturnDays = dates.length >= 2
-      ? Math.round(dates.slice(1).reduce((s, d, i) => s + (d - dates[i]) / 86_400_000, 0) / (dates.length - 1))
-      : null
-    return {
-      username, platform: u.platform, totalTokens, usdValue, lastSeen,
-      daysSince: Math.floor((Date.now() - lastSeen.getTime()) / 86_400_000),
-      bestUtcDay: bd, bestUtcHour: bh, avgReturnDays,
-    }
-  }).filter((w) => w.totalTokens >= 500).sort((a, b) => b.usdValue - a.usdValue)
+    .sort((a, b) => b.usdValue - a.usdValue)
 }
 
 // Compare avg $/hr for sessions with 1 platform vs 2 vs 3+
