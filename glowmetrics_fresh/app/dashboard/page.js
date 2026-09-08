@@ -2318,10 +2318,16 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
+    // 2. WIN BACK (data-derived: $50+ fans who are significantly overdue based on their pattern)
     whales.filter(w => w.totalUSD >= 50).forEach(w => {
-      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 45 && days <= 90) {
+      const lastTipDate = new Date(w.lastTipDate)
+      const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+      const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+      const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
+
+      // Data-derived: flag if very overdue (2x to 4x their avg gap) — they've gone quiet for a while
+      const isSignificantlyOverdue = w.avgDaysBetweenTips && days >= (w.avgDaysBetweenTips * 2) && days <= (w.avgDaysBetweenTips * 4)
+      if (isSignificantlyOverdue) {
         const name = w.username
         winBack.push({
           type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
@@ -2337,7 +2343,13 @@ const stopImportMessageRotation = () => {
     // Exclude fans gone > 90 days: they belong in At Risk, not Close to Milestone
     const milestones = [50, 100, 200, 500]
     whales.forEach(w => {
-      const daysSinceMilestone = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      // Calculate days since last tip using creator's timezone
+      const lastTipDate = new Date(w.lastTipDate)
+      const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date())
+      const creatorLastTipStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate)
+      const [cyear, cmonth, cday] = creatorNowStr.split('-').map(Number)
+      const [lyear, lmonth, lday] = creatorLastTipStr.split('-').map(Number)
+      const daysSinceMilestone = Math.floor((new Date(cyear, cmonth - 1, cday) - new Date(lyear, lmonth - 1, lday)) / 86400000)
       if (daysSinceMilestone > 90) return
       for (const m of milestones) {
         const remaining = m - w.totalUSD
@@ -2393,10 +2405,17 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 5. DORMANT
+    // 5. DORMANT (data-derived: flag if overdue based on their personal tipping pattern)
     whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
-      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 7 && days <= 44) {
+      const lastTipDate = new Date(w.lastTipDate)
+      const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+      const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+      const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
+
+      // Data-derived: trigger if overdue beyond their normal pattern (1x to 3x their avg gap)
+      // w.avgDaysBetweenTips is calculated from their actual history
+      const isOverdue = w.avgDaysBetweenTips && days >= w.avgDaysBetweenTips && days <= (w.avgDaysBetweenTips * 3)
+      if (isOverdue) {
         const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
         dormant.push({
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
@@ -2451,7 +2470,6 @@ const stopImportMessageRotation = () => {
 
   // ── Build re-engage list outside JSX for the same reason
   const buildReengageList = () => {
-    const now = Date.now()
     const messageSets = [
       (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
       (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
@@ -2459,17 +2477,28 @@ const stopImportMessageRotation = () => {
     ]
     return whales
       .filter(w => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-        return days >= 3 && days <= 60 && w.totalUSD >= 10
+        const lastTipDate = new Date(w.lastTipDate)
+        const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+        const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+        const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
+        // Data-derived: include fans who are overdue (1x to 2x their avg gap) and have spent $10+
+        const isOverdue = w.avgDaysBetweenTips && days >= w.avgDaysBetweenTips && days <= (w.avgDaysBetweenTips * 2)
+        return isOverdue && w.totalUSD >= 10
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
       .map((w, i) => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        const lastTipDate = new Date(w.lastTipDate)
+        const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+        const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+        const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
+        // Data-derived urgency: escalate based on how far beyond their normal pattern
+        const overdueFactor = w.avgDaysBetweenTips ? days / w.avgDaysBetweenTips : 1
+        const urgency = overdueFactor >= 2 ? C.red : overdueFactor >= 1.5 ? C.orange : C.gold
         return {
           whale: w,
           days,
-          urgency: days > 30 ? C.red : days > 14 ? C.orange : C.gold,
+          urgency,
           msg: messageSets[i % messageSets.length](w.username)
         }
       })
@@ -2710,22 +2739,26 @@ const stopImportMessageRotation = () => {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
-      // Use local hours — tips' date_time is UTC but getHours() converts to browser local
+      // Use creator's timezone hours, not browser hours
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours() // local hour
+        const h = getCreatorHour(t.date_time || t.dateRaw, userTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
-      const peakHour = parseInt(sortedHours[0][0]) // already local
-      const hoursAway = (peakHour - new Date().getHours() + 24) % 24
+      const peakHour = parseInt(sortedHours[0][0])
+      const currentCreatorHour = getCurrentCreatorHour(userTz)
+      const hoursAway = (peakHour - currentCreatorHour + 24) % 24
       const _pf1 = sortedHours[0][1] / fanTips.length
       const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
-      const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      const lastTipDate = new Date(w.lastTipDate)
+      const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+      const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+      const daysSince = Math.floor((creatorNow - creatorLastTip) / 86400000)
 
       if (hoursAway === 0 || hoursAway === 1) {
         alerts.push({
@@ -2791,13 +2824,25 @@ const stopImportMessageRotation = () => {
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
   const _momNow = new Date()
-  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
+  const _momCreatorDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(_momNow)
+  const [_momCreatorYear, _momCreatorMonth, _momCreatorDay] = _momCreatorDateStr.split('-').map(Number)
+  const _momMonthKey = `${_momCreatorYear}-${String(_momCreatorMonth).padStart(2,'0')}`
   const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
     derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
-      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
+      const momThisStart = new Date(`${_momCreatorYear}-${String(_momCreatorMonth).padStart(2,'0')}-01`)
+      let prevMonth = _momCreatorMonth - 1, prevYear = _momCreatorYear
+      if (prevMonth < 1) { prevMonth = 12; prevYear-- }
+      const momPrevStart = new Date(`${prevYear}-${String(prevMonth).padStart(2,'0')}-01`)
+      const momThisRev = tips.reduce((s, t) => {
+        const tipDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date(t.date_time || t.dateRaw))
+        const tipDate = new Date(tipDateStr)
+        return tipDate >= momThisStart ? s + (t.usd || 0) : s
+      }, 0)
+      const momPrevRev = tips.reduce((s, t) => {
+        const tipDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date(t.date_time || t.dateRaw))
+        const tipDate = new Date(tipDateStr)
+        return tipDate >= momPrevStart && tipDate < momThisStart ? s + (t.usd || 0) : s
+      }, 0)
       const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
       return { momThisRev, momPrevRev, growthPct }
     })
@@ -3147,8 +3192,12 @@ const stopImportMessageRotation = () => {
               if (tips.length === 0) return null
 
               const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(now)
+              const [creatorYear, creatorMonth, creatorDay] = creatorNowStr.split('-').map(Number)
+              const thisMonthStart = new Date(`${creatorYear}-${String(creatorMonth).padStart(2,'0')}-01`)
+              let prevMonth = creatorMonth - 1, prevYear = creatorYear
+              if (prevMonth < 1) { prevMonth = 12; prevYear-- }
+              const prevMonthStart = new Date(`${prevYear}-${String(prevMonth).padStart(2,'0')}-01`)
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
@@ -4461,8 +4510,18 @@ const stopImportMessageRotation = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
                 {filteredWhales.map((w, i) => {
                   const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
-                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
+                  const days = w.daysSinceLastTip ?? (() => {
+                    if (!w.lastTipDate) return null
+                    const lastTipDate = new Date(w.lastTipDate)
+                    const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+                    const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+                    return Math.floor((creatorNow - creatorLastTip) / 86400000)
+                  })()
+                  // Relationship score: recency bonus based on fan's personal pattern, not fixed thresholds
+                  const recencyBonus = (days !== null && w.avgDaysBetweenTips)
+                    ? Math.max(0, Math.round(20 * (1 - (days / w.avgDaysBetweenTips))))  // 20pt max if on schedule, 0pt if overdue
+                    : (days !== null && days < 30) ? 10 : 0
+                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + recencyBonus))
                   const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
                   // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
                   // instead of a second, inconsistent day-threshold calc — that duplicate
@@ -6744,7 +6803,13 @@ const stopImportMessageRotation = () => {
         // A fan reached from Private Sessions may have no free-chat tip
         // history at all (paid-only) -- w.lastTipDate is null in that case,
         // guarded below rather than assumed to exist.
-        const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
+        // Calculate days since last tip using creator's local date for consistency
+        const daysSinceLastTip = w.lastTipDate ? (() => {
+          const lastTipDate = new Date(w.lastTipDate)
+          const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+          const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+          return Math.floor((creatorNow - creatorLastTip) / 86400000)
+        })() : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
         const tierIcon = w.tier === 'Whale' ? '🐳' : w.tier === 'Regular' ? '💎' : w.tier === 'Emerging' ? '⭐' : '🆕'
         const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7

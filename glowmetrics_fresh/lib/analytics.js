@@ -37,7 +37,7 @@ export function calculateConfidence(validSessionCount, streamedHours) {
 }
 
 // Import canonical timezone utilities (keeps backward-compatible exports)
-import { getCreatorHour, getCreatorDay, getCreatorDateString, getCreatorTimezone } from './timezoneUtils.js'
+import { getCreatorHour, getCreatorDay, getCreatorDateString, getCreatorTimezone, getCurrentCreatorDay, getCurrentCreatorHour } from './timezoneUtils.js'
 export const toLocalHour = getCreatorHour
 export const toLocalDow = getCreatorDay
 const toLocalDateStr = getCreatorDateString
@@ -484,7 +484,14 @@ export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
     const lastTipDate = new Date(fanSorted[0].dateRaw || fanSorted[0].date_time)
     const firstTipDate = new Date(fanSorted[fanSorted.length - 1].dateRaw || fanSorted[fanSorted.length - 1].date_time)
-    const daysSinceLastTip = Math.floor((Date.now() - lastTipDate) / 86400000)
+    // Calculate days since last tip using creator's local date for consistency
+    const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date())
+    const creatorLastTipStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate)
+    const [cyear, cmonth, cday] = creatorNowStr.split('-').map(Number)
+    const [lyear, lmonth, lday] = creatorLastTipStr.split('-').map(Number)
+    const creatorNow = new Date(cyear, cmonth - 1, cday)
+    const creatorLastTip = new Date(lyear, lmonth - 1, lday)
+    const daysSinceLastTip = Math.floor((creatorNow - creatorLastTip) / 86400000)
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
