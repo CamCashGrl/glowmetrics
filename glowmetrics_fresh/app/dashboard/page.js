@@ -3816,6 +3816,49 @@ const stopImportMessageRotation = () => {
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
             {/* ═══════════════════════════════════════
+                4b. RESURFACING FANS — High-priority returning VIPs
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const resurfacingFans = analytics?.resurfacingFans || []
+              if (!resurfacingFans.length) return null
+              const displayFans = resurfacingFans.slice(0, 5)
+              const tierEmoji = { whale: '🐳', regular: '⭐', highValue: '💎', other: '🎯' }
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.25)", animation: "fadeUp 0.3s ease 0.24s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👋</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Welcome Back, VIPs!</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{displayFans.length} meaningful returning fan{displayFans.length === 1 ? '' : 's'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {displayFans.map((f, i) => (
+                      <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
+                            {tierEmoji[f.resurfacingType]} {f.username} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>({f.platform})</span>
+                          </div>
+                          <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(34,211,238,0.15)", color: C.cyan, fontWeight: 600, whiteSpace: "nowrap" }}>
+                            {f.tier}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                          💰 ${f.totalUSD.toFixed(0)} lifetime | Away for {f.dormancyDays} days | Value: #{Math.round(f.relativeValue)}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text }}>
+                          {f.returnMessage}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
                 5. YOU'RE LOSING MONEY — Risk / Loss + Missed Revenue
             ═══════════════════════════════════════ */}
             {(() => {
