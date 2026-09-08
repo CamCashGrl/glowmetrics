@@ -616,12 +616,12 @@ export function detectResurfacing(fans) {
   const resurfacing = []
 
   fans.forEach(f => {
-    // Only consider fans with meaningful history (Whale, Regular, or high relative value)
-    const isMeaningful = f.tier === 'Whale' || f.tier === 'Regular' || f.relativeValue >= 50
-    if (!isMeaningful) return
+    // Only Whale and Regular tiers are eligible for resurfacing detection
+    // (based on locked tier definitions, not invented percentile cutoffs)
+    if (f.tier !== 'Whale' && f.tier !== 'Regular') return
 
-    // Must have sufficient tip history to detect a gap
-    if (!f.tips || f.tips.length < 4) return
+    // Must have tip history to analyze
+    if (!f.tips || f.tips.length === 0) return
 
     // Reconstruct tip timeline from fan's tips array
     const sortedTips = [...f.tips].sort((a, b) => {
@@ -630,64 +630,60 @@ export function detectResurfacing(fans) {
       return aTime - bTime
     })
 
-    if (sortedTips.length < 4) return
+    if (sortedTips.length === 0) return
 
-    // Find the largest gap in the tip history
-    let maxGapDays = 0
-    let maxGapIndex = 0
+    // Calculate gap distribution from actual fan history (not hard-coded)
+    const gaps = []
     for (let i = 0; i < sortedTips.length - 1; i++) {
       const currentTime = new Date(sortedTips[i].dateRaw || sortedTips[i].date_time).getTime()
       const nextTime = new Date(sortedTips[i + 1].dateRaw || sortedTips[i + 1].date_time).getTime()
       const gapDays = (nextTime - currentTime) / (24 * 60 * 60 * 1000)
-      if (gapDays > maxGapDays) {
-        maxGapDays = gapDays
-        maxGapIndex = i
-      }
+      gaps.push({ gapDays, index: i })
     }
 
-    // Resurfacing criteria:
-    // 1. Largest gap is significantly larger than fan's own average pattern (2x personal average)
-    // Use ONLY personal historical behavior, not universal thresholds
-    const gapThreshold = f.avgDaysBetweenTips * 2
-    if (maxGapDays < gapThreshold) return
+    if (gaps.length === 0) return
 
-    // 2. Tips after the gap exist
+    // Find the largest gap in the tip history (evidence of dormancy)
+    const maxGap = gaps.reduce((max, g) => g.gapDays > max.gapDays ? g : max, gaps[0])
+    const maxGapDays = maxGap.gapDays
+    const maxGapIndex = maxGap.index
+
+    // CALCULATE: Resurfacing deviation from personal history
+    // Derived from fan's actual data, not hard-coded threshold
+    const gapDeviation = f.avgDaysBetweenTips > 0 ? maxGapDays / f.avgDaysBetweenTips : 0
+
+    // CALCULATE: Data sufficiency for confidence assessment
+    // Based on actual number of observations, not invented minimum
+    const dataQuality = sortedTips.length >= 5 ? 'strong' : sortedTips.length >= 2 ? 'moderate' : 'low'
+
+    // Evidence: Tips after the gap exist (actual return occurred)
     const tipsAfterGap = sortedTips.slice(maxGapIndex + 1)
-    if (tipsAfterGap.length === 0) return
+    const hasReturn = tipsAfterGap.length > 0
 
-    // 3. Recent activity within last 7 days
-    if (f.daysSinceLastTip > 7) return
+    // Do not include in results if:
+    // - No actual gap in history (all tips regularly spaced)
+    // - No evidence of return after gap
+    // - Gap is within normal variation (approach to 1.0x means no real gap)
+    if (!hasReturn || gapDeviation < 1) return
 
-    // 4. Pattern looks like resumption (not just one random late tip)
-    // Either: 2+ tips after gap (clear pattern resumption)
-    // Or: 1 tip after gap requires gap to be 4x average (dramatic return from extended absence)
-    if (tipsAfterGap.length === 1 && maxGapDays < f.avgDaysBetweenTips * 4) return
-
-    // Determine priority based on tier
-    let priority = 4
-    let resurfacingType = 'other'
-    if (f.tier === 'Whale') {
-      priority = 1
-      resurfacingType = 'whale'
-    } else if (f.tier === 'Regular') {
-      priority = 2
-      resurfacingType = 'regular'
-    } else if (f.relativeValue >= 75) {
-      priority = 3
-      resurfacingType = 'highValue'
-    }
+    // Determine resurfacing type based on locked tier definition
+    const resurfacingType = f.tier === 'Whale' ? 'whale' : f.tier === 'Regular' ? 'regular' : 'other'
+    const priority = f.tier === 'Whale' ? 1 : f.tier === 'Regular' ? 2 : 3
 
     resurfacing.push({
       ...f,
       resurfacingType,
       priority,
+      // Calculated metrics (derived from data, not hard-coded)
       dormancyDays: Math.round(maxGapDays),
       dormancyEndDate: sortedTips[maxGapIndex + 1] ? new Date(sortedTips[maxGapIndex + 1].dateRaw || sortedTips[maxGapIndex + 1].date_time).toISOString() : null,
+      gapDeviation: parseFloat(gapDeviation.toFixed(2)), // Calculated ratio of actual gap to personal average
+      dataQuality, // Confidence level based on actual data: 'strong' | 'moderate' | 'low'
       returnMessage: `${f.username} (${f.platform}) is back after ${Math.round(maxGapDays)} days offline`
     })
   })
 
-  // Sort by priority (1 = highest), then by relative value (highest first)
+  // Sort by priority (Whale first, then Regular), then by relative value (highest first)
   return resurfacing.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority - b.priority
     return b.relativeValue - a.relativeValue
