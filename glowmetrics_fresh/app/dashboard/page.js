@@ -61,7 +61,7 @@ const C = {
 }
 
 const TIER_COLORS = {
-  "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
+  "Whale": C.gold, "Regular": C.cyan, "Emerging": C.blue, "New": C.text
 }
 
 // Rotating microcopy shown on the CSV importer button/progress bar while a
@@ -1731,7 +1731,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan')
+        .select('plan, schedule')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -1786,7 +1786,7 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            const userTz = profile?.schedule?.timezone || 'UTC'
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -1866,7 +1866,7 @@ export default function Dashboard() {
             return prev // unchanged since the last engine run — skip the recompute
           }
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            const userTz = profile?.schedule?.timezone || 'UTC'
             const r = runEngine(prev, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -1981,7 +1981,7 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+      const userTz = profile?.schedule?.timezone || 'UTC'
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -4426,7 +4426,7 @@ const stopImportMessageRotation = () => {
                 narrow screens instead of clipping options past the viewport edge */}
             <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap", maxWidth: "100%" }}>
               <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
-                {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
+                {["ALL","Whale","Regular","Emerging","New"].map(t => {
                   const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
                   const active = whaleFilter === t
                   return (
@@ -6740,7 +6740,7 @@ const stopImportMessageRotation = () => {
         // guarded below rather than assumed to exist.
         const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
-        const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
+        const tierIcon = w.tier === 'Whale' ? '🐳' : w.tier === 'Regular' ? '💎' : w.tier === 'Emerging' ? '⭐' : '🆕'
         const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
         const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —

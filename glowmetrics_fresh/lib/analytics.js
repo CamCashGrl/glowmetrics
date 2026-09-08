@@ -36,38 +36,11 @@ export function calculateConfidence(validSessionCount, streamedHours) {
   return { level: 'Medium', label: 'Likely pattern' }
 }
 
-export function toLocalHour(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hour: 'numeric',
-      hour12: false
-    }).format(date)
-    const h = parseInt(formatted)
-    return isNaN(h) ? 0 : h === 24 ? 0 : h
-  } catch { return new Date(dateStr).getUTCHours() }
-}
-
-export function toLocalDow(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long'
-    }).format(date)
-    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      .indexOf(dayName)
-  } catch { return new Date(dateStr).getUTCDay() }
-}
-
-function toLocalDateStr(dateStr, tz) {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
-  } catch { return new Date(dateStr).toISOString().slice(0, 10) }
-}
+// Import canonical timezone utilities (keeps backward-compatible exports)
+import { getCreatorHour, getCreatorDay, getCreatorDateString, getCreatorTimezone } from './timezoneUtils.js'
+export const toLocalHour = getCreatorHour
+export const toLocalDow = getCreatorDay
+const toLocalDateStr = getCreatorDateString
 
 // ===============================
 // SANITY + FILTER HELPERS
@@ -452,7 +425,7 @@ function parseHeaderless(lines, platform) {
 // detectSessions/finalizeSession live in ./analytics/sessions.js — shared with
 // app/live/page.js. Do not redefine this grouping logic here.
 
-export function identifyWhales(tips, sessions = null) {
+export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
   const fanMap = {}
 
   // CANONICAL FAN IDENTITY: platform:username composite key
@@ -548,7 +521,7 @@ export function identifyWhales(tips, sessions = null) {
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
-    f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+    f.tips.forEach(t => { const h = toLocalHour(t.dateRaw || t.date_time, userTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
     const daysBetweenTipsArr = []
@@ -783,7 +756,7 @@ export function generateWhaleAlerts(whales) {
   return alerts.sort((a, b) => order[a.severity] - order[b.severity])
 }
 
-export function predictRevenue(tips, sessions) {
+export function predictRevenue(tips, sessions, userTz = 'UTC') {
   if (!sessions.length) return null
   const predictions = {}
   const now = Date.now()
@@ -795,8 +768,8 @@ export function predictRevenue(tips, sessions) {
   const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
   const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
   predictions.next30Days = { amount: parseFloat(last30Rev.toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low', trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null }
-  const todayDow = new Date().getUTCDay()
-  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getUTCDay() === todayDow)
+  const todayDow = toLocalDow(new Date().toISOString(), userTz)
+  const sameDaySessions = sessions.filter(s => toLocalDow(s.startTime, userTz) === todayDow)
   if (sameDaySessions.length >= 3) {
     const amounts = sameDaySessions.map(s => s.totalUSD).sort((a, b) => a - b)
     const avg = amounts.reduce((s, x) => s + x, 0) / amounts.length
@@ -816,7 +789,7 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
-    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bh) <= 1)
+    const recentAtPeak = recentSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bh) <= 1)
     if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
       alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in 3 days — estimated loss: $${(bestHour.avg * 3).toFixed(2)}`, action: `Go live at ${label} to recover this` })
@@ -848,7 +821,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   if (bestDay && worstDay && bestDay.day !== worstDay.day) {
     const daySessionMap = {}
     sessions.forEach(s => {
-      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(s.startTime).getUTCDay()]
+      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][toLocalDow(s.startTime, userTz)]
       if (!daySessionMap[d]) daySessionMap[d] = []
       daySessionMap[d].push(s.totalUSD)
     })
@@ -872,7 +845,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
 
   const whales = precomputedWhales || identifyWhales(tips, sessions)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
-  const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
+  const topWhales = trueWhales.slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
   const tE = tips.reduce((s, t) => s + t.usd, 0)
   if (wE > 0 && tE > 0 && topWhales.length > 0) {
@@ -925,12 +898,12 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   return insights.sort((a, b) => a.priority - b.priority)
 }
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour) {
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour, userTz = 'UTC') {
   const moves = []
   const now = Date.now()
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
-    const currentHour = new Date().getUTCHours()
+    const currentHour = toLocalHour(new Date().toISOString(), userTz)
     const hoursUntil = (bh - currentHour + 24) % 24
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
     if (hoursUntil === 0 || hoursUntil === 1) moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${bestHour.avg.toFixed(0)}/session at this hour`, priority: 0 })
@@ -1028,13 +1001,13 @@ export function aggregateRows(tips, tz = null) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales           = identifyWhales(tips, meaningfulSessions)
+  const whales           = identifyWhales(tips, meaningfulSessions, userTz)
   const resurfacingFans  = detectResurfacing(whales)
   const insights         = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
-  const predictions      = predictRevenue(tips, meaningfulSessions)
+  const predictions      = predictRevenue(tips, meaningfulSessions, userTz)
   const whaleAlerts      = generateWhaleAlerts(whales)
   const lossAlerts       = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
-  const nextMoves        = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
+  const nextMoves        = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour, userTz)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -1058,7 +1031,7 @@ export function aggregateRows(tips, tz = null) {
 
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
-    status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Shark' ? '🦈 SHARK' : w.tier === 'Dormant' ? '💤 DORMANT' : '🐟 REGULAR',
+    status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Regular' ? '💎 REGULAR' : w.tier === 'Emerging' ? '⭐ EMERGING' : '🆕 NEW',
     last: new Date(w.lastTipDate).toLocaleDateString(), first: new Date(w.firstTipDate).toLocaleDateString(),
     daysSince: w.daysSinceLastTip, tipProbability: w.tipProbability, churnRisk: w.churnRisk
   }))
@@ -1179,7 +1152,7 @@ export function aggregateRows(tips, tz = null) {
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
     const bestHourAvg = bestHourData.avg
     if (bestHourAvg <= overallAvg * 1.2) return
-    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bestHourData.hour) > 1).length
+    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bestHourData.hour) > 1).length
     const missedRevenue = parseFloat(((bestHourAvg - overallAvg) * sessionsNotAtBestHour).toFixed(2))
     if (missedRevenue > 5) {
       missedRevenueByPlatform[p] = { bestHour: bestHourData.hour, bestHourAvg, overallAvg: parseFloat(overallAvg.toFixed(2)), sessionsNotAtBestHour, missedRevenue, multiplier: parseFloat((bestHourAvg / overallAvg).toFixed(1)) }
@@ -1334,7 +1307,7 @@ export function aggregateRows(tips, tz = null) {
 // Completely separate from tip analytics — never mixed.
 // ============================================================
 
-export function computePaidSessionAnalytics(sessions) {
+export function computePaidSessionAnalytics(sessions, userTz = 'UTC') {
   if (!sessions || sessions.length === 0) return null
 
   const totalUSD     = sessions.reduce((s, r) => s + (parseFloat(r.usd) || 0), 0)
@@ -1424,7 +1397,7 @@ export function computePaidSessionAnalytics(sessions) {
   // ── PEAK HOURS FOR PAID SESSIONS ───────────────────────────
   const hourMap = {}
   sessions.forEach(s => {
-    const h = new Date(s.date_time).getUTCHours()
+    const h = toLocalHour(s.date_time, userTz)
     if (!hourMap[h]) hourMap[h] = { usd: 0, count: 0 }
     hourMap[h].usd   += parseFloat(s.usd) || 0
     hourMap[h].count += 1
