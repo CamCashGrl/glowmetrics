@@ -31,6 +31,13 @@ const PLATFORMS = {
     earningsUrl:()=>'https://profiles.myfreecams.com/_/ext/token_sessions',
     placeholder:'Paste your MyFreeCams tip history here...\n\nExample:\n1746555770\tJun 18th, 2026 10:40 PM\t500\tusername123\tTip\n1746555771\tJun 18th, 2026 11:02 PM\t1000\twhaleking99\tTip',
   },
+  camsoda:{
+    label:'CamSoda',short:'CS',
+    iconStyle:{background:'#10b981',color:'#fff'},
+    instructions:'Go to your dashboard → Earnings → Transaction History. Select your date range, click Download/Export to CSV, and paste the content below.',
+    earningsUrl:()=>'https://www.camsoda.com/dashboard/earnings',
+    placeholder:'Paste your CamSoda tip history here...\n\nExample:\n2026-06-18 08:27\tusername123\t500\t27.50\n2026-06-18 09:14\twhaleking99\t1000\t55.00\n2026-06-18 10:45\tregularfan\t25\t1.38',
+  },
 }
 
 // Token rates come from lib/constants.js — do not define here
@@ -38,6 +45,7 @@ const TOKEN_RATES = {
   chaturbate: PLATFORM_TOKEN_RATES.Chaturbate,
   bongacams:  PLATFORM_TOKEN_RATES.BongaCams,
   myfreecams: PLATFORM_TOKEN_RATES.MyFreeCams,
+  camsoda:    PLATFORM_TOKEN_RATES.CamSoda,
 }
 const LOADING_MESSAGES=['Cleaning your tip history…','Finding your top fans…','Calculating your average earnings per hour…','Detecting your best stream windows…','Building your dashboard…']
 const EXTRA_MSGS=['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
@@ -54,6 +62,8 @@ function tryParseDate(str){
   if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return d}
   const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
+  const csMatch=s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/)
+  if(csMatch){const[,year,mon,day,hr,min]=csMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return d}
   const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
 }
 
