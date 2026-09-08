@@ -2308,7 +2308,7 @@ const stopImportMessageRotation = () => {
       if (hrs <= 24 && w.tipProbability?.level === 'High') {
         strikeHot.push({
           type: 'strike_hot', icon: '🔥', color: C.orange, severity: 'success',
-          title: `Strike while ${w.username} is hot`,
+          title: `Strike while ${w.username} is hot (${w.platform})`,
           message: `They tipped in the last 24 hours and their tip probability is high — go live NOW while they're warm`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: getPersonalMsg(w)
@@ -2342,7 +2342,7 @@ const stopImportMessageRotation = () => {
         if (remaining > 0 && remaining <= m * 0.10) {
           milestone.push({
             type: 'milestone', icon: '💰', color: C.gold, severity: 'info',
-            title: `${w.username} is $${remaining.toFixed(0)} away from $${m}`,
+            title: `${w.username} (${w.platform}) is $${remaining.toFixed(0)} away from $${m}`,
             message: `They've spent $${w.totalUSD.toFixed(0)} lifetime — a little encouragement could push them to the $${m} milestone`,
             cta: 'Copy Message', username: w.username, whale: w,
             reengageMsg: getPersonalMsg(w)
@@ -2377,7 +2377,7 @@ const stopImportMessageRotation = () => {
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
-          title: `${w.username} is probably online right now`,
+          title: `${w.username} (${w.platform}) is probably online right now`,
           message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: getPersonalMsg(w)
@@ -2385,7 +2385,7 @@ const stopImportMessageRotation = () => {
       } else if (hoursAway <= 10 && probability >= 40) {
         onlineNow.push({
           type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
-          title: `${w.username} is likely online in ~${hoursAway}h`,
+          title: `${w.username} (${w.platform}) is likely online in ~${hoursAway}h`,
           message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
           cta: null, username: w.username, whale: w, reengageMsg: ''
         })
@@ -2399,7 +2399,7 @@ const stopImportMessageRotation = () => {
         const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
         dormant.push({
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
-          title: `You haven't heard from ${w.username} in ${timeStr}`,
+          title: `You haven't heard from ${w.username} (${w.platform}) in ${timeStr}`,
           message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: getPersonalMsg(w)
