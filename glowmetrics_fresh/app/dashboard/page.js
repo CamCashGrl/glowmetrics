@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
 import { getCreatorHour, getCreatorDay, getCreatorDateString, getCurrentCreatorHour, getCurrentCreatorDay } from "../../lib/timezoneUtils"
+import { classifyCurrentGapByDistribution } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -2318,21 +2319,17 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 2. WIN BACK (data-derived: $50+ fans who are significantly overdue based on their pattern)
+    // 2. WIN BACK (statistical: $50+ fans with unusual inactivity gaps based on their historical pattern)
     whales.filter(w => w.totalUSD >= 50).forEach(w => {
-      const lastTipDate = new Date(w.lastTipDate)
-      const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
-      const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
-      const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
+      const gapClassification = classifyCurrentGapByDistribution(w)
 
-      // Data-derived: flag if very overdue (2x to 4x their avg gap) — they've gone quiet for a while
-      const isSignificantlyOverdue = w.avgDaysBetweenTips && days >= (w.avgDaysBetweenTips * 2) && days <= (w.avgDaysBetweenTips * 4)
-      if (isSignificantlyOverdue) {
+      // Show "win back" for fans with unusual gaps (not strongly-unusual, which is handled separately)
+      if (gapClassification.classification === 'unusual' && gapClassification.confidence === 'high') {
         const name = w.username
         winBack.push({
           type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
           title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
-          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${w.daysSinceLastTip} days. A personal message could bring them back.`,
           cta: 'Copy Message', username: name, whale: w,
           reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
         })
@@ -2405,18 +2402,16 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 5. DORMANT (data-derived: flag if overdue based on their personal tipping pattern)
+    // 5. DORMANT (statistical: flag fans with unusual inactivity based on their actual history)
     whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
-      const lastTipDate = new Date(w.lastTipDate)
-      const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
-      const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
-      const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
+      const gapClassification = classifyCurrentGapByDistribution(w)
 
-      // Data-derived: trigger if overdue beyond their normal pattern (1x to 3x their avg gap)
-      // w.avgDaysBetweenTips is calculated from their actual history
-      const isOverdue = w.avgDaysBetweenTips && days >= w.avgDaysBetweenTips && days <= (w.avgDaysBetweenTips * 3)
-      if (isOverdue) {
-        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+      // Show "dormant" for fans with unusual gaps and medium-to-high evidence
+      if ((gapClassification.classification === 'unusual' || gapClassification.classification === 'strongly-unusual') &&
+          (gapClassification.confidence === 'high' || gapClassification.confidence === 'medium')) {
+        const timeStr = w.daysSinceLastTip >= 30
+          ? `${Math.round(w.daysSinceLastTip / 30)} month${w.daysSinceLastTip >= 60 ? 's' : ''}`
+          : `${w.daysSinceLastTip} days`
         dormant.push({
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
           title: `You haven't heard from ${w.username} (${w.platform}) in ${timeStr}`,
@@ -2477,27 +2472,24 @@ const stopImportMessageRotation = () => {
     ]
     return whales
       .filter(w => {
-        const lastTipDate = new Date(w.lastTipDate)
-        const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
-        const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
-        const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
-        // Data-derived: include fans who are overdue (1x to 2x their avg gap) and have spent $10+
-        const isOverdue = w.avgDaysBetweenTips && days >= w.avgDaysBetweenTips && days <= (w.avgDaysBetweenTips * 2)
-        return isOverdue && w.totalUSD >= 10
+        const gapClassification = classifyCurrentGapByDistribution(w)
+        // Include fans with unusual gaps (unusual or strongly-unusual) with decent evidence and $10+ lifetime spend
+        return gapClassification.shouldAlert && w.totalUSD >= 10
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
       .map((w, i) => {
-        const lastTipDate = new Date(w.lastTipDate)
-        const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
-        const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
-        const days = Math.floor((creatorNow - creatorLastTip) / 86400000)
-        // Data-derived urgency: escalate based on how far beyond their normal pattern
-        const overdueFactor = w.avgDaysBetweenTips ? days / w.avgDaysBetweenTips : 1
-        const urgency = overdueFactor >= 2 ? C.red : overdueFactor >= 1.5 ? C.orange : C.gold
+        const gapClassification = classifyCurrentGapByDistribution(w)
+        // Urgency scales with how unusual the gap is and evidence quality
+        let urgency = C.gold
+        if (gapClassification.classification === 'strongly-unusual') {
+          urgency = C.red
+        } else if (gapClassification.classification === 'unusual' && gapClassification.confidence === 'high') {
+          urgency = C.orange
+        }
         return {
           whale: w,
-          days,
+          days: w.daysSinceLastTip,
           urgency,
           msg: messageSets[i % messageSets.length](w.username)
         }

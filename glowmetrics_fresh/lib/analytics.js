@@ -703,6 +703,114 @@ export function detectResurfacing(fans) {
   })
 }
 
+/**
+ * Classify a fan's current inactivity gap based on their actual historical interval distribution
+ * Uses statistical analysis (median, stddev) — NOT hardcoded multipliers
+ *
+ * Returns classification object with:
+ * - classification: 'insufficient-evidence', 'normal', 'unusual', 'strongly-unusual'
+ * - confidence: 'high', 'medium', 'low'
+ * - reason: human-readable explanation
+ * - stats: {median, stddev, percentile, gapRatio}
+ * - shouldAlert: boolean (unusual or strongly-unusual with good evidence)
+ */
+export function classifyCurrentGapByDistribution(fan) {
+  if (!fan || !fan.daysBetweenTipsArr || fan.daysBetweenTipsArr.length === 0) {
+    return {
+      classification: 'insufficient-evidence',
+      confidence: 'low',
+      reason: 'No historical interval data',
+      shouldAlert: false,
+      stats: null
+    }
+  }
+
+  const intervals = fan.daysBetweenTipsArr
+  const currentGap = fan.daysSinceLastTip
+
+  // Calculate distribution metrics
+  const median = calcMedian(intervals)
+  const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length
+
+  // Standard deviation
+  const variance = intervals.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / intervals.length
+  const stddev = Math.sqrt(variance)
+
+  // Current gap's position in distribution
+  let zScore
+  if (stddev > 0.01) {
+    // Normal case: calculate z-score
+    zScore = (currentGap - mean) / stddev
+  } else if (currentGap > median * 1.5) {
+    // Very low variability (perfect/near-perfect consistency)
+    // Any meaningful deviation should be flagged
+    zScore = currentGap > median * 2 ? 3 : 2
+  } else {
+    zScore = 0
+  }
+
+  const sortedIntervals = [...intervals].sort((a, b) => a - b)
+  const percentile = sortedIntervals.filter(i => i <= currentGap).length / sortedIntervals.length
+
+  // Evidence quality: based on sample size and consistency
+  const observationCount = intervals.length
+  let evidenceConfidence = 'low'
+  if (observationCount >= 10) evidenceConfidence = 'high'
+  else if (observationCount >= 5) evidenceConfidence = 'medium'
+
+  // Classification logic based on actual distribution, not hardcoded multipliers
+  let classification = 'normal'
+  let shouldAlert = false
+
+  if (observationCount < 3) {
+    // Insufficient observations to determine pattern
+    classification = 'insufficient-evidence'
+  } else if (currentGap <= median) {
+    // Within or below their typical pattern
+    classification = 'normal'
+  } else if (currentGap > median && zScore < 1) {
+    // Above median but within 1 standard deviation
+    classification = 'normal'
+  } else if (currentGap > median && zScore >= 1 && zScore < 2) {
+    // Between 1-2 standard deviations above mean
+    // This is unusual, especially with good evidence
+    classification = 'unusual'
+    shouldAlert = evidenceConfidence === 'high' || evidenceConfidence === 'medium'
+  } else if (zScore >= 2) {
+    // More than 2 standard deviations above mean
+    // This is significantly unusual
+    classification = 'strongly-unusual'
+    shouldAlert = true
+  }
+
+  // Reason string
+  let reason
+  if (classification === 'insufficient-evidence') {
+    reason = `Only ${observationCount} historical intervals — need more data`
+  } else if (classification === 'normal') {
+    reason = `Current gap (${currentGap}d) is within their typical range (median: ${Math.round(median)}d)`
+  } else if (classification === 'unusual') {
+    reason = `Current gap (${currentGap}d) is unusually long (${Math.round(zScore)}σ above normal)`
+  } else {
+    reason = `Current gap (${currentGap}d) is significantly unusual (${Math.round(zScore)}σ above normal)`
+  }
+
+  return {
+    classification,
+    confidence: evidenceConfidence,
+    reason,
+    shouldAlert,
+    stats: {
+      median: Math.round(median * 10) / 10,
+      mean: Math.round(mean * 10) / 10,
+      stddev: Math.round(stddev * 10) / 10,
+      zScore: Math.round(zScore * 100) / 100,
+      percentile: Math.round(percentile * 100),
+      observationCount
+    }
+  }
+}
+
 function calcTipProbability(d, avg) {
   if (d < avg * 0.5)  return { level: 'High',        percentage: 85 }
   if (d < avg)        return { level: 'Medium-High',  percentage: 70 }
