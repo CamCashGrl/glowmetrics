@@ -235,7 +235,7 @@ async function sendExtensionHeartbeat() {
 // history — the data behind the dashboard's historical analytics — is a Pro
 // feature, so the plan check happens server-side in this route rather than
 // here; the extension can't be trusted to gate its own writes.
-async function syncTip({ username, tokens, platform, timestamp, isTest }) {
+async function syncTip({ username, tokens, platform, timestamp, isTest, broadcaster_username }) {
   await restorePromise;
   if (!session) return;
 
@@ -245,6 +245,7 @@ async function syncTip({ username, tokens, platform, timestamp, isTest }) {
     platform:  platform ? platform.toLowerCase() : 'extension',
     timestamp: timestamp || new Date().toISOString(),
     isTest,
+    broadcaster_username,  // SECURITY FIX #285: Include room owner for verification
   });
 
   const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
@@ -541,7 +542,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.action === 'tip') {
-    const { username, tokens, platform, isTest } = msg;
+    const { username, tokens, platform, isTest, broadcaster_username } = msg;
     lastTipTs = Date.now();
     const usd = parseFloat((tokens * (TOKEN_RATES[platform] || 0.05)).toFixed(2));
     const tip = { username, tokens, usd, platform, ts: lastTipTs };
@@ -561,7 +562,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       if (keys.length > 100) chrome.storage.local.remove(keys.slice(100));
     });
 
-    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString(), isTest }).then((result) => {
+    // SECURITY FIX #285: Pass broadcaster_username to syncTip for room verification
+    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString(), isTest, broadcaster_username }).then((result) => {
       chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true, savedToHistory: !!result?.savedToHistory } });
     });
 

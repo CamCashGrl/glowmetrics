@@ -48,13 +48,55 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { username, amount, platform, timestamp, isTest } = body;
+    const { username, amount, platform, timestamp, isTest, broadcaster_username } = body;
 
     if (!username || !amount || !platform) {
       return Response.json(
         { error: 'Missing required fields: username, amount, platform' },
         { status: 400, headers: cors }
       );
+    }
+
+    // SECURITY FIX #285: Verify that tips are only captured from the authenticated user's own room
+    // broadcaster_username is the room owner (extracted from page by extension)
+    // This prevents cross-creator tip theft when Live Mode is active
+    if (broadcaster_username) {
+      const broadcasterUsername = broadcaster_username.trim().toLowerCase();
+
+      // Check if this broadcaster_username is registered to the authenticated user
+      const { data: broadcasterAccount, error: broadcasterError } = await supabaseAdmin
+        .from('broadcaster_accounts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('platform', platform.toLowerCase())
+        .eq('username', broadcasterUsername)
+        .maybeSingle();
+
+      // If broadcaster account doesn't exist or doesn't match this user, REJECT the tip
+      if (!broadcasterAccount || broadcasterError) {
+        console.warn(`Blocked tip: username=${username}, broadcaster=${broadcasterUsername}, platform=${platform}, user=${user.id} — broadcaster_account mismatch`);
+        return Response.json(
+          { error: 'Tip rejected: broadcaster room does not match your verified account. This may indicate the extension detected tips from another creator\'s room while you were browsing as a viewer.' },
+          { status: 403, headers: cors }
+        );
+      }
+    } else {
+      // If no broadcaster_username sent, fall back to checking profiles table for backward compatibility
+      // (Future: make broadcaster_username mandatory after deprecation period)
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select(`${platform.toLowerCase()}_username`)
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const fieldName = `${platform.toLowerCase()}_username`;
+      if (!profile?.[fieldName]) {
+        console.warn(`Tip from ${username} rejected: user ${user.id} has no verified ${platform} broadcaster account`);
+        return Response.json(
+          { error: `Please set up your ${platform} broadcaster account in settings before tips can be saved.` },
+          { status: 403, headers: cors }
+        );
+      }
     }
 
     // The popup's "Test Tip" button proves the extension can reach this
