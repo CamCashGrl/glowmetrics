@@ -676,11 +676,15 @@ export default function OnboardingPage(){
       const pi=setInterval(()=>{const pr=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(pr*100))},60)
       const mi=setInterval(()=>setLoadingMsgIdx(i=>(i+1)%msgs.length),900)
 
+      const controller=new AbortController()
+      const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+
       // Upload free tips
       const tipUploadPromise=fetch('/api/upload',{
         method:'POST',
         headers:{Authorization:`Bearer ${session.access_token}`},
-        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})()
+        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})(),
+        signal:controller.signal
       })
 
       // Upload BongaCams paid sessions if any detected
@@ -694,7 +698,8 @@ export default function OnboardingPage(){
         paidUploadPromise=fetch('/api/upload-paid-sessions',{
           method:'POST',
           headers:{Authorization:`Bearer ${session.access_token}`},
-          body:paidForm
+          body:paidForm,
+          signal:controller.signal
         })
       }
 
@@ -703,6 +708,7 @@ export default function OnboardingPage(){
         paidUploadPromise,
         new Promise(r=>setTimeout(r,minWait)),
       ])
+      clearTimeout(timeoutId)
       clearInterval(pi);clearInterval(mi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error){
@@ -718,7 +724,8 @@ export default function OnboardingPage(){
       if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('trial')}
       else setStep('step4')
     }catch(e){
-      if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
+      if(e.name==='AbortError')setImportError('Import timed out. Check your connection or try a smaller file.')
+      else if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
       else setImportError(e.message||'Import failed')
       track('onboarding_import_failed',{platform:platformId,code:e.code||null,message:e.message||null})
       setStep('paste')
@@ -756,7 +763,15 @@ export default function OnboardingPage(){
       const minWait=isFirstImport?5500:1800
       const start=Date.now()
       const pi=setInterval(()=>{const p=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(p*100))},60)
-      const[res]=await Promise.all([fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form}),new Promise(r=>setTimeout(r,minWait))])
+
+      const controller=new AbortController()
+      const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+
+      const[res]=await Promise.all([
+        fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form,signal:controller.signal}),
+        new Promise(r=>setTimeout(r,minWait))
+      ])
+      clearTimeout(timeoutId)
       clearInterval(pi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
@@ -768,7 +783,7 @@ export default function OnboardingPage(){
       if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('trial')}
       else setStep('step4')
     }catch(e){
-      setCsvError(e.message||'Upload failed')
+      setCsvError(e.name==='AbortError'?'Upload timed out. Try a smaller file or check your connection.':e.message||'Upload failed')
       track('onboarding_import_failed',{platform:platformId,message:e.message||null,source:'csv'})
       setStep('csv')
     }
