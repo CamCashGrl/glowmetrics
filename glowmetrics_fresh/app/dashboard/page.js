@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
 import { getCreatorHour, getCreatorDay, getCreatorDateString, getCurrentCreatorHour, getCurrentCreatorDay } from "../../lib/timezoneUtils"
-import { classifyCurrentGapByDistribution } from "../../lib/analytics"
+import { classifyCurrentGapByDistribution, detectCanonicalResurfacing } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -2321,10 +2321,10 @@ const stopImportMessageRotation = () => {
 
     // 2. WIN BACK (statistical: $50+ fans with unusual inactivity gaps based on their historical pattern)
     whales.filter(w => w.totalUSD >= 50).forEach(w => {
-      const gapClassification = classifyCurrentGapByDistribution(w)
+      const resurfacing = detectCanonicalResurfacing(w)
 
       // Show "win back" for fans with unusual gaps (not highly-unusual/extreme, which are handled separately)
-      if (gapClassification.classification === 'unusual' && gapClassification.confidence === 'high') {
+      if (resurfacing.classification === 'unusual' && resurfacing.confidence === 'high') {
         const name = w.username
         winBack.push({
           type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
@@ -2404,11 +2404,10 @@ const stopImportMessageRotation = () => {
 
     // 5. DORMANT (statistical: flag fans with unusual inactivity based on their actual history)
     whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
-      const gapClassification = classifyCurrentGapByDistribution(w)
+      const resurfacing = detectCanonicalResurfacing(w)
 
       // Show "dormant" for fans with unusual gaps and medium-to-high evidence
-      if ((gapClassification.classification === 'unusual' || gapClassification.classification === 'highly-unusual' || gapClassification.classification === 'extreme') &&
-          (gapClassification.confidence === 'high' || gapClassification.confidence === 'medium')) {
+      if (resurfacing.shouldAlert && (resurfacing.confidence === 'high' || resurfacing.confidence === 'medium')) {
         const timeStr = w.daysSinceLastTip >= 30
           ? `${Math.round(w.daysSinceLastTip / 30)} month${w.daysSinceLastTip >= 60 ? 's' : ''}`
           : `${w.daysSinceLastTip} days`
@@ -2472,21 +2471,21 @@ const stopImportMessageRotation = () => {
     ]
     return whales
       .filter(w => {
-        const gapClassification = classifyCurrentGapByDistribution(w)
+        const resurfacing = detectCanonicalResurfacing(w)
         // Include fans with unusual gaps (unusual/highly-unusual/extreme) with decent evidence and $10+ lifetime spend
-        return gapClassification.shouldAlert && w.totalUSD >= 10
+        return resurfacing.shouldAlert && w.totalUSD >= 10
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
       .map((w, i) => {
-        const gapClassification = classifyCurrentGapByDistribution(w)
+        const resurfacing = detectCanonicalResurfacing(w)
         // Urgency scales with how unusual the gap is and evidence quality
         let urgency = C.gold
-        if (gapClassification.classification === 'extreme') {
+        if (resurfacing.classification === 'extreme') {
           urgency = C.red
-        } else if (gapClassification.classification === 'highly-unusual') {
+        } else if (resurfacing.classification === 'highly-unusual') {
           urgency = C.red
-        } else if (gapClassification.classification === 'unusual' && gapClassification.confidence === 'high') {
+        } else if (resurfacing.classification === 'unusual' && resurfacing.confidence === 'high') {
           urgency = C.orange
         }
         return {

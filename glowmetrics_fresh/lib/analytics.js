@@ -905,6 +905,41 @@ export function classifyCurrentGapByDistribution(fan) {
   }
 }
 
+/**
+ * CANONICAL RESURFACING DETECTION
+ * Single source of truth for all re-engagement/dormancy/win-back alerts
+ * Used by: Command Center, Live Mode, dormant alerts, re-engagement alerts, win-back alerts
+ *
+ * Returns structured result with alert decision, priority, and reasoning
+ */
+export function detectCanonicalResurfacing(fan) {
+  if (!fan || !fan.tier || (fan.tier !== 'Whale' && fan.tier !== 'Regular')) {
+    return { shouldAlert: false, reason: 'Not eligible tier', priority: 'none' }
+  }
+
+  const gapAnalysis = classifyCurrentGapByDistribution(fan)
+
+  // Only alert on unusual/highly-unusual/extreme classifications with reasonable evidence
+  const alertEligible = gapAnalysis.classification === 'unusual' ||
+                        gapAnalysis.classification === 'highly-unusual' ||
+                        gapAnalysis.classification === 'extreme'
+
+  return {
+    shouldAlert: alertEligible && gapAnalysis.shouldAlert,
+    classification: gapAnalysis.classification,
+    priority: gapAnalysis.priority,
+    confidence: gapAnalysis.confidence,
+    reason: gapAnalysis.reason,
+    stats: gapAnalysis.stats,
+    fanTier: fan.tier,
+    resurfacingType: fan.tier === 'Whale' ? 'whale' : 'regular',
+    daysSinceLastTip: fan.daysSinceLastTip,
+    totalUSD: fan.totalUSD,
+    username: fan.username,
+    platform: fan.platform
+  }
+}
+
 function calcTipProbability(d, avg, daysBetweenTipsArr = []) {
   if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
     // Fallback when insufficient distribution data: use simple average-based heuristic
@@ -1053,14 +1088,10 @@ export function generateWhaleAlerts(whales) {
       alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
     if (w.daysSinceLastTip > 0 && w.daysSinceLastTip <= 3 && w.tipCount > 5) {
       // Check if this return is from an unusual gap (not just regular tipping)
-      // Use statistical classification to determine if the interval they just closed was notable
-      const gapClassification = classifyCurrentGapByDistribution(w)
-      if (gapClassification && gapClassification.stats) {
-        // Alert if the gap they just closed was unusual according to their distribution
-        const prevGapWasUnusual = gapClassification.classification === 'unusual' || gapClassification.classification === 'highly-unusual' || gapClassification.classification === 'extreme'
-        if (prevGapWasUnusual && gapClassification.confidence !== 'low') {
-          alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
-        }
+      // Use canonical resurfacing detection to determine if the interval they just closed was notable
+      const resurfacing = detectCanonicalResurfacing(w)
+      if (resurfacing && resurfacing.shouldAlert && resurfacing.confidence !== 'low') {
+        alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
       }
     }
   })
