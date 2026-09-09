@@ -9,7 +9,7 @@ import { identifyWhales, classifyCurrentGapByDistribution } from '../../analytic
 import { detectSessions } from '../../analytics/sessions.js'
 
 describe('Statistical Distribution-Based Resurfacing', () => {
-  test('daily tipper with 10-day gap classified as strongly-unusual', () => {
+  test('daily tipper with 10-day gap classified as highly-unusual/extreme', () => {
     // Fan tips daily for 30 days, last tip was 10 days ago
     // So daysSinceLastTip = 10, and all historical intervals are ~1 day
     const now = new Date()
@@ -32,15 +32,17 @@ describe('Statistical Distribution-Based Resurfacing', () => {
 
     const classification = classifyCurrentGapByDistribution(dailyFan)
 
-    // For a daily tipper (median ~1 day), 10-day gap is strongly unusual (z-score > 2)
-    expect(classification.classification).toBe('strongly-unusual')
+    // For a daily tipper (median ~1 day), 10-day gap is highly unusual or extreme
+    // (empirical percentile 95-100, since it's much larger than any historical gap)
+    expect(classification.classification).toMatch(/highly-unusual|extreme/)
     expect(classification.confidence).toBe('high')
     expect(classification.shouldAlert).toBe(true)
-    expect(classification.stats.zScore).toBeGreaterThan(2)
+    expect(classification.stats.empiricalRarity).toBeGreaterThan(75)
   })
 
-  test('weekly tipper with 2-week gap classified as normal or unusual', () => {
+  test('weekly tipper with 2-week gap classified as highly-unusual', () => {
     // Fan tips weekly for 8 weeks, last tip was 14 days ago
+    // Empirically: 14 days is LONGER than any historical gap (all 7), so it's in the 100th percentile
     const now = new Date()
     const baseDate = new Date(now.getTime() - (63 * 24 * 60 * 60 * 1000))
     const tips = []
@@ -53,7 +55,7 @@ describe('Statistical Distribution-Based Resurfacing', () => {
         tokens: 400
       })
     }
-    // Last tip was 14 days ago (2x typical interval, but not extreme)
+    // Last tip was 14 days ago (2x typical interval = longest gap ever for this fan)
 
     const sessions = detectSessions(tips)
     const whales = identifyWhales(tips, sessions, 'UTC')
@@ -61,10 +63,12 @@ describe('Statistical Distribution-Based Resurfacing', () => {
 
     const classification = classifyCurrentGapByDistribution(weeklyFan)
 
-    // For a weekly tipper, 14 days is within normal range (close to median, maybe 1σ)
-    expect(classification.classification).toMatch(/normal|unusual/)
-    // z-score should not be extremely high (though could be 1-2 range)
-    expect(classification.stats.zScore).toBeLessThan(3)
+    // Empirically: 14 days is the longest gap this weekly fan has ever had
+    // So empirical percentile is 100% (longer than all previous gaps)
+    // This should be highly-unusual or extreme
+    expect(classification.classification).toMatch(/highly-unusual|extreme/)
+    // Empirical rarity should be very high (95%+)
+    expect(classification.stats.empiricalRarity).toBeGreaterThan(90)
   })
 
   test('inconsistent tipper has medium confidence', () => {
@@ -132,12 +136,13 @@ describe('Statistical Distribution-Based Resurfacing', () => {
   })
 
   test('no hardcoded multipliers - uses actual distribution', () => {
-    // Different fans with different patterns should have different thresholds
+    // Different fans with different patterns should have different rarity scores
     // based on their actual history, not fixed multipliers
 
     const now = new Date()
 
-    // Fan A: Tips every 5 days, last tip 15 days ago
+    // Fan A: Tips every 5 days, last tip 15 days ago (45 days back from start)
+    // Historical gaps: ~5, 5, 5, ..., but current gap from last tip = 15 days
     const baseDateA = new Date(now.getTime() - (65 * 24 * 60 * 60 * 1000))
     const tipsA = []
     for (let i = 0; i < 10; i++) {
@@ -149,10 +154,14 @@ describe('Statistical Distribution-Based Resurfacing', () => {
         tokens: 200
       })
     }
-    // Last tip 15 days ago (3x their 5-day pattern)
+    // Last tip at offset 45 days (65-45=20 days ago from now), so daysSinceLastTip ≈ 20
 
-    // Fan B: Tips every 50 days, last tip 15 days ago
-    const baseDateB = new Date(now.getTime() - (215 * 24 * 60 * 60 * 1000))
+    // Fan B: Tips every 50 days, last tip positioned so current gap is small
+    // Tips at: 0, 50, 100, 150 days back from baseDate
+    // If baseDate is 215d ago, last tip is at 150d offset = 65d ago
+    // But we want daysSinceLastTip to be ~15 for comparison
+    // So let's adjust: baseDate should be now - 165d to make last tip 15d ago
+    const baseDateB = new Date(now.getTime() - (165 * 24 * 60 * 60 * 1000))
     const tipsB = []
     for (let i = 0; i < 4; i++) {
       tipsB.push({
@@ -163,7 +172,7 @@ describe('Statistical Distribution-Based Resurfacing', () => {
         tokens: 2000
       })
     }
-    // Last tip 15 days ago (much less than their 50-day pattern, median ~50)
+    // Last tip 15 days ago (much shorter than their 50-day pattern)
 
     const sessions = detectSessions([...tipsA, ...tipsB])
     const whales = identifyWhales([...tipsA, ...tipsB], sessions, 'UTC')
@@ -173,11 +182,13 @@ describe('Statistical Distribution-Based Resurfacing', () => {
     const classA = classifyCurrentGapByDistribution(fanA)
     const classB = classifyCurrentGapByDistribution(fanB)
 
-    // Same 15-day gap, but:
-    // - For 5-day-pattern fan (15 days = 3x median): unusual or strongly-unusual
-    // - For 50-day-pattern fan (15 days < median): normal
-    expect(classA.classification).toMatch(/unusual|strongly-unusual/)
+    // Same gap length (~15-20d), but empirical rarity differs based on THEIR actual distribution:
+    // - For 5-day-pattern fan: 15-20 days is extremely long (100th percentile, beyond all gaps)
+    // - For 50-day-pattern fan: 15 days is quite short (low percentile, normal for them)
+    expect(classA.classification).toMatch(/highly-unusual|extreme/)
     expect(classB.classification).toBe('normal')
-    // No hardcoded "2x" or "3x" - calculated from distribution
+    // No hardcoded "2x" or "3x" - calculated from empirical percentile based on THEIR distribution
+    expect(classA.stats.empiricalRarity).toBeGreaterThan(90)
+    expect(classB.stats.empiricalRarity).toBeLessThan(50)
   })
 })

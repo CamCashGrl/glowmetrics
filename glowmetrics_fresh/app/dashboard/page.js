@@ -2323,7 +2323,7 @@ const stopImportMessageRotation = () => {
     whales.filter(w => w.totalUSD >= 50).forEach(w => {
       const gapClassification = classifyCurrentGapByDistribution(w)
 
-      // Show "win back" for fans with unusual gaps (not strongly-unusual, which is handled separately)
+      // Show "win back" for fans with unusual gaps (not highly-unusual/extreme, which are handled separately)
       if (gapClassification.classification === 'unusual' && gapClassification.confidence === 'high') {
         const name = w.username
         winBack.push({
@@ -2407,7 +2407,7 @@ const stopImportMessageRotation = () => {
       const gapClassification = classifyCurrentGapByDistribution(w)
 
       // Show "dormant" for fans with unusual gaps and medium-to-high evidence
-      if ((gapClassification.classification === 'unusual' || gapClassification.classification === 'strongly-unusual') &&
+      if ((gapClassification.classification === 'unusual' || gapClassification.classification === 'highly-unusual' || gapClassification.classification === 'extreme') &&
           (gapClassification.confidence === 'high' || gapClassification.confidence === 'medium')) {
         const timeStr = w.daysSinceLastTip >= 30
           ? `${Math.round(w.daysSinceLastTip / 30)} month${w.daysSinceLastTip >= 60 ? 's' : ''}`
@@ -2473,7 +2473,7 @@ const stopImportMessageRotation = () => {
     return whales
       .filter(w => {
         const gapClassification = classifyCurrentGapByDistribution(w)
-        // Include fans with unusual gaps (unusual or strongly-unusual) with decent evidence and $10+ lifetime spend
+        // Include fans with unusual gaps (unusual/highly-unusual/extreme) with decent evidence and $10+ lifetime spend
         return gapClassification.shouldAlert && w.totalUSD >= 10
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
@@ -2482,7 +2482,9 @@ const stopImportMessageRotation = () => {
         const gapClassification = classifyCurrentGapByDistribution(w)
         // Urgency scales with how unusual the gap is and evidence quality
         let urgency = C.gold
-        if (gapClassification.classification === 'strongly-unusual') {
+        if (gapClassification.classification === 'extreme') {
+          urgency = C.red
+        } else if (gapClassification.classification === 'highly-unusual') {
           urgency = C.red
         } else if (gapClassification.classification === 'unusual' && gapClassification.confidence === 'high') {
           urgency = C.orange
@@ -2638,7 +2640,7 @@ const stopImportMessageRotation = () => {
             zScore = (daysSince - mean) / stddev
           }
 
-          // Classify: unusual (1σ-2σ) or strongly-unusual (≥2σ) means overdue
+          // Classify: if gap exceeds 1σ from mean, fan is overdue (based on their distribution)
           const isOverdue = zScore >= 1
           return isOverdue
         } else {

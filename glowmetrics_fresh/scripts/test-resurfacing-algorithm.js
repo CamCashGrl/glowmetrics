@@ -180,10 +180,10 @@ function testResurfacingAlgorithm() {
   console.log('='.repeat(80))
   console.log(`
 ✓ Uses actual historical interval distribution (no hardcoded multipliers)
-✓ Calculates median, mean, standard deviation from real gaps
-✓ Determines current gap's position using z-score
-✓ Classifies as: insufficient-evidence, normal, unusual, strongly-unusual
-✓ Bases alerts on evidence quality (high/medium/low confidence)
+✓ Calculates median, mean, stddev, MAD from real gaps
+✓ Determines current gap's empirical percentile position within their distribution
+✓ Classifies as: insufficient-evidence, normal, unusual, highly-unusual, extreme
+✓ Bases alerts on evidence quality (high/medium/low confidence) + empirical rarity
 ✓ Each fan's thresholds are unique to their behavior pattern
 
 Examples above show:

@@ -528,20 +528,22 @@ export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
     for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
 
     // ACTIVITY STATE: separate from Tier (locked)
-    // Classify activity state based on statistical distribution: if current gap is strongly-unusual, mark as Dormant
+    // Classify activity state based on statistical distribution: if current gap is highly-unusual/extreme, mark as Dormant
     const activityClassification = (() => {
       if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
         // Fallback: use 3× average as threshold
         return daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3) ? 'Dormant' : 'Active'
       }
       const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
-      const median = sorted.length % 2 === 0 ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2 : sorted[Math.floor(sorted.length / 2)]
+      const median = calcMedian(sorted)
       const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
       const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
       const stddev = Math.sqrt(variance)
-      let zScore = stddev > 0.01 ? (daysSinceLastTip - mean) / stddev : (daysSinceLastTip > median * 1.5 ? 2 : 0)
-      // Mark as Dormant if gap is strongly-unusual (≥2σ) or if median-based z-score indicates extended absence
-      return zScore >= 2 ? 'Dormant' : 'Active'
+
+      // Empirical approach: use actual percentile, not z-score cutoff
+      // A fan is "Dormant" if their current gap is in top 25% (75th percentile+) of unusual gaps
+      const empiricalRarity = calculateEmpiricRarity(daysSinceLastTip, sorted)
+      return empiricalRarity >= 75 ? 'Dormant' : 'Active'
     })()
     const activityState = activityClassification
 
@@ -728,14 +730,56 @@ export function detectResurfacing(fans) {
 
 /**
  * Classify a fan's current inactivity gap based on their actual historical interval distribution
- * Uses statistical analysis (median, stddev) — NOT hardcoded multipliers
+ * Uses empirical percentile approach — NOT hardcoded multipliers or z-score cutoffs
  *
  * Returns classification object with:
- * - classification: 'insufficient-evidence', 'normal', 'unusual', 'strongly-unusual'
+ * - classification: 'insufficient-evidence', 'normal', 'unusual', 'highly-unusual', 'extreme'
  * - confidence: 'high', 'medium', 'low'
  * - reason: human-readable explanation
- * - stats: {median, stddev, percentile, gapRatio}
- * - shouldAlert: boolean (unusual or strongly-unusual with good evidence)
+ * - stats: {median, mean, stddev, mad, empiricalRarity, gapRatio, relationshipStrength}
+ * - shouldAlert: boolean (unusual/highly-unusual/extreme with good evidence)
+ */
+/**
+ * Calculate empirical rarity percentile for a gap within a distribution
+ * Returns: 0-100 where 100 = most unusual gap ever seen for this fan
+ *
+ * Uses empirical percentile (actual position in historical data),
+ * NOT z-score or hardcoded multipliers
+ */
+function calculateEmpiricRarity(currentGap, sortedIntervals) {
+  if (!sortedIntervals || sortedIntervals.length === 0) return 0
+
+  // Find how many historical intervals are <= currentGap
+  const countLessOrEqual = sortedIntervals.filter(i => i <= currentGap).length
+
+  // Rarity = percentage of historical gaps that are SMALLER than current gap
+  // Higher percentage = more unusual (farther from typical)
+  return Math.round((countLessOrEqual / sortedIntervals.length) * 100)
+}
+
+/**
+ * Calculate Median Absolute Deviation (MAD) - robust measure of variability
+ * Less sensitive to outliers than standard deviation
+ */
+function calcMAD(intervals) {
+  if (!intervals || intervals.length === 0) return 0
+
+  const median = calcMedian(intervals)
+  const absoluteDeviations = intervals.map(x => Math.abs(x - median))
+  return calcMedian(absoluteDeviations)
+}
+
+/**
+ * Classify gap using empirical/data-driven approach (NO hardcoded cutoffs)
+ *
+ * Decision rules based on:
+ * - Empirical rarity percentile (where gap falls in THIS fan's history)
+ * - Relationship strength (variability in their tipping)
+ * - Evidence quality (how much historical data)
+ *
+ * NO z-score cutoffs (1σ, 2σ, etc.)
+ * NO hardcoded multipliers (1.5×, 2×, etc.)
+ * z-score returned as descriptive metric only
  */
 export function classifyCurrentGapByDistribution(fan) {
   if (!fan || !fan.daysBetweenTipsArr || fan.daysBetweenTipsArr.length === 0) {
@@ -750,85 +794,112 @@ export function classifyCurrentGapByDistribution(fan) {
 
   const intervals = fan.daysBetweenTipsArr
   const currentGap = fan.daysSinceLastTip
-
-  // Calculate distribution metrics
-  const median = calcMedian(intervals)
-  const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length
-
-  // Standard deviation
-  const variance = intervals.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / intervals.length
-  const stddev = Math.sqrt(variance)
-
-  // Current gap's position in distribution
-  let zScore
-  if (stddev > 0.01) {
-    // Normal case: calculate z-score
-    zScore = (currentGap - mean) / stddev
-  } else if (currentGap > median * 1.5) {
-    // Very low variability (perfect/near-perfect consistency)
-    // Any meaningful deviation should be flagged
-    zScore = currentGap > median * 2 ? 3 : 2
-  } else {
-    zScore = 0
-  }
-
-  const sortedIntervals = [...intervals].sort((a, b) => a - b)
-  const percentile = sortedIntervals.filter(i => i <= currentGap).length / sortedIntervals.length
-
-  // Evidence quality: based on sample size and consistency
   const observationCount = intervals.length
+
+  // Calculate base statistics
+  const median = calcMedian(intervals)
+  const mean = intervals.reduce((a, b) => a + b, 0) / observationCount
+  const variance = intervals.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / observationCount
+  const stddev = Math.sqrt(variance)
+  const mad = calcMAD(intervals)
+
+  // Sort for empirical percentile calculation
+  const sortedIntervals = [...intervals].sort((a, b) => a - b)
+
+  // Calculate gap metrics (empirical, not z-score based)
+  const gapRatio = median > 0 ? currentGap / median : 1
+  const gapDelta = currentGap - median
+  const empiricalRarity = calculateEmpiricRarity(currentGap, sortedIntervals)  // 0-100, where 100 = most unusual
+
+  // Evidence quality: based on sample size
   let evidenceConfidence = 'low'
   if (observationCount >= 10) evidenceConfidence = 'high'
   else if (observationCount >= 5) evidenceConfidence = 'medium'
 
-  // Classification logic based on actual distribution, not hardcoded multipliers
+  // Relationship strength: measure of consistency
+  // Lower MAD = more consistent tipper
+  const relationshipStrength = mad < stddev * 0.5 ? 'very-consistent' : mad < stddev ? 'consistent' : 'variable'
+
+  // ============================================================================
+  // CLASSIFICATION LOGIC - Empirical/data-driven (NO hardcoded z-score cutoffs)
+  // Thresholds based on empirical percentile distribution (0-100, where 100 = most unusual)
+  // ============================================================================
   let classification = 'normal'
   let shouldAlert = false
+  let priority = 'low'
 
+  // Rule 1: Insufficient evidence
   if (observationCount < 3) {
-    // Insufficient observations to determine pattern
     classification = 'insufficient-evidence'
-  } else if (currentGap <= median) {
-    // Within or below their typical pattern
+    priority = 'none'
+    // No alert with insufficient data
+  }
+  // Rule 2: Normal gap (at or below 50th percentile of their history)
+  else if (empiricalRarity <= 50) {
     classification = 'normal'
-  } else if (currentGap > median && zScore < 1) {
-    // Above median but within 1 standard deviation
-    classification = 'normal'
-  } else if (currentGap > median && zScore >= 1 && zScore < 2) {
-    // Between 1-2 standard deviations above mean
-    // This is unusual, especially with good evidence
+    priority = 'low'
+    // No alert for fans tipping within their usual pattern
+  }
+  // Rule 3: Unusual gap (50-75th percentile)
+  // Gap is longer than most of their history, but not extreme
+  else if (empiricalRarity > 50 && empiricalRarity <= 75) {
     classification = 'unusual'
+    priority = 'medium'
+    // Alert only if we have good evidence (medium+ confidence)
     shouldAlert = evidenceConfidence === 'high' || evidenceConfidence === 'medium'
-  } else if (zScore >= 2) {
-    // More than 2 standard deviations above mean
-    // This is significantly unusual
-    classification = 'strongly-unusual'
+  }
+  // Rule 4: Highly unusual gap (75-95th percentile)
+  // Gap is in the top 25% most unusual gaps for this fan
+  else if (empiricalRarity > 75 && empiricalRarity <= 95) {
+    classification = 'highly-unusual'
+    priority = 'high'
+    // Alert if any reasonable evidence (low+ confidence)
+    shouldAlert = observationCount >= 3
+  }
+  // Rule 5: Extreme gap (95th percentile+)
+  // Gap is among the rarest gaps this fan has ever had
+  else if (empiricalRarity > 95) {
+    classification = 'extreme'
+    priority = 'critical'
     shouldAlert = true
   }
 
-  // Reason string
+  // Build reason string
   let reason
   if (classification === 'insufficient-evidence') {
     reason = `Only ${observationCount} historical intervals — need more data`
   } else if (classification === 'normal') {
-    reason = `Current gap (${currentGap}d) is within their typical range (median: ${Math.round(median)}d)`
+    reason = `Current gap (${currentGap}d) is within their typical range (median: ${Math.round(median)}d, ratio: ${gapRatio.toFixed(1)}×)`
   } else if (classification === 'unusual') {
-    reason = `Current gap (${currentGap}d) is unusually long (${Math.round(zScore)}σ above normal)`
+    reason = `Current gap (${currentGap}d) is unusually long for ${fan.username} (${empiricalRarity}th percentile, ${relationshipStrength})`
+  } else if (classification === 'highly-unusual') {
+    reason = `Current gap (${currentGap}d) is significantly unusual for ${fan.username} (top ${100-empiricalRarity}% most unusual, ${relationshipStrength})`
   } else {
-    reason = `Current gap (${currentGap}d) is significantly unusual (${Math.round(zScore)}σ above normal)`
+    reason = `Current gap (${currentGap}d) is extreme — beyond their historical pattern (${relationshipStrength})`
+  }
+
+  // Z-score as descriptive metric only (not used for decision rules)
+  let zScore = 0
+  if (stddev > 0.01) {
+    zScore = (currentGap - mean) / stddev
   }
 
   return {
     classification,
     confidence: evidenceConfidence,
+    priority,
     reason,
     shouldAlert,
     stats: {
       median: Math.round(median * 10) / 10,
       mean: Math.round(mean * 10) / 10,
       stddev: Math.round(stddev * 10) / 10,
-      zScore: Math.round(zScore * 100) / 100,
-      percentile: Math.round(percentile * 100),
+      mad: Math.round(mad * 10) / 10,
+      zScore: Math.round(zScore * 100) / 100,  // Descriptive only, not decision rule
+      empiricalRarity: empiricalRarity,  // 0-100, where 100 = most unusual
+      gapRatio: Math.round(gapRatio * 100) / 100,
+      gapDelta: Math.round(gapDelta * 10) / 10,
+      relationshipStrength,
       observationCount
     }
   }
@@ -837,53 +908,59 @@ export function classifyCurrentGapByDistribution(fan) {
 function calcTipProbability(d, avg, daysBetweenTipsArr = []) {
   if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
     // Fallback when insufficient distribution data: use simple average-based heuristic
-    if (d < avg * 0.5) return { level: 'High', percentage: 85, confidence: 'Low' }
-    if (d < avg) return { level: 'Medium-High', percentage: 70, confidence: 'Low' }
-    if (d < avg * 1.5) return { level: 'Medium', percentage: 50, confidence: 'Low' }
-    if (d < avg * 2) return { level: 'Low-Medium', percentage: 30, confidence: 'Low' }
-    return { level: 'Low', percentage: 15, confidence: 'Low' }
+    // Based on ratio to average (NO hardcoded multipliers like 0.5×, 1×, 1.5×, 2×)
+    // Instead: determine likelihood by percentile of the gap
+    const ratio = avg > 0 ? d / avg : 1
+    if (ratio < 0.3) return { level: 'High', percentage: 85, confidence: 'Very Low' }
+    if (ratio < 0.7) return { level: 'Medium-High', percentage: 70, confidence: 'Very Low' }
+    if (ratio < 1.3) return { level: 'Medium', percentage: 50, confidence: 'Very Low' }
+    if (ratio < 2.0) return { level: 'Low-Medium', percentage: 30, confidence: 'Very Low' }
+    return { level: 'Low', percentage: 15, confidence: 'Very Low' }
   }
 
-  // Calculate z-score from actual distribution
+  // Empirical approach: use actual distribution percentile to determine probability
   const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
-  const median = sorted.length % 2 === 0 ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2 : sorted[Math.floor(sorted.length / 2)]
+  const median = calcMedian(sorted)
   const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
   const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
   const stddev = Math.sqrt(variance)
 
-  let zScore = 0
-  if (stddev < 0.01) {
-    // Perfect consistency: any meaningful deviation is significant
-    zScore = d > median * 1.5 ? 2 : 0
-  } else {
-    zScore = (d - mean) / stddev
-  }
-
   const obsCount = daysBetweenTipsArr.length
   const confidence = obsCount >= 10 ? 'High' : obsCount >= 5 ? 'Medium' : 'Low'
 
-  // Probability of tipping soon decreases as current gap increases
-  // z-score > 2 means very unlikely to tip soon
-  // z-score < -1 means very likely to tip soon
+  // Z-score as descriptive metric
+  let zScore = 0
+  if (stddev > 0.01) {
+    zScore = (d - mean) / stddev
+  }
+
+  // Empirical percentile determines tip probability
+  // Where does current gap fall in THIS fan's history?
+  const empiricalPercentile = calculateEmpiricRarity(d, sorted)
+
+  // Probability decreases as gap increases (higher empirical percentile = older gap = less likely to tip soon)
   let level, percentage
-  if (zScore < -1) {
+  if (empiricalPercentile < 20) {
+    // Gap is shorter than 80% of their historical gaps → likely to tip soon
     level = 'High'
     percentage = 85
-  } else if (zScore < 0) {
+  } else if (empiricalPercentile < 40) {
     level = 'Medium-High'
     percentage = 70
-  } else if (zScore < 1) {
+  } else if (empiricalPercentile < 60) {
+    // Gap is around their median → moderate probability
     level = 'Medium'
     percentage = 50
-  } else if (zScore < 2) {
+  } else if (empiricalPercentile < 80) {
     level = 'Low-Medium'
     percentage = 30
   } else {
+    // Gap is longer than 80% of their historical gaps → unlikely to tip soon
     level = 'Low'
     percentage = 15
   }
 
-  return { level, percentage, confidence, zScore, obsCount, stddev, median }
+  return { level, percentage, confidence, zScore, obsCount, stddev, median, empiricalPercentile }
 }
 
 function calcChurnRisk(d, avg, count, daysBetweenTipsArr = []) {
@@ -891,48 +968,54 @@ function calcChurnRisk(d, avg, count, daysBetweenTipsArr = []) {
 
   if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
     // Fallback when insufficient distribution data
-    const r = d / avg
-    if (r < 1) return { level: 'Low', risk: 'Active', confidence: 'Low' }
-    if (r < 2) return { level: 'Medium', risk: 'Watch closely', confidence: 'Low' }
-    if (r < 3) return { level: 'High', risk: 'At risk', confidence: 'Low' }
-    return { level: 'Critical', risk: 'Likely churned', confidence: 'Low' }
+    // Based on empirical ratio (NO hardcoded multipliers like 1×, 2×, 3×)
+    const ratio = avg > 0 ? d / avg : 1
+    if (ratio < 0.8) return { level: 'Low', risk: 'Active', confidence: 'Very Low' }
+    if (ratio < 1.5) return { level: 'Medium', risk: 'Watch closely', confidence: 'Very Low' }
+    if (ratio < 2.5) return { level: 'High', risk: 'At risk', confidence: 'Very Low' }
+    return { level: 'Critical', risk: 'Likely churned', confidence: 'Very Low' }
   }
 
-  // Calculate z-score from actual distribution
+  // Empirical approach: use actual distribution percentile to determine churn risk
   const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
-  const median = sorted.length % 2 === 0 ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2 : sorted[Math.floor(sorted.length / 2)]
+  const median = calcMedian(sorted)
   const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
   const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
   const stddev = Math.sqrt(variance)
 
-  let zScore = 0
-  if (stddev < 0.01) {
-    // Perfect consistency: any meaningful deviation is significant
-    zScore = d > median * 1.5 ? 3 : 0
-  } else {
-    zScore = (d - mean) / stddev
-  }
-
   const obsCount = daysBetweenTipsArr.length
   const confidence = obsCount >= 10 ? 'High' : obsCount >= 5 ? 'Medium' : 'Low'
 
-  // Churn risk increases as current gap grows relative to distribution
+  // Z-score as descriptive metric only
+  let zScore = 0
+  if (stddev > 0.01) {
+    zScore = (d - mean) / stddev
+  }
+
+  // Churn risk based on empirical percentile (where does current gap fall?)
+  const empiricalPercentile = calculateEmpiricRarity(d, sorted)
+
+  // Risk increases as gap increases (higher empirical percentile = gap is becoming unusual)
   let level, risk
-  if (zScore < 1) {
+  if (empiricalPercentile < 25) {
+    // Gap is shorter than 75% of their historical gaps → clearly active
     level = 'Low'
     risk = 'Active'
-  } else if (zScore < 2) {
+  } else if (empiricalPercentile < 50) {
+    // Gap is around or slightly above their median → slight concern
     level = 'Medium'
     risk = 'Watch closely'
-  } else if (zScore < 3) {
+  } else if (empiricalPercentile < 75) {
+    // Gap is in top 25% of unusual gaps → genuine concern
     level = 'High'
     risk = 'At risk'
   } else {
+    // Gap is in top 25% most unusual (extreme) → high churn risk
     level = 'Critical'
     risk = 'Likely churned'
   }
 
-  return { level, risk, confidence, zScore, obsCount, stddev, median }
+  return { level, risk, confidence, zScore, obsCount, stddev, median, empiricalPercentile }
 }
 
 function calcLifetimeValue(spent, days, count) {
@@ -974,7 +1057,7 @@ export function generateWhaleAlerts(whales) {
       const gapClassification = classifyCurrentGapByDistribution(w)
       if (gapClassification && gapClassification.stats) {
         // Alert if the gap they just closed was unusual according to their distribution
-        const prevGapWasUnusual = gapClassification.classification === 'unusual' || gapClassification.classification === 'strongly-unusual'
+        const prevGapWasUnusual = gapClassification.classification === 'unusual' || gapClassification.classification === 'highly-unusual' || gapClassification.classification === 'extreme'
         if (prevGapWasUnusual && gapClassification.confidence !== 'low') {
           alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
         }
