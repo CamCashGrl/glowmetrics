@@ -438,7 +438,6 @@ function parseHeaderless(lines, platform) {
         if (isNaN(num) || num <= 0) continue
         if (raw.includes('$')) { usd = num }
         else if (i === 2 && tokens === 0) { tokens = Math.round(num) }
-        else if (i === 3 && usd === 0) { usd = num }
       }
       if (tokens === 0 && usd > 0) tokens = Math.round(usd / tokenRate(platform))
       if (usd === 0 && tokens > 0) usd = parseFloat((tokens * tokenRate(platform)).toFixed(2))
