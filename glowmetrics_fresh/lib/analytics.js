@@ -1858,3 +1858,52 @@ export function computePaidSessionAnalytics(sessions, userTz = 'UTC') {
     dateRange,
   }
 }
+
+// ── Snapshot window (Free-tier 31-day analysis window) ──────────────────
+// Single source of truth for "full imported history" vs "the most recent
+// N days of it" — used by both the onboarding paste flow (client-side, over
+// already-parsed rows) and the CSV-upload API route (server-side, over
+// tipRows about to be inserted), so the two import paths never compute this
+// two different ways. This is a DISPLAY window, not a storage/retention
+// limit: callers must still persist every valid row regardless of what this
+// returns — it only describes what date range the "full" vs "recent" stats
+// cover, from data that's already been correctly parsed/validated upstream.
+export function computeSnapshotStats(rows, windowDays = 31) {
+  const dated = rows
+    .map(r => ({
+      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts),
+      tokens: Number(r.tokens) || 0,
+      usd: Number(r.usd) || 0,
+    }))
+    .filter(r => !isNaN(r.date.getTime()))
+    .sort((a, b) => a.date - b.date)
+
+  const empty = { from: null, to: null, days: 0, tips: 0, tokens: 0, usd: 0 }
+  if (!dated.length) return { full: empty, recent: { ...empty, isPartial: true } }
+
+  const from = dated[0].date
+  const to = dated[dated.length - 1].date
+  const fullDays = Math.floor((to - from) / 86400000) + 1
+
+  const full = {
+    from, to, days: fullDays,
+    tips: dated.length,
+    tokens: dated.reduce((s, r) => s + r.tokens, 0),
+    usd: parseFloat(dated.reduce((s, r) => s + r.usd, 0).toFixed(2)),
+  }
+
+  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  const recentStart = windowStart < from ? from : windowStart
+  const recentRows = dated.filter(r => r.date >= recentStart)
+  const recentDays = Math.floor((to - recentStart) / 86400000) + 1
+
+  const recent = {
+    from: recentStart, to, days: recentDays,
+    tips: recentRows.length,
+    tokens: recentRows.reduce((s, r) => s + r.tokens, 0),
+    usd: parseFloat(recentRows.reduce((s, r) => s + r.usd, 0).toFixed(2)),
+    isPartial: fullDays < windowDays,
+  }
+
+  return { full, recent }
+}

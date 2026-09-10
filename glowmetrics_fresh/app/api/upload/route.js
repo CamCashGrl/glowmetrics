@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -128,6 +128,14 @@ export async function POST(req) {
   const summaryDateTo   = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
   const summaryTotalUsd = parseFloat(tipRows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
   const summaryTotalTokens = tipRows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+  // Free-tier 31-day analysis window — same computeSnapshotStats() the
+  // onboarding paste flow uses, so a CSV file upload and a pasted-then-
+  // uploaded import report identical, real (not estimated) full-range vs
+  // recent-window numbers.
+  const snapshot = computeSnapshotStats(
+    tipRows.map(r => ({ date: r.date_time, tokens: r.tokens, usd: r.usd })),
+    31
+  )
 
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
@@ -271,6 +279,7 @@ export async function POST(req) {
     dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
+    snapshot,
   }
 
   if (errors.length > 0) {
