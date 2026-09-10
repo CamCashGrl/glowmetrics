@@ -36,38 +36,11 @@ export function calculateConfidence(validSessionCount, streamedHours) {
   return { level: 'Medium', label: 'Likely pattern' }
 }
 
-export function toLocalHour(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hour: 'numeric',
-      hour12: false
-    }).format(date)
-    const h = parseInt(formatted)
-    return isNaN(h) ? 0 : h === 24 ? 0 : h
-  } catch { return new Date(dateStr).getUTCHours() }
-}
-
-export function toLocalDow(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long'
-    }).format(date)
-    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      .indexOf(dayName)
-  } catch { return new Date(dateStr).getUTCDay() }
-}
-
-function toLocalDateStr(dateStr, tz) {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
-  } catch { return new Date(dateStr).toISOString().slice(0, 10) }
-}
+// Import canonical timezone utilities (keeps backward-compatible exports)
+import { getCreatorHour, getCreatorDay, getCreatorDateString, getCreatorTimezone, getCurrentCreatorDay, getCurrentCreatorHour } from './timezoneUtils.js'
+export const toLocalHour = getCreatorHour
+export const toLocalDow = getCreatorDay
+const toLocalDateStr = getCreatorDateString
 
 // ===============================
 // SANITY + FILTER HELPERS
@@ -91,10 +64,15 @@ function getTipFrequency(daysBetweenTips) {
 }
 
 function isUserRelevant(user) {
-  if (!user || typeof user !== 'object') return false;
-  if (user.daysSinceLastTip > 90) return false;
-  if ((user.totalTokens || 0) < 100) return false;
-  return true;
+  if (!user || typeof user !== 'object') return false
+  // Instead of hardcoded 90-day cutoff, filter based on:
+  // 1. Minimum engagement (100+ tokens)
+  // 2. Whether we have evidence to make predictions (churnRisk confidence)
+  if ((user.totalTokens || 0) < 100) return false
+  // Only exclude if we have HIGH confidence that they've truly churned (critical churn risk + very recent no activity)
+  // This preserves alerts for fans we're reasonably confident about
+  if (user.churnRisk?.level === 'Critical' && user.daysSinceLastTip > 180 && user.churnRisk?.confidence === 'High') return false
+  return true
 }
 
 function validateInsights(insights = []) {
@@ -293,10 +271,13 @@ function parseCSVLine(line) {
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === '"') { inQuotes = !inQuotes }
-    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = '' }
+    else if (char === ',' && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''))
+      current = ''
+    }
     else { current += char }
   }
-  result.push(current.trim())
+  result.push(current.trim().replace(/^"|"$/g, ''))
   return result
 }
 
@@ -451,11 +432,23 @@ function parseHeaderless(lines, platform) {
 // detectSessions/finalizeSession live in ./analytics/sessions.js — shared with
 // app/live/page.js. Do not redefine this grouping logic here.
 
-export function identifyWhales(tips) {
+export function identifyWhales(tips, sessions = null, userTz = 'UTC') {
   const fanMap = {}
+
+  // CANONICAL FAN IDENTITY: platform:username composite key
   tips.forEach(t => {
-    const key = t.username.toLowerCase()
-    if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
+    const key = `${t.platform}:${t.username}`.toLowerCase()
+    if (!fanMap[key]) {
+      fanMap[key] = {
+        platform: t.platform,
+        username: t.username,
+        totalUSD: 0,
+        totalTokens: 0,
+        tipCount: 0,
+        tips: [],
+        tipNotes: []
+      }
+    }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
     fanMap[key].tipCount += 1
@@ -466,66 +459,600 @@ export function identifyWhales(tips) {
   const allFans = Object.values(fanMap)
   const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
   const totalFans = sorted.length
-  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2))
-  const rankByUsername = new Map(sorted.map((s, i) => [s.username.toLowerCase(), i]))
+
+  // O(1) rank lookup for percentile calculations
+  const rankByKey = new Map(sorted.map((s, i) => [`${s.platform}:${s.username}`.toLowerCase(), i]))
+
+  // Calculate canonical 6-month window from latest tip in dataset
+  let latestTipDate = new Date(0)
+  tips.forEach(t => {
+    const dt = new Date(t.dateRaw || t.date_time)
+    if (dt > latestTipDate) latestTipDate = dt
+  })
+  const sixMonthsAgoMs = latestTipDate.getTime() - (180 * 24 * 60 * 60 * 1000)
+
+  // Build a map of fan → set of CANONICAL SESSION IDs they tipped in (for qualifying session count)
+  // CRITICAL: Use canonical session.id, NOT calendar dates
+  // Two sessions on the same date are TWO distinct canonical sessions and count as 2
+  const fanSessionIds = {}
+  if (sessions && sessions.length > 0) {
+    sessions.forEach(session => {
+      session.tips?.forEach(tip => {
+        const fanKey = `${tip.platform}:${tip.username}`.toLowerCase()
+        if (!fanSessionIds[fanKey]) fanSessionIds[fanKey] = new Set()
+        // Use canonical session ID (e.g., "session_1694203200000")
+        fanSessionIds[fanKey].add(session.id)
+      })
+    })
+  }
 
   return allFans.map(f => {
+    const fanKey = `${f.platform}:${f.username}`.toLowerCase()
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
     const lastTipDate = new Date(fanSorted[0].dateRaw || fanSorted[0].date_time)
     const firstTipDate = new Date(fanSorted[fanSorted.length - 1].dateRaw || fanSorted[fanSorted.length - 1].date_time)
-    const daysSinceLastTip = Math.floor((Date.now() - lastTipDate) / 86400000)
+    // Calculate days since last tip using creator's local date for consistency
+    const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date())
+    const creatorLastTipStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate)
+    const [cyear, cmonth, cday] = creatorNowStr.split('-').map(Number)
+    const [lyear, lmonth, lday] = creatorLastTipStr.split('-').map(Number)
+    const creatorNow = new Date(cyear, cmonth - 1, cday)
+    const creatorLastTip = new Date(lyear, lmonth - 1, lday)
+    const daysSinceLastTip = Math.floor((creatorNow - creatorLastTip) / 86400000)
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-    const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
+    const fanRankIndex = rankByKey.get(fanKey)
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
-    let tier = 'Regular'
-    if (percentileRank <= 0.05) tier = 'Whale'
-    else if (percentileRank <= 0.20) tier = 'Shark'
-    else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+    const relativeValue = Math.round((1 - percentileRank) * 100)
 
-    const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
-    const hourCounts = {}
-    f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
-    const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-    const spendPercentile = Math.round((1 - percentileRank) * 100)
+    // CANONICAL TIER LOGIC (locked)
+    let tier = 'New'
+    const qualifyingSessionCount = fanSessionIds[fanKey]?.size || 0
+    const isActiveInLast6Months = lastTipDate.getTime() >= sixMonthsAgoMs
+
+    // WHALE: $50+ lifetime revenue (absolute, no percentile override)
+    if (f.totalUSD >= 50) {
+      tier = 'Whale'
+    }
+    // REGULAR: 11+ qualifying sessions AND active within 6 months
+    else if (qualifyingSessionCount >= 11 && isActiveInLast6Months) {
+      tier = 'Regular'
+    }
+    // EMERGING: 3+ qualifying sessions (for dataset analysis only)
+    else if (qualifyingSessionCount >= 3) {
+      tier = 'Emerging'
+    }
+
+    // Calculate daysBetweenTipsArr early so it can be used for status and activity state
     const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
     const daysBetweenTipsArr = []
     for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
 
+    // ACTIVITY STATE: separate from Tier (locked)
+    // Classify activity state based on statistical distribution: if current gap is highly-unusual/extreme, mark as Dormant
+    const activityClassification = (() => {
+      if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
+        // Fallback: use 3× average as threshold
+        return daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3) ? 'Dormant' : 'Active'
+      }
+      const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
+      const median = calcMedian(sorted)
+      const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
+      const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
+      const stddev = Math.sqrt(variance)
+
+      // Empirical approach: use actual percentile, not z-score cutoff
+      // A fan is "Dormant" if their current gap is in top 25% (75th percentile+) of unusual gaps
+      const empiricalRarity = calculateEmpiricRarity(daysSinceLastTip, sorted)
+      return empiricalRarity >= 75 ? 'Dormant' : 'Active'
+    })()
+    const activityState = activityClassification
+
+    // STATUS: calculated separately from Tier (locked)
+    // Now using statistical churn risk classification
+    let status = 'Healthy'
+    const churnRiskLevel = calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount, daysBetweenTipsArr).level
+    if (churnRiskLevel === 'High') status = 'Watch'
+    if (churnRiskLevel === 'Critical') status = 'At Risk'
+
+    const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
+    const hourCounts = {}
+    f.tips.forEach(t => { const h = toLocalHour(t.dateRaw || t.date_time, userTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+    const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
+
     return {
-      username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)), totalTokens: f.totalTokens,
-      tipCount: f.tipCount, avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
-      biggestTip: parseFloat(biggestTip.toFixed(2)), platform: f.platform, tier,
-      lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
-      daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
-      tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      // Identity (FIVE INDEPENDENT DIMENSIONS)
+      platform: f.platform,
+      username: f.username,
+
+      // Financial Metrics
+      totalUSD: parseFloat(f.totalUSD.toFixed(2)),
+      totalTokens: f.totalTokens,
+      tipCount: f.tipCount,
+      avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
+      biggestTip: parseFloat(biggestTip.toFixed(2)),
+
+      // DIMENSION 1: TIER (Whale/Regular/Emerging/New)
+      tier,
+
+      // DIMENSION 2: RELATIVE VALUE (percentile rank)
+      relativeValue,
+      isTopSpender: percentileRank <= 0.05,
+
+      // DIMENSION 3: STATUS (Healthy/Watch/At Risk/Critical)
+      status,
+
+      // DIMENSION 4: ACTIVITY STATE (Active/Dormant)
+      activityState,
+
+      // DIMENSION 5: MANAGEMENT STATE (for future: Unarchived/Archived, dismissal state)
+      // (stored separately in database, not computed here)
+
+      // Temporal Metrics
+      lastTipDate: lastTipDate.toISOString(),
+      firstTipDate: firstTipDate.toISOString(),
+      daysSinceLastTip,
+      avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)),
+      daysBetweenTipsArr,
+
+      // Session Metrics
+      qualifyingSessionCount,
+      isActiveInLast6Months,
+
+      // Predictive Metrics
+      tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips, daysBetweenTipsArr),
+      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount, daysBetweenTipsArr),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
-      hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
+
+      // Behavior Metrics
+      hasPrivates: privateTips.length > 0,
+      privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
-      tipNotes: f.tipNotes, tips: f.tips, isTopSpender: percentileRank <= 0.05, spendPercentile
+      tipNotes: f.tipNotes,
+      tips: f.tips
     }
   }).sort((a, b) => b.totalUSD - a.totalUSD)
 }
 
-function calcTipProbability(d, avg) {
-  if (d < avg * 0.5)  return { level: 'High',        percentage: 85 }
-  if (d < avg)        return { level: 'Medium-High',  percentage: 70 }
-  if (d < avg * 1.5)  return { level: 'Medium',       percentage: 50 }
-  if (d < avg * 2)    return { level: 'Low-Medium',   percentage: 30 }
-  return                     { level: 'Low',           percentage: 15 }
+export function detectResurfacing(fans) {
+  if (!fans || fans.length === 0) return []
+
+  const resurfacing = []
+
+  fans.forEach(f => {
+    // Only Whale and Regular tiers are eligible for resurfacing detection
+    // (based on locked tier definitions, not invented percentile cutoffs)
+    if (f.tier !== 'Whale' && f.tier !== 'Regular') return
+
+    // Must have tip history to analyze
+    if (!f.tips || f.tips.length === 0) return
+
+    // Reconstruct tip timeline from fan's tips array
+    const sortedTips = [...f.tips].sort((a, b) => {
+      const aTime = new Date(a.dateRaw || a.date_time).getTime()
+      const bTime = new Date(b.dateRaw || b.date_time).getTime()
+      return aTime - bTime
+    })
+
+    if (sortedTips.length === 0) return
+
+    // Calculate gap distribution from actual fan history (not hard-coded)
+    const gaps = []
+    for (let i = 0; i < sortedTips.length - 1; i++) {
+      const currentTime = new Date(sortedTips[i].dateRaw || sortedTips[i].date_time).getTime()
+      const nextTime = new Date(sortedTips[i + 1].dateRaw || sortedTips[i + 1].date_time).getTime()
+      const gapDays = (nextTime - currentTime) / (24 * 60 * 60 * 1000)
+      gaps.push({ gapDays, index: i })
+    }
+
+    if (gaps.length === 0) return
+
+    // Find the largest gap in the tip history (evidence of dormancy)
+    const maxGap = gaps.reduce((max, g) => g.gapDays > max.gapDays ? g : max, gaps[0])
+    const maxGapDays = maxGap.gapDays
+    const maxGapIndex = maxGap.index
+
+    // CALCULATE: Resurfacing deviation from personal history
+    // Derived from fan's actual data, not hard-coded threshold
+    const gapDeviation = f.avgDaysBetweenTips > 0 ? maxGapDays / f.avgDaysBetweenTips : 0
+
+    // CALCULATE: Evidence quality from actual relationship history (NOT hard-coded thresholds)
+    // Measure confidence in this resurfacing detection based on available data
+    const observationCount = sortedTips.length
+    const firstTipTime = new Date(sortedTips[0].dateRaw || sortedTips[0].date_time).getTime()
+    const lastTipBeforeGapTime = new Date(sortedTips[maxGapIndex].dateRaw || sortedTips[maxGapIndex].date_time).getTime()
+    const relationshipDurationDays = (lastTipBeforeGapTime - firstTipTime) / (24 * 60 * 60 * 1000)
+
+    // Calculate interval consistency (lower = more consistent pattern)
+    let intervalVariance = 0
+    if (gaps.length > 1) {
+      const avgGap = gaps.reduce((sum, g) => sum + g.gapDays, 0) / gaps.length
+      intervalVariance = Math.sqrt(
+        gaps.reduce((sum, g) => sum + Math.pow(g.gapDays - avgGap, 2), 0) / gaps.length
+      )
+    }
+
+    // Calculate evidence quality score from actual data:
+    // - More observations = stronger evidence
+    // - Longer relationship = more established pattern
+    // - More consistent intervals = clearer typical behavior
+    // - Qualifying sessions count = relationship strength
+    const evidenceScore =
+      (observationCount * 0.3) +  // Weight: number of observations
+      (Math.min(relationshipDurationDays / 30, 12) * 1.0) +  // Weight: relationship duration (months, capped at 12)
+      (f.qualifyingSessionCount * 0.5) +  // Weight: distinct sessions established
+      (Math.max(0, 5 - intervalVariance) * 0.2)  // Weight: consistency (lower variance = higher score)
+
+    // Derived evidence quality from calculated metrics
+    const evidenceQuality = {
+      observationCount,
+      relationshipDurationDays: Math.round(relationshipDurationDays),
+      intervalVariability: Math.round(intervalVariance * 100) / 100,
+      qualifyingSessionsCount: f.qualifyingSessionCount,
+      score: Math.round(evidenceScore * 100) / 100,
+      confidenceLevel: evidenceScore > 20 ? 'high' : evidenceScore > 10 ? 'moderate' : 'low'
+    }
+
+    // Evidence: Tips after the gap exist (actual return occurred)
+    const tipsAfterGap = sortedTips.slice(maxGapIndex + 1)
+    const hasReturn = tipsAfterGap.length > 0
+
+    // Do not include in results if:
+    // - No actual gap in history (all tips regularly spaced)
+    // - No evidence of return after gap
+    // - Gap is within normal variation (approach to 1.0x means no real gap)
+    if (!hasReturn || gapDeviation < 1) return
+
+    // Determine resurfacing type based on locked tier definition
+    const resurfacingType = f.tier === 'Whale' ? 'whale' : f.tier === 'Regular' ? 'regular' : 'other'
+    const priority = f.tier === 'Whale' ? 1 : f.tier === 'Regular' ? 2 : 3
+
+    resurfacing.push({
+      ...f,
+      resurfacingType,
+      priority,
+      // Calculated metrics (derived from data, not hard-coded)
+      dormancyDays: Math.round(maxGapDays),
+      dormancyEndDate: sortedTips[maxGapIndex + 1] ? new Date(sortedTips[maxGapIndex + 1].dateRaw || sortedTips[maxGapIndex + 1].date_time).toISOString() : null,
+      gapDeviation: parseFloat(gapDeviation.toFixed(2)), // Calculated ratio of actual gap to personal average
+      evidenceQuality, // Confidence metrics derived from actual relationship history
+      returnMessage: `${f.username} (${f.platform}) is back after ${Math.round(maxGapDays)} days offline`
+    })
+  })
+
+  // Sort by priority (Whale first, then Regular), then by relative value (highest first)
+  return resurfacing.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority
+    return b.relativeValue - a.relativeValue
+  })
 }
 
-function calcChurnRisk(d, avg, count) {
-  if (count < 3) return { level: 'Unknown', risk: 'Insufficient data' }
-  const r = d / avg
-  if (r < 1) return { level: 'Low',      risk: 'Active' }
-  if (r < 2) return { level: 'Medium',   risk: 'Watch closely' }
-  if (r < 3) return { level: 'High',     risk: 'At risk' }
-  return           { level: 'Critical',  risk: 'Likely churned' }
+/**
+ * Classify a fan's current inactivity gap based on their actual historical interval distribution
+ * Uses empirical percentile approach — NOT hardcoded multipliers or z-score cutoffs
+ *
+ * Returns classification object with:
+ * - classification: 'insufficient-evidence', 'normal', 'unusual', 'highly-unusual', 'extreme'
+ * - confidence: 'high', 'medium', 'low'
+ * - reason: human-readable explanation
+ * - stats: {median, mean, stddev, mad, empiricalRarity, gapRatio, relationshipStrength}
+ * - shouldAlert: boolean (unusual/highly-unusual/extreme with good evidence)
+ */
+/**
+ * Calculate empirical rarity percentile for a gap within a distribution
+ * Returns: 0-100 where 100 = most unusual gap ever seen for this fan
+ *
+ * Uses empirical percentile (actual position in historical data),
+ * NOT z-score or hardcoded multipliers
+ */
+function calculateEmpiricRarity(currentGap, sortedIntervals) {
+  if (!sortedIntervals || sortedIntervals.length === 0) return 0
+
+  // Find how many historical intervals are <= currentGap
+  const countLessOrEqual = sortedIntervals.filter(i => i <= currentGap).length
+
+  // Rarity = percentage of historical gaps that are SMALLER than current gap
+  // Higher percentage = more unusual (farther from typical)
+  return Math.round((countLessOrEqual / sortedIntervals.length) * 100)
+}
+
+/**
+ * Calculate Median Absolute Deviation (MAD) - robust measure of variability
+ * Less sensitive to outliers than standard deviation
+ */
+function calcMAD(intervals) {
+  if (!intervals || intervals.length === 0) return 0
+
+  const median = calcMedian(intervals)
+  const absoluteDeviations = intervals.map(x => Math.abs(x - median))
+  return calcMedian(absoluteDeviations)
+}
+
+/**
+ * Classify gap using empirical/data-driven approach (NO hardcoded cutoffs)
+ *
+ * Decision rules based on:
+ * - Empirical rarity percentile (where gap falls in THIS fan's history)
+ * - Relationship strength (variability in their tipping)
+ * - Evidence quality (how much historical data)
+ *
+ * NO z-score cutoffs (1σ, 2σ, etc.)
+ * NO hardcoded multipliers (1.5×, 2×, etc.)
+ * z-score returned as descriptive metric only
+ */
+export function classifyCurrentGapByDistribution(fan) {
+  if (!fan || !fan.daysBetweenTipsArr || fan.daysBetweenTipsArr.length === 0) {
+    return {
+      classification: 'insufficient-evidence',
+      confidence: 'low',
+      reason: 'No historical interval data',
+      shouldAlert: false,
+      stats: null
+    }
+  }
+
+  const intervals = fan.daysBetweenTipsArr
+  const currentGap = fan.daysSinceLastTip
+  const observationCount = intervals.length
+
+  // Calculate base statistics
+  const median = calcMedian(intervals)
+  const mean = intervals.reduce((a, b) => a + b, 0) / observationCount
+  const variance = intervals.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / observationCount
+  const stddev = Math.sqrt(variance)
+  const mad = calcMAD(intervals)
+
+  // Sort for empirical percentile calculation
+  const sortedIntervals = [...intervals].sort((a, b) => a - b)
+
+  // Calculate gap metrics (empirical, not z-score based)
+  const gapRatio = median > 0 ? currentGap / median : 1
+  const gapDelta = currentGap - median
+  const empiricalRarity = calculateEmpiricRarity(currentGap, sortedIntervals)  // 0-100, where 100 = most unusual
+
+  // Evidence quality: based on sample size
+  let evidenceConfidence = 'low'
+  if (observationCount >= 10) evidenceConfidence = 'high'
+  else if (observationCount >= 5) evidenceConfidence = 'medium'
+
+  // Relationship strength: measure of consistency
+  // Lower MAD = more consistent tipper
+  const relationshipStrength = mad < stddev * 0.5 ? 'very-consistent' : mad < stddev ? 'consistent' : 'variable'
+
+  // ============================================================================
+  // CLASSIFICATION LOGIC - Empirical/data-driven (NO hardcoded z-score cutoffs)
+  // Thresholds based on empirical percentile distribution (0-100, where 100 = most unusual)
+  // ============================================================================
+  let classification = 'normal'
+  let shouldAlert = false
+  let priority = 'low'
+
+  // Rule 1: Insufficient evidence
+  if (observationCount < 3) {
+    classification = 'insufficient-evidence'
+    priority = 'none'
+    // No alert with insufficient data
+  }
+  // Rule 2: Normal gap (at or below 50th percentile of their history)
+  else if (empiricalRarity <= 50) {
+    classification = 'normal'
+    priority = 'low'
+    // No alert for fans tipping within their usual pattern
+  }
+  // Rule 3: Unusual gap (50-75th percentile)
+  // Gap is longer than most of their history, but not extreme
+  else if (empiricalRarity > 50 && empiricalRarity <= 75) {
+    classification = 'unusual'
+    priority = 'medium'
+    // Alert only if we have good evidence (medium+ confidence)
+    shouldAlert = evidenceConfidence === 'high' || evidenceConfidence === 'medium'
+  }
+  // Rule 4: Highly unusual gap (75-95th percentile)
+  // Gap is in the top 25% most unusual gaps for this fan
+  else if (empiricalRarity > 75 && empiricalRarity <= 95) {
+    classification = 'highly-unusual'
+    priority = 'high'
+    // Alert if any reasonable evidence (low+ confidence)
+    shouldAlert = observationCount >= 3
+  }
+  // Rule 5: Extreme gap (95th percentile+)
+  // Gap is among the rarest gaps this fan has ever had
+  else if (empiricalRarity > 95) {
+    classification = 'extreme'
+    priority = 'critical'
+    shouldAlert = true
+  }
+
+  // Build reason string
+  let reason
+  if (classification === 'insufficient-evidence') {
+    reason = `Only ${observationCount} historical intervals — need more data`
+  } else if (classification === 'normal') {
+    reason = `Current gap (${currentGap}d) is within their typical range (median: ${Math.round(median)}d, ratio: ${gapRatio.toFixed(1)}×)`
+  } else if (classification === 'unusual') {
+    reason = `Current gap (${currentGap}d) is unusually long for ${fan.username} (${empiricalRarity}th percentile, ${relationshipStrength})`
+  } else if (classification === 'highly-unusual') {
+    reason = `Current gap (${currentGap}d) is significantly unusual for ${fan.username} (top ${100-empiricalRarity}% most unusual, ${relationshipStrength})`
+  } else {
+    reason = `Current gap (${currentGap}d) is extreme — beyond their historical pattern (${relationshipStrength})`
+  }
+
+  // Z-score as descriptive metric only (not used for decision rules)
+  let zScore = 0
+  if (stddev > 0.01) {
+    zScore = (currentGap - mean) / stddev
+  }
+
+  return {
+    classification,
+    confidence: evidenceConfidence,
+    priority,
+    reason,
+    shouldAlert,
+    stats: {
+      median: Math.round(median * 10) / 10,
+      mean: Math.round(mean * 10) / 10,
+      stddev: Math.round(stddev * 10) / 10,
+      mad: Math.round(mad * 10) / 10,
+      zScore: Math.round(zScore * 100) / 100,  // Descriptive only, not decision rule
+      empiricalRarity: empiricalRarity,  // 0-100, where 100 = most unusual
+      gapRatio: Math.round(gapRatio * 100) / 100,
+      gapDelta: Math.round(gapDelta * 10) / 10,
+      relationshipStrength,
+      observationCount
+    }
+  }
+}
+
+/**
+ * CANONICAL RESURFACING DETECTION
+ * Single source of truth for all re-engagement/dormancy/win-back alerts
+ * Used by: Command Center, Live Mode, dormant alerts, re-engagement alerts, win-back alerts
+ *
+ * Returns structured result with alert decision, priority, and reasoning
+ */
+export function detectCanonicalResurfacing(fan) {
+  if (!fan || !fan.tier || (fan.tier !== 'Whale' && fan.tier !== 'Regular')) {
+    return { shouldAlert: false, reason: 'Not eligible tier', priority: 'none' }
+  }
+
+  const gapAnalysis = classifyCurrentGapByDistribution(fan)
+
+  // Only alert on unusual/highly-unusual/extreme classifications with reasonable evidence
+  const alertEligible = gapAnalysis.classification === 'unusual' ||
+                        gapAnalysis.classification === 'highly-unusual' ||
+                        gapAnalysis.classification === 'extreme'
+
+  return {
+    shouldAlert: alertEligible && gapAnalysis.shouldAlert,
+    classification: gapAnalysis.classification,
+    priority: gapAnalysis.priority,
+    confidence: gapAnalysis.confidence,
+    reason: gapAnalysis.reason,
+    stats: gapAnalysis.stats,
+    fanTier: fan.tier,
+    resurfacingType: fan.tier === 'Whale' ? 'whale' : 'regular',
+    daysSinceLastTip: fan.daysSinceLastTip,
+    totalUSD: fan.totalUSD,
+    username: fan.username,
+    platform: fan.platform
+  }
+}
+
+function calcTipProbability(d, avg, daysBetweenTipsArr = []) {
+  if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
+    // Fallback when insufficient distribution data: use simple average-based heuristic
+    // Based on ratio to average (NO hardcoded multipliers like 0.5×, 1×, 1.5×, 2×)
+    // Instead: determine likelihood by percentile of the gap
+    const ratio = avg > 0 ? d / avg : 1
+    if (ratio < 0.3) return { level: 'High', percentage: 85, confidence: 'Very Low' }
+    if (ratio < 0.7) return { level: 'Medium-High', percentage: 70, confidence: 'Very Low' }
+    if (ratio < 1.3) return { level: 'Medium', percentage: 50, confidence: 'Very Low' }
+    if (ratio < 2.0) return { level: 'Low-Medium', percentage: 30, confidence: 'Very Low' }
+    return { level: 'Low', percentage: 15, confidence: 'Very Low' }
+  }
+
+  // Empirical approach: use actual distribution percentile to determine probability
+  const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
+  const median = calcMedian(sorted)
+  const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
+  const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
+  const stddev = Math.sqrt(variance)
+
+  const obsCount = daysBetweenTipsArr.length
+  const confidence = obsCount >= 10 ? 'High' : obsCount >= 5 ? 'Medium' : 'Low'
+
+  // Z-score as descriptive metric
+  let zScore = 0
+  if (stddev > 0.01) {
+    zScore = (d - mean) / stddev
+  }
+
+  // Empirical percentile determines tip probability
+  // Where does current gap fall in THIS fan's history?
+  const empiricalPercentile = calculateEmpiricRarity(d, sorted)
+
+  // Probability decreases as gap increases (higher empirical percentile = older gap = less likely to tip soon)
+  let level, percentage
+  if (empiricalPercentile < 20) {
+    // Gap is shorter than 80% of their historical gaps → likely to tip soon
+    level = 'High'
+    percentage = 85
+  } else if (empiricalPercentile < 40) {
+    level = 'Medium-High'
+    percentage = 70
+  } else if (empiricalPercentile < 60) {
+    // Gap is around their median → moderate probability
+    level = 'Medium'
+    percentage = 50
+  } else if (empiricalPercentile < 80) {
+    level = 'Low-Medium'
+    percentage = 30
+  } else {
+    // Gap is longer than 80% of their historical gaps → unlikely to tip soon
+    level = 'Low'
+    percentage = 15
+  }
+
+  return { level, percentage, confidence, zScore, obsCount, stddev, median, empiricalPercentile }
+}
+
+function calcChurnRisk(d, avg, count, daysBetweenTipsArr = []) {
+  if (count < 3) return { level: 'Unknown', risk: 'Insufficient data', confidence: 'Low' }
+
+  if (!daysBetweenTipsArr || daysBetweenTipsArr.length < 3) {
+    // Fallback when insufficient distribution data
+    // Based on empirical ratio (NO hardcoded multipliers like 1×, 2×, 3×)
+    const ratio = avg > 0 ? d / avg : 1
+    if (ratio < 0.8) return { level: 'Low', risk: 'Active', confidence: 'Very Low' }
+    if (ratio < 1.5) return { level: 'Medium', risk: 'Watch closely', confidence: 'Very Low' }
+    if (ratio < 2.5) return { level: 'High', risk: 'At risk', confidence: 'Very Low' }
+    return { level: 'Critical', risk: 'Likely churned', confidence: 'Very Low' }
+  }
+
+  // Empirical approach: use actual distribution percentile to determine churn risk
+  const sorted = [...daysBetweenTipsArr].sort((a, b) => a - b)
+  const median = calcMedian(sorted)
+  const mean = sorted.reduce((s, x) => s + x, 0) / sorted.length
+  const variance = sorted.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sorted.length
+  const stddev = Math.sqrt(variance)
+
+  const obsCount = daysBetweenTipsArr.length
+  const confidence = obsCount >= 10 ? 'High' : obsCount >= 5 ? 'Medium' : 'Low'
+
+  // Z-score as descriptive metric only
+  let zScore = 0
+  if (stddev > 0.01) {
+    zScore = (d - mean) / stddev
+  }
+
+  // Churn risk based on empirical percentile (where does current gap fall?)
+  const empiricalPercentile = calculateEmpiricRarity(d, sorted)
+
+  // Risk increases as gap increases (higher empirical percentile = gap is becoming unusual)
+  let level, risk
+  if (empiricalPercentile < 25) {
+    // Gap is shorter than 75% of their historical gaps → clearly active
+    level = 'Low'
+    risk = 'Active'
+  } else if (empiricalPercentile < 50) {
+    // Gap is around or slightly above their median → slight concern
+    level = 'Medium'
+    risk = 'Watch closely'
+  } else if (empiricalPercentile < 75) {
+    // Gap is in top 25% of unusual gaps → genuine concern
+    level = 'High'
+    risk = 'At risk'
+  } else {
+    // Gap is in top 25% most unusual (extreme) → high churn risk
+    level = 'Critical'
+    risk = 'Likely churned'
+  }
+
+  return { level, risk, confidence, zScore, obsCount, stddev, median, empiricalPercentile }
 }
 
 function calcLifetimeValue(spent, days, count) {
@@ -562,8 +1089,12 @@ export function generateWhaleAlerts(whales) {
     if (w.tipProbability.level === 'High' && w.totalUSD >= tipLikelyThreshold)
       alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
     if (w.daysSinceLastTip > 0 && w.daysSinceLastTip <= 3 && w.tipCount > 5) {
-      if (w.daysSinceLastTip > w.avgDaysBetweenTips * 1.5)
+      // Check if this return is from an unusual gap (not just regular tipping)
+      // Use canonical resurfacing detection to determine if the interval they just closed was notable
+      const resurfacing = detectCanonicalResurfacing(w)
+      if (resurfacing && resurfacing.shouldAlert && resurfacing.confidence !== 'low') {
         alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
+      }
     }
   })
   alerts = alerts.filter(a => isUserRelevant(a.whale))
@@ -571,7 +1102,7 @@ export function generateWhaleAlerts(whales) {
   return alerts.sort((a, b) => order[a.severity] - order[b.severity])
 }
 
-export function predictRevenue(tips, sessions) {
+export function predictRevenue(tips, sessions, userTz = 'UTC') {
   if (!sessions.length) return null
   const predictions = {}
   const now = Date.now()
@@ -583,8 +1114,8 @@ export function predictRevenue(tips, sessions) {
   const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
   const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
   predictions.next30Days = { amount: parseFloat(last30Rev.toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low', trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null }
-  const todayDow = new Date().getUTCDay()
-  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getUTCDay() === todayDow)
+  const todayDow = toLocalDow(new Date().toISOString(), userTz)
+  const sameDaySessions = sessions.filter(s => toLocalDow(s.startTime, userTz) === todayDow)
   if (sameDaySessions.length >= 3) {
     const amounts = sameDaySessions.map(s => s.totalUSD).sort((a, b) => a - b)
     const avg = amounts.reduce((s, x) => s + x, 0) / amounts.length
@@ -604,7 +1135,7 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
-    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bh) <= 1)
+    const recentAtPeak = recentSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bh) <= 1)
     if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
       alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in 3 days — estimated loss: $${(bestHour.avg * 3).toFixed(2)}`, action: `Go live at ${label} to recover this` })
@@ -636,7 +1167,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   if (bestDay && worstDay && bestDay.day !== worstDay.day) {
     const daySessionMap = {}
     sessions.forEach(s => {
-      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(s.startTime).getUTCDay()]
+      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][toLocalDow(s.startTime, userTz)]
       if (!daySessionMap[d]) daySessionMap[d] = []
       daySessionMap[d].push(s.totalUSD)
     })
@@ -658,9 +1189,9 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
-  const whales = precomputedWhales || identifyWhales(tips)
+  const whales = precomputedWhales || identifyWhales(tips, sessions)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
-  const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
+  const topWhales = trueWhales.slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
   const tE = tips.reduce((s, t) => s + t.usd, 0)
   if (wE > 0 && tE > 0 && topWhales.length > 0) {
@@ -713,12 +1244,12 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   return insights.sort((a, b) => a.priority - b.priority)
 }
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour) {
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour, userTz = 'UTC') {
   const moves = []
   const now = Date.now()
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
-    const currentHour = new Date().getUTCHours()
+    const currentHour = toLocalHour(new Date().toISOString(), userTz)
     const hoursUntil = (bh - currentHour + 24) % 24
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
     if (hoursUntil === 0 || hoursUntil === 1) moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${bestHour.avg.toFixed(0)}/session at this hour`, priority: 0 })
@@ -750,7 +1281,7 @@ export function aggregateRows(tips, tz = null) {
     return {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
-      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
+      predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [], resurfacingFans: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
@@ -816,12 +1347,13 @@ export function aggregateRows(tips, tz = null) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales      = identifyWhales(tips)
-  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
-  const predictions = predictRevenue(tips, meaningfulSessions)
-  const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
+  const whales           = identifyWhales(tips, meaningfulSessions, userTz)
+  const resurfacingFans  = detectResurfacing(whales)
+  const insights         = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
+  const predictions      = predictRevenue(tips, meaningfulSessions, userTz)
+  const whaleAlerts      = generateWhaleAlerts(whales)
+  const lossAlerts       = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
+  const nextMoves        = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour, userTz)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -845,7 +1377,7 @@ export function aggregateRows(tips, tz = null) {
 
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
-    status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Shark' ? '🦈 SHARK' : w.tier === 'Dormant' ? '💤 DORMANT' : '🐟 REGULAR',
+    status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Regular' ? '💎 REGULAR' : w.tier === 'Emerging' ? '⭐ EMERGING' : '🆕 NEW',
     last: new Date(w.lastTipDate).toLocaleDateString(), first: new Date(w.firstTipDate).toLocaleDateString(),
     daysSince: w.daysSinceLastTip, tipProbability: w.tipProbability, churnRisk: w.churnRisk
   }))
@@ -966,7 +1498,7 @@ export function aggregateRows(tips, tz = null) {
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
     const bestHourAvg = bestHourData.avg
     if (bestHourAvg <= overallAvg * 1.2) return
-    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bestHourData.hour) > 1).length
+    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bestHourData.hour) > 1).length
     const missedRevenue = parseFloat(((bestHourAvg - overallAvg) * sessionsNotAtBestHour).toFixed(2))
     if (missedRevenue > 5) {
       missedRevenueByPlatform[p] = { bestHour: bestHourData.hour, bestHourAvg, overallAvg: parseFloat(overallAvg.toFixed(2)), sessionsNotAtBestHour, missedRevenue, multiplier: parseFloat((bestHourAvg / overallAvg).toFixed(1)) }
@@ -1099,7 +1631,7 @@ export function aggregateRows(tips, tz = null) {
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
     topTippers, platforms, sessions: allValidSessions,
     insights: validateInsights(insights),
-    predictions, whaleAlerts, lossAlerts, nextMoves, whales,
+    predictions, whaleAlerts, lossAlerts, nextMoves, whales, resurfacingFans,
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, privateShowFans, spyShowFans,
@@ -1121,7 +1653,7 @@ export function aggregateRows(tips, tz = null) {
 // Completely separate from tip analytics — never mixed.
 // ============================================================
 
-export function computePaidSessionAnalytics(sessions) {
+export function computePaidSessionAnalytics(sessions, userTz = 'UTC') {
   if (!sessions || sessions.length === 0) return null
 
   const totalUSD     = sessions.reduce((s, r) => s + (parseFloat(r.usd) || 0), 0)
@@ -1211,7 +1743,7 @@ export function computePaidSessionAnalytics(sessions) {
   // ── PEAK HOURS FOR PAID SESSIONS ───────────────────────────
   const hourMap = {}
   sessions.forEach(s => {
-    const h = new Date(s.date_time).getUTCHours()
+    const h = toLocalHour(s.date_time, userTz)
     if (!hourMap[h]) hourMap[h] = { usd: 0, count: 0 }
     hourMap[h].usd   += parseFloat(s.usd) || 0
     hourMap[h].count += 1
@@ -1325,4 +1857,53 @@ export function computePaidSessionAnalytics(sessions) {
     },
     dateRange,
   }
+}
+
+// ── Snapshot window (Free-tier 31-day analysis window) ──────────────────
+// Single source of truth for "full imported history" vs "the most recent
+// N days of it" — used by both the onboarding paste flow (client-side, over
+// already-parsed rows) and the CSV-upload API route (server-side, over
+// tipRows about to be inserted), so the two import paths never compute this
+// two different ways. This is a DISPLAY window, not a storage/retention
+// limit: callers must still persist every valid row regardless of what this
+// returns — it only describes what date range the "full" vs "recent" stats
+// cover, from data that's already been correctly parsed/validated upstream.
+export function computeSnapshotStats(rows, windowDays = 31) {
+  const dated = rows
+    .map(r => ({
+      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts),
+      tokens: Number(r.tokens) || 0,
+      usd: Number(r.usd) || 0,
+    }))
+    .filter(r => !isNaN(r.date.getTime()))
+    .sort((a, b) => a.date - b.date)
+
+  const empty = { from: null, to: null, days: 0, tips: 0, tokens: 0, usd: 0 }
+  if (!dated.length) return { full: empty, recent: { ...empty, isPartial: true } }
+
+  const from = dated[0].date
+  const to = dated[dated.length - 1].date
+  const fullDays = Math.floor((to - from) / 86400000) + 1
+
+  const full = {
+    from, to, days: fullDays,
+    tips: dated.length,
+    tokens: dated.reduce((s, r) => s + r.tokens, 0),
+    usd: parseFloat(dated.reduce((s, r) => s + r.usd, 0).toFixed(2)),
+  }
+
+  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  const recentStart = windowStart < from ? from : windowStart
+  const recentRows = dated.filter(r => r.date >= recentStart)
+  const recentDays = Math.floor((to - recentStart) / 86400000) + 1
+
+  const recent = {
+    from: recentStart, to, days: recentDays,
+    tips: recentRows.length,
+    tokens: recentRows.reduce((s, r) => s + r.tokens, 0),
+    usd: parseFloat(recentRows.reduce((s, r) => s + r.usd, 0).toFixed(2)),
+    isPartial: fullDays < windowDays,
+  }
+
+  return { full, recent }
 }

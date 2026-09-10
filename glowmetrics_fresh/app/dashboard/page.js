@@ -1,13 +1,16 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { getCreatorHour, getCreatorDay, getCreatorDateString, getCurrentCreatorHour, getCurrentCreatorDay } from "../../lib/timezoneUtils"
+import { classifyCurrentGapByDistribution, detectCanonicalResurfacing } from "../../lib/analytics"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import { computeCoachingState } from "../../lib/coaching/triggers"
+import { archiveFan, unarchiveFan, isArchived, dismissDiscovery, restoreDiscovery, isDismissed, getActiveFans } from "../../lib/analytics/fanManagement"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
@@ -60,7 +63,7 @@ const C = {
 }
 
 const TIER_COLORS = {
-  "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
+  "Whale": C.gold, "Regular": C.cyan, "Emerging": C.blue, "New": C.text
 }
 
 // Rotating microcopy shown on the CSV importer button/progress bar while a
@@ -1394,6 +1397,8 @@ export default function Dashboard() {
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
+  const [archiveState, setArchiveState] = useState({ archivedFans: new Set(), archivedAt: new Map() })
+  const [dismissalState, setDismissalState] = useState({ dismissedDiscoveries: new Set(), dismissedAt: new Map() })
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
@@ -1500,6 +1505,7 @@ export default function Dashboard() {
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
+  const userTz = useMemo(() => profile?.schedule?.timezone || 'UTC', [profile?.schedule?.timezone])
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
@@ -1728,7 +1734,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan')
+        .select('plan, schedule')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -1783,7 +1789,6 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
             const r = runEngine(updated, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -1863,7 +1868,6 @@ export default function Dashboard() {
             return prev // unchanged since the last engine run — skip the recompute
           }
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
             const r = runEngine(prev, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -1978,7 +1982,6 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -2250,26 +2253,26 @@ const stopImportMessageRotation = () => {
   // so hour/day reflects when money actually came in, not when the session started
   // Use UTC to match the database timestamps
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips, userTz], () => {
     const pt = {}
     tips.forEach(t => {
       if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
-      const dt = new Date(t.date_time || t.dateRaw)
-      const hour = dt.getUTCHours()
-      const day = UTC_DAYS_LONG[dt.getUTCDay()]
+      const dateStr = t.date_time || t.dateRaw
+      const hour = getCreatorHour(dateStr, userTz)
+      const day = UTC_DAYS_LONG[getCreatorDay(dateStr, userTz)]
       pt[t.platform].hours[hour] = (pt[t.platform].hours[hour] || 0) + (t.usd || 0)
       pt[t.platform].days[day]   = (pt[t.platform].days[day]   || 0) + (t.usd || 0)
     })
     return pt
   })
 
-  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips], () => whales.filter(w => {
+  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips, userTz], () => whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
       const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
       const tippedOnDay = fanTips.some(t => {
-        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][getCreatorDay(t.date_time || t.dateRaw, userTz)]
         return dayShort === chartDrillDay
       })
       if (!tippedOnDay) return false
@@ -2308,7 +2311,7 @@ const stopImportMessageRotation = () => {
       if (hrs <= 24 && w.tipProbability?.level === 'High') {
         strikeHot.push({
           type: 'strike_hot', icon: '🔥', color: C.orange, severity: 'success',
-          title: `Strike while ${w.username} is hot`,
+          title: `Strike while ${w.username} is hot (${w.platform})`,
           message: `They tipped in the last 24 hours and their tip probability is high — go live NOW while they're warm`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: getPersonalMsg(w)
@@ -2316,15 +2319,17 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
+    // 2. WIN BACK (statistical: $50+ fans with unusual inactivity gaps based on their historical pattern)
     whales.filter(w => w.totalUSD >= 50).forEach(w => {
-      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 45 && days <= 90) {
+      const resurfacing = detectCanonicalResurfacing(w)
+
+      // Show "win back" for fans with unusual gaps (not highly-unusual/extreme, which are handled separately)
+      if (resurfacing.classification === 'unusual' && resurfacing.confidence === 'high') {
         const name = w.username
         winBack.push({
           type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
           title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
-          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${w.daysSinceLastTip} days. A personal message could bring them back.`,
           cta: 'Copy Message', username: name, whale: w,
           reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
         })
@@ -2335,14 +2340,20 @@ const stopImportMessageRotation = () => {
     // Exclude fans gone > 90 days: they belong in At Risk, not Close to Milestone
     const milestones = [50, 100, 200, 500]
     whales.forEach(w => {
-      const daysSinceMilestone = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      // Calculate days since last tip using creator's timezone
+      const lastTipDate = new Date(w.lastTipDate)
+      const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date())
+      const creatorLastTipStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate)
+      const [cyear, cmonth, cday] = creatorNowStr.split('-').map(Number)
+      const [lyear, lmonth, lday] = creatorLastTipStr.split('-').map(Number)
+      const daysSinceMilestone = Math.floor((new Date(cyear, cmonth - 1, cday) - new Date(lyear, lmonth - 1, lday)) / 86400000)
       if (daysSinceMilestone > 90) return
       for (const m of milestones) {
         const remaining = m - w.totalUSD
         if (remaining > 0 && remaining <= m * 0.10) {
           milestone.push({
             type: 'milestone', icon: '💰', color: C.gold, severity: 'info',
-            title: `${w.username} is $${remaining.toFixed(0)} away from $${m}`,
+            title: `${w.username} (${w.platform}) is $${remaining.toFixed(0)} away from $${m}`,
             message: `They've spent $${w.totalUSD.toFixed(0)} lifetime — a little encouragement could push them to the $${m} milestone`,
             cta: 'Copy Message', username: w.username, whale: w,
             reengageMsg: getPersonalMsg(w)
@@ -2361,23 +2372,22 @@ const stopImportMessageRotation = () => {
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
-        // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
+        const h = getCreatorHour(t.date_time || t.dateRaw, userTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
       if (!bestHour) return
       const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
-      const hoursAway = (peakHour - currentUTCHr + 24) % 24
+      const currentCreatorHr = getCurrentCreatorHour(userTz)
+      const hoursAway = (peakHour - currentCreatorHr + 24) % 24
       const _pf0 = bestHour[1] / fanTips.length
       const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
-      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+      const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
       if (hoursAway <= 2 && probability >= 40) {
         onlineNow.push({
           type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
-          title: `${w.username} is probably online right now`,
+          title: `${w.username} (${w.platform}) is probably online right now`,
           message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: getPersonalMsg(w)
@@ -2385,21 +2395,25 @@ const stopImportMessageRotation = () => {
       } else if (hoursAway <= 10 && probability >= 40) {
         onlineNow.push({
           type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
-          title: `${w.username} is likely online in ~${hoursAway}h`,
+          title: `${w.username} (${w.platform}) is likely online in ~${hoursAway}h`,
           message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
           cta: null, username: w.username, whale: w, reengageMsg: ''
         })
       }
     })
 
-    // 5. DORMANT
+    // 5. DORMANT (statistical: flag fans with unusual inactivity based on their actual history)
     whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
-      const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 7 && days <= 44) {
-        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+      const resurfacing = detectCanonicalResurfacing(w)
+
+      // Show "dormant" for fans with unusual gaps and medium-to-high evidence
+      if (resurfacing.shouldAlert && (resurfacing.confidence === 'high' || resurfacing.confidence === 'medium')) {
+        const timeStr = w.daysSinceLastTip >= 30
+          ? `${Math.round(w.daysSinceLastTip / 30)} month${w.daysSinceLastTip >= 60 ? 's' : ''}`
+          : `${w.daysSinceLastTip} days`
         dormant.push({
           type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
-          title: `You haven't heard from ${w.username} in ${timeStr}`,
+          title: `You haven't heard from ${w.username} (${w.platform}) in ${timeStr}`,
           message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
           cta: 'Copy Message', username: w.username, whale: w,
           reengageMsg: getPersonalMsg(w)
@@ -2450,7 +2464,6 @@ const stopImportMessageRotation = () => {
 
   // ── Build re-engage list outside JSX for the same reason
   const buildReengageList = () => {
-    const now = Date.now()
     const messageSets = [
       (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
       (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
@@ -2458,17 +2471,27 @@ const stopImportMessageRotation = () => {
     ]
     return whales
       .filter(w => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-        return days >= 3 && days <= 60 && w.totalUSD >= 10
+        const resurfacing = detectCanonicalResurfacing(w)
+        // Include fans with unusual gaps (unusual/highly-unusual/extreme) with decent evidence and $10+ lifetime spend
+        return resurfacing.shouldAlert && w.totalUSD >= 10
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
       .map((w, i) => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        const resurfacing = detectCanonicalResurfacing(w)
+        // Urgency scales with how unusual the gap is and evidence quality
+        let urgency = C.gold
+        if (resurfacing.classification === 'extreme') {
+          urgency = C.red
+        } else if (resurfacing.classification === 'highly-unusual') {
+          urgency = C.red
+        } else if (resurfacing.classification === 'unusual' && resurfacing.confidence === 'high') {
+          urgency = C.orange
+        }
         return {
           whale: w,
-          days,
-          urgency: days > 30 ? C.red : days > 14 ? C.orange : C.gold,
+          days: w.daysSinceLastTip,
+          urgency,
           msg: messageSets[i % messageSets.length](w.username)
         }
       })
@@ -2481,9 +2504,9 @@ const stopImportMessageRotation = () => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getHours() // local hour — analytics hours are already local
+    const utcHour = getCurrentCreatorHour(userTz) // creator's local hour
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const todayName = DAYS[now.getDay()] // local day of week
+    const todayName = DAYS[getCurrentCreatorDay(userTz)] // creator's local day of week
 
     // Best hour: today-specific per platform first, then all-time fallback
     // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
@@ -2588,33 +2611,59 @@ const stopImportMessageRotation = () => {
           sum + s.reduce((t, tip) => t + (tip.tokens || 0), 0), 0) / fanSessions.length
         if (avgTokensPerSession < 50) return false
 
-        // Calculate avg days between sessions
+        // Calculate days between sessions from actual distribution
         const sessionDates = fanSessions.map(s => new Date(s[0].date_time || s[0].dateRaw))
-        let totalGap = 0
+        const sessionIntervals = []
         for (let i = 1; i < sessionDates.length; i++) {
-          totalGap += (sessionDates[i] - sessionDates[i-1]) / 86400000
+          sessionIntervals.push((sessionDates[i] - sessionDates[i-1]) / 86400000)
         }
-        const avgDaysBetweenSessions = fanSessions.length > 1 ? totalGap / (fanSessions.length - 1) : 30
 
-        // Must be overdue — gone longer than 1.5x their normal interval
-        // (accounts for "every 2-3 streams" — if they stream 2-3x/week that's a few days)
         const daysSince = w.daysSinceLastTip
-        const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
-        // Cap at 90 days: beyond that the fan is "At Risk", not "Re-engage"
-        return daysSince >= overdueThreshold && daysSince <= 90
+
+        // Use statistical distribution of session intervals (similar to classifyCurrentGapByDistribution)
+        if (sessionIntervals.length >= 3) {
+          const sorted = [...sessionIntervals].sort((a, b) => a - b)
+          const median = sorted.length % 2 === 0
+            ? (sorted[Math.floor(sorted.length / 2) - 1] + sorted[Math.floor(sorted.length / 2)]) / 2
+            : sorted[Math.floor(sorted.length / 2)]
+          const mean = sessionIntervals.reduce((s, x) => s + x, 0) / sessionIntervals.length
+          const variance = sessionIntervals.reduce((s, x) => s + Math.pow(x - mean, 2), 0) / sessionIntervals.length
+          const stddev = Math.sqrt(variance)
+
+          // Calculate z-score for current gap
+          let zScore = 0
+          if (stddev < 0.01) {
+            // Perfect consistency: flag if meaningfully above median
+            zScore = daysSince > median * 1.5 ? 2 : 0
+          } else {
+            zScore = (daysSince - mean) / stddev
+          }
+
+          // Classify: if gap exceeds 1σ from mean, fan is overdue (based on their distribution)
+          const isOverdue = zScore >= 1
+          return isOverdue
+        } else {
+          // Fallback for few observations: use simple average-based heuristic
+          const avgDaysBetweenSessions = sessionIntervals.length > 0
+            ? sessionIntervals.reduce((s, x) => s + x, 0) / sessionIntervals.length
+            : 30
+          const overdueThreshold = Math.max(avgDaysBetweenSessions * 1.5, 3)
+          return daysSince >= overdueThreshold
+        }
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
 
     // Likely online right now
+    const creatorNowHour = getCurrentCreatorHour(userTz)
     const likelyOnline = (whales || [])
       .filter(w => {
         if (!w.tips || w.tips.length < 3) return false
         if (w.totalUSD < 3) return false
         const hc = {}
-        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
+        w.tips.forEach(t => { const h = getCreatorHour(t.date_time || t.dateRaw, userTz); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
-        return (peakH - utcHour + 24) % 24 <= 1
+        return (peakH - creatorNowHour + 24) % 24 <= 1
       })
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 3)
@@ -2626,18 +2675,18 @@ const stopImportMessageRotation = () => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const alertCurrentHour = new Date().getUTCHours()
-    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    const alertCurrentHour = getCurrentCreatorHour(userTz)
+    const currentDay = (['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'])[getCurrentCreatorDay(userTz)]
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
-    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
+    // Use creator's timezone to match platformTimes calculation
     const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
-      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      const dateStr = t.date_time || t.dateRaw
+      const day = UTC_DAYS_LONG[getCreatorDay(dateStr, userTz)]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -2653,14 +2702,15 @@ const stopImportMessageRotation = () => {
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // FIX: use getUTCHours() — tips are stored in UTC
+    // Use creator's timezone for hour buckets to match analytics
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
-      const d = new Date(t.date_time || t.dateRaw)
+      const dateStr = t.date_time || t.dateRaw
+      const d = new Date(dateStr)
       // Floor to UTC hour-bucket key for deduplication
       const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = d.getUTCHours()
+      const h = getCreatorHour(dateStr, userTz)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
       platHourUSD[p][h] += t.usd || 0
@@ -2677,21 +2727,21 @@ const stopImportMessageRotation = () => {
     })
 
     const platNames = Object.keys(platHourAvg)
-    // Use UTC current hour to match stored data
-    const currentUTCHour = new Date().getUTCHours()
+    // Use creator's current hour for comparison
+    const currentCreatorHour = getCurrentCreatorHour(userTz)
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
-        const hourVal = platHourAvg[plat][currentUTCHour] || 0
+        const hourVal = platHourAvg[plat][currentCreatorHour] || 0
         const otherPlats = platNames.filter(p => p !== plat)
         otherPlats.forEach(other => {
-          const otherVal = platHourAvg[other][currentUTCHour] || 0
+          const otherVal = platHourAvg[other][currentCreatorHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((currentUTCHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+            const fmtLabel = currentCreatorHour === 0 ? '12 AM' : currentCreatorHour < 12 ? `${currentCreatorHour} AM` : currentCreatorHour === 12 ? '12 PM' : `${currentCreatorHour - 12} PM`
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
-              message: `At ${label}, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
+              message: `At ${fmtLabel}, ${plat} historically averages $${hourVal.toFixed(0)} vs $${otherVal.toFixed(0)} on ${other}. Stream on ${plat} now.`
             })
           }
         })
@@ -2707,22 +2757,26 @@ const stopImportMessageRotation = () => {
         : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
-      // Use local hours — tips' date_time is UTC but getHours() converts to browser local
+      // Use creator's timezone hours, not browser hours
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours() // local hour
+        const h = getCreatorHour(t.date_time || t.dateRaw, userTz)
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
-      const peakHour = parseInt(sortedHours[0][0]) // already local
-      const hoursAway = (peakHour - new Date().getHours() + 24) % 24
+      const peakHour = parseInt(sortedHours[0][0])
+      const currentCreatorHour = getCurrentCreatorHour(userTz)
+      const hoursAway = (peakHour - currentCreatorHour + 24) % 24
       const _pf1 = sortedHours[0][1] / fanTips.length
       const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
       const label = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`
-      const daysSince = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+      const lastTipDate = new Date(w.lastTipDate)
+      const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+      const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+      const daysSince = Math.floor((creatorNow - creatorLastTip) / 86400000)
 
       if (hoursAway === 0 || hoursAway === 1) {
         alerts.push({
@@ -2788,13 +2842,25 @@ const stopImportMessageRotation = () => {
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
   const _momNow = new Date()
-  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
+  const _momCreatorDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(_momNow)
+  const [_momCreatorYear, _momCreatorMonth, _momCreatorDay] = _momCreatorDateStr.split('-').map(Number)
+  const _momMonthKey = `${_momCreatorYear}-${String(_momCreatorMonth).padStart(2,'0')}`
   const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
     derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
-      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
+      const momThisStart = new Date(`${_momCreatorYear}-${String(_momCreatorMonth).padStart(2,'0')}-01`)
+      let prevMonth = _momCreatorMonth - 1, prevYear = _momCreatorYear
+      if (prevMonth < 1) { prevMonth = 12; prevYear-- }
+      const momPrevStart = new Date(`${prevYear}-${String(prevMonth).padStart(2,'0')}-01`)
+      const momThisRev = tips.reduce((s, t) => {
+        const tipDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date(t.date_time || t.dateRaw))
+        const tipDate = new Date(tipDateStr)
+        return tipDate >= momThisStart ? s + (t.usd || 0) : s
+      }, 0)
+      const momPrevRev = tips.reduce((s, t) => {
+        const tipDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date(t.date_time || t.dateRaw))
+        const tipDate = new Date(tipDateStr)
+        return tipDate >= momPrevStart && tipDate < momThisStart ? s + (t.usd || 0) : s
+      }, 0)
       const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
       return { momThisRev, momPrevRev, growthPct }
     })
@@ -3144,8 +3210,12 @@ const stopImportMessageRotation = () => {
               if (tips.length === 0) return null
 
               const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+              const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(now)
+              const [creatorYear, creatorMonth, creatorDay] = creatorNowStr.split('-').map(Number)
+              const thisMonthStart = new Date(`${creatorYear}-${String(creatorMonth).padStart(2,'0')}-01`)
+              let prevMonth = creatorMonth - 1, prevYear = creatorYear
+              if (prevMonth < 1) { prevMonth = 12; prevYear-- }
+              const prevMonthStart = new Date(`${prevYear}-${String(prevMonth).padStart(2,'0')}-01`)
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
@@ -3464,8 +3534,8 @@ const stopImportMessageRotation = () => {
                 const gl = engineInsights.go_live_status
                 const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
                 const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                const localHour = (new Date().getUTCHours() - new Date().getTimezoneOffset() / 60 + 24) % 24
-                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
+                const localHour = getCurrentCreatorHour(userTz)
+                const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${localHour} AM` : localHour === 12 ? '12 PM' : `${localHour - 12} PM`
                 const glText = gl.multiplier
                   ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${engineInsights?.summary?.best_platform || 'your top platform'}.`
                   : `Go-live signal: ${gl.status} — check your stream timing`
@@ -3526,7 +3596,7 @@ const stopImportMessageRotation = () => {
 
               {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _lh=Math.round(h); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
                 const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
                 const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
                 if (!allPlats.length) return null
@@ -3549,7 +3619,7 @@ const stopImportMessageRotation = () => {
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} total · {(p.hours || 0).toFixed(0)}h streamed</div>
                             {(() => {
-                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][getCurrentCreatorDay(userTz)]
                             const ptimes = analytics?.platformBestTimes?.[p.platform]
                             const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
                             const bestDayEntry = ptimes?.bestDay
@@ -3603,8 +3673,10 @@ const stopImportMessageRotation = () => {
                 const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
                 const platDayUSD = {}; const platDayDates = {}
                 tips.forEach(t => {
-                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
-                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
+                  const p = t.platform
+                  const dateStr = t.date_time || t.dateRaw
+                  const shortDay = UTC_DAYS[getCreatorDay(dateStr, userTz)]
+                  const dateKey = getCreatorDateString(dateStr, userTz)
                   if (!platDayUSD[p]) platDayUSD[p] = {}
                   if (!platDayDates[p]) platDayDates[p] = {}
                   platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
@@ -3621,8 +3693,8 @@ const stopImportMessageRotation = () => {
                 })
                 const platList = Object.keys(platDayAvg)
                 if (platList.length < 1) return null
-                const todayShort = UTC_DAYS[new Date().getUTCDay()]
-                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                const todayShort = UTC_DAYS[getCurrentCreatorDay(userTz)]
+                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][getCurrentCreatorDay(userTz)]
                 return (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -3672,15 +3744,15 @@ const stopImportMessageRotation = () => {
                 A. Likely Online Now  B. Milestones  C. At Risk
             ═══════════════════════════════════════ */}
             {(() => {
-              const currentUTCHourTE = new Date().getUTCHours()
-              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+              const currentUTCHourTE = getCurrentCreatorHour(userTz)
+              const labelH = h => { const _lh=Math.round(h); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
 
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
-                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  fanTips.forEach(t => { const h = getCreatorHour(t.date_time || t.dateRaw, userTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
@@ -3809,6 +3881,70 @@ const stopImportMessageRotation = () => {
                       </div>
                     </div>
                   )}
+                </div>
+              )
+            })()}
+
+            {/* section divider */}
+            <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+            {/* ═══════════════════════════════════════
+                4b. RESURFACING FANS — High-priority returning VIPs
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const resurfacingFans = analytics?.resurfacingFans || []
+              if (!resurfacingFans.length) return null
+              const activeFans = getActiveFans(resurfacingFans, archiveState)
+              const filteredFans = activeFans.filter(f => {
+                const discoveryId = `resurfacing_${f.platform}_${f.username}`
+                return !isDismissed(discoveryId, dismissalState)
+              })
+              const displayFans = filteredFans.slice(0, 5)
+              const tierEmoji = { whale: '🐳', regular: '⭐', highValue: '💎', other: '🎯' }
+              return (
+                <div style={{ ...glassCard, borderRadius: 18, padding: 24, marginBottom: 28, border: "1px solid rgba(34,211,238,0.25)", animation: "fadeUp 0.3s ease 0.24s both" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(34,211,238,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>👋</div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Welcome Back, VIPs!</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{displayFans.length} meaningful returning fan{displayFans.length === 1 ? '' : 's'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {displayFans.map((f, i) => (
+                      <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.15)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>
+                            {tierEmoji[f.resurfacingType]} {f.username} <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>({f.platform})</span>
+                          </div>
+                          <div style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: "rgba(34,211,238,0.15)", color: C.cyan, fontWeight: 600, whiteSpace: "nowrap" }}>
+                            {f.tier}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
+                          💰 ${f.totalUSD.toFixed(0)} lifetime | Away for {f.dormancyDays} days | Value: #{Math.round(f.relativeValue)}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.text, marginBottom: 8 }}>
+                          {f.returnMessage}
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => {
+                            const fanKey = `${f.platform}:${f.username}`.toLowerCase()
+                            archiveFan(fanKey, archiveState)
+                            setArchiveState({ ...archiveState })
+                          }} style={{ fontSize: 10, padding: "4px 8px", borderRadius: 5, background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.4)", color: C.white, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            📦 Archive
+                          </button>
+                          <button onClick={() => {
+                            const discoveryId = `resurfacing_${f.platform}_${f.username}`
+                            dismissDiscovery(discoveryId, dismissalState)
+                            setDismissalState({ ...dismissalState })
+                          }} style={{ fontSize: 10, padding: "4px 8px", borderRadius: 5, background: "rgba(236,72,153,0.2)", border: "1px solid rgba(236,72,153,0.4)", color: C.white, cursor: "pointer", whiteSpace: "nowrap" }}>
+                            🙈 Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )
             })()}
@@ -4078,6 +4214,7 @@ const stopImportMessageRotation = () => {
             const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
             const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
             const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
+            const fmtLocalHour = h => h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`
 
             // For best day: compute avg per active day (not raw total which is misleading)
             const dayData = platformTimes[p.platform]?.days || {}
@@ -4086,9 +4223,9 @@ const stopImportMessageRotation = () => {
               const activeDates = new Set(
                 tips.filter(t => {
                   if (t.platform !== p.platform) return false
-                  const dt = new Date(t.date_time || t.dateRaw)
-                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
-                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
+                  const dateStr = t.date_time || t.dateRaw
+                  return UTC_DAYS_LONG[getCreatorDay(dateStr, userTz)] === day
+                }).map(t => getCreatorDateString(t.date_time || t.dateRaw, userTz))
               ).size
               return [day, activeDates > 0 ? total / activeDates : 0]
             })
@@ -4101,7 +4238,7 @@ const stopImportMessageRotation = () => {
             if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
             if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
             if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
-            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
+            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${fmtLocalHour(parseInt(bHour[0]))} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
             if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
             return insights
           }
@@ -4359,7 +4496,7 @@ const stopImportMessageRotation = () => {
                 narrow screens instead of clipping options past the viewport edge */}
             <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap", maxWidth: "100%" }}>
               <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
-                {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
+                {["ALL","Whale","Regular","Emerging","New"].map(t => {
                   const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
                   const active = whaleFilter === t
                   return (
@@ -4391,8 +4528,18 @@ const stopImportMessageRotation = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
                 {filteredWhales.map((w, i) => {
                   const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
-                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
+                  const days = w.daysSinceLastTip ?? (() => {
+                    if (!w.lastTipDate) return null
+                    const lastTipDate = new Date(w.lastTipDate)
+                    const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+                    const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+                    return Math.floor((creatorNow - creatorLastTip) / 86400000)
+                  })()
+                  // Relationship score: recency bonus based on fan's personal pattern, not fixed thresholds
+                  const recencyBonus = (days !== null && w.avgDaysBetweenTips)
+                    ? Math.max(0, Math.round(20 * (1 - (days / w.avgDaysBetweenTips))))  // 20pt max if on schedule, 0pt if overdue
+                    : (days !== null && days < 30) ? 10 : 0
+                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + recencyBonus))
                   const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
                   // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
                   // instead of a second, inconsistent day-threshold calc — that duplicate
@@ -6254,12 +6401,15 @@ const stopImportMessageRotation = () => {
           const bestMo = analytics?.bestMonth
           const totalUSD = analytics?.totalUSD || 0
           const now = new Date()
-          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+          // Get current date in creator's timezone
+          const creatorNowStr = new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(now)
+          const [creatorYear, creatorMonth, creatorDay] = creatorNowStr.split('-').map(Number)
+          const thisMonthKey = `${creatorYear}-${String(creatorMonth).padStart(2,'0')}`
           const thisMonth = monthly.find(m => m.month === thisMonthKey)
           const thisMonthUSD = thisMonth?.usd || 0
           const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
-          const dayOfMonth = now.getUTCDate()
+          const daysInMonth = new Date(creatorYear, creatorMonth, 0).getDate()
+          const dayOfMonth = creatorDay
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
@@ -6671,9 +6821,15 @@ const stopImportMessageRotation = () => {
         // A fan reached from Private Sessions may have no free-chat tip
         // history at all (paid-only) -- w.lastTipDate is null in that case,
         // guarded below rather than assumed to exist.
-        const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
+        // Calculate days since last tip using creator's local date for consistency
+        const daysSinceLastTip = w.lastTipDate ? (() => {
+          const lastTipDate = new Date(w.lastTipDate)
+          const creatorNow = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(new Date()))
+          const creatorLastTip = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: userTz }).format(lastTipDate))
+          return Math.floor((creatorNow - creatorLastTip) / 86400000)
+        })() : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
-        const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
+        const tierIcon = w.tier === 'Whale' ? '🐳' : w.tier === 'Regular' ? '💎' : w.tier === 'Emerging' ? '⭐' : '🆕'
         const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
         const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
@@ -6713,7 +6869,7 @@ const stopImportMessageRotation = () => {
         const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
         whaleTips.forEach(t => {
-          const d = new Date(t.date_time).getUTCDay()
+          const d = getCreatorDay(t.date_time, userTz)
           const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
           if (key in dayCounts) dayCounts[key]++
         })

@@ -64,8 +64,8 @@ create policy "profiles_own_update" on profiles for update using (auth.uid() = i
 create or replace function handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, display_name)
-  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', new.email));
+  insert into public.profiles (id, display_name, plan, trial_days)
+  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', new.email), 'free', 7);
   return new;
 end;
 $$ language plpgsql security definer;

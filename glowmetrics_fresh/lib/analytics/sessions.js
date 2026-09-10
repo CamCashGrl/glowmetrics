@@ -21,7 +21,7 @@ export function detectSessions(tips) {
   }).filter(Boolean).sort((a, b) => a.timestamp - b.timestamp)
   if (parsed.length === 0) return []
 
-  const SESSION_GAP_MS = 3 * 60 * 60 * 1000
+  const SESSION_GAP_MS = 60 * 60 * 1000 // Canonical 60-minute session gap
   const sessions = []
   let cur = null
 

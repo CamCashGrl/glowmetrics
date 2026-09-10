@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
+import { computeSnapshotStats } from '../../lib/analytics'
 import { track } from '../../lib/track'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
@@ -102,7 +103,7 @@ function parseBCPaidSessions(rawText){
   return{sessions,skipped}
 }
 
-function parseRows(rawText,platformId){
+export function parseRows(rawText,platformId){
   const rate=TOKEN_RATES[platformId]||0.05
   const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
   const rows=[];let skipped=0
@@ -127,15 +128,69 @@ function parseRows(rawText,platformId){
     return{rows,skipped}
   }
   const headerKw=['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning','reference','private','voyeur','group','xfer','returned','fines','total','mfc','away','club','display','sort','period','payment','month','search']
-  for(const line of lines){
-    const cols=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
-    // Skip reference IDs (MFC format — long numeric first column)
-    if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift()
+  const splitCols=l=>l.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
+  const shiftRefId=cols=>{if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift();return cols}
+
+  // Map an actual header row's column names to their role (timestamp/tokens/
+  // balance/type/username/note) so data rows are read by column identity
+  // instead of guessed by position. This must only ever run on the header
+  // row itself — running a keyword scan on every row (the old approach)
+  // false-positives on ordinary fan notes that happen to contain common
+  // words like "time"/"from"/"private"/"tip", silently dropping real tips.
+  const ROLE_KW={
+    timestamp:['timestamp','date/time','date','time'],
+    tokens:['token change','tokens','token amt'],
+    balance:['token balance','balance'],
+    usd:['usd','payout','earnings','dollar','amount'],
+    type:['transaction type','type','action'],
+    username:['user','username','member','from','sender'],
+    note:['note','message','notes','comment'],
+  }
+  const mapHeaderRow=cols=>{
+    const lower=cols.map(c=>c.toLowerCase().trim())
+    const map={};const claimed=new Set()
+    for(const role of['timestamp','tokens','balance','usd','type','username','note']){
+      for(let i=0;i<lower.length;i++){
+        if(claimed.has(i))continue
+        if(ROLE_KW[role].some(k=>lower[i]===k||lower[i].includes(k))){map[role]=i;claimed.add(i);break}
+      }
+    }
+    return map
+  }
+  const firstCols=lines.length?shiftRefId(splitCols(lines[0])):[]
+  const headerMap=mapHeaderRow(firstCols)
+  const hasHeaderRow=headerMap.timestamp!==undefined&&(headerMap.tokens!==undefined||headerMap.username!==undefined)
+
+  for(const[idx,line]of lines.entries()){
+    if(hasHeaderRow&&idx===0)continue // the actual header row — skip once, by position, not by content scan
+    const cols=shiftRefId(splitCols(line))
     if(cols.length<2){skipped++;continue}
-    const lower=cols.map(c=>c.toLowerCase())
-    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
     // Skip BongaCams paid chat rows from the free tips parser
     if(detectBCPaidRow(cols)){skipped++;continue}
+
+    if(hasHeaderRow){
+      const type=headerMap.type!==undefined?cols[headerMap.type]:''
+      if(type&&/cash|payout|withdraw/i.test(type)){skipped++;continue}
+      const ts=headerMap.timestamp!==undefined?tryParseDate(cols[headerMap.timestamp]):null
+      if(!ts){skipped++;continue}
+      const tokensRaw=headerMap.tokens!==undefined?parseFloat(String(cols[headerMap.tokens]).replace(/[$,]/g,'')):NaN
+      const tokens=Number.isFinite(tokensRaw)?Math.round(tokensRaw):null
+      if(!tokens||tokens<1){skipped++;continue}
+      const username=headerMap.username!==undefined?cols[headerMap.username].trim():''
+      const note=headerMap.note!==undefined?cols[headerMap.note]:''
+      // Earnings always come from the actual tip amount, never the running
+      // account balance ("Token balance") — that's a cumulative total, not
+      // a per-tip payout. Prefer an explicit USD/payout column if the
+      // platform's export has one; otherwise derive from tokens × rate.
+      const usdRaw=headerMap.usd!==undefined?parseFloat(String(cols[headerMap.usd]).replace(/[$,]/g,'')):NaN
+      const usd=Number.isFinite(usdRaw)&&usdRaw>0?usdRaw:+(tokens*rate).toFixed(2)
+      rows.push({ts,username:username||'anonymous',tokens,usd,note})
+      continue
+    }
+
+    // Headerless fallback — no column names to map by, so guess by shape.
+    const lower=cols.map(c=>c.toLowerCase())
+    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
     let ts=null,tsIdx=-1
     for(let i=0;i<cols.length;i++){const d=tryParseDate(cols[i]);if(d){ts=d;tsIdx=i;break}}
     if(!ts){skipped++;continue}
@@ -182,7 +237,7 @@ function paidSessionsToCSVBlob(sessions){
   return new Blob([csvRows.join('\n')],{type:'text/csv'})
 }
 
-function buildPreview(rawText,platformId,platformLabel){
+export function buildPreview(rawText,platformId,platformLabel){
   const{rows,skipped}=parseRows(rawText,platformId)
 
   // Also detect paid sessions for BongaCams so we can show them in preview
@@ -202,6 +257,18 @@ function buildPreview(rawText,platformId,platformLabel){
   const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
   const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
   const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
+  // A raw token-sum peak hour can be driven entirely by a single whale tip on
+  // a single day — that's not evidence of a repeatable streaming window, just
+  // that one big transaction happened to land in that hour. Only call it a
+  // confident "sweet spot" if tips from at least 2 distinct calendar days
+  // landed in that hour; otherwise the UI shows the raw peak without implying
+  // it's a reliable pattern.
+  let bestHourConfident=false
+  if(bestHour){
+    const targetHour=parseInt(bestHour[0])
+    const distinctDays=new Set(allRows.filter(r=>r.ts.getHours()===targetHour).map(r=>r.ts.toDateString()))
+    bestHourConfident=distinctDays.size>=2
+  }
   return{
     tipsDetected:rows.length,
     paidSessionsDetected:paidSessions.length,
@@ -212,7 +279,15 @@ function buildPreview(rawText,platformId,platformLabel){
     dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
     bestHour:bestHour?fmtHour(bestHour[0]):null,
+    bestHourConfident,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
+    // Full parsed rows + the shared Free-tier 31-day window computed from
+    // them (lib/analytics.js computeSnapshotStats — same function the CSV
+    // upload API route uses) so the onboarding success states can show real
+    // "full imported range" vs "most recent 31 days" numbers instead of
+    // reusing the flat totals above for both.
+    rows,
+    snapshot:computeSnapshotStats(rows.map(r=>({date:r.ts,tokens:r.tokens,usd:r.usd})),31),
   }
 }
 
@@ -363,6 +438,11 @@ const CSS=`
   @keyframes flashPulse{0%{opacity:0}20%{opacity:1}100%{opacity:0}}
   @keyframes statCardIn{from{opacity:0;transform:translateY(8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes progressSweep{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+  @keyframes dashboardSweep{0%{opacity:0;transform:translateX(-30%) scaleX(0.6)}45%{opacity:1}100%{opacity:0;transform:translateX(30%) scaleX(1.4)}}
+  @keyframes dashboardDissolve{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.03)}}
+  @media(prefers-reduced-motion:reduce){
+    .ob-dash-sweep,.ob-dash-dissolve{animation:none!important}
+  }
   textarea::placeholder{color:rgba(100,116,139,0.4);font-family:monospace;font-size:11px;line-height:1.6}
   input::placeholder{color:rgba(100,116,139,0.4)}
   input:focus,textarea:focus{outline:none}
@@ -497,7 +577,22 @@ export default function OnboardingPage(){
   const[booting,setBooting]=useState(true)
   const[userPlan,setUserPlan]=useState('free')
 
-  const[step,setStep]=useState('platform')
+  const[step,setStep]=useState('platforms')
+  // selectedPlatforms order IS the primary/secondary order: index 0 is
+  // always Primary. Selecting a platform appends it; "make primary" moves
+  // it to index 0. This is the single source of truth for primary/secondary
+  // status — there is no separate primaryPlatformId to keep in sync.
+  const[selectedPlatforms,setSelectedPlatforms]=useState([])
+  // Which position in selectedPlatforms is currently being connected.
+  const[queueIndex,setQueueIndex]=useState(0)
+  // Per-platform outcome once its connect step finishes (connected or
+  // skipped), keyed by platform id — powers the platform-success screen,
+  // the final summary, and (eventually) cross-platform features without
+  // needing a second parallel data model.
+  const[platformResults,setPlatformResults]=useState({})
+  // platformId = the platform currently being connected. All existing
+  // parse/import machinery below is unchanged and keys off this exactly as
+  // it always did — only what drives it (a queue instead of one click) is new.
   const[platformId,setPlatformId]=useState('chaturbate')
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
@@ -516,10 +611,21 @@ export default function OnboardingPage(){
   const[csvError,setCsvError]=useState('')
   const[loadingMsgIdx,setLoadingMsgIdx]=useState(0)
   const[loadingProgress,setLoadingProgress]=useState(0)
+  const[howItWorksOpen,setHowItWorksOpen]=useState(false)
+  const[dashboardTransitioning,setDashboardTransitioning]=useState(false)
   const csvRef=useRef()
 
+  function enterDashboard(){
+    const reduceMotion=typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    track('dashboard_transition_completed',{platforms:selectedPlatforms})
+    if(reduceMotion){router.push('/dashboard');return}
+    setDashboardTransitioning(true)
+    setTimeout(()=>router.push('/dashboard'),700)
+  }
+
   const platform=PLATFORMS[platformId]
-  const stepNum={platform:1,username:1,paste:2,csv:2,loading:3,trial:3,step4:3,done:3}[step]||1
+  const primaryPlatformId=selectedPlatforms[0]||null
+  const stepNum={platforms:1,username:1,paste:2,csv:2,loading:2,platformSuccess:2,finalSummary:3,trial:3,step4:3,done:3}[step]||1
   const showProgress=!['loading'].includes(step)
 
   useEffect(()=>{
@@ -528,8 +634,15 @@ export default function OnboardingPage(){
       if(!user){router.replace('/login');return}
       const{data}=await supabase.from('beta_users').select('onboarding_complete').eq('user_id',user.id).single()
       if(data?.onboarding_complete){router.replace('/dashboard');return}
-      const{data:profile}=await supabase.from('profiles').select('plan').eq('id',user.id).single()
+      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform').eq('id',user.id).single()
       setUserPlan(profile?.plan==='pro'?'pro':'free')
+      // Restore an in-progress platform selection if the user left and came
+      // back — matches beta_users.onboarding_complete already gating re-entry.
+      const saved=(profile?.streaming_platforms||[]).filter(id=>PLATFORMS[id])
+      if(saved.length){
+        const primary=profile?.primary_pro_platform&&saved.includes(profile.primary_pro_platform)?profile.primary_pro_platform:saved[0]
+        setSelectedPlatforms([primary,...saved.filter(id=>id!==primary)])
+      }
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -546,8 +659,71 @@ export default function OnboardingPage(){
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
   }
 
+  // ── Multi-platform selection (Step 1) ──────────────────────────
+  function togglePlatform(id){
+    setSelectedPlatforms(prev=>prev.includes(id)?prev.filter(p=>p!==id):[...prev,id])
+  }
+  function makePrimary(id){
+    setSelectedPlatforms(prev=>prev.includes(id)?[id,...prev.filter(p=>p!==id)]:prev)
+    track('onboarding_primary_platform_selected',{platform:id})
+  }
+
+  function startConnecting(id){
+    setPlatformId(id)
+    setPasteText('');setPreview(null);setParseError('');setImportError('');setCsvError('');setUpgradeBlocked(null);setHowItWorksOpen(false)
+    if(id==='chaturbate'&&!cbUsername)setStep('username');else setStep('paste')
+    track('onboarding_import_started',{platform:id})
+  }
+
+  async function confirmPlatforms(){
+    if(!selectedPlatforms.length)return
+    if(user){
+      await supabase.from('profiles').upsert({id:user.id,streaming_platforms:selectedPlatforms,primary_pro_platform:selectedPlatforms[0]},{onConflict:'id'})
+    }
+    selectedPlatforms.forEach(id=>track('onboarding_platform_selected',{platform:id}))
+    setQueueIndex(0)
+    startConnecting(selectedPlatforms[0])
+  }
+
+  // After a platform's connect step finishes (success or skip), either move
+  // to the next platform that has no result yet, or the final summary.
+  // Deliberately NOT "queueIndex + 1": finalSummary lets a user go back and
+  // connect a platform they'd earlier skipped (see the 'Connect later' link
+  // below), and after THAT completes, a plain index increment would run
+  // straight into a platform that was already handled — this always finds
+  // whatever's actually still outstanding instead, so it's correct however
+  // the user got here.
+  // Pass the just-computed results explicitly when calling this in the same
+  // tick as setPlatformResults (state updates aren't visible synchronously);
+  // omit it when platformResults is already known-committed (e.g. the button
+  // on the platformSuccess screen, which only renders after that commit).
+  function goToNextOrFinish(latestResults){
+    const results=latestResults||platformResults
+    const nextUnhandled=selectedPlatforms.find(id=>!results[id])
+    if(nextUnhandled){
+      setQueueIndex(selectedPlatforms.indexOf(nextUnhandled))
+      startConnecting(nextUnhandled)
+    }else{
+      setStep('finalSummary')
+    }
+  }
+
+  function skipCurrentPlatform(){
+    const updated={...platformResults,[platformId]:{status:'skipped'}}
+    setPlatformResults(updated)
+    track('onboarding_secondary_skipped',{platform:platformId})
+    goToNextOrFinish(updated)
+  }
+
+  // finalSummary is reached exactly once per onboarding session (the queue
+  // never loops back to it), so the next step is always the trial upsell —
+  // its own "Skip for now" button already routes to 'done'.
+  function finishOnboarding(){
+    track('onboarding_complete',{platforms:selectedPlatforms,primary:primaryPlatformId})
+    setStep('trial')
+  }
+
   function selectPlatform(id){
-    if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
     setPlatformId(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
   }
@@ -609,11 +785,15 @@ export default function OnboardingPage(){
       const pi=setInterval(()=>{const pr=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(pr*100))},60)
       const mi=setInterval(()=>setLoadingMsgIdx(i=>(i+1)%msgs.length),900)
 
+      const controller=new AbortController()
+      const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+
       // Upload free tips
       const tipUploadPromise=fetch('/api/upload',{
         method:'POST',
         headers:{Authorization:`Bearer ${session.access_token}`},
-        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})()
+        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})(),
+        signal:controller.signal
       })
 
       // Upload BongaCams paid sessions if any detected
@@ -627,7 +807,8 @@ export default function OnboardingPage(){
         paidUploadPromise=fetch('/api/upload-paid-sessions',{
           method:'POST',
           headers:{Authorization:`Bearer ${session.access_token}`},
-          body:paidForm
+          body:paidForm,
+          signal:controller.signal
         })
       }
 
@@ -636,6 +817,7 @@ export default function OnboardingPage(){
         paidUploadPromise,
         new Promise(r=>setTimeout(r,minWait)),
       ])
+      clearTimeout(timeoutId)
       clearInterval(pi);clearInterval(mi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error){
@@ -648,10 +830,16 @@ export default function OnboardingPage(){
       setImportResult({inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0})
-      if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('trial')}
-      else setStep('step4')
+      if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
+      setPlatformResults(prev=>({...prev,[platformId]:{
+        status:'connected',inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0,
+        snapshot:p?.snapshot||null,topSpender:p?.topSpender||null,
+        bestHour:p?.bestHour||null,bestHourConfident:p?.bestHourConfident||false,
+      }}))
+      setStep('platformSuccess')
     }catch(e){
-      if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
+      if(e.name==='AbortError')setImportError('Import timed out. Check your connection or try a smaller file.')
+      else if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
       else setImportError(e.message||'Import failed')
       track('onboarding_import_failed',{platform:platformId,code:e.code||null,message:e.message||null})
       setStep('paste')
@@ -672,10 +860,10 @@ export default function OnboardingPage(){
       })
       const json=await res.json()
       if(json.url)window.location.href=json.url
-      else throw new Error('No checkout URL returned')
+      else throw new Error(json.error||'No checkout URL returned')
     }catch(e){
       console.error('Trial checkout failed:',e)
-      alert('Failed to start trial. Please try again.')
+      alert(e.message||'Failed to start trial. Please try again.')
     }
   }
 
@@ -689,7 +877,15 @@ export default function OnboardingPage(){
       const minWait=isFirstImport?5500:1800
       const start=Date.now()
       const pi=setInterval(()=>{const p=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(p*100))},60)
-      const[res]=await Promise.all([fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form}),new Promise(r=>setTimeout(r,minWait))])
+
+      const controller=new AbortController()
+      const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+
+      const[res]=await Promise.all([
+        fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form,signal:controller.signal}),
+        new Promise(r=>setTimeout(r,minWait))
+      ])
+      clearTimeout(timeoutId)
       clearInterval(pi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
@@ -698,10 +894,14 @@ export default function OnboardingPage(){
       setImportResult({inserted,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'csv'})
-      if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000);setStep('trial')}
-      else setStep('step4')
+      if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
+      setPlatformResults(prev=>({...prev,[platformId]:{
+        status:'connected',inserted,skipped:json.skipped??0,
+        snapshot:json.snapshot||null,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo,source:'csv',
+      }}))
+      setStep('platformSuccess')
     }catch(e){
-      setCsvError(e.message||'Upload failed')
+      setCsvError(e.name==='AbortError'?'Upload timed out. Try a smaller file or check your connection.':e.message||'Upload failed')
       track('onboarding_import_failed',{platform:platformId,message:e.message||null,source:'csv'})
       setStep('csv')
     }
@@ -717,6 +917,14 @@ export default function OnboardingPage(){
 
   const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
   const tipsDisplayed=importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)
+  const isPrimaryInQueue=queueIndex===0
+  const queuePosLabel=selectedPlatforms.length>1?` (${queueIndex+1} of ${selectedPlatforms.length})`:''
+  const currentResult=platformResults[platformId]||null
+  const nextUnhandledId=selectedPlatforms.find(id=>!platformResults[id])||null
+  // snapshot.full/.recent dates come back as real Date objects from the
+  // client-side paste-preview path, but as ISO strings from the CSV-upload
+  // API response (JSON has no Date type) — new Date(x) normalizes either.
+  const fmtDate=d=>d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'
 
   return(
     <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'28px 16px 34px',background:'#070b18',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
@@ -742,7 +950,7 @@ export default function OnboardingPage(){
       <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
         <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
-        <div className="ob-card ob-card-inner" style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)'}}>
+        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
@@ -764,21 +972,22 @@ export default function OnboardingPage(){
             </header>
           )}
 
-          {/* ══ PLATFORM ══ */}
-          {step==='platform'&&(
+          {/* ══ PLATFORMS (multi-select + primary) ══ */}
+          {step==='platforms'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Tell us where you stream</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Select all platforms you stream on. Your primary platform will shape your personalized insights.</p>
               </div>
-              <div style={{marginBottom:22}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platforms</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
-                    const sel=platformId===key
+                    const sel=selectedPlatforms.includes(key)
+                    const isPrimary=selectedPlatforms[0]===key
                     return(
-                      <button key={key} onClick={()=>setPlatformId(key)} style={{
+                      <button key={key} onClick={()=>togglePlatform(key)} style={{
                         flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
                         background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
                         border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
@@ -789,6 +998,7 @@ export default function OnboardingPage(){
                       onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
                       >
                         {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
+                        {isPrimary&&<div style={{position:'absolute',top:9,left:9,padding:'2px 6px',borderRadius:6,background:GRAD,fontSize:7,fontWeight:900,letterSpacing:'0.06em',color:'#fff',textTransform:'uppercase'}}>Primary</div>}
                         <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
                         <div style={{fontSize:12,fontWeight:700,color:sel?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
                       </button>
@@ -796,16 +1006,48 @@ export default function OnboardingPage(){
                   })}
                 </div>
               </div>
-              <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
+
+              {selectedPlatforms.length>0&&(
+                <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.06)',padding:'12px 14px',marginBottom:14}}>
+                  <div style={{display:'flex',alignItems:'center',gap:9}}>
+                    <span style={{fontSize:16}}>👑</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,fontWeight:800,color:'#fff'}}>Primary platform: {PLATFORMS[primaryPlatformId].label}</div>
+                      <div style={{fontSize:10,color:'rgba(148,163,184,0.75)',lineHeight:1.5}}>We'll use this to personalize your experience and show your most relevant insights first.</div>
+                    </div>
+                  </div>
+                  {selectedPlatforms.length>1&&(
+                    <div style={{display:'flex',gap:6,marginTop:9,flexWrap:'wrap'}}>
+                      {selectedPlatforms.slice(1).map(id=>(
+                        <button key={id} onClick={()=>makePrimary(id)} style={{fontSize:10,fontWeight:700,color:CYAN,background:'rgba(33,230,243,0.08)',border:'1px solid rgba(33,230,243,0.25)',borderRadius:8,padding:'4px 9px',cursor:'pointer'}}>Make {PLATFORMS[id].label} primary</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{marginBottom:20}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                  <span style={{fontSize:11,color:'rgba(148,163,184,0.75)'}}>{selectedPlatforms.length} platform{selectedPlatforms.length===1?'':'s'} selected</span>
+                  <span style={{fontSize:11,color:CYAN,fontWeight:700}}>{selectedPlatforms.length} / 3</span>
+                </div>
+                <div style={{height:7,borderRadius:100,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)',overflow:'hidden'}}>
+                  <div style={{height:'100%',width:`${(selectedPlatforms.length/3)*100}%`,background:GRAD,borderRadius:100,boxShadow:selectedPlatforms.length?'0 0 12px rgba(33,230,243,0.4)':'none',transition:'width 0.25s ease'}}/>
+                </div>
+              </div>
+
+              <OBBtn onClick={confirmPlatforms} disabled={!selectedPlatforms.length} style={{marginBottom:10}}>
+                {selectedPlatforms.length?`Continue with ${selectedPlatforms.length} platform${selectedPlatforms.length===1?'':'s'} →`:'Select a platform to continue'}
+              </OBBtn>
             </div>
           )}
 
           {/* ══ USERNAME ══ */}
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 1 of 3 — Chaturbate</div>
+              <div style={EYE}>Step 2 of 3 — Chaturbate{queuePosLabel}</div>
               <div style={{textAlign:'center',marginBottom:22}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Connect your Chaturbate data':`You also stream on ${platform.label}`}</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
               </div>
               <div style={{marginBottom:22}}>
@@ -822,7 +1064,7 @@ export default function OnboardingPage(){
                 <div style={{marginTop:5,fontSize:10,color:'rgba(100,116,139,0.45)'}}>Exact username you use to broadcast (not display name)</div>
               </div>
               <OBBtn onClick={handleUsernameSubmit} style={{marginBottom:10}}>Continue to Tip Import →</OBBtn>
-              <OBLinks links={[{label:'← Back',onClick:()=>setStep('platform')},{label:"Skip — I'll navigate there myself",onClick:()=>{setCbUsername('');setStep('paste')}}]}/>
+              <OBLinks links={[{label:'← Back',onClick:()=>setStep('platforms')},{label:"Skip — I'll navigate there myself",onClick:()=>{setCbUsername('');setStep('paste')}}]}/>
               <OBTrust/>
             </div>
           )}
@@ -830,10 +1072,10 @@ export default function OnboardingPage(){
           {/* ══ PASTE ══ */}
           {step==='paste'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — {platform.label}</div>
+              <div style={EYE}>Step 2 of 3 — {platform.label}{queuePosLabel}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Paste your tip history</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</p>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Paste your tip history':`You also stream on ${platform.label}`}</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>{isPrimaryInQueue?<>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</>:<>Let's see what CamCash can uncover there. Start with one export — you can add more history anytime.</>}</p>
               </div>
 
               {/* BongaCams paid chat notice */}
@@ -876,10 +1118,10 @@ export default function OnboardingPage(){
               </div>
 
               <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>
-                <OBSecBtn onClick={()=>setStep('platform')} style={{height:46}}>← Back</OBSecBtn>
+                <OBSecBtn onClick={()=>setStep('platforms')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Import & build dashboard →</OBBtn>
               </div>
-              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')}]}/>
+              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')},...(!isPrimaryInQueue?[{label:'Skip for now — connect later',onClick:skipCurrentPlatform}]:[])]}/>
               <OBTrust/>
             </div>
           )}
@@ -887,9 +1129,9 @@ export default function OnboardingPage(){
           {/* ══ CSV ══ */}
           {step==='csv'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — {platform.label}</div>
+              <div style={EYE}>Step 2 of 3 — {platform.label}{queuePosLabel}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Upload your CSV</h1>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>{isPrimaryInQueue?'Upload your CSV':`You also stream on ${platform.label}`}</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65}}>Export your earnings as a CSV file and drop it below.</p>
               </div>
               <div onClick={()=>!csvUploading&&csvRef.current?.click()} style={{border:'2px dashed rgba(255,255,255,0.1)',borderRadius:16,padding:'40px 20px',textAlign:'center',cursor:csvUploading?'not-allowed':'pointer',background:'rgba(255,255,255,0.02)',marginBottom:12,transition:'all 0.2s'}} onMouseEnter={e=>{if(!csvUploading){e.currentTarget.style.borderColor='rgba(33,230,243,0.4)';e.currentTarget.style.background='rgba(33,230,243,0.03)'}}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.1)';e.currentTarget.style.background='rgba(255,255,255,0.02)'}}>
@@ -897,7 +1139,8 @@ export default function OnboardingPage(){
                 {csvUploading?(<><div style={{width:24,height:24,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.1)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite',margin:'0 auto 10px'}}/><div style={{fontSize:13,color:CYAN,fontWeight:500}}>Uploading…</div></>):(<><div style={{fontSize:28,marginBottom:8}}>📁</div><div style={{fontSize:13,fontWeight:700,color:'#f8fafc',marginBottom:3}}>Drop your CSV here or click to browse</div><div style={{fontSize:11,color:'rgba(148,163,184,0.55)'}}>Supports {platform.label} export format</div></>)}
               </div>
               {csvError&&<div style={{marginBottom:12,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {csvError}</div>}
-              <div style={{display:'flex',gap:9}}><OBSecBtn onClick={()=>setStep('paste')} style={{flex:1}}>← Use paste instead</OBSecBtn><OBSecBtn onClick={()=>setStep('platform')} style={{flex:1}}>← Back</OBSecBtn></div>
+              <div style={{display:'flex',gap:9}}><OBSecBtn onClick={()=>setStep('paste')} style={{flex:1}}>← Use paste instead</OBSecBtn><OBSecBtn onClick={()=>setStep('platforms')} style={{flex:1}}>← Back</OBSecBtn></div>
+              {!isPrimaryInQueue&&<OBLinks links={[{label:'Skip for now — connect later',onClick:skipCurrentPlatform}]}/>}
               <OBTrust/>
             </div>
           )}
@@ -960,6 +1203,104 @@ export default function OnboardingPage(){
                 </div>))}
               </div>
               <div style={{textAlign:'center',marginTop:10,fontSize:10,color:'rgba(100,116,139,0.45)'}}>⚡ Almost there! Crunching the good stuff…</div>
+            </div>
+          )}
+
+          {/* ══ PLATFORM SUCCESS (primary or secondary) ══ */}
+          {step==='platformSuccess'&&currentResult&&(()=>{
+            const snap=currentResult.snapshot
+            const full=snap?.full
+            const recent=snap?.recent
+            return(
+            <div style={{animation:'fadeUp 0.35s ease both',textAlign:'center'}}>
+              <div style={{width:56,height:56,borderRadius:20,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,color:'#fff',margin:'0 auto 14px',boxShadow:'0 0 40px rgba(33,230,243,0.35),0 0 70px rgba(255,47,174,0.2)'}}>✓</div>
+              <div style={EYE}>{isPrimaryInQueue?'Primary Platform':'Secondary Platform'}</div>
+              <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>{isPrimaryInQueue?`Your ${platform.label} data is ready`:`${platform.label} data connected`}</h1>
+              {full&&full.days>0&&(
+                <p style={{fontSize:12,color:'rgba(148,163,184,0.75)',marginBottom:18}}>{fmtDate(full.from)} — {fmtDate(full.to)} · {full.days} day{full.days===1?'':'s'} of data imported</p>
+              )}
+
+              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:16}}>
+                <div className="stat-card" style={{padding:'12px 10px'}}>
+                  <div style={{fontSize:9,color:'rgba(148,163,184,0.6)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>Earnings</div>
+                  <div style={{fontSize:18,fontWeight:900,color:CYAN}}>${(full?.usd??currentResult.totalUsd??0).toFixed(2)}</div>
+                </div>
+                <div className="stat-card" style={{padding:'12px 10px'}}>
+                  <div style={{fontSize:9,color:'rgba(148,163,184,0.6)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>Tips</div>
+                  <div style={{fontSize:18,fontWeight:900,color:'#4ade80'}}>{full?.tips??currentResult.inserted??0}</div>
+                </div>
+              </div>
+
+              <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',padding:'14px 16px',marginBottom:16,textAlign:'left'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                  <div style={{fontSize:10,fontWeight:900,color:'rgba(33,230,243,0.9)',textTransform:'uppercase',letterSpacing:'0.1em'}}>Your first snapshot</div>
+                  <button onClick={()=>setHowItWorksOpen(v=>{const next=!v;if(next)track('onboarding_how_it_works_opened',{platform:platformId});return next})} style={{background:'none',border:'none',color:'rgba(148,163,184,0.6)',fontSize:10,cursor:'pointer',padding:0}}>ⓘ How this works</button>
+                </div>
+                {howItWorksOpen&&(
+                  <div style={{borderRadius:11,background:'rgba(33,230,243,0.06)',border:'1px solid rgba(33,230,243,0.18)',padding:'10px 12px',marginBottom:10,fontSize:11,color:'rgba(203,213,225,0.85)',lineHeight:1.6}}>
+                    CamCash keeps your imported history so your insights can get smarter as you add more data. Your Free dashboard focuses on your most recent 31 days so you can quickly see what's happening now. Older imported history is preserved where available and can power deeper trends as you unlock more of CamCash.
+                  </div>
+                )}
+                {recent&&!recent.isPartial?(
+                  <>
+                    <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:2}}>Most recent 31 days</div>
+                    <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:8}}>{fmtDate(recent.from)} — {fmtDate(recent.to)}</div>
+                  </>
+                ):(
+                  <>
+                    <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:2}}>Your available data</div>
+                    <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:8}}>You're starting with {recent?.days||0} day{recent?.days===1?'':'s'} of data. Add more history later to uncover deeper trends.</div>
+                  </>
+                )}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
+                  <div><div style={{fontSize:9,color:'rgba(148,163,184,0.55)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Earnings</div><div style={{fontSize:14,fontWeight:800,color:CYAN}}>${(recent?.usd||0).toFixed(2)}</div></div>
+                  <div><div style={{fontSize:9,color:'rgba(148,163,184,0.55)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Tips</div><div style={{fontSize:14,fontWeight:800,color:'#4ade80'}}>{recent?.tips||0}</div></div>
+                </div>
+              </div>
+
+              {!isPrimaryInQueue&&(
+                <div style={{borderRadius:13,border:'1px solid rgba(124,92,255,0.22)',background:'rgba(124,92,255,0.06)',padding:'12px 14px',marginBottom:16,textAlign:'left'}}>
+                  <div style={{fontSize:10,fontWeight:900,color:'#a78bfa',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>CamCash found more</div>
+                  {['Cross-platform comparison','Deeper earnings patterns','Longer-term trends'].map(t=>(<div key={t} style={{fontSize:11,color:'rgba(203,213,225,0.75)',marginBottom:5}}>🔒 {t}</div>))}
+                  <a href="/pricing" style={{fontSize:11,fontWeight:700,color:'#a78bfa',textDecoration:'none'}}>Unlock deeper insights →</a>
+                </div>
+              )}
+
+              <OBBtn onClick={()=>goToNextOrFinish()}>{nextUnhandledId?`Continue to ${PLATFORMS[nextUnhandledId].label} →`:'See your setup →'}</OBBtn>
+            </div>
+          )})()}
+
+          {/* ══ FINAL SUMMARY ══ */}
+          {step==='finalSummary'&&(
+            <div style={{animation:'fadeUp 0.35s ease both',textAlign:'center'}}>
+              <div style={EYE}>All Set</div>
+              <h1 style={{fontSize:21,fontWeight:900,color:'#fff',marginBottom:7}}>Your CamCash setup is ready ✓</h1>
+              <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',lineHeight:1.6,marginBottom:18}}>Your first snapshot is ready.</p>
+
+              <div style={{marginBottom:18}}>
+                {selectedPlatforms.map((id,i)=>{
+                  const res=platformResults[id]
+                  const connected=res?.status==='connected'
+                  return(
+                    <div key={id} style={{display:'flex',alignItems:'center',gap:11,padding:'11px 13px',borderRadius:13,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',marginBottom:8,textAlign:'left'}}>
+                      <div style={{width:36,height:36,borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,flexShrink:0,...PLATFORMS[id].iconStyle}}>{PLATFORMS[id].short}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:700,color:'#fff'}}>{PLATFORMS[id].label}</div>
+                        <div style={{fontSize:10,color:'rgba(148,163,184,0.65)'}}>{i===0?'Primary':'Secondary'} · {connected?'Connected':'Not connected'}</div>
+                      </div>
+                      {connected?<span style={{color:'#4ade80',fontSize:14}}>✓</span>:(
+                        <button onClick={()=>{setQueueIndex(i);startConnecting(id)}} style={{fontSize:10,fontWeight:700,color:CYAN,background:'none',border:'none',cursor:'pointer'}}>Connect later →</button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {selectedPlatforms.length>1&&(
+                <p style={{fontSize:11,color:'rgba(148,163,184,0.65)',lineHeight:1.55,marginBottom:16}}>CamCash is ready to start building your cross-platform picture as more data comes in.</p>
+              )}
+
+              <OBBtn onClick={finishOnboarding}>Enter CamCash →</OBBtn>
             </div>
           )}
 
@@ -1042,7 +1383,11 @@ export default function OnboardingPage(){
                 <div>
                   <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
                   {preview?.bestHour?(
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    preview.bestHourConfident?(
+                      <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    ):(
+                      <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your biggest tips so far cluster around <strong style={{color:PINK}}>{preview.bestHour}</strong>, but that's based on limited history — import more to confirm it's a real pattern.</p>
+                    )
                   ):(
                     <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
                   )}
@@ -1061,11 +1406,15 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
-              <OBBtn onClick={()=>router.push('/dashboard')} style={{marginBottom:10}}>Go to Dashboard →</OBBtn>
+              <OBBtn onClick={enterDashboard} style={{marginBottom:10}}>Go to Dashboard →</OBBtn>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:9}}>
                 {[{label:'Add more history',onClick:()=>{setPasteText('');setStep('paste')}},{label:'Set up live tracking',onClick:()=>window.open('https://www.camcashgrl.com/extension','_blank')}].map(b=>(<OBSecBtn key={b.label} onClick={b.onClick} style={{width:'100%',height:40,fontSize:12}}>{b.label}</OBSecBtn>))}
               </div>
             </div>
+          )}
+
+          {dashboardTransitioning&&(
+            <div className="ob-dash-sweep" style={{position:'absolute',inset:0,zIndex:20,pointerEvents:'none',background:GRAD,animation:'dashboardSweep 0.7s ease-out both',mixBlendMode:'screen'}}/>
           )}
 
         </div>
