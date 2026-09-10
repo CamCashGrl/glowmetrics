@@ -385,9 +385,10 @@ function FeedbackBubble(){
 }
 
 // ── Design tokens ──────────────────────────────────────────────
-const CYAN='#21E6F3'
-const PINK='#FF2FAE'
-const GRAD='linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
+const CYAN='#16F4FF'
+const PINK='#FF2BAE'
+const PURPLE='#7C5CFF'
+const GRAD='linear-gradient(90deg,#16F4FF 0%,#55B8FF 35%,#7C5CFF 68%,#FF2BAE 100%)'
 const EYE={fontSize:10,fontWeight:900,letterSpacing:'0.22em',textTransform:'uppercase',color:CYAN,marginBottom:10,textAlign:'center'}
 
 const CSS=`
@@ -407,6 +408,16 @@ const CSS=`
   @keyframes dashboardDissolve{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.03)}}
   @media(prefers-reduced-motion:reduce){
     .ob-dash-sweep,.ob-dash-dissolve{animation:none!important}
+    .ob-plat-card{transition:none!important}
+    .ob-check-in{animation:none!important}
+  }
+  .ob-plat-card{transition:transform 0.22s ease,border-color 0.22s ease,box-shadow 0.22s ease,background 0.22s ease}
+  .ob-plat-card:hover{transform:translateY(-3px)}
+  .ob-plat-card:not([data-selected="true"]):hover{border-color:rgba(22,244,255,0.5)!important;box-shadow:0 0 18px rgba(22,244,255,0.10)!important;background:rgba(13,24,50,0.72)!important}
+  .ob-plat-card:focus-visible{outline:2px solid rgba(22,244,255,0.8);outline-offset:2px}
+  .ob-check-in{animation:checkIn 0.28s cubic-bezier(.34,1.56,.64,1) both}
+  @media(min-width:761px){
+    .ob-card{min-height:680px}
   }
   textarea::placeholder{color:rgba(100,116,139,0.4);font-family:monospace;font-size:11px;line-height:1.6}
   input::placeholder{color:rgba(100,116,139,0.4)}
@@ -504,11 +515,12 @@ function OBProgress({current}){
 function OBBtn({onClick,children,disabled=false,style={}}){
   return(
     <button onClick={onClick} disabled={disabled} className={disabled?'':'ob-btn-primary'} style={{
-      width:'100%',height:48,borderRadius:14,border:'none',
-      background:disabled?'rgba(255,255,255,0.07)':GRAD,
-      color:disabled?'rgba(255,255,255,0.25)':'#fff',
+      width:'100%',height:56,borderRadius:16,
+      border:disabled?'1px solid rgba(124,92,255,0.18)':'none',
+      background:disabled?'rgba(10,18,40,0.55)':GRAD,
+      color:disabled?'rgba(215,217,234,0.55)':'#fff',
       fontSize:14,fontWeight:900,cursor:disabled?'not-allowed':'pointer',
-      boxShadow:disabled?'none':'0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)',
+      boxShadow:disabled?'inset 0 1px 0 rgba(255,255,255,0.05)':'0 0 14px rgba(22,244,255,0.16),0 0 28px rgba(255,43,174,0.10)',
       transition:'all 0.18s',display:'flex',alignItems:'center',justifyContent:'center',gap:7,
       letterSpacing:'-0.01em',
       ...style
@@ -620,6 +632,7 @@ export default function OnboardingPage(){
   const[loadingMsgIdx,setLoadingMsgIdx]=useState(0)
   const[loadingProgress,setLoadingProgress]=useState(0)
   const[howItWorksOpen,setHowItWorksOpen]=useState(false)
+  const[changePrimaryOpen,setChangePrimaryOpen]=useState(false)
   const[dashboardTransitioning,setDashboardTransitioning]=useState(false)
   const csvRef=useRef()
 
@@ -674,6 +687,7 @@ export default function OnboardingPage(){
   function makePrimary(id){
     setSelectedPlatforms(prev=>prev.includes(id)?[id,...prev.filter(p=>p!==id)]:prev)
     track('onboarding_primary_platform_selected',{platform:id})
+    setChangePrimaryOpen(false)
   }
 
   function startConnecting(id){
@@ -943,10 +957,10 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:820}}>
-        <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
+      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:900}}>
+        <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(22,244,255,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,43,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
-        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',display:'flex',alignItems:'stretch',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',display:'flex',alignItems:'stretch',borderRadius:28,border:'1px solid rgba(120,150,220,0.18)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',overflow:'hidden',boxShadow:'0 0 40px rgba(22,244,255,0.10),0 0 100px rgba(124,92,255,0.08),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
@@ -980,26 +994,29 @@ export default function OnboardingPage(){
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Tell us <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>where you stream</span></h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Select all platforms you stream on. Your primary platform will shape your personalized insights.</p>
               </div>
-              <div style={{marginBottom:16}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platforms</div>
-                <div className="ob-plat-row" style={{display:'flex',gap:9}}>
+              <div style={{marginBottom:20}}>
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:10,letterSpacing:'0.12em',textTransform:'uppercase'}}>Your platforms</div>
+                <div className="ob-plat-row" style={{display:'flex',gap:12}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
                     const sel=selectedPlatforms.includes(key)
                     const isPrimary=selectedPlatforms[0]===key
                     return(
-                      <button key={key} onClick={()=>togglePlatform(key)} style={{
-                        flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
-                        background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
-                        border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
-                        boxShadow:sel?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
-                        cursor:'pointer',transition:'all 0.22s',position:'relative',
+                      <button key={key} onClick={()=>togglePlatform(key)} className="ob-plat-card" data-selected={sel} style={{
+                        flex:1,minHeight:128,padding:'16px 10px',borderRadius:19,textAlign:'center',
+                        display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                        background:sel?'rgba(16,30,58,0.85)':'rgba(9,18,42,0.65)',
+                        border:sel?`1px solid rgba(22,244,255,0.95)`:'1px solid rgba(120,150,220,0.18)',
+                        boxShadow:sel?'0 0 22px rgba(22,244,255,0.14)':'none',
+                        cursor:'pointer',position:'relative',
                       }}
-                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
-                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
                       >
-                        {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
-                        {isPrimary&&<div style={{position:'absolute',top:9,left:9,padding:'2px 6px',borderRadius:6,background:GRAD,fontSize:7,fontWeight:900,letterSpacing:'0.06em',color:'#fff',textTransform:'uppercase'}}>Primary</div>}
-                        <div style={{height:44,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 8px'}}>
+                        {sel&&<div className="ob-check-in" style={{position:'absolute',top:10,right:10,width:19,height:19,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(22,244,255,0.6)'}}>✓</div>}
+                        {sel&&(isPrimary?(
+                          <div style={{position:'absolute',top:10,left:10,padding:'3px 8px',borderRadius:100,background:GRAD,fontSize:8,fontWeight:900,letterSpacing:'0.06em',color:'#fff',textTransform:'uppercase',display:'flex',alignItems:'center',gap:3}}><span aria-hidden="true">★</span><span>Primary</span></div>
+                        ):(
+                          <div style={{position:'absolute',top:10,left:10,padding:'3px 8px',borderRadius:100,background:'rgba(124,92,255,0.16)',border:'1px solid rgba(124,92,255,0.4)',fontSize:8,fontWeight:800,letterSpacing:'0.06em',color:'#c9bfff',textTransform:'uppercase'}}>Secondary</div>
+                        ))}
+                        <div style={{height:40,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 8px'}}>
                           {key==='myfreecams'?(
                             <span style={{fontSize:16,fontWeight:900,letterSpacing:'0.01em',color:sel?'#fff':'rgba(255,255,255,0.55)'}}>{p.short}</span>
                           ):(
@@ -1019,28 +1036,40 @@ export default function OnboardingPage(){
               </div>
 
               {selectedPlatforms.length>0&&(
-                <div style={{borderRadius:11,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.06)',padding:'10px 14px',marginBottom:14}}>
-                  <div style={{display:'flex',alignItems:'center',gap:9}}>
-                    <span style={{fontSize:15}}>👑</span>
-                    <div style={{flex:1,fontSize:12,fontWeight:800,color:'#fff'}}>Primary platform: {PLATFORMS[primaryPlatformId].label}</div>
+                <>
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:8,letterSpacing:'0.12em',textTransform:'uppercase'}}>Primary platform</div>
+                <div style={{position:'relative',display:'flex',alignItems:'center',gap:11,minHeight:64,borderRadius:16,border:'1px solid rgba(120,150,220,0.18)',background:'rgba(9,18,42,0.65)',padding:'13px 16px',marginBottom:16}}>
+                  <span style={{fontSize:18,flexShrink:0}}>👑</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:800,color:'#fff'}}>Primary platform: {PLATFORMS[primaryPlatformId].label}</div>
+                    <div style={{fontSize:10,color:'rgba(148,163,184,0.7)',marginTop:2}}>We'll prioritize your most relevant insights here.</div>
                   </div>
                   {selectedPlatforms.length>1&&(
-                    <div style={{display:'flex',gap:6,marginTop:9,flexWrap:'wrap'}}>
-                      {selectedPlatforms.slice(1).map(id=>(
-                        <button key={id} onClick={()=>makePrimary(id)} style={{fontSize:10,fontWeight:700,color:CYAN,background:'rgba(33,230,243,0.08)',border:'1px solid rgba(33,230,243,0.25)',borderRadius:8,padding:'4px 9px',cursor:'pointer'}}>Make {PLATFORMS[id].label} primary</button>
+                    <button onClick={()=>setChangePrimaryOpen(v=>!v)} style={{flexShrink:0,background:'none',border:'none',color:CYAN,fontSize:11,fontWeight:800,cursor:'pointer',padding:'4px 2px'}}>Change →</button>
+                  )}
+                  {changePrimaryOpen&&selectedPlatforms.length>1&&(
+                    <div role="menu" style={{position:'absolute',top:'calc(100% + 8px)',right:0,zIndex:6,width:200,borderRadius:14,border:'1px solid rgba(120,150,220,0.22)',background:'rgba(10,15,32,0.97)',backdropFilter:'blur(20px)',boxShadow:'0 18px 44px rgba(0,0,0,0.5)',padding:8,animation:'fadeUp 0.15s ease both'}}>
+                      <div style={{fontSize:9,fontWeight:800,color:'rgba(148,163,184,0.6)',textTransform:'uppercase',letterSpacing:'0.1em',padding:'4px 8px 6px'}}>Make primary</div>
+                      {selectedPlatforms.map(id=>(
+                        <button key={id} onClick={()=>makePrimary(id)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 8px',borderRadius:9,border:'none',background:id===primaryPlatformId?'rgba(22,244,255,0.08)':'transparent',color:id===primaryPlatformId?CYAN:'#e5e7eb',fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'left'}}>
+                          <span>{PLATFORMS[id].label}</span>
+                          {id===primaryPlatformId&&<span style={{fontSize:10}}>✓ Current</span>}
+                        </button>
                       ))}
                     </div>
                   )}
                 </div>
+                </>
               )}
 
-              <div style={{marginBottom:20}}>
+              <div style={{marginBottom:22}}>
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:8,letterSpacing:'0.12em',textTransform:'uppercase'}}>Platform coverage</div>
                 <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                  <span style={{fontSize:11,color:'rgba(148,163,184,0.75)'}}>{selectedPlatforms.length} platform{selectedPlatforms.length===1?'':'s'} selected</span>
+                  <span style={{fontSize:11,color:'rgba(148,163,184,0.75)'}}>{selectedPlatforms.length} of 3 platforms selected</span>
                   <span style={{fontSize:11,color:CYAN,fontWeight:700}}>{selectedPlatforms.length} / 3</span>
                 </div>
                 <div style={{height:7,borderRadius:100,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)',overflow:'hidden'}}>
-                  <div style={{height:'100%',width:`${(selectedPlatforms.length/3)*100}%`,background:GRAD,borderRadius:100,boxShadow:selectedPlatforms.length?'0 0 12px rgba(33,230,243,0.4)':'none',transition:'width 0.25s ease'}}/>
+                  <div style={{height:'100%',width:`${(selectedPlatforms.length/3)*100}%`,background:GRAD,borderRadius:100,boxShadow:selectedPlatforms.length?'0 0 12px rgba(22,244,255,0.4)':'none',transition:'width 0.4s ease-out'}}/>
                 </div>
               </div>
 

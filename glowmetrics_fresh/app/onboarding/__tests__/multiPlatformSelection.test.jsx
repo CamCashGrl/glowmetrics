@@ -7,7 +7,7 @@
  * never loses an earlier selection, and changing Primary reorders without
  * deleting anything.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 // The page renders a decorative <canvas> particle background (AmbientParticles)
@@ -61,7 +61,9 @@ describe('Onboarding Step 1 — multi-platform + primary designation', () => {
     fireEvent.click(await screen.findByText('BongaCams'))
     await waitFor(() => expect(screen.getByText(/Primary platform: Chaturbate/)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Make BongaCams primary/ })).toBeInTheDocument()
+    expect(screen.getByText('Secondary')).toBeInTheDocument()
+    // Changing primary is contextual (a "Change" trigger), not a permanent button per platform
+    expect(screen.getByRole('button', { name: 'Change →' })).toBeInTheDocument()
   })
 
   test('C: selecting all three platforms shows exactly one Primary and "3 / 3" coverage', async () => {
@@ -76,15 +78,20 @@ describe('Onboarding Step 1 — multi-platform + primary designation', () => {
     expect(screen.getAllByText('Primary')).toHaveLength(1)
   })
 
-  test('D: "Make primary" moves the designation without losing the other selection', async () => {
+  test('D: "Change" popover moves the Primary designation without losing the other selection', async () => {
     render(<OnboardingPage />)
     fireEvent.click(await screen.findByText('Chaturbate'))
     fireEvent.click(await screen.findByText('BongaCams'))
-    await waitFor(() => screen.getByRole('button', { name: /Make BongaCams primary/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Make BongaCams primary/ }))
+    await waitFor(() => screen.getByRole('button', { name: 'Change →' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Change →' }))
+    const menu = await screen.findByRole('menu')
+    fireEvent.click(within(menu).getByText('BongaCams'))
     await waitFor(() => expect(screen.getByText(/Primary platform: BongaCams/)).toBeInTheDocument())
-    // Chaturbate must still be selected (not lost), now offered as the one to make primary
-    expect(screen.getByRole('button', { name: /Make Chaturbate primary/ })).toBeInTheDocument()
+    // Chaturbate must still be selected (not lost) — reopen the popover and
+    // confirm it's still offered there, now as the one to switch back to.
+    fireEvent.click(screen.getByRole('button', { name: 'Change →' }))
+    const reopenedMenu = await screen.findByRole('menu')
+    expect(within(reopenedMenu).getByText('Chaturbate')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
   })
 
