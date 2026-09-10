@@ -11,10 +11,45 @@ function getSupabaseAdmin() {
   )
 }
 
-async function getUserByEmail(supabase, email) {
-  const { data, error } = await supabase.auth.admin.listUsers()
-  if (error) return null
-  return data.users.find(u => u.email === email) || null
+// supabase.auth.admin.listUsers() is paginated — 50 users per page by
+// default, and NOT called with any page param here previously, so it only
+// ever saw the oldest ~50 accounts. Past that (this project has 167+ users),
+// every lookup by email silently returned null and every webhook handler
+// below hit its `if (!user) break` and did nothing — Stripe still saw a 200
+// response, so it never retried, and the failure was completely invisible.
+// This is now only a fallback (see getUserById below, which is exact and
+// O(1)); when it does run, it pages through the whole user list instead of
+// just the first page.
+export async function getUserByEmail(supabase, email) {
+  if (!email) return null
+  let page = 1
+  const perPage = 200
+  for (;;) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+    if (error) return null
+    const match = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase())
+    if (match) return match
+    if (data.users.length < perPage) return null // reached the last page
+    page++
+  }
+}
+
+// Exact, single-lookup user resolution by Supabase auth id — used first.
+// The checkout route sets metadata.userId on both the Checkout Session and
+// the Subscription it creates (app/api/stripe/checkout/route.js), so this
+// is available on every event below without needing to guess from an email
+// Stripe collected at checkout, which is not guaranteed to exactly match
+// the account's signup email (case, aliasing, or the customer editing it
+// in Stripe's hosted checkout page).
+export async function getUserById(supabase, userId) {
+  if (!userId) return null
+  const { data, error } = await supabase.auth.admin.getUserById(userId)
+  if (error || !data?.user) return null
+  return data.user
+}
+
+export async function resolveUser(supabase, { userId, email }) {
+  return (await getUserById(supabase, userId)) || getUserByEmail(supabase, email)
 }
 
 async function getEmailFromCustomer(customerId) {
@@ -92,16 +127,19 @@ export async function POST(request) {
       case 'checkout.session.completed': {
         const session = event.data.object
         const email = session.customer_details?.email || session.customer_email
-        if (!email) break
+        const user = await resolveUser(supabase, { userId: session.metadata?.userId, email })
+        if (!user) {
+          console.error(`Webhook checkout.session.completed: could not resolve a user (userId=${session.metadata?.userId}, email=${email})`)
+          break
+        }
 
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
-
+        // Whether this is trialing or already active gets set precisely by
+        // customer.subscription.created/updated (fired for the same
+        // checkout, momentarily before or after this event) — grant Pro
+        // access here without guessing a status this event can't see.
         const update = {
           plan: 'pro',
           stripe_customer_id: session.customer,
-          subscription_status: 'active',
-          trial_ends_at: null, // Trial is over, they have a paid subscription
         }
 
         const ok = await updateProfile(supabase, user.id, update)
@@ -127,10 +165,11 @@ export async function POST(request) {
       case 'customer.subscription.created': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
-        if (!email) break
-
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
+        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
+        if (!user) {
+          console.error(`Webhook subscription.created: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          break
+        }
 
         // Determine subscription status based on Stripe status
         const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
@@ -166,10 +205,11 @@ export async function POST(request) {
       case 'customer.subscription.deleted': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
-        if (!email) break
-
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
+        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
+        if (!user) {
+          console.error(`Webhook subscription.deleted: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          break
+        }
 
         const update = {
           plan: 'free',
@@ -200,10 +240,11 @@ export async function POST(request) {
       case 'customer.subscription.updated': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
-        if (!email) break
-
-        const user = await getUserByEmail(supabase, email)
-        if (!user) break
+        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
+        if (!user) {
+          console.error(`Webhook subscription.updated: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          break
+        }
 
         const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
         const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
