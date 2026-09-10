@@ -746,10 +746,10 @@ export default function OnboardingPage(){
       })
       const json=await res.json()
       if(json.url)window.location.href=json.url
-      else throw new Error('No checkout URL returned')
+      else throw new Error(json.error||'No checkout URL returned')
     }catch(e){
       console.error('Trial checkout failed:',e)
-      alert('Failed to start trial. Please try again.')
+      alert(e.message||'Failed to start trial. Please try again.')
     }
   }
 
