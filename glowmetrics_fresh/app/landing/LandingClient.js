@@ -914,21 +914,10 @@ export default function LandingClient() {
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
     { q: "Can I track more than one platform for free?", a: "The free tier tracks 1 platform at a time. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
-    { q: "What does early adopter pricing mean?", a: "Sign up now and your premium rate is locked in at $9.99/month forever, even as pricing increases for new users later." },
   ]
 
   return (
     <div className={dmSans.className} style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, overflowX: "hidden" }}>
-
-      {/* ── EARLY ADOPTER BANNER ── */}
-      <div style={{ background: "rgba(255,43,174,0.10)", borderBottom: "1px solid rgba(255,43,174,0.22)", padding: "14px 32px", textAlign: "center", position: "relative", zIndex: 2 }}>
-        <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
-          <span style={{ fontSize: 14, color: T.textSoft, fontWeight: 600 }}>
-            Early adopter pricing: <span style={{ color: T.pink, fontWeight: 800 }}>$9.99/mo forever</span> ·{" "}
-            <a href="/pricing" style={{ color: T.pink, fontWeight: 800, textDecoration: "none" }}>Lock in your rate →</a>
-          </span>
-        </div>
-      </div>
 
       {/* ── AMBIENT BACKGROUND ── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1075,7 +1064,7 @@ export default function LandingClient() {
               ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever for 1 platform. Premium unlocks multi-platform tracking, starting at $9.99/mo for early adopters (locked in for life)"],
+              ["Price", "Free forever for 1 platform. Standard is $19.99/mo (or $99/yr) and unlocks multi-platform tracking"],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
@@ -1157,7 +1146,7 @@ export default function LandingClient() {
           {[
             { num: "1", accent: T.cyan, icon: "🧩", title: "Download Extension", body: "Auto-detect tips instantly. Works without an account. Use immediately.", link: ["/extension", "Download free →"] },
             { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Premium optional" },
-            { num: "3", accent: T.pink, icon: "🚀", title: "Lock In Lifetime Pricing", body: "Early adopter: $9.99/month forever.", link: ["/pricing", "Claim early pricing →"] },
+            { num: "3", accent: T.pink, icon: "🚀", title: "Upgrade Anytime", body: "Standard is $19.99/month (or $99/year) when you're ready for multi-platform tracking.", link: ["/pricing", "See pricing →"] },
           ].map(({ num, accent, icon, title, body, link, note }) => (
             <div key={title} style={{ background: `${accent}0d`, border: `1px solid ${accent}30`, borderRadius: 18, padding: "28px 24px", textAlign: "center", position: "relative" }}>
               <div style={{ width: 30, height: 30, borderRadius: 9, background: T.gradientPrimary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#06101A", margin: "0 auto 14px", boxShadow: "0 0 14px rgba(22,244,255,0.3)" }}>{num}</div>
@@ -1183,7 +1172,6 @@ export default function LandingClient() {
             { icon: "🌿", text: "Free tier always exists" },
             { icon: "🔍", text: "Transparent about everything" },
             { icon: "🔒", text: "No surprise feature locks" },
-            { icon: "⏰", text: "Lifetime pricing for early adopters" },
             { icon: "💜", text: "Built by cam models, for cam models" },
           ].map(({ icon, text }) => (
             <div key={text} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>

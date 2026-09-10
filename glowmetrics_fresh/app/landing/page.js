@@ -1124,7 +1124,6 @@ export default function LandingPage() {
             { icon: "🌿", text: "Free tier always exists" },
             { icon: "🔍", text: "Transparent about everything" },
             { icon: "🔒", text: "No surprise feature locks" },
-            { icon: "⏰", text: "Lifetime pricing for early adopters" },
             { icon: "💜", text: "Built by cam models, for cam models" },
           ].map(({ icon, text }) => (
             <div key={text} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>

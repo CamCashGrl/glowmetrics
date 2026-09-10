@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import UserCounter from '../components/UserCounter'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
@@ -805,10 +804,6 @@ function FinalCTA({ user }) {
         >
           View Extension →
         </Button>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <UserCounter variant="pill" />
       </div>
 
       <p
