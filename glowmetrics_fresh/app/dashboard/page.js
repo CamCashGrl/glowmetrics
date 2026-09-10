@@ -13,7 +13,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard, PlatformIntelligenceHero } from './DashboardPreview'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
@@ -2240,6 +2240,15 @@ const stopImportMessageRotation = () => {
   const platformBestTimes     = analytics?.platformBestTimes     || {}
   const earningsVelocity      = analytics?.earningsVelocity      ?? null
   const platformVelocity      = analytics?.platformVelocity      || {}
+  // Platform $/hr, single source of truth — mirrors the exact formula used by
+  // the "Platform ROI ($/hr streamed)" card below (What's Working section) so
+  // every $/hr shown on this page always agrees for the same platform. Do not
+  // give the Overview hero its own session-eligibility or time-window rule for
+  // this figure; if the ROI card's formula ever changes, update it here too.
+  const platformRoiMap = {}
+  ;(analytics?.platforms || []).forEach(p => {
+    platformRoiMap[p.platform] = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : null)
+  })
   const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
   const returningVsNew        = analytics?.returningVsNew        || null
   const topFanDependency      = analytics?.topFanDependency      || null
@@ -3119,8 +3128,10 @@ const stopImportMessageRotation = () => {
           )}
         </div>
 
-        {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
-        {_isLowData && (
+        {/* ── DASHBOARD PROGRESS CARD — on other tabs only; Overview leads with
+             Platform Intelligence instead so the first view is never just a
+             checklist ── */}
+        {_isLowData && activeTab !== 'overview' && (
           <DashboardProgressCard
             totalTips={tips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
@@ -3133,6 +3144,23 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+
+            {/* ═══════════════════════════════════════
+                0. PLATFORM INTELLIGENCE — first thing the user sees
+            ═══════════════════════════════════════ */}
+            <PlatformIntelligenceHero
+              tips={tips}
+              sessions={sessions}
+              profile={profile}
+              isPro={isPro}
+              totalSessions={analytics?.meaningfulSessionCount || 0}
+              platformRoi={platformRoiMap}
+              onConnectPlatform={() => router.push('/onboarding')}
+              onUnlockPro={() => openUpgradeModal('platform_intelligence')}
+              onOpenStreamPlanner={() => handleTabChange('planner')}
+              onOpenMoneyMap={() => handleTabChange('moneymap')}
+              onOpenLiveMode={() => handleTabChange('live')}
+            />
 
             {/* ═══════════════════════════════════════
                 1. MONEY SNAPSHOT
