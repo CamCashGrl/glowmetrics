@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+// Cron endpoint — must run fresh on every invocation (real DB state, never
+// a build-time snapshot). Without this, Next.js's build-time static
+// optimization for GET route handlers runs this at `next build` time,
+// where SUPABASE_SERVICE_ROLE_KEY isn't set, and the build fails with
+// "supabaseKey is required" instead of just running normally at runtime.
+export const dynamic = 'force-dynamic'
+
 // Downgrades goodwill Pro grants (the Sep 2026 apology for the Stripe
 // webhook bug — see app/api/stripe/webhook/route.js) back to free once
 // their trial_ends_at passes. Only ever touches subscription_status =

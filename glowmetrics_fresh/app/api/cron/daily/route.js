@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 
+// Cron endpoint — never statically optimize this (see the same note in
+// app/api/cron/expire-goodwill-trials/route.js).
+export const dynamic = 'force-dynamic'
+
 export async function GET(req) {
   const origin = new URL(req.url).origin
   let digest = null
