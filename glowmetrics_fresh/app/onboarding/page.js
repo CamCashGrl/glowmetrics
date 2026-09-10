@@ -102,7 +102,7 @@ function parseBCPaidSessions(rawText){
   return{sessions,skipped}
 }
 
-function parseRows(rawText,platformId){
+export function parseRows(rawText,platformId){
   const rate=TOKEN_RATES[platformId]||0.05
   const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
   const rows=[];let skipped=0
@@ -127,15 +127,69 @@ function parseRows(rawText,platformId){
     return{rows,skipped}
   }
   const headerKw=['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning','reference','private','voyeur','group','xfer','returned','fines','total','mfc','away','club','display','sort','period','payment','month','search']
-  for(const line of lines){
-    const cols=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
-    // Skip reference IDs (MFC format — long numeric first column)
-    if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift()
+  const splitCols=l=>l.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
+  const shiftRefId=cols=>{if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift();return cols}
+
+  // Map an actual header row's column names to their role (timestamp/tokens/
+  // balance/type/username/note) so data rows are read by column identity
+  // instead of guessed by position. This must only ever run on the header
+  // row itself — running a keyword scan on every row (the old approach)
+  // false-positives on ordinary fan notes that happen to contain common
+  // words like "time"/"from"/"private"/"tip", silently dropping real tips.
+  const ROLE_KW={
+    timestamp:['timestamp','date/time','date','time'],
+    tokens:['token change','tokens','token amt'],
+    balance:['token balance','balance'],
+    usd:['usd','payout','earnings','dollar','amount'],
+    type:['transaction type','type','action'],
+    username:['user','username','member','from','sender'],
+    note:['note','message','notes','comment'],
+  }
+  const mapHeaderRow=cols=>{
+    const lower=cols.map(c=>c.toLowerCase().trim())
+    const map={};const claimed=new Set()
+    for(const role of['timestamp','tokens','balance','usd','type','username','note']){
+      for(let i=0;i<lower.length;i++){
+        if(claimed.has(i))continue
+        if(ROLE_KW[role].some(k=>lower[i]===k||lower[i].includes(k))){map[role]=i;claimed.add(i);break}
+      }
+    }
+    return map
+  }
+  const firstCols=lines.length?shiftRefId(splitCols(lines[0])):[]
+  const headerMap=mapHeaderRow(firstCols)
+  const hasHeaderRow=headerMap.timestamp!==undefined&&(headerMap.tokens!==undefined||headerMap.username!==undefined)
+
+  for(const[idx,line]of lines.entries()){
+    if(hasHeaderRow&&idx===0)continue // the actual header row — skip once, by position, not by content scan
+    const cols=shiftRefId(splitCols(line))
     if(cols.length<2){skipped++;continue}
-    const lower=cols.map(c=>c.toLowerCase())
-    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
     // Skip BongaCams paid chat rows from the free tips parser
     if(detectBCPaidRow(cols)){skipped++;continue}
+
+    if(hasHeaderRow){
+      const type=headerMap.type!==undefined?cols[headerMap.type]:''
+      if(type&&/cash|payout|withdraw/i.test(type)){skipped++;continue}
+      const ts=headerMap.timestamp!==undefined?tryParseDate(cols[headerMap.timestamp]):null
+      if(!ts){skipped++;continue}
+      const tokensRaw=headerMap.tokens!==undefined?parseFloat(String(cols[headerMap.tokens]).replace(/[$,]/g,'')):NaN
+      const tokens=Number.isFinite(tokensRaw)?Math.round(tokensRaw):null
+      if(!tokens||tokens<1){skipped++;continue}
+      const username=headerMap.username!==undefined?cols[headerMap.username].trim():''
+      const note=headerMap.note!==undefined?cols[headerMap.note]:''
+      // Earnings always come from the actual tip amount, never the running
+      // account balance ("Token balance") — that's a cumulative total, not
+      // a per-tip payout. Prefer an explicit USD/payout column if the
+      // platform's export has one; otherwise derive from tokens × rate.
+      const usdRaw=headerMap.usd!==undefined?parseFloat(String(cols[headerMap.usd]).replace(/[$,]/g,'')):NaN
+      const usd=Number.isFinite(usdRaw)&&usdRaw>0?usdRaw:+(tokens*rate).toFixed(2)
+      rows.push({ts,username:username||'anonymous',tokens,usd,note})
+      continue
+    }
+
+    // Headerless fallback — no column names to map by, so guess by shape.
+    const lower=cols.map(c=>c.toLowerCase())
+    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
     let ts=null,tsIdx=-1
     for(let i=0;i<cols.length;i++){const d=tryParseDate(cols[i]);if(d){ts=d;tsIdx=i;break}}
     if(!ts){skipped++;continue}
@@ -182,7 +236,7 @@ function paidSessionsToCSVBlob(sessions){
   return new Blob([csvRows.join('\n')],{type:'text/csv'})
 }
 
-function buildPreview(rawText,platformId,platformLabel){
+export function buildPreview(rawText,platformId,platformLabel){
   const{rows,skipped}=parseRows(rawText,platformId)
 
   // Also detect paid sessions for BongaCams so we can show them in preview
@@ -202,6 +256,18 @@ function buildPreview(rawText,platformId,platformLabel){
   const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
   const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
   const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
+  // A raw token-sum peak hour can be driven entirely by a single whale tip on
+  // a single day — that's not evidence of a repeatable streaming window, just
+  // that one big transaction happened to land in that hour. Only call it a
+  // confident "sweet spot" if tips from at least 2 distinct calendar days
+  // landed in that hour; otherwise the UI shows the raw peak without implying
+  // it's a reliable pattern.
+  let bestHourConfident=false
+  if(bestHour){
+    const targetHour=parseInt(bestHour[0])
+    const distinctDays=new Set(allRows.filter(r=>r.ts.getHours()===targetHour).map(r=>r.ts.toDateString()))
+    bestHourConfident=distinctDays.size>=2
+  }
   return{
     tipsDetected:rows.length,
     paidSessionsDetected:paidSessions.length,
@@ -212,6 +278,7 @@ function buildPreview(rawText,platformId,platformLabel){
     dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
     bestHour:bestHour?fmtHour(bestHour[0]):null,
+    bestHourConfident,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
   }
 }
@@ -672,10 +739,10 @@ export default function OnboardingPage(){
       })
       const json=await res.json()
       if(json.url)window.location.href=json.url
-      else throw new Error('No checkout URL returned')
+      else throw new Error(json.error||'No checkout URL returned')
     }catch(e){
       console.error('Trial checkout failed:',e)
-      alert('Failed to start trial. Please try again.')
+      alert(e.message||'Failed to start trial. Please try again.')
     }
   }
 
@@ -1042,7 +1109,11 @@ export default function OnboardingPage(){
                 <div>
                   <div style={{fontSize:10,fontWeight:800,color:PINK,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Best first insight</div>
                   {preview?.bestHour?(
-                    <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    preview.bestHourConfident?(
+                      <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your earnings peak around <strong style={{color:PINK}}>{preview.bestHour}</strong>. That's your sweet spot — prioritize streaming then.</p>
+                    ):(
+                      <p style={{fontSize:13,color:'rgba(248,250,252,0.9)',lineHeight:1.6}}>Your biggest tips so far cluster around <strong style={{color:PINK}}>{preview.bestHour}</strong>, but that's based on limited history — import more to confirm it's a real pattern.</p>
+                    )
                   ):(
                     <p style={{fontSize:12,color:'rgba(148,163,184,0.7)',lineHeight:1.6}}>Import more history to unlock your peak streaming windows.</p>
                   )}
