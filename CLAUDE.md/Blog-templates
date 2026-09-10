@@ -1,0 +1,388 @@
+# CamCashGrl Project Instructions
+
+## Project Context
+
+CamCashGrl is a creator analytics platform for cam models, webcam models, streamers, and adult creators.
+
+The product helps models understand:
+
+* real hourly earnings
+* token income
+* tip history
+* best stream times
+* top fans and repeat spenders
+* platform performance
+* session trends
+* private show vs tip income
+* creator business patterns
+
+Write and build for models/creators, not viewers.
+
+Avoid viewer-focused adult traffic, porn language, free-cam language, or anything that sounds like the site is for people looking to watch explicit content.
+
+## Brand Voice
+
+CamCashGrl should sound:
+
+* honest
+* direct
+* model-friendly
+* data-focused
+* practical
+* supportive
+* feminine but still professional
+* business-minded, not spammy
+
+Use language like:
+
+* earnings
+* tokens
+* tips
+* sessions
+* top fans
+* regulars
+* whales
+* best stream times
+* $/hour
+* payout
+* tip history
+* CSV import
+* tracking
+* analytics
+* private shows
+* tip menu
+* goals
+* creator business
+
+Avoid:
+
+* porn-viewer language
+* unrealistic earning promises
+* “get rich quick” claims
+* generic SaaS filler
+* deleting useful existing insights
+* creating broken links
+* renaming existing routes unless explicitly requested
+
+## Blog SEO Rules
+
+Every CamCashGrl blog post should have:
+
+* one clear primary keyword
+* 3–6 secondary keywords
+* unique title
+* unique meta description
+* canonical URL
+* Article schema
+* FAQ schema when FAQs are included
+* visible FAQ section matching the FAQ schema
+* internal links to related tools/posts
+* one mid-article CTA
+* one final CTA
+* no duplicate H1s
+* semantic heading order
+* descriptive links
+* image alt text when images are used
+
+Answer the search intent in the first 150 words.
+
+Do not keyword stuff.
+
+Do not make unsupported income claims.
+
+Do not write for viewers searching for sex chat, porn, free cams, live sex, or explicit content.
+
+## Standard Blog Structure
+
+Future CamCashGrl blog posts should generally follow this structure:
+
+1. Metadata
+2. Article schema
+3. FAQ schema if needed
+4. Breadcrumb
+5. Article meta row
+6. H1
+7. Strong intro
+8. Optional quick answer box
+9. Optional stat cards
+10. Main educational sections
+11. CamCash insight block
+12. Practical example or calculator-style section
+13. Internal link callout
+14. Mid-article CTA
+15. Advanced/tactical sections
+16. FAQ section
+17. Related tools
+18. Related reading
+19. Final CTA
+
+Not every post needs every optional section, but every post should feel useful, branded, and conversion-focused.
+
+## Blog Template Components
+
+Prefer using reusable blog components when available, such as:
+
+* BlogMeta
+* BlogIntro
+* QuickAnswerBox
+* StatGrid
+* InsightBox
+* CalculatorBox
+* WarningBox
+* ComparisonBox
+* MidArticleCTA
+* FAQSection
+* RelatedTools
+* RelatedReading
+* FinalCTA
+
+If these components do not exist yet, create them carefully in a reusable blog component file instead of duplicating large inline style objects across every post.
+
+Do not refactor every existing blog post at once unless explicitly asked.
+
+When creating reusable components:
+
+* preserve the existing dark CamCashGrl editorial style
+* keep mobile layouts clean
+* use rounded cards
+* use subtle borders
+* use readable contrast
+* use gradient CTA buttons
+* avoid huge bloated spacing
+
+## Metadata Pattern
+
+Use this pattern for blog metadata:
+
+```js
+export const metadata = {
+  title: POST_TITLE,
+  description: POST_DESCRIPTION,
+  alternates: { canonical: CANONICAL_URL },
+  openGraph: {
+    title: POST_TITLE,
+    description: POST_DESCRIPTION,
+    url: CANONICAL_URL,
+    type: 'article',
+    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: POST_TITLE,
+    description: POST_DESCRIPTION,
+  },
+}
+```
+
+## Article Schema Pattern
+
+Use this pattern for article schema:
+
+```js
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: POST_TITLE,
+  description: POST_DESCRIPTION,
+  url: CANONICAL_URL,
+  datePublished: DATE_PUBLISHED,
+  dateModified: DATE_MODIFIED,
+  author: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
+  mainEntityOfPage: { '@type': 'WebPage', '@id': CANONICAL_URL },
+}
+```
+
+## FAQ Schema Rules
+
+If a post includes FAQ schema, the visible FAQ content must match the schema.
+
+Use this pattern:
+
+```js
+{
+  '@type': 'Question',
+  name: QUESTION,
+  acceptedAnswer: {
+    '@type': 'Answer',
+    text: ANSWER,
+  },
+}
+```
+
+## Common Internal Links
+
+Before linking, verify the route exists.
+
+Common routes to check:
+
+* `/landing`
+* `/landing/demo`
+* `/guides/cam-model-token-calculator`
+* `/guides/chaturbate-earnings-tracker`
+* `/guides/chaturbate-token-tracker`
+* `/guides/chaturbate-best-hours`
+* `/guides/cam-model-income-tracker`
+* `/guides/chaturbate-room-title-generator`
+* `/tools/cam-model-name-generator`
+* `/blog/how-to-make-money-on-chaturbate`
+* `/blog/how-to-make-more-money-on-chaturbate`
+* `/blog/cam-model-earnings`
+* `/blog/why-cam-income-is-inconsistent`
+* `/blog/how-to-increase-cam-earnings`
+* `/guides/cam-model-analytics`
+
+Do not create broken links.
+
+## CTA Rules
+
+Each post should include CTAs that match the search intent.
+
+Examples:
+
+For token/payout posts:
+
+* Button: `Convert My Tokens`
+
+For earnings posts:
+
+* Button: `Calculate My Hourly Rate`
+
+For best-time posts:
+
+* Button: `Find My Best Stream Times`
+
+For top-fan posts:
+
+* Button: `See My Top Fans`
+
+For beginner posts:
+
+* Button: `Start Tracking My Earnings`
+
+For advanced strategy posts:
+
+* Button: `Find My Earning Patterns`
+
+Default CTA href:
+
+* `/landing`
+
+Only use another route if it already exists and is more relevant.
+
+## Blog Types
+
+### Beginner Pillar Guide
+
+Use for:
+
+* how to make money on Chaturbate
+* how much do cam models make
+* cam model earnings
+* webcam model income
+
+Structure:
+
+* broad intro
+* quick answer
+* basics
+* realistic ranges
+* beginner mistakes
+* why tracking matters
+* CTA to CamCash
+
+### Advanced Strategy Guide
+
+Use for:
+
+* how to make more money on Chaturbate
+* increase cam earnings
+* best time to stream
+* improve $/hour
+* top tippers
+
+Structure:
+
+* assume the reader already streams
+* focus on optimization
+* use data examples
+* include session/fan strategy
+* CTA to analytics/dashboard
+
+### Calculator / Conversion Guide
+
+Use for:
+
+* Chaturbate token calculator
+* token to USD
+* payout calculator
+* income calculator
+
+Structure:
+
+* quick answer
+* formula
+* example calculations
+* calculator CTA
+* FAQ
+* related tracking tools
+
+### Comparison / Alternative Post
+
+Use for:
+
+* CamDash alternative
+* CB Cam Insights alternative
+* Statbate alternative
+* cam model analytics tools
+* best Chaturbate tools
+
+Structure:
+
+* fair comparison
+* no false claims
+* explain who each tool is for
+* position CamCash around private model-owned analytics, CSV import, best hours, top fans, and session tracking
+
+### Problem / Pain Point Post
+
+Use for:
+
+* why cam income is inconsistent
+* why tips are low
+* why the room is dead
+* why models burn out
+
+Structure:
+
+* validate the pain
+* explain likely causes
+* show what to track
+* offer practical fixes
+* CTA to CamCash insights
+
+## Existing Post Safety
+
+Before editing existing posts:
+
+1. Inspect the current file.
+2. Preserve useful content.
+3. Preserve current routes.
+4. Preserve existing schema unless replacing with an equivalent helper.
+5. Do not delete existing insights unless they are duplicate, inaccurate, or off-intent.
+6. Do not mass-refactor all posts in one pass without permission.
+7. Run lint/build if available.
+8. Summarize files changed and any issues.
+
+## Technical Rules
+
+* Keep one H1 per page.
+* Use H2/H3 in logical order.
+* Keep metadata unique.
+* Keep canonical URLs correct.
+* Keep mobile responsiveness.
+* Add alt text to images.
+* Do not add client-side code unless required.
+* Do not break imports.
+* Do not invent routes.
+* Do not remove analytics, CTA, or internal linking sections unless replacing them with a better equivalent.

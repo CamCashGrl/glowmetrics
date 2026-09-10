@@ -1,0 +1,37 @@
+# CamCash — AI-Powered Analytics for Cam Models
+
+> CamCash ([camcashgrl.com](https://www.camcashgrl.com)) is a free
+> analytics dashboard for cam models on Chaturbate, BongaCams,
+> and MyFreeCams. It provides tip tracking, fan intelligence,
+> session analysis, and live coaching.
+
+## What CamCash Does
+- Tracks individual tip events from CSV exports or live Chrome extension
+- Identifies top spenders, churn risk, and fan lifetime value
+- Shows peak earning hours and best streaming days
+- Compares revenue per hour across platforms
+- Provides AI-powered coaching during live streams
+- Generates optimized room titles based on goals and mood
+
+## Supported Platforms
+- Chaturbate
+- BongaCams
+- MyFreeCams
+
+## Key Pages
+- [Homepage](https://www.camcashgrl.com)
+- [Dashboard](https://www.camcashgrl.com/dashboard)
+- [Blog](https://www.camcashgrl.com/blog)
+- [Extension](https://www.camcashgrl.com/extension)
+- [Token Calculator](https://www.camcashgrl.com/guides/chaturbate-token-calculator)
+- [Room Title Generator](https://www.camcashgrl.com/guides/chaturbate-room-title-generator)
+
+## Blog Content
+CamCash publishes guides and analytics content for
+cam models covering earnings optimization, fan
+retention, platform strategy, and business analytics.
+
+## Target Audience
+Independent cam models and live stream creators on
+adult content platforms who want to grow their
+income using data.
