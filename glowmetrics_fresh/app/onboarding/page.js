@@ -592,6 +592,29 @@ function OBSidebar({current}){
   )
 }
 
+// Platform-identity header — carries the selected platform's identity through
+// every Step 2/3 screen (spec: "the platform identity must be visible
+// throughout"), reusing the same wordmark treatment as the Step 1 cards so
+// it reads as the same platform, not a re-introduced one.
+function PlatformIdentityHeader({platformId,isPrimary}){
+  const p=PLATFORMS[platformId]
+  return(
+    <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'6px 14px 6px 10px',borderRadius:100,border:'1px solid rgba(120,150,220,0.22)',background:'rgba(9,18,42,0.65)',margin:'0 auto 14px'}}>
+      {platformId==='myfreecams'?(
+        <span style={{fontSize:13,fontWeight:900,color:'#fff'}}>{p.short}</span>
+      ):(
+        <span style={{
+          fontFamily:"'Brush Script MT',cursive",fontStyle:'italic',fontWeight:700,fontSize:14,
+          background:platformId==='chaturbate'?'linear-gradient(90deg,#FFA35C,#F05A2A)':'linear-gradient(90deg,#FF3B6E,#c026d3)',
+          WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',
+        }}>{p.label}</span>
+      )}
+      <span style={{width:1,height:12,background:'rgba(255,255,255,0.12)'}}/>
+      <span style={{fontSize:9,fontWeight:800,letterSpacing:'0.1em',textTransform:'uppercase',color:isPrimary?CYAN:'#c9bfff'}}>{isPrimary?'Primary':'Secondary'}</span>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────
 export default function OnboardingPage(){
   const router=useRouter()
@@ -1082,8 +1105,9 @@ export default function OnboardingPage(){
           {/* ══ USERNAME ══ */}
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — Chaturbate{queuePosLabel}</div>
+              <div style={EYE}>Step 2 of 3{queuePosLabel}</div>
               <div style={{textAlign:'center',marginBottom:22}}>
+                <PlatformIdentityHeader platformId="chaturbate" isPrimary={isPrimaryInQueue}/>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Connect your Chaturbate data':`You also stream on ${platform.label}`}</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
               </div>
@@ -1109,12 +1133,14 @@ export default function OnboardingPage(){
           {/* ══ PASTE ══ */}
           {step==='paste'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — {platform.label}{queuePosLabel}</div>
+              <div style={EYE}>Step 2 of 3{queuePosLabel}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Paste your tip history':`You also stream on ${platform.label}`}</h1>
+                <PlatformIdentityHeader platformId={platformId} isPrimary={isPrimaryInQueue}/>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Connect your primary platform':`You also stream on ${platform.label}`}</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>{isPrimaryInQueue?<>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</>:<>Let's see what CamCash can uncover there. Start with one export — you can add more history anytime.</>}</p>
               </div>
 
+              <div style={{borderRadius:20,border:'1px solid rgba(120,150,220,0.18)',background:'rgba(9,18,42,0.5)',padding:16,marginBottom:16}}>
               {/* BongaCams paid chat notice */}
               {platformId==='bongacams'&&(
                 <div style={{borderRadius:12,border:'1px solid rgba(255,47,174,0.22)',background:'rgba(255,47,174,0.055)',padding:'12px 14px',marginBottom:12,fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
@@ -1134,12 +1160,13 @@ export default function OnboardingPage(){
               </div>
 
               <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                style={{width:'100%',height:156,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.48)',background:'rgba(1,3,12,0.98)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
+                style={{width:'100%',height:156,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.48)',background:'rgba(1,3,12,0.98)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:0,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
                 onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
                 onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
               />
 
-              {parseError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
+              {parseError&&<div style={{marginTop:9,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
+              </div>
 
               {upgradeBlocked&&(
                 <div style={{marginBottom:10,padding:'12px 14px',borderRadius:12,background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.35)'}}>
@@ -1166,8 +1193,9 @@ export default function OnboardingPage(){
           {/* ══ CSV ══ */}
           {step==='csv'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — {platform.label}{queuePosLabel}</div>
+              <div style={EYE}>Step 2 of 3{queuePosLabel}</div>
               <div style={{textAlign:'center',marginBottom:16}}>
+                <PlatformIdentityHeader platformId={platformId} isPrimary={isPrimaryInQueue}/>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>{isPrimaryInQueue?'Upload your CSV':`You also stream on ${platform.label}`}</h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65}}>Export your earnings as a CSV file and drop it below.</p>
               </div>
