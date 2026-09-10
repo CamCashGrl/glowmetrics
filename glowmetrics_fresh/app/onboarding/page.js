@@ -444,9 +444,15 @@ const CSS=`
     animation:cardShimmer 7s ease-in-out infinite;
     pointer-events:none;z-index:1;
   }
+  .ob-header-logo{display:none}
+  @media(max-width:760px){
+    .ob-sidebar{display:none!important}
+    .ob-header-logo{display:block}
+  }
   @media(max-width:600px){
     main{padding:18px 12px 28px!important;align-items:flex-start!important}
-    .ob-card{padding:22px 16px!important;border-radius:24px!important}
+    .ob-card-content{padding:22px 16px!important}
+    .ob-card{border-radius:24px!important}
     .ob-plat-row{flex-direction:column!important}
   }
 `
@@ -533,6 +539,45 @@ function OBLinks({links}){
 
 function OBTrust(){
   return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:14,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
+}
+
+// Persistent left-rail journey indicator — Platforms / Connect Data / Your
+// Insights map 1:1 onto the existing stepNum (1/2/3) already computed for
+// OBProgress, so this never needs its own state. Hidden below 760px (see
+// CSS) rather than stacked, to keep the mobile flow exactly as it was.
+function OBSidebar({current}){
+  const items=[
+    {n:1,label:'Platforms',sub:'Select all you stream on'},
+    {n:2,label:'Connect Data',sub:'Import your history'},
+    {n:3,label:'Your Insights',sub:'See what we found'},
+  ]
+  return(
+    <div className="ob-sidebar" style={{width:196,flexShrink:0,padding:'26px 18px 20px',borderRight:'1px solid rgba(255,255,255,0.08)',display:'flex',flexDirection:'column'}}>
+      <OBLogo/>
+      <div style={{fontSize:10,color:'rgba(148,163,184,0.55)',lineHeight:1.5,textAlign:'center',marginTop:-6,marginBottom:26}}>Made for cam models by cam models</div>
+      <div style={{display:'flex',flexDirection:'column',gap:16}}>
+        {items.map(it=>{
+          const state=it.n<current?'done':it.n===current?'active':'upcoming'
+          return(
+            <div key={it.n} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+              <div style={{width:20,height:20,borderRadius:'50%',flexShrink:0,marginTop:1,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,
+                background:state==='done'?CYAN:state==='active'?GRAD:'rgba(255,255,255,0.06)',
+                border:state==='upcoming'?'1px solid rgba(255,255,255,0.14)':'none',
+                color:state==='upcoming'?'rgba(255,255,255,0.3)':'#04101b',
+                boxShadow:state==='active'?'0 0 14px rgba(33,230,243,0.5)':'none',transition:'all 0.3s'}}>
+                {state==='done'?'✓':it.n}
+              </div>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:state==='upcoming'?'rgba(255,255,255,0.35)':'#fff'}}>{it.label}</div>
+                <div style={{fontSize:10,color:'rgba(148,163,184,0.5)',marginTop:1}}>{it.sub}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{marginTop:'auto',paddingTop:20}}><OBTrust/></div>
+    </div>
+  )
 }
 
 // ── Main component ─────────────────────────────────────────────
@@ -898,13 +943,17 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:820}}>
         <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
         <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
-        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',display:'flex',alignItems:'stretch',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
+
+          <OBSidebar current={stepNum}/>
+
+          <div className="ob-card-content" style={{position:'relative',flex:1,minWidth:0,padding:'26px 28px 24px'}}>
 
           {!['loading','done'].includes(step)&&(
             <button
@@ -918,7 +967,7 @@ export default function OnboardingPage(){
 
           {!['loading'].includes(step)&&(
             <header>
-              <OBLogo showSub={step==='platform'}/>
+              <div className="ob-header-logo"><OBLogo showSub={step==='platform'}/></div>
               {showProgress&&<OBProgress current={stepNum}/>}
             </header>
           )}
@@ -928,7 +977,7 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Tell us where you stream</h1>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Tell us <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}}>where you stream</span></h1>
                 <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Select all platforms you stream on. Your primary platform will shape your personalized insights.</p>
               </div>
               <div style={{marginBottom:16}}>
@@ -950,8 +999,19 @@ export default function OnboardingPage(){
                       >
                         {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
                         {isPrimary&&<div style={{position:'absolute',top:9,left:9,padding:'2px 6px',borderRadius:6,background:GRAD,fontSize:7,fontWeight:900,letterSpacing:'0.06em',color:'#fff',textTransform:'uppercase'}}>Primary</div>}
-                        <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
-                        <div style={{fontSize:12,fontWeight:700,color:sel?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
+                        <div style={{height:44,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 8px'}}>
+                          {key==='myfreecams'?(
+                            <span style={{fontSize:16,fontWeight:900,letterSpacing:'0.01em',color:sel?'#fff':'rgba(255,255,255,0.55)'}}>{p.short}</span>
+                          ):(
+                            <span style={{
+                              fontFamily:"'Brush Script MT',cursive",fontStyle:'italic',fontWeight:700,fontSize:17,lineHeight:1.1,
+                              background:key==='chaturbate'?'linear-gradient(90deg,#FFA35C,#F05A2A)':'linear-gradient(90deg,#FF3B6E,#c026d3)',
+                              WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',
+                              opacity:sel?1:0.7,
+                            }}>{p.label}</span>
+                          )}
+                        </div>
+                        {key==='myfreecams'&&<div style={{fontSize:11,fontWeight:700,color:sel?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>}
                       </button>
                     )
                   })}
@@ -959,13 +1019,10 @@ export default function OnboardingPage(){
               </div>
 
               {selectedPlatforms.length>0&&(
-                <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.06)',padding:'12px 14px',marginBottom:14}}>
+                <div style={{borderRadius:11,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.06)',padding:'10px 14px',marginBottom:14}}>
                   <div style={{display:'flex',alignItems:'center',gap:9}}>
-                    <span style={{fontSize:16}}>👑</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:12,fontWeight:800,color:'#fff'}}>Primary platform: {PLATFORMS[primaryPlatformId].label}</div>
-                      <div style={{fontSize:10,color:'rgba(148,163,184,0.75)',lineHeight:1.5}}>We'll use this to personalize your experience and show your most relevant insights first.</div>
-                    </div>
+                    <span style={{fontSize:15}}>👑</span>
+                    <div style={{flex:1,fontSize:12,fontWeight:800,color:'#fff'}}>Primary platform: {PLATFORMS[primaryPlatformId].label}</div>
                   </div>
                   {selectedPlatforms.length>1&&(
                     <div style={{display:'flex',gap:6,marginTop:9,flexWrap:'wrap'}}>
@@ -1368,6 +1425,7 @@ export default function OnboardingPage(){
             <div className="ob-dash-sweep" style={{position:'absolute',inset:0,zIndex:20,pointerEvents:'none',background:GRAD,animation:'dashboardSweep 0.7s ease-out both',mixBlendMode:'screen'}}/>
           )}
 
+          </div>
         </div>
       </div>
     </main>
