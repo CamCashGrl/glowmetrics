@@ -347,7 +347,7 @@ export default function CamCashVsCamDashPost() {
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
             {[
-              { name: 'CamCash', price: 'Free (limited) / $19.99/mo', sub: 'Free: 1 platform, capped history. Standard: $19.99/mo or $99/yr for all supported platforms. A $9.99/mo early-adopter rate has been offered to some accounts — confirm current availability at checkout.', highlight: true },
+              { name: 'CamCash', price: 'Free (limited) / $19.99/mo', sub: 'Free: 1 platform, unlimited history on it. Standard: $19.99/mo or $99/yr for all supported platforms.', highlight: true },
               { name: 'CamDash', price: 'Not publicly verified', sub: 'Confirm current pricing on camdash.app.', highlight: false },
               { name: 'CB Cam Insights', price: 'Not publicly verified', sub: 'Confirm current pricing on cbcaminsights.com.', highlight: false },
             ].map(({ name, price, sub, highlight }) => (
