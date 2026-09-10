@@ -271,10 +271,13 @@ function parseCSVLine(line) {
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === '"') { inQuotes = !inQuotes }
-    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = '' }
+    else if (char === ',' && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''))
+      current = ''
+    }
     else { current += char }
   }
-  result.push(current.trim())
+  result.push(current.trim().replace(/^"|"$/g, ''))
   return result
 }
 
