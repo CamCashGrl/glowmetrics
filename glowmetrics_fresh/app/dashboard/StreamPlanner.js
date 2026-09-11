@@ -944,7 +944,7 @@ function ProgressTab({ tips, windows, prefs }) {
 
 const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id:"progress", label:"Progress" }]
 
-function StreamPlannerContent({ tips, isPro }) {
+function StreamPlannerContent({ tips, isPro, whales: passedWhales, windowSummary, analytics }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -961,7 +961,10 @@ function StreamPlannerContent({ tips, isPro }) {
   }, [])
 
   const windows = useMemo(() => bestWindows(tips),  [tips])
-  const whales  = useMemo(() => detectWhales(tips), [tips])
+  // Use passed whales from parent analytics if available; fall back to local
+  // detection for backward compatibility. Prefer passed version since it
+  // matches the windowed data context.
+  const whales  = useMemo(() => passedWhales || detectWhales(tips), [passedWhales, tips])
 
   // Overall confidence in the dataset as a whole (spec Step 3) — drives
   // whether a personalized Peak Earning Window claim is shown at all, using
@@ -1034,7 +1037,7 @@ function StreamPlannerContent({ tips, isPro }) {
 // inside StreamPlannerContent (Very Low/Low/Medium/High) now decides what
 // personalized claim, if any, is shown — the Pro teaser only appears at
 // Medium confidence, next to a real (not fabricated) personalized result.
-export default function StreamPlanner({ tips = [], isPro = false }) {
+export default function StreamPlanner({ tips = [], isPro = false, whales = null, windowSummary = null, analytics = null }) {
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1049,5 +1052,5 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
     )
   }
 
-  return <StreamPlannerContent tips={tips} isPro={isPro} />
+  return <StreamPlannerContent tips={tips} isPro={isPro} whales={whales} windowSummary={windowSummary} analytics={analytics} />
 }
