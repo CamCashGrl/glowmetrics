@@ -215,31 +215,31 @@ function PricingSection({
   user,
 }) {
   const freeFeatures = [
-    'Track 1 cam platform',
+    'Track up to 3 platforms (1 Primary + 2 Secondary)',
     'Upload tip history by CSV',
     'Basic earnings dashboard',
     'Basic session analytics',
     'Live tip detection',
     'Real-time alerts',
-    'Basic Live Mode coaching',
-    'Top 3 fans',
-    'Limited recent tip history',
-    'Basic fan insights',
+    '60 minutes/day tracked Live Mode time (1 platform at a time)',
+    'Top Fans with tier and trend status',
+    '31-day rolling analysis per platform',
+    'Basic Money Map & Stream Planner',
   ]
 
   const standardFeatures = [
-    'Track all supported cam platforms',
-    'Full permanent tip history',
-    'Expanded fan insights',
-    'Full fan profiles and CRM tools',
+    'Track unlimited platforms simultaneously',
+    'Full historical analysis (beyond 31 days)',
+    'Unlimited Live Mode tracking across all platforms',
+    'Deep fan profiles and CRM tools',
+    'Full fan insights with churn & re-engagement coaching',
     'Cross-platform earnings comparisons',
-    'Advanced Live Mode coaching',
+    'Detailed trend diagnostics and best-times analysis',
+    'Advanced Stream Planner with full features',
+    'Advanced Money Map with historical depth',
     'Private-session analytics',
-    'Churn and re-engagement insights',
-    'Full best-time analysis',
-    'Stream Planner',
-    'Money Map',
     'Advanced recommendations and reports',
+    'Priority support',
   ]
 
   return (
@@ -589,11 +589,11 @@ function PromiseSection() {
 const FAQ_ITEMS = [
   {
     q: 'Will the free plan always be available?',
-    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes up to 3 platforms (1 Primary + 2 Secondary), CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, 60 minutes/day tracked Live Mode, top-fan insights with tier and trend status, 31-day rolling analysis per platform, and basic Money Map & Stream Planner access.',
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports one cam platform. Standard unlocks tracking across every supported platform and adds cross-platform comparisons.',
+    a: 'The free plan supports up to 3 platforms (1 Primary + 2 Secondary). Free analysis covers the most recent 31 days per platform. Standard unlocks unlimited platforms with full historical analysis and cross-platform comparisons.',
   },
   {
     q: 'What does the Standard plan include?',
@@ -813,8 +813,7 @@ function FinalCTA({ user }) {
           margin: 0,
         }}
       >
-        Free plan always available · No credit card
-        required · Four platforms supported
+        Free plan always available · No credit card required · Track up to 3 platforms free · Full history with Pro
       </p>
     </section>
   )
