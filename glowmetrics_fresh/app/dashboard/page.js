@@ -14,6 +14,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard, PlatformIntelligenceHero } from './DashboardPreview'
+import { FREE_PLATFORM_LIMIT, FREE_ANALYSIS_WINDOW_DAYS, resolvePlatformRoles, platformLimitMessage } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
@@ -2081,8 +2082,9 @@ const stopImportMessageRotation = () => {
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — instead of a hard block, show a
-    // quick preview of the file's contents plus a soft paywall below it.
+    // Free plan tracks up to FREE_PLATFORM_LIMIT platforms — instead of a
+    // hard block once that's reached, show a quick preview of the file's
+    // contents plus a soft paywall below it.
     if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
       await denyWithPlatformPreview(file, forcePlatform)
       return
@@ -2298,7 +2300,11 @@ const stopImportMessageRotation = () => {
   }))
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  // Free tracks up to FREE_PLATFORM_LIMIT platforms (see lib/planLimits.js);
+  // the real enforcement is the DB trigger in
+  // supabase/migrations/20260910_free_tier_three_platform_limit.sql — this
+  // just needs to match it for UI purposes.
+  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_PLATFORM_LIMIT
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -6085,7 +6091,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms.join(', ')}. Auto-removes duplicates.` : `Free plan tracks up to ${FREE_PLATFORM_LIMIT} platforms. Auto-removes duplicates.`}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -6095,7 +6101,7 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  {platformLimitMessage()}
                 </div>
                 <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
