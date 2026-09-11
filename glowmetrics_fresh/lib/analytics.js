@@ -278,7 +278,9 @@ function normalizeHeaderName(h) {
   if (['your_payout','usd_amount','payout','usd','earnings','amount_usd'].includes(clean)) return 'usd'
   if (['date_and_time','date_time','datetime','timestamp','date','time'].includes(clean)) return 'date_time'
   if (['member','username','user','tipper','sender','nickname','from'].includes(clean)) return 'username'
-  if (['transaction_type','chat_type','tip_type','type'].includes(clean)) return 'tip_type'
+  // Session type column variations: chat_type, session_type, activity_type, show_type, paid_chat_type, etc.
+  // Maps different platform export formats to the unified tip_type field for BC_PAID_CHAT_TYPES matching
+  if (['transaction_type','chat_type','tip_type','type','session_type','activity_type','show_type','paid_chat_type'].includes(clean)) return 'tip_type'
   if (clean === 'action') return 'action'
   if (clean === 'note') return 'note'
   if (clean === 'platform') return 'platform'

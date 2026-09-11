@@ -335,6 +335,14 @@ export async function POST(req) {
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
   }
 
+  // ── BONGACAMS NO PAID SESSIONS WARNING ──────────────────────────────────
+  // If BongaCams detected but no paid sessions found, user may be missing a
+  // session-type column (Chat Type, Session Type, Activity Type, etc.)
+  if ((detectedPlatform === 'BongaCams') && paidSessionRows.length === 0 && tipRows.length > 0) {
+    response.bongaCamsWarning = 'No private/group/spy sessions detected. If your BongaCams export includes private chat sessions, verify it contains a session-type column (e.g., "Chat Type", "Session Type", "Activity Type").'
+    console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing a session-type column.')
+  }
+
   // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────
   if (errors.length === 0) {
     try {
