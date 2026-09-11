@@ -492,7 +492,8 @@ export function identifyWhales(tips) {
     f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const spendPercentile = Math.round((1 - percentileRank) * 100)
-    const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
+    const tipsAsc = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
+    const tipDates = tipsAsc.map(t => new Date(t.dateRaw || t.date_time))
     const daysBetweenTipsArr = []
     for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
 
@@ -504,6 +505,7 @@ export function identifyWhales(tips) {
       daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
       churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      trend: calcFanTrend(tipsAsc),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
@@ -544,6 +546,49 @@ function calcExpectedNextTip(d, avg) {
   if (n <= 3)  return `In ${n} days`
   if (n <= 7)  return `In ~${n} days`
   return `In ~${Math.round(n / 7)} weeks`
+}
+
+// Trending is a separate signal from tier/churnRisk — it describes whether a
+// fan's own spending is moving relative to their own established pattern,
+// never relative to other fans or a single outlier tip.
+//
+// tipsAsc: this fan's tips, sorted oldest -> newest (usd required).
+//
+// NOTE ON THE 25% THRESHOLD: this is a starting comparison point, not a
+// value validated against real CamCash fan data — flagged per the
+// never-invent-analytics/formula-requirments rule against inventing hard
+// thresholds. Treat as provisional until checked against real distributions.
+const TREND_CHANGE_THRESHOLD = 0.25
+
+function calcFanTrend(tipsAsc) {
+  const count = tipsAsc.length
+  // Fewer than 4 tips isn't enough to compare a "before" and "after" window
+  // without a single tip dominating either side.
+  if (count < 4) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const mid = Math.floor(count / 2)
+  const priorHalf = tipsAsc.slice(0, mid)
+  const recentHalf = tipsAsc.slice(mid)
+  const avg = arr => arr.reduce((s, t) => s + (t.usd || 0), 0) / arr.length
+  const priorAvg = avg(priorHalf)
+  const recentAvg = avg(recentHalf)
+
+  if (priorAvg <= 0) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const pctChange = (recentAvg - priorAvg) / priorAvg
+  const confidence = count >= 8 ? 'Medium' : 'Low'
+
+  if (pctChange >= TREND_CHANGE_THRESHOLD) {
+    return { direction: 'up', label: 'Trending Up', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  if (pctChange <= -TREND_CHANGE_THRESHOLD) {
+    return { direction: 'down', label: 'Trending Down', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  return { direction: 'stable', label: 'Stable', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
 }
 
 export function generateWhaleAlerts(whales) {
