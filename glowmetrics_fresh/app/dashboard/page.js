@@ -1440,9 +1440,6 @@ export default function Dashboard() {
   const [liveTick, setLiveTick] = useState(0)
   const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
-  const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
-  const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
-  const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
@@ -7057,51 +7054,16 @@ const stopImportMessageRotation = () => {
               <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
                 <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
               </div>
-              {earlyAccessSubmitted ? (
-                <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>You're on the list!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>We'll email you with a founding user discount when we launch.</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="email"
-                    value={earlyAccessEmail}
-                    onChange={e => setEarlyAccessEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 14, outline: "none", marginBottom: 10, boxSizing: "border-box" }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-                  />
-                  <Button
-                    disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                    onClick={async () => {
-                      if (!earlyAccessEmail.trim()) return
-                      setEarlyAccessSubmitting(true)
-                      track('early_access_signup', { email: earlyAccessEmail })
-                      try {
-                        const { data: { user: currentUser } } = await supabase.auth.getUser()
-                        await supabase.from('early_access').insert({
-                          email: earlyAccessEmail.trim(),
-                          user_id: currentUser?.id || null,
-                          signed_up_at: new Date().toISOString()
-                        }).then(() => {})
-                      } catch(e) {}
-                      setEarlyAccessSubmitted(true)
-                      setEarlyAccessSubmitting(false)
-                      showToast("🎉 You're on the founding user list!")
-                    }}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                    {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
-                  </Button>
-                  <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                    Maybe later
-                  </button>
-                </>
-              )}
+              <Button
+                as="a"
+                href="/pricing"
+                onClick={() => track('upgrade_modal_checkout_click')}
+                style={{ display: "block", width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12, textAlign: "center" }}>
+                ✦ Upgrade to Pro →
+              </Button>
+              <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                Maybe later
+              </button>
             </div>
           </div>
         </div>
