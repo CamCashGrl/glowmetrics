@@ -4430,6 +4430,49 @@ const stopImportMessageRotation = () => {
               )
             })()}
 
+            {/* CONVERSION CARD — free plan only. Only ever built from a REAL
+                fan who is both a top tipper (Whale/Shark tier) and has
+                genuinely passed the evidence-gated At Risk bar in
+                lib/analytics.js (same behavioralState used everywhere else
+                — never a separate/fabricated risk claim). If no such fan
+                exists, nothing renders — we do not manufacture urgency. */}
+            {!isPro && (() => {
+              const atRiskTopFan = [...whales]
+                .filter(w => (w.tier === 'Whale' || w.tier === 'Shark') && w.behavioralState === 'At Risk')
+                .sort((a, b) => b.totalUSD - a.totalUSD)[0]
+              if (!atRiskTopFan) return null
+              return (
+                <a href="/pricing" style={{ textDecoration: 'none', display: 'block' }}>
+                  <div style={{
+                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
+                    border: '1px solid rgba(248,113,113,0.45)',
+                    background: 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.05))',
+                    animation: 'alertPulseCritical 1.8s ease-in-out infinite',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 18 }}>🚨</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: C.red, textTransform: 'uppercase', letterSpacing: 0.6 }}>Top Fan At Risk</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', filter: 'blur(7px)' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div aria-hidden style={{ filter: 'blur(6px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 14, marginBottom: 3 }}>••••••••••</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{atRiskTopFan.platform} · last tipped {atRiskTopFan.daysSinceLastTip}d ago</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white }}>${atRiskTopFan.totalUSD.toFixed(0)}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>lifetime spend</div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(248,113,113,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>⚠️ One of your top tippers has broken their pattern — unlock Fan Intelligence to see who and win them back</span>
+                      <span style={{ fontSize: 12, color: C.red, fontWeight: 800, whiteSpace: 'nowrap' }}>Upgrade to Pro →</span>
+                    </div>
+                  </div>
+                </a>
+              )
+            })()}
+
             {/* ALL TIPPERS — CRM Card Grid */}
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
