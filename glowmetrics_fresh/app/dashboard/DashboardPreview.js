@@ -11,6 +11,7 @@
 //   EmptyDashboard           — no_data state
 //   DashboardPreview         — very_low/partial/full_data state
 //   LockedInsightCard        — use inside full dashboard for unready cards
+//   PlatformIntelligenceHero — first-view post-onboarding platform comparison
 //
 // Plan source of truth: profiles.plan ('free' | 'pro')
 // ============================================================
@@ -808,5 +809,480 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
 
       </div>
     </div>
+  )
+}
+
+// ============================================================
+// PLATFORM INTELLIGENCE HERO — first view after onboarding
+//
+// Replaces the low-data checklist as the primary thing a user sees on the
+// Overview tab. Shows what CamCash actually knows about their multi-platform
+// business right now, using only real imported data — never invented,
+// never estimated to fill a gap. Everything below is additive; it does not
+// touch any other dashboard tab.
+// ============================================================
+
+const FREE_TIER_MAX_PLATFORMS = 3
+const SNAPSHOT_WINDOW_DAYS = 31
+
+const PI = {
+  bg: '#070B18',
+  panel: 'rgba(11,18,38,0.74)',
+  panelStrong: 'rgba(9,16,35,0.88)',
+  border: 'rgba(138,164,220,0.16)',
+  borderStrong: 'rgba(22,244,255,0.42)',
+  cyan: '#16F4FF',
+  blue: '#55B8FF',
+  purple: '#7C5CFF',
+  pink: '#FF2BAE',
+  gold: '#F6B94A',
+  green: '#59D98E',
+  text: '#F5F7FF',
+  body: '#A9B4CC',
+  muted: '#6F7C98',
+  gradient: 'linear-gradient(90deg,#16F4FF 0%,#55B8FF 36%,#7C5CFF 69%,#FF2BAE 100%)',
+}
+
+const PLATFORM_META = {
+  Chaturbate: { short: 'CB', color: '#F05A2A' },
+  BongaCams:  { short: 'BC', color: '#FF3B6E' },
+  MyFreeCams: { short: 'MFC', color: '#F6A33A' },
+}
+const ALL_PLATFORM_NAMES = Object.keys(PLATFORM_META)
+const _normPlatKey = (name) => (name || '').toString().toLowerCase().replace(/[^a-z]/g, '')
+
+function resolvePlatformName(key) {
+  if (!key) return null
+  const norm = _normPlatKey(key)
+  return ALL_PLATFORM_NAMES.find(name => _normPlatKey(name) === norm) || null
+}
+
+export function resolvePlatformRoles({ primaryProPlatform, streamingPlatforms, tips = [] }) {
+  const fromOnboarding = resolvePlatformName(primaryProPlatform)
+  const selected = (streamingPlatforms || []).map(resolvePlatformName).filter(Boolean)
+
+  if (fromOnboarding) {
+    const secondary = selected.filter(p => p !== fromOnboarding)
+    return { primary: fromOnboarding, secondary, source: 'onboarding' }
+  }
+
+  const byUsd = {}
+  tips.forEach(t => {
+    const p = resolvePlatformName(t.platform)
+    if (!p) return
+    byUsd[p] = (byUsd[p] || 0) + (parseFloat(t.usd) || 0)
+  })
+  const ranked = Object.entries(byUsd).sort((a, b) => b[1] - a[1]).map(([p]) => p)
+  return { primary: ranked[0] || null, secondary: ranked.slice(1), source: 'inferred' }
+}
+
+export function computePlatformCardStats(tips, sessions, platformName, windowDays = SNAPSHOT_WINDOW_DAYS, platformRoi = {}) {
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === platformName)
+  if (!platTips.length) {
+    return { platform: platformName, hasData: false, usd: 0, tipCount: 0, hours: 0, usdPerHour: null, windowDays: 0, fullHistoryDays: 0, latestDate: null, earliestDate: null }
+  }
+
+  const dated = platTips
+    .map(t => ({ ...t, _d: new Date(t.date_time || t.dateRaw) }))
+    .filter(t => !isNaN(t._d.getTime()))
+    .sort((a, b) => a._d - b._d)
+
+  if (!dated.length) return { platform: platformName, hasData: false, usd: 0, tipCount: 0, hours: 0, usdPerHour: null, windowDays: 0, fullHistoryDays: 0, latestDate: null, earliestDate: null }
+
+  const to = dated[dated.length - 1]._d
+  const from = dated[0]._d
+  const fullHistoryDays = Math.max(1, Math.floor((to - from) / 86400000) + 1)
+  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  const recentStart = windowStart < from ? from : windowStart
+  const recentTips = dated.filter(t => t._d >= recentStart)
+  const visibleDays = Math.min(fullHistoryDays, windowDays)
+
+  const usd = parseFloat(recentTips.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2))
+  const tipCount = recentTips.length
+
+  const platSessions = (sessions || []).filter(s => resolvePlatformName(s.platform) === platformName && new Date(s.startTime) >= recentStart)
+  const hours = parseFloat(platSessions.reduce((s, x) => s + (Number(x.durationHours) || 0), 0).toFixed(1))
+  // $/hr is never derived locally — it must always equal the "Platform ROI"
+  // card's number for this platform (single source of truth). No independent
+  // session-eligibility or time-window rule for this figure.
+  const usdPerHour = Object.prototype.hasOwnProperty.call(platformRoi, platformName) ? platformRoi[platformName] : null
+
+  return {
+    platform: platformName,
+    hasData: true,
+    usd,
+    tipCount,
+    hours,
+    usdPerHour,
+    windowDays: visibleDays,
+    fullHistoryDays,
+    latestDate: to,
+    earliestDate: from,
+  }
+}
+
+export function computeDataVaultStats(tips, windowDays = SNAPSHOT_WINDOW_DAYS) {
+  const dated = (tips || [])
+    .map(t => new Date(t.date_time || t.dateRaw))
+    .filter(d => !isNaN(d.getTime()))
+    .sort((a, b) => a - b)
+  if (!dated.length) return { fullHistoryDays: 0, visibleDays: 0, hasMoreThanWindow: false }
+  const fullHistoryDays = Math.max(1, Math.floor((dated[dated.length - 1] - dated[0]) / 86400000) + 1)
+  return { fullHistoryDays, visibleDays: Math.min(fullHistoryDays, windowDays), hasMoreThanWindow: fullHistoryDays > windowDays }
+}
+
+export function computeMilestones({ primaryStats, secondaryConnectedCount, streamingPlatforms }) {
+  return [
+    { label: 'Primary platform connected', done: !!primaryStats?.hasData },
+    { label: 'First snapshot created', done: !!primaryStats?.hasData },
+    { label: 'Second platform connected', done: secondaryConnectedCount >= 1 },
+    { label: 'Multi-platform profile created', done: (streamingPlatforms || []).length >= 2 },
+  ]
+}
+
+function PlatformBadge({ name, size = 40, active = false }) {
+  const meta = PLATFORM_META[name] || { short: '?', color: PI.muted }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.28,
+      background: `${meta.color}18`, border: `1px solid ${meta.color}${active ? '95' : '48'}`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.31, fontWeight: 900, color: meta.color, flexShrink: 0,
+      boxShadow: active ? `0 0 18px ${meta.color}20` : 'none'
+    }}>{meta.short}</div>
+  )
+}
+
+function piCard(extra = {}) {
+  return {
+    borderRadius: 20,
+    border: `1px solid ${PI.border}`,
+    background: PI.panel,
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    boxShadow: '0 14px 45px rgba(0,0,0,0.22)',
+    position: 'relative',
+    overflow: 'hidden',
+    ...extra,
+  }
+}
+
+function PiLabel({ children }) {
+  return <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: PI.muted }}>{children}</div>
+}
+
+function PiMetric({ label, value, accent = PI.text }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: PI.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 21, lineHeight: 1.05, fontWeight: 900, color: accent, letterSpacing: '-0.03em' }}>{value}</div>
+    </div>
+  )
+}
+
+function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
+  const connected = !!stats?.hasData
+  const meta = PLATFORM_META[platform] || { color: PI.muted, short: '?' }
+  return (
+    <div className={primary ? 'pi-platform-card pi-platform-card-primary' : 'pi-platform-card'} style={piCard({ padding: 20, minWidth: 0, height: '100%', background: primary ? `linear-gradient(145deg, ${meta.color}12, rgba(10,16,36,.88))` : PI.panelStrong })}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(circle at 85% 10%, ${meta.color}12, transparent 36%)` }} />
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <PlatformBadge name={platform} size={44} active={connected} />
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 900, color: PI.text }}>{platform}</div>
+              <div style={{ display: 'inline-flex', marginTop: 5, padding: '3px 8px', borderRadius: 999, background: primary ? 'linear-gradient(90deg,#16F4FF,#7C5CFF)' : 'rgba(124,92,255,.14)', color: primary ? '#06101A' : '#B9AEFF', fontSize: 9, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                {primary ? 'Primary' : 'Secondary'}
+              </div>
+            </div>
+          </div>
+          {connected ? <span style={{ fontSize: 10, fontWeight: 800, color: PI.green }}>● Connected</span> : <span style={{ fontSize: 10, fontWeight: 800, color: PI.muted }}>○ Not connected</span>}
+        </div>
+
+        {connected ? (
+          <>
+            <div style={{ marginTop: 18, marginBottom: 14 }}>
+              <PiLabel>{stats.windowDays < SNAPSHOT_WINDOW_DAYS ? `${stats.windowDays} days available` : `Most recent ${SNAPSHOT_WINDOW_DAYS} days`}</PiLabel>
+            </div>
+            <div className="pi-primary-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14 }}>
+              <PiMetric label="Earnings" value={fmt$(stats.usd)} accent={PI.gold} />
+              <PiMetric label="Tips" value={fmtN(stats.tipCount)} />
+              <PiMetric label="Hours" value={stats.hours > 0 ? `${stats.hours}h` : '—'} />
+              <PiMetric label="$ / hr" value={stats.usdPerHour != null ? fmt$(stats.usdPerHour) : '—'} accent={PI.cyan} />
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 11, color: PI.muted }}>
+              <span>{stats.earliestDate ? `History starts ${fmtDate(stats.earliestDate)}` : ''}</span>
+              {primary && stats.fullHistoryDays > SNAPSHOT_WINDOW_DAYS && <span style={{ color: PI.pink, fontWeight: 800 }}>{stats.fullHistoryDays} days on file</span>}
+            </div>
+          </>
+        ) : (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: PI.body, marginBottom: 14 }}>Selected during onboarding. Connect data to build this platform's snapshot.</div>
+            <button onClick={onConnect} style={secondaryBtn({ width: '100%', justifyContent: 'center', fontSize: 12, borderRadius: 12 })}>Connect data →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function PlatformCoverage({ primary, secondary, connectedSet, maxPlatforms = FREE_TIER_MAX_PLATFORMS, onConnectMore }) {
+  const slots = [primary, ...secondary].filter(Boolean)
+  const connectedCount = slots.filter(p => connectedSet.has(p)).length
+  const pct = maxPlatforms ? Math.min(100, Math.round((connectedCount / maxPlatforms) * 100)) : 0
+  return (
+    <div className="pi-coverage" style={piCard({ padding: '16px 18px', marginTop: 16 })}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 900, color: PI.text, textTransform: 'uppercase', letterSpacing: '.08em' }}>Platform coverage</div>
+          <div style={{ fontSize: 11, color: PI.muted, marginTop: 3 }}>Your CamCash picture grows as you connect each platform.</div>
+        </div>
+        <div style={{ fontSize: 12, color: PI.cyan, fontWeight: 900, whiteSpace: 'nowrap' }}>{connectedCount} / {maxPlatforms} connected</div>
+      </div>
+      <div style={{ height: 7, borderRadius: 999, background: 'rgba(255,255,255,.055)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: PI.gradient, borderRadius: 999, transition: 'width .45s ease' }} />
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+        {slots.map((p, i) => (
+          <div key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 9px', borderRadius: 10, border: `1px solid ${connectedSet.has(p) ? 'rgba(89,217,142,.18)' : 'rgba(255,255,255,.07)'}`, background: connectedSet.has(p) ? 'rgba(89,217,142,.05)' : 'rgba(255,255,255,.025)' }}>
+            <span style={{ color: connectedSet.has(p) ? PI.green : PI.muted }}>{connectedSet.has(p) ? '✓' : '○'}</span>
+            <span style={{ fontSize: 11, color: PI.text, fontWeight: 700 }}>{p}</span>
+            <span style={{ fontSize: 9, color: PI.muted, textTransform: 'uppercase' }}>{i === 0 ? 'Primary' : 'Secondary'}</span>
+          </div>
+        ))}
+        {slots.length < maxPlatforms && <button onClick={onConnectMore} style={{ border: '1px dashed rgba(22,244,255,.28)', background: 'rgba(22,244,255,.03)', color: PI.cyan, borderRadius: 10, padding: '6px 9px', fontSize: 11, fontWeight: 800 }}>+ Connect platform</button>}
+      </div>
+    </div>
+  )
+}
+
+function MilestoneStrip({ milestones }) {
+  const done = milestones.filter(m => m.done).length
+  return (
+    <div className="pi-milestones" style={piCard({ padding: '14px 16px', marginTop: 14 })}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 900, color: PI.text, textTransform: 'uppercase', letterSpacing: '.08em' }}>Your CamCash progress</div>
+          <div style={{ fontSize: 11, color: PI.muted, marginTop: 3 }}>Real milestones as your platform picture fills in.</div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 900, color: PI.cyan }}>{done} / {milestones.length}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8 }}>
+        {milestones.map(m => (
+          <div key={m.label} style={{ padding: '9px 10px', borderRadius: 12, background: m.done ? 'rgba(89,217,142,.055)' : 'rgba(255,255,255,.022)', border: `1px solid ${m.done ? 'rgba(89,217,142,.15)' : 'rgba(255,255,255,.06)'}` }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: m.done ? PI.green : PI.muted }}>{m.done ? '✓ Complete' : '○ Next'}</div>
+            <div style={{ fontSize: 10, color: m.done ? PI.body : PI.muted, lineHeight: 1.45, marginTop: 4 }}>{m.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function DataVaultCard({ vault, onUnlock, isPro = false }) {
+  const pct = vault.fullHistoryDays > 0 ? Math.max(2, Math.round((vault.visibleDays / vault.fullHistoryDays) * 100)) : 0
+  return (
+    <div className="pi-vault" style={piCard({ marginTop: 14, padding: 16, background: 'linear-gradient(145deg,rgba(124,92,255,.09),rgba(10,16,35,.84))', border: '1px solid rgba(124,92,255,.22)' })}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <PiLabel>Data vault</PiLabel>
+          <div style={{ fontSize: 18, fontWeight: 900, color: PI.text, marginTop: 5 }}>{fmtN(vault.fullHistoryDays)}-day history on file</div>
+          <div style={{ fontSize: 11, color: PI.body, marginTop: 3 }}>Free view uses the most recent {SNAPSHOT_WINDOW_DAYS} days.</div>
+        </div>
+        {isPro ? <span style={{ ...secondaryBtn({ borderColor: 'rgba(89,217,142,.20)', color: '#CFFBE1', background: 'rgba(89,217,142,.05)', fontSize: 11, borderRadius: 11, cursor: 'default' }) }}>✓ Full history unlocked</span> : <button onClick={onUnlock} style={{ ...secondaryBtn({ borderColor: 'rgba(255,43,174,.28)', color: '#FFD6F0', background: 'rgba(255,43,174,.05)', fontSize: 11, borderRadius: 11 }) }}>Unlock deeper history →</button>}
+      </div>
+      <div style={{ marginTop: 13, height: 8, borderRadius: 999, background: 'rgba(255,255,255,.06)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: PI.gradient, borderRadius: 999 }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 10, color: PI.muted }}>
+        <span>{vault.visibleDays} days visible</span>
+        <span>{Math.max(0, vault.fullHistoryDays - vault.visibleDays)} days deeper in history</span>
+      </div>
+    </div>
+  )
+}
+
+function HowThisWorksInfo() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(v => !v)} style={{ border: 0, background: 'transparent', padding: '4px 0', color: PI.muted, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>ⓘ How this works</button>
+      {open && (
+        <div style={{ position: 'absolute', top: 30, right: 0, zIndex: 20, width: 320, padding: 14, borderRadius: 14, border: '1px solid rgba(22,244,255,.16)', background: 'rgba(8,13,30,.96)', boxShadow: '0 18px 55px rgba(0,0,0,.45)' }}>
+          <div style={{ fontSize: 11, fontWeight: 900, color: PI.text, marginBottom: 7 }}>How this works</div>
+          <div style={{ fontSize: 11, color: PI.body, lineHeight: 1.65 }}>CamCash keeps your imported history. Your Free view focuses on the most recent 31 days so you can see what is happening now. More history and broader platform intelligence unlock deeper analysis.</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NoticeStrip({ children, accent = PI.cyan }) {
+  return <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 12, border: `1px solid ${accent}20`, background: `${accent}07`, color: PI.body, fontSize: 11, lineHeight: 1.55 }}>{children}</div>
+}
+
+function CamCashNoticed({ primary, primaryStats, secondary, secondaryStats }) {
+  const comparisons = secondaryStats.filter(s => s.hasData && s.usdPerHour != null && primaryStats?.usdPerHour != null)
+  const rateLead = comparisons.sort((a,b) => (b.usdPerHour || 0) - (a.usdPerHour || 0))[0]
+  const recentPlatforms = [primaryStats, ...secondaryStats].filter(s => s?.hasData).sort((a,b) => b.usd - a.usd)
+  const strongest = recentPlatforms[0]
+  const insights = []
+  if (strongest) insights.push(`${strongest.platform} is your strongest recent earner at ${fmt$(strongest.usd)}.`)
+  if (rateLead) insights.push(`${rateLead.platform} currently has the highest tracked $/hour among your connected platforms.`)
+  if (!insights.length && primary) insights.push(`${primary} is your current Primary Platform. Add more history or another platform to deepen the comparison.`)
+  if (!insights.length) return null
+  return (
+    <div className="pi-noticed" style={piCard({ marginTop: 16, padding: 16, background: 'linear-gradient(145deg,rgba(22,244,255,.045),rgba(124,92,255,.045))' })}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <PiLabel>CamCash noticed</PiLabel>
+          <div style={{ fontSize: 16, fontWeight: 900, color: PI.text, marginTop: 4 }}>What your data is telling us so far</div>
+        </div>
+        <div style={{ fontSize: 10, color: PI.cyan, fontWeight: 800 }}>Based on your data</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(insights.length,2)},minmax(0,1fr))`, gap: 10, marginTop: 12 }}>
+        {insights.slice(0,2).map(text => <div key={text} style={{ padding: '11px 12px', borderRadius: 12, border: '1px solid rgba(255,255,255,.06)', background: 'rgba(255,255,255,.025)', color: PI.body, fontSize: 11, lineHeight: 1.55 }}>{text}</div>)}
+      </div>
+    </div>
+  )
+}
+
+function DeeperIntelligence({ primaryStats, totalSessions, isPro = false, onOpenStreamPlanner, onOpenMoneyMap, onUnlock }) {
+  const plannerLine = totalSessions > 0 ? `${fmtN(totalSessions)} sessions already contribute to your current planning picture.` : 'Once you have session history, CamCash can start identifying stronger windows.'
+  const moneyLine = primaryStats?.hasData ? `${fmtN(primaryStats.tipCount)} recent tips are mapped on your Primary Platform.` : 'Connect your Primary Platform to start building your money picture.'
+  return (
+    <div className="pi-deeper" style={{ marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+        <div>
+          <PiLabel>Go deeper</PiLabel>
+          <div style={{ fontSize: 17, fontWeight: 900, color: PI.text, marginTop: 4 }}>Turn your data into decisions</div>
+        </div>
+        <div style={{ fontSize: 10, color: PI.muted }}>More intelligence unlocks as your data grows</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+        <div style={piCard({ padding: 15 })}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 900, color: PI.text }}>◷ Stream Planner</div>
+            <span style={{ fontSize: 9, fontWeight: 800, color: PI.cyan, letterSpacing: '.08em' }}>PLAN</span>
+          </div>
+          <div style={{ fontSize: 11, color: PI.body, lineHeight: 1.55, margin: '8px 0 10px' }}>{plannerLine}</div>
+          <div style={{ padding: 10, borderRadius: 11, background: 'rgba(124,92,255,.06)', border: '1px solid rgba(124,92,255,.16)', fontSize: 11, color: isPro ? PI.green : PI.muted }}>{isPro ? '✓ Historical + cross-platform optimization available' : '🔒 Deeper historical + cross-platform optimization'}</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={onOpenStreamPlanner} style={secondaryBtn({ fontSize: 10, padding: '8px 11px', borderRadius: 10 })}>Open Planner →</button>
+            {!isPro && <button onClick={onUnlock} style={{ border: 0, background: 'transparent', color: PI.pink, fontSize: 10, fontWeight: 800 }}>Unlock deeper</button>}
+          </div>
+        </div>
+        <div style={piCard({ padding: 15 })}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 900, color: PI.text }}>◫ Money Map</div>
+            <span style={{ fontSize: 9, fontWeight: 800, color: PI.cyan, letterSpacing: '.08em' }}>MONEY</span>
+          </div>
+          <div style={{ fontSize: 11, color: PI.body, lineHeight: 1.55, margin: '8px 0 10px' }}>{moneyLine}</div>
+          <div style={{ padding: 10, borderRadius: 11, background: 'rgba(255,43,174,.045)', border: '1px solid rgba(255,43,174,.14)', fontSize: 11, color: isPro ? PI.green : PI.muted }}>{isPro ? '✓ Historical + cross-platform money intelligence available' : '🔒 Deeper historical + cross-platform money intelligence'}</div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button onClick={onOpenMoneyMap} style={secondaryBtn({ fontSize: 10, padding: '8px 11px', borderRadius: 10 })}>Open Money Map →</button>
+            {!isPro && <button onClick={onUnlock} style={{ border: 0, background: 'transparent', color: PI.pink, fontSize: 10, fontWeight: 800 }}>Unlock deeper</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ActionCards({ onOpenLiveMode }) {
+  return (
+    <div className="pi-actions" style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12 }}>
+      <div style={piCard({ padding: 15, background: 'linear-gradient(145deg,rgba(89,217,142,.055),rgba(7,15,26,.84))', border: '1px solid rgba(89,217,142,.14)' })}>
+        <div style={{ fontSize: 11, fontWeight: 900, color: PI.green, textTransform: 'uppercase', letterSpacing: '.1em' }}>Live Mode</div>
+        <div style={{ fontSize: 15, fontWeight: 900, color: PI.text, marginTop: 4 }}>Turn insights into live coaching.</div>
+        <div style={{ fontSize: 11, color: PI.body, lineHeight: 1.55, marginTop: 6 }}>Track what happens while you stream and feed new activity back into your CamCash picture.</div>
+        <button onClick={onOpenLiveMode} style={{ marginTop: 10, ...secondaryBtn({ borderColor: 'rgba(89,217,142,.24)', background: 'rgba(89,217,142,.06)', color: '#CFFBE1', fontSize: 10, padding: '8px 12px', borderRadius: 10 }) }}>Open Live Mode →</button>
+      </div>
+      <div style={piCard({ padding: 15, background: 'linear-gradient(145deg,rgba(22,244,255,.045),rgba(7,15,26,.84))', border: '1px solid rgba(22,244,255,.14)' })}>
+        <div style={{ fontSize: 11, fontWeight: 900, color: PI.cyan, textTransform: 'uppercase', letterSpacing: '.1em' }}>Tip Extension</div>
+        <div style={{ fontSize: 15, fontWeight: 900, color: PI.text, marginTop: 4 }}>Capture tips automatically.</div>
+        <div style={{ fontSize: 11, color: PI.body, lineHeight: 1.55, marginTop: 6 }}>Connect the CamCash browser extension so new tip activity can flow into your analytics without manual entry.</div>
+        <a href="/extension" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', marginTop: 10, ...secondaryBtn({ borderColor: 'rgba(22,244,255,.24)', background: 'rgba(22,244,255,.05)', color: '#D7FBFF', fontSize: 10, padding: '8px 12px', borderRadius: 10 }) }}>Get the extension →</a>
+      </div>
+    </div>
+  )
+}
+
+export function PlatformIntelligenceHero({
+  tips = [], sessions = [], profile, isPro = false,
+  totalSessions = 0, platformRoi = {},
+  onConnectPlatform, onUnlockPro, onOpenStreamPlanner, onOpenMoneyMap, onOpenLiveMode,
+}) {
+  const { primary, secondary } = resolvePlatformRoles({
+    primaryProPlatform: profile?.primary_pro_platform,
+    streamingPlatforms: profile?.streaming_platforms,
+    tips,
+  })
+
+  const primaryStats = primary ? computePlatformCardStats(tips, sessions, primary, SNAPSHOT_WINDOW_DAYS, platformRoi) : null
+  const secondaryStats = secondary.map(p => computePlatformCardStats(tips, sessions, p, SNAPSHOT_WINDOW_DAYS, platformRoi))
+  const connectedSet = new Set([primary, ...secondary].filter((p, i) => i === 0 ? primaryStats?.hasData : secondaryStats[i - 1]?.hasData))
+  const secondaryConnectedCount = secondaryStats.filter(s => s.hasData).length
+  const vault = computeDataVaultStats(tips)
+  const milestones = computeMilestones({ primaryStats, secondaryConnectedCount, streamingPlatforms: profile?.streaming_platforms })
+  const platformCount = [primary, ...secondary].filter(Boolean).length
+  const comparisonCount = connectedSet.size
+  const availableCount = Math.max(0, FREE_TIER_MAX_PLATFORMS - platformCount)
+
+  const handleConnectMore = () => onConnectPlatform?.(null)
+
+  return (
+    <section className="pi-hero" style={{ marginBottom: 22 }}>
+      <div className="pi-hero-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 12 }}>
+        <div>
+          <PiLabel>CamCash Platform Intelligence</PiLabel>
+          <h1 style={{ marginTop: 5, fontSize: 'clamp(21px,2.1vw,29px)', lineHeight: 1.1, fontWeight: 900, color: PI.text, letterSpacing: '-0.04em' }}>Your cam business, across platforms.</h1>
+          <div style={{ marginTop: 6, maxWidth: 760, fontSize: 12, color: PI.body, lineHeight: 1.55 }}>
+            See your Primary Platform clearly, compare connected platforms, and build a richer picture as you add data.
+          </div>
+        </div>
+        <HowThisWorksInfo />
+      </div>
+
+      <div className={`pi-platform-grid pi-platform-grid-${Math.min(platformCount || 1, 3)}`}>
+        {primary && <PlatformCard platform={primary} stats={primaryStats} primary onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(primary)} />}
+        {secondary.map((p, i) => <PlatformCard key={p} platform={p} stats={secondaryStats[i]} onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(p)} />)}
+        {!primary && (
+          <div style={piCard({ padding: 22, minHeight: 160, display: 'flex', flexDirection: 'column', justifyContent: 'center' })}>
+            <PiLabel>Platform setup</PiLabel>
+            <div style={{ fontSize: 16, fontWeight: 900, color: PI.text, marginTop: 5 }}>Connect your primary platform</div>
+            <div style={{ fontSize: 11, color: PI.body, lineHeight: 1.55, marginTop: 5 }}>Choose a platform in onboarding so CamCash can build your cross-platform view.</div>
+            <button onClick={() => onConnectPlatform?.(null)} style={{ ...secondaryBtn({ alignSelf: 'flex-start', marginTop: 12, fontSize: 10, padding: '8px 12px', borderRadius: 10 }) }}>Set up platforms →</button>
+          </div>
+        )}
+      </div>
+
+      <PlatformCoverage primary={primary} secondary={secondary} connectedSet={connectedSet} onConnectMore={handleConnectMore} />
+
+      {comparisonCount > 0 && (
+        <NoticeStrip>
+          <strong style={{ color: PI.text }}>{comparisonCount} platform{comparisonCount === 1 ? '' : 's'} connected.</strong>{' '}
+          {comparisonCount === 1 ? 'Connect another platform to unlock the full side-by-side comparison experience.' : `You have ${availableCount} platform slot${availableCount === 1 ? '' : 's'} available in the current Free setup.`}
+        </NoticeStrip>
+      )}
+
+      <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} />
+
+      {vault.hasMoreThanWindow && <DataVaultCard vault={vault} onUnlock={onUnlockPro} isPro={isPro} />}
+
+      <MilestoneStrip milestones={milestones} />
+
+      <DeeperIntelligence
+        primaryStats={primaryStats}
+        totalSessions={totalSessions}
+        isPro={isPro}
+        onOpenStreamPlanner={onOpenStreamPlanner}
+        onOpenMoneyMap={onOpenMoneyMap}
+        onUnlock={onUnlockPro}
+      />
+
+      <ActionCards onOpenLiveMode={onOpenLiveMode} />
+    </section>
   )
 }
