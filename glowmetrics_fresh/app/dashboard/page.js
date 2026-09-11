@@ -4445,9 +4445,9 @@ const stopImportMessageRotation = () => {
                 <a href="/pricing" style={{ textDecoration: 'none', display: 'block' }}>
                   <div style={{
                     ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
-                    border: '1px solid rgba(248,113,113,0.45)',
+                    border: '1.5px solid rgba(248,113,113,0.6)',
                     background: 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.05))',
-                    animation: 'alertPulseCritical 1.8s ease-in-out infinite',
+                    boxShadow: '0 0 24px rgba(248,113,113,0.15)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <span style={{ fontSize: 18 }}>🚨</span>
