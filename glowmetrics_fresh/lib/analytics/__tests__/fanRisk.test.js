@@ -132,4 +132,58 @@ describe('Fan risk / behavioral state — Step 1 hardening', () => {
     const [fan] = identifyWhales(tips, sessions)
     expect(fan.behavioralState).toBe('Active')
   })
+
+  describe('Trend field — independent signal from behavioral state', () => {
+    test('fan with 3 tips returns insufficient trend', () => {
+      const tips = fanTips('newFan', 'Chaturbate', 3, 5, 10, 5)
+      const [fan] = identifyWhales(tips, [])
+      expect(fan.trend.direction).toBe('insufficient')
+      expect(fan.trend.label).toContain('New / Insufficient Data')
+    })
+
+    test('fan with 8 tips trending up returns up direction', () => {
+      // First 4 tips: $10 each (avg $10)
+      // Next 4 tips: $15 each (avg $15) — 50% increase, well above 25% threshold
+      const tips = [
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(40), date_time: daysAgo(40) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(30), date_time: daysAgo(30) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(20), date_time: daysAgo(20) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(15), date_time: daysAgo(15) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 15, tokens: 0, dateRaw: daysAgo(10), date_time: daysAgo(10) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 15, tokens: 0, dateRaw: daysAgo(8), date_time: daysAgo(8) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 15, tokens: 0, dateRaw: daysAgo(5), date_time: daysAgo(5) },
+        { username: 'trendingUp', platform: 'Chaturbate', usd: 15, tokens: 0, dateRaw: daysAgo(2), date_time: daysAgo(2) },
+      ]
+      const [fan] = identifyWhales(tips, [])
+      expect(fan.trend.direction).toBe('up')
+      expect(fan.trend.confidence).toBe('Medium') // 8 tips → Medium confidence
+      expect(fan.trend.pctChange).toBe(50) // 50% increase
+    })
+
+    test('fan with 6 tips trending down returns down direction', () => {
+      // First 3 tips: $20 each (avg $20)
+      // Next 3 tips: $10 each (avg $10) — 50% decrease, well below -25% threshold
+      const tips = [
+        { username: 'trendingDown', platform: 'Chaturbate', usd: 20, tokens: 0, dateRaw: daysAgo(30), date_time: daysAgo(30) },
+        { username: 'trendingDown', platform: 'Chaturbate', usd: 20, tokens: 0, dateRaw: daysAgo(20), date_time: daysAgo(20) },
+        { username: 'trendingDown', platform: 'Chaturbate', usd: 20, tokens: 0, dateRaw: daysAgo(15), date_time: daysAgo(15) },
+        { username: 'trendingDown', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(10), date_time: daysAgo(10) },
+        { username: 'trendingDown', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(5), date_time: daysAgo(5) },
+        { username: 'trendingDown', platform: 'Chaturbate', usd: 10, tokens: 0, dateRaw: daysAgo(1), date_time: daysAgo(1) },
+      ]
+      const [fan] = identifyWhales(tips, [])
+      expect(fan.trend.direction).toBe('down')
+      expect(fan.trend.confidence).toBe('Low') // 6 tips → Low confidence
+      expect(fan.trend.pctChange).toBe(-50) // 50% decrease
+    })
+
+    test('fan with 10 tips stable in spending returns stable direction', () => {
+      // All tips: $15 each (no change)
+      const tips = fanTips('stableFan', 'Chaturbate', 10, 3, 5, 15)
+      const [fan] = identifyWhales(tips, [])
+      expect(fan.trend.direction).toBe('stable')
+      expect(fan.trend.confidence).toBe('Medium') // 10 tips → Medium confidence
+      expect(fan.trend.pctChange).toBe(0)
+    })
+  })
 })
