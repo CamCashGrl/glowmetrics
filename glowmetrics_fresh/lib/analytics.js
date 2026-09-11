@@ -351,6 +351,14 @@ function detectDelimiter(text) {
 // and is out of scope here; consolidating the two is a separate follow-up.
 const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
 
+// Chaturbate private show detection — matched against Action column
+// "Private Show:" indicates a paid private show, "Tip From:" indicates free tips
+const CB_PRIVATE_SHOW_PATTERN = /^Private Show:/i
+
+// MyFreeCams private session detection — matched against Type column
+// Type = "Private" indicates paid private earnings, "Tip" indicates free tips
+const MFC_PRIVATE_TYPE = 'Private'
+
 function parseWithHeaders(lines, platform, delimiter = ',') {
   const rawHeaders = parseCSVLine(lines[0], delimiter)
   const headers = rawHeaders.map(normalizeHeaderName)
@@ -363,17 +371,23 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
     const row = {}
     headers.forEach((h, idx) => { row[h] = (vals[idx] ?? '').trim() })
 
-    const action = (row.action || '').toLowerCase()
+    const action = (row.action || '')
+    const actionLower = action.toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
-    // Exact (case-insensitive) match against the four BongaCams paid-chat
-    // types — same match semantics as onboarding's detectBCPaidRow(), just
-    // applied to the already header-mapped tip_type field instead of
-    // scanning raw columns.
+
+    // Platform-specific private session detection:
+    // 1. BongaCams: Chat Type column matches one of the paid session types
     const bcPaidChatType = BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipType) || null
 
-    if (action.includes('transfer') || action.includes('cash') ||
-        action.includes('outbound tip') || action.includes('promoted room') ||
-        action.includes('referral')) continue
+    // 2. Chaturbate: Action field starts with "Private Show:" (paid), "Tip From:" (free)
+    const cbIsPrivateShow = CB_PRIVATE_SHOW_PATTERN.test(action)
+
+    // 3. MyFreeCams: Type column equals "Private" (paid), "Tip" (free)
+    const mfcIsPrivate = tipType === MFC_PRIVATE_TYPE.toLowerCase()
+
+    if (actionLower.includes('transfer') || actionLower.includes('cash') ||
+        actionLower.includes('outbound tip') || actionLower.includes('promoted room') ||
+        actionLower.includes('referral')) continue
 
     if (tipType && !tipType.includes('tip') && !tipType.includes('private') &&
         !tipType.includes('spy') && !tipType.includes('show') && !tipType.includes('chat') &&
@@ -424,6 +438,13 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
         : row.platform || platform)
       : platform
 
+    // Determine if this is a paid session based on platform-specific patterns:
+    // - BongaCams: checked via Chat Type column values
+    // - Chaturbate: checked via Action field prefix "Private Show:"
+    // - MyFreeCams: checked via Type column value "Private"
+    const isPaidSession = bcPaidChatType || cbIsPrivateShow || mfcIsPrivate
+    const sessionTypeValue = bcPaidChatType || (cbIsPrivateShow ? 'Private Show' : (mfcIsPrivate ? 'Private' : null))
+
     results.push({
       dateRaw, date_time: dateRaw, username,
       platform: rowPlatform || 'Unknown',
@@ -431,10 +452,11 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
       tip_type: row.tip_type || 'Tip',
       tip_note: row.note || row.tip_note || '',
-      // Paid-chat/spy-mode rows must be routed to paid_sessions, not tips —
+      // Paid-chat/spy-mode/private-show rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat
       // parseCSV() result without re-deriving the classification themselves.
-      ...(bcPaidChatType ? { is_paid_session: true, session_type: bcPaidChatType } : {}),
+      // Applies to: BongaCams paid chat types, Chaturbate private shows, MyFreeCams private sessions
+      ...(isPaidSession ? { is_paid_session: true, session_type: sessionTypeValue } : {}),
     })
   }
   return results
