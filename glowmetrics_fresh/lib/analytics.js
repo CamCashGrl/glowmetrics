@@ -457,7 +457,10 @@ function parseHeaderless(lines, platform) {
 export function identifyWhales(tips) {
   const fanMap = {}
   tips.forEach(t => {
-    const key = t.username.toLowerCase()
+    // Fan identity is platform + username — the same username on two
+    // platforms is two different fans, never merged (matches the intent
+    // already documented at the Whale Profile Modal call site).
+    const key = `${t.platform || 'Unknown'}:${t.username.toLowerCase()}`
     if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
@@ -466,11 +469,24 @@ export function identifyWhales(tips) {
     if (t.tip_note) fanMap[key].tipNotes.push(t.tip_note)
   })
 
+  // Real per-platform "last seen active" date — the latest tip timestamp
+  // from ANY fan on that platform. Used to tell "this fan went quiet" apart
+  // from "the creator hasn't streamed there recently," so churn risk isn't
+  // calculated against a platform with no recent opportunity at all.
+  const platformLastActivity = {}
+  tips.forEach(t => {
+    const p = t.platform || 'Unknown'
+    const ts = new Date(t.dateRaw || t.date_time).getTime()
+    if (!platformLastActivity[p] || ts > platformLastActivity[p]) platformLastActivity[p] = ts
+  })
+
   const allFans = Object.values(fanMap)
   const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
   const totalFans = sorted.length
-  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2))
-  const rankByUsername = new Map(sorted.map((s, i) => [s.username.toLowerCase(), i]))
+  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2)).
+  // Keyed by platform+username, same as fanMap — two fans can share a
+  // username across platforms and must not collide here.
+  const rankByFanKey = new Map(sorted.map((s, i) => [`${s.platform || 'Unknown'}:${s.username.toLowerCase()}`, i]))
 
   return allFans.map(f => {
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
@@ -480,7 +496,7 @@ export function identifyWhales(tips) {
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-    const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
+    const fanRankIndex = rankByFanKey.get(`${f.platform || 'Unknown'}:${f.username.toLowerCase()}`)
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
     let tier = 'Regular'
     if (percentileRank <= 0.05) tier = 'Whale'
@@ -504,7 +520,7 @@ export function identifyWhales(tips) {
       lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount, Math.floor((Date.now() - (platformLastActivity[f.platform] || Date.now())) / 86400000)),
       trend: calcFanTrend(tipsAsc),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
@@ -524,8 +540,17 @@ function calcTipProbability(d, avg) {
   return                     { level: 'Low',           percentage: 15 }
 }
 
-function calcChurnRisk(d, avg, count) {
+// creatorGapDays: days since the creator's own last recorded activity on
+// this platform (real data — the max tip date across ALL fans on the
+// platform, not an invented number). If the creator hasn't had any activity
+// more recently than this fan's own gap, the fan never had an opportunity
+// to tip — that's creator inactivity, not fan churn, so risk evaluation
+// pauses rather than escalating.
+function calcChurnRisk(d, avg, count, creatorGapDays = 0) {
   if (count < 3) return { level: 'Unknown', risk: 'Insufficient data' }
+  if (creatorGapDays > 0 && d <= creatorGapDays) {
+    return { level: 'Paused', risk: 'Risk signals paused — no recent streaming activity to evaluate against' }
+  }
   const r = d / avg
   if (r < 1) return { level: 'Low',      risk: 'Active' }
   if (r < 2) return { level: 'Medium',   risk: 'Watch closely' }

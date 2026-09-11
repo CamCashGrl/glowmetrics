@@ -2271,7 +2271,7 @@ const stopImportMessageRotation = () => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
-      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase() && t.platform === w.platform)
       const tippedOnDay = fanTips.some(t => {
         const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
         return dayShort === chartDrillDay
@@ -2361,7 +2361,7 @@ const stopImportMessageRotation = () => {
       if (w.tipCount < 5) return
       const fanTips = (w.tips && w.tips.length > 0)
         ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase() && t.platform === w.platform)
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
@@ -2708,7 +2708,7 @@ const stopImportMessageRotation = () => {
     topWhales.forEach(w => {
       const fanTips = (w.tips && w.tips.length > 0)
         ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase() && t.platform === w.platform)
       if (fanTips.length < 3) return
 
       // Use local hours — tips' date_time is UTC but getHours() converts to browser local
@@ -3701,7 +3701,7 @@ const stopImportMessageRotation = () => {
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
-                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase() && t.platform === w.platform)
                   const hourCounts = {}
                   fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
