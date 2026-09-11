@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CamCash</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 410px;
+      max-height: 640px;
+      overflow: hidden;
+      background: #0a0c14;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid #1a1f30;
+    }
+    .header-left { display: flex; flex-direction: column; gap: 1px; }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 15px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a855f7, #ec4899);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo-badge {
+      width: 20px; height: 20px; border-radius: 6px;
+      background: linear-gradient(135deg, #22d3ee, #a855f7, #ec4899);
+      -webkit-text-fill-color: initial;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #fff;
+    }
+    .subtitle { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.6px; }
+
+    .status-pill {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 4px 9px;
+      border-radius: 20px;
+      letter-spacing: 0.4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .status-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .status-offline  { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .status-offline .dot  { background: #64748b; }
+    .status-live     { background: rgba(16,185,129,0.15); color: #10b981; }
+    .status-live .dot     { background: #10b981; box-shadow: 0 0 6px #10b981; animation: pulse 1.4s ease-in-out infinite; }
+    .status-paused   { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .status-paused .dot   { background: #f59e0b; }
+    .status-attention { background: rgba(248,113,113,0.15); color: #f87171; }
+    .status-attention .dot { background: #f87171; animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    #auth-section { padding: 16px 14px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 12px; }
+    .field { margin-bottom: 9px; }
+    .field label {
+      display: block; font-size: 10px; color: #64748b; margin-bottom: 3px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .field input {
+      width: 100%; padding: 8px 10px; background: #161b2e; border: 1px solid #1e2232;
+      border-radius: 7px; color: #f1f5f9; font-size: 13px; outline: none;
+    }
+    .field input:focus { border-color: #7c5cff; }
+    #auth-error { display: none; font-size: 11px; color: #f87171; margin: 6px 0; }
+
+    .btn { width: 100%; padding: 9px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 6px; }
+    .btn-primary { background: linear-gradient(135deg, #7c5cff, #ec4899); color: white; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+    .btn-ghost { background: #161b2e; color: #64748b; border: 1px solid #1e2232; margin-top: 4px; }
+    .btn-ghost:hover { color: #94a3b8; }
+
+    #dashboard-section { display: none; }
+    #dashboard-body { max-height: 570px; overflow-y: auto; }
+
+    #user-info { padding: 6px 14px; font-size: 10px; color: #4ade80; }
+
+    /* ── Session controls ── */
+    #session-controls { margin: 6px 14px 10px; }
+    #session-status-row {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    #session-label { font-size: 12px; font-weight: 800; letter-spacing: 0.3px; }
+    #session-timer { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: #f1f5f9; }
+    #session-resolution-prompt {
+      font-size: 12px; color: #cbd5e1; line-height: 1.45; margin-bottom: 8px;
+      padding: 8px 10px; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); border-radius: 8px;
+    }
+    .session-btn-row { display: flex; gap: 7px; }
+    .session-btn {
+      flex: 1; padding: 9px 0; border-radius: 8px; font-size: 13px; font-weight: 800; cursor: pointer; border: 1px solid transparent;
+    }
+    .session-btn:disabled { opacity: 0.5; cursor: wait; }
+    .session-btn-start  { background: linear-gradient(135deg, #10b981, #22d3ee); color: #04140f; }
+    .session-btn-pause  { background: rgba(245,158,11,0.16); border-color: rgba(245,158,11,0.45); color: #f59e0b; }
+    .session-btn-resume { background: rgba(16,185,129,0.16); border-color: rgba(16,185,129,0.45); color: #10b981; }
+    .session-btn-stop   { background: rgba(248,113,113,0.16); border-color: rgba(248,113,113,0.45); color: #f87171; }
+
+    #coach-actions { display: none; gap: 7px; margin-top: 8px; }
+    .coach-action-btn { flex: 1; padding: 7px 0; border-radius: 7px; font-size: 12px; font-weight: 800; cursor: pointer; border: 1px solid transparent; }
+    .coach-action-performed { background: rgba(16,185,129,0.16); border-color: rgba(16,185,129,0.45); color: #10b981; }
+    .coach-action-skip      { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15); color: #94a3b8; }
+
+    /* ── Stats row ── */
+    #stats-row { display: flex; gap: 6px; margin: 0 14px 10px; }
+    .stat-card {
+      flex: 1; background: #12162400; background: rgba(255,255,255,0.03); border: 1px solid #1a1f30;
+      border-radius: 8px; padding: 7px 6px; text-align: center; min-width: 0;
+    }
+    .stat-label { font-size: 8px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+    .stat-value { font-size: 13px; font-weight: 800; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stat-value.g { color: #10b981; }
+    .stat-value.c { color: #22d3ee; }
+    .stat-value.pink { color: #ec4899; }
+
+    /* ── Live coach ── */
+    #coach-card {
+      margin: 0 14px 10px; padding: 9px 11px; border-radius: 9px;
+      background: rgba(236,72,153,0.07); border: 1px solid rgba(236,72,153,0.22);
+      max-height: 100px; overflow: hidden;
+    }
+    #coach-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    #coach-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #ec4899; }
+    #coach-meta { font-size: 9px; color: #64748b; }
+    #coach-msg {
+      font-size: 12px; color: #e2e8f0; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    /* ── Recent tips ── */
+    #tips-section { margin: 0 14px 10px; }
+    .tips-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .tips-label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #475569; }
+    .tips-viewall { font-size: 10px; color: #7c5cff; text-decoration: none; }
+    #tips-list { max-height: 108px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .tip-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 9px; background: rgba(255,255,255,0.03); border: 1px solid #1a1f30; border-radius: 7px; font-size: 12px;
+    }
+    .tip-username { color: #a78bfa; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
+    .tip-amount { color: #10b981; font-weight: 700; }
+    .tip-time { color: #475569; font-size: 10px; }
+    .empty-state { color: #475569; font-size: 11px; padding: 8px 0; text-align: center; }
+
+    #platform-limit-alert {
+      display: none; margin: 0 14px 8px; padding: 7px 10px; border-radius: 7px; font-size: 11px; line-height: 1.4;
+      background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.3); color: #c4b5fd;
+    }
+
+    #plan-notice {
+      display: none; margin: 0 14px 8px; padding: 7px 10px; border-radius: 7px;
+      background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2);
+    }
+    #plan-notice .txt { font-size: 10px; color: #fbbf24; line-height: 1.4; }
+    #plan-notice a { color: #fbbf24; font-weight: 700; }
+
+    /* ── Bottom action bar ── */
+    .footer {
+      display: flex; align-items: center; gap: 6px; padding: 9px 14px;
+      border-top: 1px solid #1a1f30; background: #0a0c14;
+    }
+    .footer-btn {
+      flex: 1; text-align: center; font-size: 11px; font-weight: 700; padding: 8px 0; border-radius: 7px;
+      text-decoration: none; cursor: pointer; border: 1px solid #1e2232; background: #161b2e; color: #94a3b8;
+    }
+    .footer-btn.primary { background: linear-gradient(135deg, #7c5cff, #ec4899); color: #fff; border: none; }
+    .footer-btn:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo"><span class="logo-badge">$</span>CamCash</div>
+      <div class="subtitle">Live Stream Companion</div>
+    </div>
+    <div class="status-pill status-offline" id="status-pill">
+      <span class="dot"></span><span id="status-pill-text">OFFLINE</span>
+    </div>
+  </div>
+
+  <!-- Auth -->
+  <div id="auth-section">
+    <div class="section-title">Sign in to CamCash</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <div id="auth-error"></div>
+    <button class="btn btn-primary" id="login-btn">Sign In</button>
+    <button class="btn btn-ghost" id="guest-btn">Continue as Guest (no sync)</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard-section">
+    <div id="user-info"></div>
+
+    <div id="dashboard-body">
+      <!-- Session controls -->
+      <div id="session-controls">
+        <div id="session-status-row">
+          <span id="session-label"></span>
+          <span id="session-timer"></span>
+        </div>
+        <div id="session-resolution-prompt" style="display:none;"></div>
+        <div class="session-btn-row" id="session-btn-row"></div>
+      </div>
+
+      <!-- Stats -->
+      <div id="stats-row">
+        <div class="stat-card"><div class="stat-label">Earned</div><div class="stat-value g" id="stat-earned">$0.00</div></div>
+        <div class="stat-card"><div class="stat-label">Tokens</div><div class="stat-value c" id="stat-tokens">0</div></div>
+        <div class="stat-card"><div class="stat-label">Tips</div><div class="stat-value" id="stat-tips">0</div></div>
+        <div class="stat-card"><div class="stat-label">Top Tipper</div><div class="stat-value pink" id="stat-top">—</div></div>
+      </div>
+
+      <!-- Live Coach -->
+      <div id="coach-card">
+        <div id="coach-header">
+          <span id="coach-title">Live Coach</span>
+          <span id="coach-meta"></span>
+        </div>
+        <div id="coach-msg">Coaching tips will appear during your stream</div>
+        <div id="coach-actions">
+          <button class="coach-action-btn coach-action-performed" id="coach-performed-btn">✓ Performed</button>
+          <button class="coach-action-btn coach-action-skip" id="coach-skip-btn">Skip</button>
+        </div>
+      </div>
+
+      <!-- Platform-limit alert -->
+      <div id="platform-limit-alert"></div>
+
+      <!-- Free plan notice -->
+      <div id="plan-notice">
+        <div class="txt">🔓 Free plan — live coaching &amp; tip feed always on. Tips aren't saved permanently.
+          <a href="https://www.camcashgrl.com/pricing" target="_blank">Upgrade →</a>
+        </div>
+      </div>
+
+      <!-- Recent Tips -->
+      <div id="tips-section">
+        <div class="tips-header">
+          <span class="tips-label">Recent Tips</span>
+          <a class="tips-viewall" href="https://www.camcashgrl.com/dashboard?tab=live" target="_blank">View all in Dashboard</a>
+        </div>
+        <div id="tips-list">
+          <div class="empty-state">No tips yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a class="footer-btn" href="https://www.camcashgrl.com/dashboard?tab=live" target="_blank">Dashboard</a>
+      <button class="footer-btn primary" id="test-tip-btn">Test Tip</button>
+      <button class="footer-btn" id="logout-btn">Sign Out</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
