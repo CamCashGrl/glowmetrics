@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -1510,6 +1511,19 @@ export default function Dashboard() {
     isPro ? { excludedCount: 0, oldestExcludedDate: null, byPlatform: {} } : summarizeWindowExclusion(tips, analysisTips),
     [tips, analysisTips, isPro]
   )
+
+  // Build honest soft-paywall teasers based on real signals.
+  const proTeasers = useMemo(() =>
+    buildProTeasers({ tips, analysisTips, whales: analytics?.whales, windowSummary, isPro }),
+    [tips, analysisTips, analytics?.whales, windowSummary, isPro]
+  )
+
+  // Map internal teaser tab names to actual activeTab values
+  const teaserTabMap = { 'map': 'moneymap', 'trends': 'analytics' }
+  const getTeasersForTab = (tabName) => proTeasers.filter(t => {
+    const mappedTab = teaserTabMap[t.tab] || t.tab
+    return mappedTab === tabName
+  })
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
@@ -4399,6 +4413,19 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 13, color: C.muted }}>Import your CSV files to see how your platforms compare</div>
                 </div>
               )}
+
+              {getTeasersForTab('platforms').map(teaser => (
+                <div key={teaser.id} style={{ marginTop: 24 }}>
+                  <LockedInsightCard
+                    title={teaser.title}
+                    description={teaser.description}
+                    requirement={teaser.requirement}
+                    lockType="requires_pro"
+                    ctaLabel="Upgrade to Pro"
+                    ctaAction={() => openUpgradeModal('pro_teaser_' + teaser.id)}
+                  />
+                </div>
+              ))}
             </div>
           )
         })()}
@@ -4800,6 +4827,19 @@ const stopImportMessageRotation = () => {
                 </button>
               </div>
             )}
+
+            {getTeasersForTab('whales').map(teaser => (
+              <div key={teaser.id} style={{ marginTop: 24 }}>
+                <LockedInsightCard
+                  title={teaser.title}
+                  description={teaser.description}
+                  requirement={teaser.requirement}
+                  lockType="requires_pro"
+                  ctaLabel="Upgrade to Pro"
+                  ctaAction={() => openUpgradeModal('pro_teaser_' + teaser.id)}
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -6778,9 +6818,24 @@ const stopImportMessageRotation = () => {
             : <StreamPlanner tips={analysisTips} isPro={isPro} whales={analytics?.whales} windowSummary={windowSummary} />
         )}
         {activeTab === 'moneymap' && (
-          _moneyMapLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={analysisTips} isPro={isPro} whales={analytics?.whales} windowSummary={windowSummary} analytics={analytics} />
+          <div>
+            {_moneyMapLock.locked
+              ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
+              : <MoneyMap tips={analysisTips} isPro={isPro} whales={analytics?.whales} windowSummary={windowSummary} analytics={analytics} />
+            }
+            {getTeasersForTab('moneymap').map(teaser => (
+              <div key={teaser.id} style={{ marginTop: 24, padding: '0 0' }}>
+                <LockedInsightCard
+                  title={teaser.title}
+                  description={teaser.description}
+                  requirement={teaser.requirement}
+                  lockType="requires_pro"
+                  ctaLabel="Upgrade to Pro"
+                  ctaAction={() => openUpgradeModal('pro_teaser_' + teaser.id)}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
