@@ -672,6 +672,7 @@ export function identifyWhales(tips, meaningfulSessions = []) {
       lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
+      trend: calcFanTrend(tipsAsc),
       // behavioralState: the new, correct, eligibility-gated status (spec Step 1).
       behavioralState: behavioral.state, behavioralStateReason: behavioral.reason,
       spendDeclineRatio, platformRiskContext: platformCtx,
@@ -709,6 +710,46 @@ function calcExpectedNextTip(d, avg) {
   if (n <= 3)  return `In ${n} days`
   if (n <= 7)  return `In ~${n} days`
   return `In ~${Math.round(n / 7)} weeks`
+}
+
+// ── FAN TREND SIGNAL ─────────────────────────────────────────────────────
+// Trending is a separate signal from tier/behavioralState — describes whether a
+// fan's own spending is moving relative to their own established pattern,
+// never relative to other fans or a single outlier tip.
+// tipsAsc: this fan's tips, sorted oldest -> newest (usd required).
+// NOTE: TREND_CHANGE_THRESHOLD of 0.25 is a starting point, not yet
+// validated against real fan spending distributions — flag per formula-requirements.
+const TREND_CHANGE_THRESHOLD = 0.25
+
+function calcFanTrend(tipsAsc) {
+  const count = tipsAsc.length
+  // Fewer than 4 tips isn't enough to compare a "before" and "after" window
+  // without a single tip dominating either side.
+  if (count < 4) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const mid = Math.floor(count / 2)
+  const priorHalf = tipsAsc.slice(0, mid)
+  const recentHalf = tipsAsc.slice(mid)
+  const avg = arr => arr.reduce((s, t) => s + (t.usd || 0), 0) / arr.length
+  const priorAvg = avg(priorHalf)
+  const recentAvg = avg(recentHalf)
+
+  if (priorAvg <= 0) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const pctChange = (recentAvg - priorAvg) / priorAvg
+  const confidence = count >= 8 ? 'Medium' : 'Low'
+
+  if (pctChange >= TREND_CHANGE_THRESHOLD) {
+    return { direction: 'up', label: 'Trending Up', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  if (pctChange <= -TREND_CHANGE_THRESHOLD) {
+    return { direction: 'down', label: 'Trending Down', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  return { direction: 'stable', label: 'Stable', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
 }
 
 export function generateWhaleAlerts(whales) {
