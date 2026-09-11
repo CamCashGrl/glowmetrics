@@ -454,10 +454,152 @@ function parseHeaderless(lines, platform) {
 // detectSessions/finalizeSession live in ./analytics/sessions.js — shared with
 // app/live/page.js. Do not redefine this grouping logic here.
 
-export function identifyWhales(tips) {
+// ── FAN IDENTITY ─────────────────────────────────────────────────────────
+// "Never merge fans across platforms by username alone" (formula-requirments
+// skill). A username is only unique within one platform.
+function fanKey(platform, username) {
+  return `${platform || 'Unknown'}:${(username || '').toLowerCase()}`
+}
+
+// Minimum tip count before we trust a fan's own history as a baseline for
+// tiering or risk — reused as the single source of truth for both the tier
+// split (New/Developing) and the behavioral-state split below, so the two
+// dimensions never disagree about what counts as "not enough history yet."
+// Carried over from the original calcChurnRisk's `count < 3` floor.
+const FAN_MIN_TIPS_FOR_BASELINE = 3
+
+// ── CREATOR/PLATFORM ACTIVITY CONTEXT ────────────────────────────────────
+// A fan's absence can only be evidence of that FAN's decline if the creator
+// actually had the opportunity to be tipped on that same platform recently,
+// and if the fan data itself isn't stale. This computes that context once,
+// per platform, from the creator's own meaningfulSessions (the existing
+// "creator had a meaningful opportunity" concept — sessionQuality ===
+// 'meaningful') and the tips' own event timestamps (never import time).
+//
+// RISK_SIGNALS_PAUSE_DAYS reuses the same 60-day floor already used for the
+// pre-existing fan-tier Dormant rule below (`daysSinceLastTip > max(60, ...)`)
+// — one constant, not a new invented one.
+const RISK_SIGNALS_PAUSE_DAYS = 60
+// DATA_STALE_GAP_DAYS is NEW and NOT derived from existing logic — flagged in
+// the report as unvalidated and needing product sign-off. It only decides
+// when to show "Data Needs Updating" instead of suppressing risk silently.
+const DATA_STALE_GAP_DAYS = 14
+
+export function getPlatformRiskContext(tips, meaningfulSessions = []) {
+  const now = Date.now()
+  const platforms = new Set()
+  tips.forEach(t => platforms.add(t.platform || 'Unknown'))
+  meaningfulSessions.forEach(s => platforms.add(s.platform || 'Unknown'))
+
+  const ctx = {}
+  platforms.forEach(p => {
+    const platTips = tips.filter(t => (t.platform || 'Unknown') === p)
+    const platSessions = meaningfulSessions.filter(s => (s.platform || 'Unknown') === p)
+    const lastTipMs = platTips.length
+      ? Math.max(...platTips.map(t => new Date(t.dateRaw || t.date_time).getTime()))
+      : null
+    const lastSessionMs = platSessions.length
+      ? Math.max(...platSessions.map(s => new Date(s.startTime).getTime()))
+      : null
+    const lastTipDaysAgo = lastTipMs !== null && !isNaN(lastTipMs) ? Math.floor((now - lastTipMs) / 86400000) : null
+    const lastMeaningfulSessionDaysAgo = lastSessionMs !== null && !isNaN(lastSessionMs)
+      ? Math.floor((now - lastSessionMs) / 86400000) : null
+
+    // No meaningful same-platform session at all, or none recently enough —
+    // the creator hasn't had the opportunity to be tipped, so absence of fan
+    // tips cannot be attributed to fan decline.
+    const riskSignalsPaused = lastMeaningfulSessionDaysAgo === null || lastMeaningfulSessionDaysAgo > RISK_SIGNALS_PAUSE_DAYS
+
+    // Creator has streamed meaningfully on this platform more recently than
+    // the newest tip on record for it, by more than the gap threshold — the
+    // fan/tip import is behind the creator's real activity, so "no tips"
+    // reflects a data gap, not fan behavior.
+    const dataNeedsUpdating = !riskSignalsPaused && lastTipDaysAgo !== null &&
+      (lastTipDaysAgo - lastMeaningfulSessionDaysAgo) > DATA_STALE_GAP_DAYS
+
+    ctx[p] = {
+      platform: p,
+      riskSignalsPaused,
+      dataNeedsUpdating,
+      lastMeaningfulSessionDaysAgo,
+      lastTipDaysAgo,
+      dataAgeDays: lastTipDaysAgo,
+    }
+  })
+  return ctx
+}
+
+// ── FAN BEHAVIORAL STATE ─────────────────────────────────────────────────
+// Single source of truth for churn/risk labeling — replaces calcChurnRisk.
+// Two independent dimensions, per the spec: `tier` (relationship/type,
+// computed in identifyWhales below) and `behavioralState` (this function).
+// A fan can only be labeled At Risk when ALL of:
+//   (a) an established per-fan baseline exists (tipCount >= FAN_MIN_TIPS_FOR_BASELINE)
+//   (b) the creator had meaningful same-platform opportunity recently (platformCtx)
+//   (c) the comparison is same-platform (platformCtx is keyed by the fan's own platform)
+//   (d) the fan's own data isn't stale relative to the creator's recent activity (platformCtx)
+//   (e) there is a meaningful decline from the fan's own baseline — frequency
+//       (daysSinceLastTip vs avgDaysBetweenTips) OR spend amount (this fan's
+//       own recent tip sizes vs their own earlier tip sizes)
+function calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, tipCount, spendDeclineRatio, platformCtx }) {
+  // Fewer than 3 tips: never enough baseline to claim decline of any kind.
+  if (tipCount < FAN_MIN_TIPS_FOR_BASELINE) {
+    if (tipCount <= 0) return { state: 'Insufficient Data', reason: 'No tip history yet.' }
+    // Still within a plausible early window since their (only) tip(s) — treat
+    // as a developing relationship, not a risk signal either way.
+    if (daysSinceLastTip <= 45) {
+      return { state: 'New/Developing', reason: `Only ${tipCount} tip${tipCount === 1 ? '' : 's'} so far — too early to assess a pattern.` }
+    }
+    return { state: 'Insufficient Data', reason: `Only ${tipCount} tip${tipCount === 1 ? '' : 's'} on record and no recent activity — not enough history to assess behavior.` }
+  }
+
+  const r = avgDaysBetweenTips > 0 ? daysSinceLastTip / avgDaysBetweenTips : (daysSinceLastTip > 0 ? Infinity : 0)
+  const hasSpendDecline = spendDeclineRatio !== null && spendDeclineRatio !== undefined && spendDeclineRatio <= 0.5
+  const stillOnSchedule = r < 1 && !hasSpendDecline
+  const evidenceOfDecline = r >= 2 || hasSpendDecline
+
+  // Creator context must support attributing an absence to the FAN — never
+  // fabricated from "time passed" alone.
+  const creatorEligible = !!platformCtx && !platformCtx.riskSignalsPaused && !platformCtx.dataNeedsUpdating
+
+  if (!creatorEligible) {
+    if (stillOnSchedule) return { state: 'Active', reason: 'Tipping on their normal schedule.' }
+    const reason = !platformCtx || platformCtx.riskSignalsPaused
+      ? "Creator hasn't had meaningful activity on this platform recently, so this fan's absence can't be attributed to fan decline."
+      : "This platform's fan/tip data may be behind the creator's recent activity, so current behavior may not be complete."
+    return { state: 'Dormant', reason }
+  }
+
+  if (stillOnSchedule) return { state: 'Active', reason: 'Tipping on their normal schedule.' }
+  if (evidenceOfDecline) {
+    const reason = hasSpendDecline && r < 2
+      ? "Tip amounts have dropped well below this fan's own baseline while the creator remains active on this platform."
+      : `Hasn't tipped in ${Math.round(daysSinceLastTip)} days vs. their usual ~${Math.round(avgDaysBetweenTips)}-day pattern.`
+    return { state: 'At Risk', reason }
+  }
+  return { state: 'Watch', reason: "Some deviation from this fan's normal pattern, but not enough evidence yet to call it at risk." }
+}
+
+// Backward-compatible shape for existing UI (app/dashboard/page.js) that
+// reads `fan.churnRisk.level` / `.risk` — derived from the one behavioral
+// state above rather than computed separately, so there is exactly one
+// churn formula, just exposed under two field names during migration.
+function legacyChurnRiskShape(state) {
+  switch (state) {
+    case 'Active':          return { level: 'Low',      risk: 'Active' }
+    case 'Watch':           return { level: 'Medium',   risk: 'Watch closely' }
+    case 'At Risk':         return { level: 'High',     risk: 'At risk' }
+    case 'Dormant':         return { level: 'Dormant',  risk: 'Dormant' }
+    case 'New/Developing':
+    case 'Insufficient Data':
+    default:                return { level: 'Unknown',  risk: 'Insufficient data' }
+  }
+}
+
+export function identifyWhales(tips, meaningfulSessions = []) {
   const fanMap = {}
   tips.forEach(t => {
-    const key = t.username.toLowerCase()
+    const key = fanKey(t.platform, t.username)
     if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
@@ -469,8 +611,10 @@ export function identifyWhales(tips) {
   const allFans = Object.values(fanMap)
   const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
   const totalFans = sorted.length
-  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2))
-  const rankByUsername = new Map(sorted.map((s, i) => [s.username.toLowerCase(), i]))
+  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2)).
+  // Keyed by platform+username now, matching the fan-identity fix above.
+  const rankByFanKey = new Map(sorted.map((s, i) => [fanKey(s.platform, s.username), i]))
+  const platformRiskContext = getPlatformRiskContext(tips, meaningfulSessions)
 
   return allFans.map(f => {
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
@@ -480,21 +624,46 @@ export function identifyWhales(tips) {
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-    const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
+    const fanRankIndex = rankByFanKey.get(fanKey(f.platform, f.username))
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
+
+    // ── TIER (relationship/type) — independent of behavioral state ────────
+    // Whale/Shark/Dormant thresholds and priority order preserved exactly as
+    // before. New/Developing and Occasional fill the previously-uniform
+    // "Regular" bucket for low-history/low-frequency fans.
     let tier = 'Regular'
     if (percentileRank <= 0.05) tier = 'Whale'
     else if (percentileRank <= 0.20) tier = 'Shark'
+    else if (f.tipCount < FAN_MIN_TIPS_FOR_BASELINE) tier = 'New/Developing'
     else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+    else if (f.tipCount < 5) tier = 'Occasional' // NEW threshold (unvalidated) — see report
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
     f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const spendPercentile = Math.round((1 - percentileRank) * 100)
-    const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
+    const tipsAsc = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
+    const tipDates = tipsAsc.map(t => new Date(t.dateRaw || t.date_time))
     const daysBetweenTipsArr = []
     for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
+
+    // Spend-decline baseline: this fan's own recent tip amounts vs their own
+    // earlier tip amounts (split their history in half chronologically).
+    // Needs at least 4 tips to form two non-trivial halves; otherwise null
+    // (not computable — never fabricated).
+    let spendDeclineRatio = null
+    if (f.tipCount >= 4) {
+      const mid = Math.floor(tipsAsc.length / 2)
+      const earlier = tipsAsc.slice(0, mid)
+      const recent = tipsAsc.slice(mid)
+      const earlierAvg = earlier.reduce((s, t) => s + (t.usd || 0), 0) / earlier.length
+      const recentAvg = recent.reduce((s, t) => s + (t.usd || 0), 0) / recent.length
+      if (earlierAvg > 0) spendDeclineRatio = parseFloat((recentAvg / earlierAvg).toFixed(3))
+    }
+
+    const platformCtx = platformRiskContext[f.platform || 'Unknown'] || null
+    const behavioral = calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, tipCount: f.tipCount, spendDeclineRatio, platformCtx })
 
     return {
       username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)), totalTokens: f.totalTokens,
@@ -503,7 +672,13 @@ export function identifyWhales(tips) {
       lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      trend: calcFanTrend(tipsAsc),
+      // behavioralState: the new, correct, eligibility-gated status (spec Step 1).
+      behavioralState: behavioral.state, behavioralStateReason: behavioral.reason,
+      spendDeclineRatio, platformRiskContext: platformCtx,
+      // churnRisk: kept only for backward compatibility with existing UI —
+      // derived 1:1 from behavioralState above, not a second formula.
+      churnRisk: legacyChurnRiskShape(behavioral.state),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
@@ -522,15 +697,6 @@ function calcTipProbability(d, avg) {
   return                     { level: 'Low',           percentage: 15 }
 }
 
-function calcChurnRisk(d, avg, count) {
-  if (count < 3) return { level: 'Unknown', risk: 'Insufficient data' }
-  const r = d / avg
-  if (r < 1) return { level: 'Low',      risk: 'Active' }
-  if (r < 2) return { level: 'Medium',   risk: 'Watch closely' }
-  if (r < 3) return { level: 'High',     risk: 'At risk' }
-  return           { level: 'Critical',  risk: 'Likely churned' }
-}
-
 function calcLifetimeValue(spent, days, count) {
   if (days < 7 || count < 2) return { prediction: spent, confidence: 'Low' }
   const p = (spent / days) * 365
@@ -544,6 +710,46 @@ function calcExpectedNextTip(d, avg) {
   if (n <= 3)  return `In ${n} days`
   if (n <= 7)  return `In ~${n} days`
   return `In ~${Math.round(n / 7)} weeks`
+}
+
+// ── FAN TREND SIGNAL ─────────────────────────────────────────────────────
+// Trending is a separate signal from tier/behavioralState — describes whether a
+// fan's own spending is moving relative to their own established pattern,
+// never relative to other fans or a single outlier tip.
+// tipsAsc: this fan's tips, sorted oldest -> newest (usd required).
+// NOTE: TREND_CHANGE_THRESHOLD of 0.25 is a starting point, not yet
+// validated against real fan spending distributions — flag per formula-requirements.
+const TREND_CHANGE_THRESHOLD = 0.25
+
+function calcFanTrend(tipsAsc) {
+  const count = tipsAsc.length
+  // Fewer than 4 tips isn't enough to compare a "before" and "after" window
+  // without a single tip dominating either side.
+  if (count < 4) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const mid = Math.floor(count / 2)
+  const priorHalf = tipsAsc.slice(0, mid)
+  const recentHalf = tipsAsc.slice(mid)
+  const avg = arr => arr.reduce((s, t) => s + (t.usd || 0), 0) / arr.length
+  const priorAvg = avg(priorHalf)
+  const recentAvg = avg(recentHalf)
+
+  if (priorAvg <= 0) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const pctChange = (recentAvg - priorAvg) / priorAvg
+  const confidence = count >= 8 ? 'Medium' : 'Low'
+
+  if (pctChange >= TREND_CHANGE_THRESHOLD) {
+    return { direction: 'up', label: 'Trending Up', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  if (pctChange <= -TREND_CHANGE_THRESHOLD) {
+    return { direction: 'down', label: 'Trending Down', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  return { direction: 'stable', label: 'Stable', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
 }
 
 export function generateWhaleAlerts(whales) {
@@ -661,7 +867,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
-  const whales = precomputedWhales || identifyWhales(tips)
+  const whales = precomputedWhales || identifyWhales(tips, sessions)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
   const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
@@ -761,7 +967,8 @@ export function aggregateRows(tips, tz = null) {
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
       platformVelocity: {}, missedRevenueByPlatform: {},
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
+      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+      platformRiskContext: {}
     }
   }
 
@@ -819,7 +1026,8 @@ export function aggregateRows(tips, tz = null) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales      = identifyWhales(tips)
+  const whales      = identifyWhales(tips, meaningfulSessions)
+  const platformRiskContext = getPlatformRiskContext(tips, meaningfulSessions)
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
   const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
@@ -1111,6 +1319,7 @@ export function aggregateRows(tips, tz = null) {
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+    platformRiskContext,
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,

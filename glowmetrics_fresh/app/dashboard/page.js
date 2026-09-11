@@ -4404,6 +4404,75 @@ const stopImportMessageRotation = () => {
               )}
             </div>
 
+            {/* RISK CONTEXT BANNER(S) — surfaces Risk Signals Paused / Data
+                Needs Updating per platform instead of silently mislabeling
+                fans. Scoped to whichever platform(s) are currently in view. */}
+            {(() => {
+              const ctx = analytics?.platformRiskContext || {}
+              const platformsInView = platformFilter === "ALL" ? allPlatforms : [platformFilter]
+              const flagged = platformsInView
+                .map(p => ctx[p])
+                .filter(c => c && (c.riskSignalsPaused || c.dataNeedsUpdating))
+              if (!flagged.length) return null
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {flagged.map(c => (
+                    <div key={c.platform} style={{ padding: '10px 14px', borderRadius: 10, background: c.riskSignalsPaused ? 'rgba(148,163,184,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${c.riskSignalsPaused ? 'rgba(148,163,184,0.25)' : 'rgba(245,158,11,0.3)'}`, fontSize: 12, color: C.text }}>
+                      <strong style={{ color: c.riskSignalsPaused ? C.muted : C.gold }}>{c.riskSignalsPaused ? `Risk Signals Paused — ${c.platform}` : `Data Needs Updating — ${c.platform}`}</strong>
+                      <div style={{ marginTop: 2, color: C.muted }}>
+                        {c.riskSignalsPaused
+                          ? "You haven't had a meaningful stream here recently, so CamCash isn't labeling inactive fans as at risk."
+                          : `Your ${c.platform} fan data is ${c.dataAgeDays ?? '?'} days old, so current fan behavior may not be complete.`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+
+            {/* CONVERSION CARD — free plan only. Only ever built from a REAL
+                fan who is both a top tipper (Whale/Shark tier) and has
+                genuinely passed the evidence-gated At Risk bar in
+                lib/analytics.js (same behavioralState used everywhere else
+                — never a separate/fabricated risk claim). If no such fan
+                exists, nothing renders — we do not manufacture urgency. */}
+            {!isPro && (() => {
+              const atRiskTopFan = [...whales]
+                .filter(w => (w.tier === 'Whale' || w.tier === 'Shark') && w.behavioralState === 'At Risk')
+                .sort((a, b) => b.totalUSD - a.totalUSD)[0]
+              if (!atRiskTopFan) return null
+              return (
+                <a href="/pricing" style={{ textDecoration: 'none', display: 'block' }}>
+                  <div style={{
+                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
+                    border: '1.5px solid rgba(248,113,113,0.6)',
+                    background: 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.05))',
+                    boxShadow: '0 0 24px rgba(248,113,113,0.15)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 18 }}>🚨</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: C.red, textTransform: 'uppercase', letterSpacing: 0.6 }}>Top Fan At Risk</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', filter: 'blur(7px)' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div aria-hidden style={{ filter: 'blur(6px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 14, marginBottom: 3 }}>••••••••••</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{atRiskTopFan.platform} · last tipped {atRiskTopFan.daysSinceLastTip}d ago</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white }}>${atRiskTopFan.totalUSD.toFixed(0)}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>lifetime spend</div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(248,113,113,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>⚠️ One of your top tippers has broken their pattern — unlock Fan Intelligence to see who and win them back</span>
+                      <span style={{ fontSize: 12, color: C.red, fontWeight: 800, whiteSpace: 'nowrap' }}>Upgrade to Pro →</span>
+                    </div>
+                  </div>
+                </a>
+              )
+            })()}
+
             {/* ALL TIPPERS — CRM Card Grid */}
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
@@ -4418,18 +4487,16 @@ const stopImportMessageRotation = () => {
                   const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
                   const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
                   const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
-                  // instead of a second, inconsistent day-threshold calc — that duplicate
-                  // was why nearly every card showed "High" regardless of actual pattern.
-                  const cr = w.churnRisk?.level
-                  const riskLevel = cr === "Low" ? { label: "Low", color: C.green, pct: 20 }
-                    : cr === "Medium" ? { label: "Medium", color: C.gold, pct: 55 }
-                    : cr === "High" ? { label: "High", color: C.red, pct: 80 }
-                    : cr === "Critical" ? { label: "Critical", color: C.red, pct: 95 }
-                    : null
-                  const riskReason = riskLevel && (riskLevel.label === "High" || riskLevel.label === "Critical")
-                    ? `Inactive for ${days} days`
-                    : riskLevel?.label === "Medium" ? "Spend has slowed" : null
+                  // Reuse the shared behavioral-state formula from analytics.js
+                  // (w.behavioralState / w.behavioralStateReason) — evidence-gated
+                  // per Fan Intelligence rules, never a raw days-since guess.
+                  const bs = w.behavioralState
+                  const riskLevel = bs === "Active" ? { label: "Active", color: C.green, pct: 15 }
+                    : bs === "Watch" ? { label: "Watch", color: C.gold, pct: 55 }
+                    : bs === "At Risk" ? { label: "At Risk", color: C.red, pct: 85 }
+                    : bs === "Dormant" ? { label: "Dormant", color: C.muted, pct: 40 }
+                    : null // New/Developing, Insufficient Data → no risk meter at all
+                  const riskReason = w.behavioralStateReason || null
                   return (
                     <div key={i}
                       className="hoverable"
@@ -4529,7 +4596,7 @@ const stopImportMessageRotation = () => {
                     if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })
                     if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper", color: C.cyan })
                     if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
-                    if (w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical") tags.push({ label: "🚨 At churn risk", color: C.red })
+                    if (w.behavioralState === "At Risk") tags.push({ label: "🚨 At churn risk", color: C.red })
                     if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
                     if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
                     if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
@@ -6662,12 +6729,12 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={true} />
+            : <StreamPlanner tips={tips} isPro={isPro} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={true} />
+            : <MoneyMap tips={tips} isPro={isPro} />
         )}
       </div>
 
