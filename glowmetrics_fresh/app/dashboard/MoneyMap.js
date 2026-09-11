@@ -5,6 +5,10 @@ import {
   PieChart, Pie, Cell, Label,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
+// Single source of truth for fan tiering — do not reimplement whale
+// detection locally (was: a duplicate `detectWhales()` below using a
+// hardcoded 500-token threshold that disagreed with lib/analytics.js).
+import { identifyWhales } from "../../lib/analytics"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -133,23 +137,6 @@ function windowStats(tips) {
     }
   }
   return grid
-}
-
-function detectWhales(tips) {
-  const map = {}
-  for (const t of tips) {
-    const u = t.username||"anon"
-    if (!map[u]) map[u] = { username:u, tokens:0, usd:0, count:0, lastSeen:null, platforms:new Set() }
-    map[u].tokens += Number(t.tokens||0)
-    map[u].usd    += Number(t.usd||0)
-    map[u].count++
-    const ts = t.date_time
-    if (!map[u].lastSeen || ts > map[u].lastSeen) map[u].lastSeen = ts
-    if (t.platform) map[u].platforms.add(normPlatform(t.platform))
-  }
-  return Object.values(map)
-    .map(w=>({...w, platforms:w.platforms.size, isWhale:w.tokens>=500}))
-    .sort((a,b)=>b.usd-a.usd)
 }
 
 function monthlyTotals(tips) {
@@ -709,14 +696,16 @@ function TrendsTab({ tips, sessions }) {
 }
 
 // ─── Inner content (all hooks here) ──────────────────────────────────────────
-function MoneyMapContent({ tips }) {
+function MoneyMapContent({ tips, isPro }) {
   const [tab, setTab] = useState("map")
 
   const sessions = useMemo(()=>groupIntoSessions(tips),[tips])
 
   const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
   const totalTokens = useMemo(()=>tips.reduce((s,t)=>s+Number(t.tokens||0),0),[tips])
-  const whales      = useMemo(()=>detectWhales(tips).filter(w=>w.isWhale),[tips])
+  // Reuse the single fan-tiering source of truth (lib/analytics.js) instead
+  // of a locally invented whale threshold.
+  const whales      = useMemo(()=>identifyWhales(tips).filter(w=>w.tier==="Whale"),[tips])
   const avgSession  = useMemo(()=>{
     if (!sessions.length) return 0
     return sessions.reduce((s,x)=>s+x.usd,0)/sessions.length
@@ -731,12 +720,21 @@ function MoneyMapContent({ tips }) {
 
   return (
     <div style={{background:BG,minHeight:"100%",padding:"0",color:TEXT,fontFamily:"inherit"}}>
-      {/* Header stats */}
+      {/* Header stats — reporting metrics render for every plan; the Whale
+          count (tier/churn-adjacent) is Pro-only per spec Step 2. */}
       <div style={{display:"flex",gap:"12px",flexWrap:"wrap",marginBottom:"20px"}}>
         <StatCard label="Total Earned" value={fmtUsd(totalUsd)} sub={`${tips.length} tips`}/>
         <StatCard label="Total Tokens" value={totalTokens.toLocaleString()} sub="all time" color={PURPLE}/>
         <StatCard label="Avg / Session" value={fmtUsd(avgSession)} sub={`${sessions.length} sessions`} color={AMBER}/>
-        <StatCard label="Whales" value={whales.length} sub="500+ tokens lifetime" color={PINK}/>
+        {isPro ? (
+          <StatCard label="Whales" value={whales.length} sub="top 5% of fans by spend" color={PINK}/>
+        ) : (
+          <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:"12px",padding:"16px 20px",flex:"1",minWidth:"120px",position:"relative"}}>
+            <div style={{color:SLATE,fontSize:"11px",fontWeight:"600",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"6px"}}>Whales</div>
+            <div style={{color:PINK,fontSize:"22px",fontWeight:"800",lineHeight:"1",filter:"blur(4px)"}}>{whales.length}</div>
+            <a href="/pricing" style={{color:CYAN,fontSize:"11px",marginTop:"4px",display:"block",textDecoration:"none"}}>Upgrade to see</a>
+          </div>
+        )}
       </div>
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab}/>
@@ -750,22 +748,13 @@ function MoneyMapContent({ tips }) {
 }
 
 // ─── Exported component ───────────────────────────────────────────────────────
+// Per spec Step 2: no whole-module Pro gate. Reporting sections (heatmap,
+// sessions, platforms, trends, totals) render for every plan whenever real
+// data exists; only the Whale stat above is Pro-restricted, and only once it
+// has passed the same eligibility bar as lib/analytics.js's tiering (i.e. it
+// is never a blurred teaser built from insufficient evidence — with zero
+// tips there's nothing to blur, so the low-data screen below takes over first).
 export default function MoneyMap({ tips = [], isPro = false }) {
-  if (!isPro) {
-    return (
-      <div style={{width:"100%",padding:"32px 24px",boxSizing:"border-box"}}>
-        <div style={{background:"rgba(15,20,32,0.75)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"16px",padding:"48px 40px",width:"100%",boxSizing:"border-box"}}>
-          <h2 style={{color:"#f1f5f9",fontSize:"22px",fontWeight:"700",marginBottom:"10px",marginTop:0}}>Money Map</h2>
-          <p style={{color:"#94a3b8",fontSize:"14px",marginBottom:"32px"}}>Visualize your earnings with heatmaps, session breakdowns, platform comparisons, and trend analysis.</p>
-          <div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
-            <a href="/live/demo" style={{display:"inline-flex",alignItems:"center",gap:"8px",background:"rgba(34,211,238,0.12)",border:"1px solid rgba(34,211,238,0.3)",color:"#22d3ee",fontWeight:"600",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>▶ Watch Demo</a>
-            <a href="/pricing" style={{display:"inline-flex",alignItems:"center",background:"linear-gradient(135deg,#22d3ee,#a855f7)",color:"#0a0e1a",fontWeight:"800",padding:"10px 24px",borderRadius:"10px",textDecoration:"none",fontSize:"14px"}}>Upgrade to Pro</a>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (tips.length < 20) {
     return (
       <div style={{textAlign:"center",padding:"60px 24px"}}>
@@ -777,5 +766,5 @@ export default function MoneyMap({ tips = [], isPro = false }) {
     )
   }
 
-  return <MoneyMapContent tips={tips}/>
+  return <MoneyMapContent tips={tips} isPro={isPro}/>
 }
