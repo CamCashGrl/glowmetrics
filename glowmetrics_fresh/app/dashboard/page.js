@@ -1453,8 +1453,8 @@ export default function Dashboard() {
   const [monthlyGoal, setMonthlyGoal] = useState(null)
   const [goalInput, setGoalInput] = useState('')
   const [showGoalEditor, setShowGoalEditor] = useState(false)
-  const [tipperNotes, setTipperNotes] = useState({}) // { username: { note, followUp } }
-  const [noteTarget, setNoteTarget] = useState(null)
+  const [tipperNotes, setTipperNotes] = useState({}) // { "platform::username": { note, followUp } }
+  const [noteTarget, setNoteTarget] = useState(null) // { username, platform } | null
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [engineInsights, setEngineInsights] = useState(null)
@@ -1506,19 +1506,29 @@ export default function Dashboard() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
+  // Fan identity is platform + username (see lib/analytics.js identifyWhales)
+  // — a note key must include platform so the same username on two
+  // platforms never shares a note. Notes saved before platform tracking
+  // existed have no platform on the row; those are looked up by username
+  // alone as a fallback so nothing already saved is lost or hidden.
+  const noteKey = (username, platform) => `${(platform || '').toLowerCase()}::${(username || '').toLowerCase()}`
+  const getTipperNote = (username, platform) =>
+    tipperNotes[noteKey(username, platform)] || tipperNotes[(username || '').toLowerCase()]
+
   // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
-  const saveTipperNote = async (username, note, followUp = false) => {
+  const saveTipperNote = async (username, note, followUp = false, platform = null) => {
     if (!user) return
     setNoteSaving(true)
     try {
       await supabase.from('tipper_notes').upsert({
         user_id: user.id,
         tipper_username: username.toLowerCase(),
+        platform: platform || null,
         note,
         follow_up: followUp,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,tipper_username' })
-      setTipperNotes(prev => ({ ...prev, [username.toLowerCase()]: { note, followUp } }))
+      }, { onConflict: 'user_id,tipper_username,platform' })
+      setTipperNotes(prev => ({ ...prev, [noteKey(username, platform)]: { note, followUp } }))
       showToast('✅ Note saved')
       setNoteTarget(null)
     } catch(e) { showToast('❌ Failed to save note') }
@@ -1736,7 +1746,13 @@ export default function Dashboard() {
         .then(({ data }) => {
           if (data?.length) {
             const map = {}
-            data.forEach(n => { map[n.tipper_username.toLowerCase()] = { note: n.note, followUp: n.follow_up } })
+            data.forEach(n => {
+              // Platform-specific key for real lookups, plus the bare
+              // username as a legacy fallback for pre-migration rows that
+              // have no platform (n.platform is null) — see getTipperNote.
+              map[noteKey(n.tipper_username, n.platform)] = { note: n.note, followUp: n.follow_up }
+              if (!n.platform) map[n.tipper_username.toLowerCase()] = { note: n.note, followUp: n.follow_up }
+            })
             setTipperNotes(map)
           }
         })
@@ -4498,7 +4514,7 @@ const stopImportMessageRotation = () => {
                           aria-label={`Message ${w.username}`}
                           title="Message fan"
                           style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
-                        <button onClick={() => setNoteTarget(w.username)}
+                        <button onClick={() => setNoteTarget(w)}
                           aria-label={`Add note for ${w.username}`}
                           title="Add note"
                           style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
@@ -4600,9 +4616,9 @@ const stopImportMessageRotation = () => {
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
                             <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
-                            <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
-                              style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
-                              {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
+                            <button onClick={() => { setNoteTarget(w); setNoteText(getTipperNote(w.username, w.platform)?.note || '') }}
+                              style={{ padding: "4px 8px", borderRadius: 6, background: getTipperNote(w.username, w.platform)?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: getTipperNote(w.username, w.platform)?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: getTipperNote(w.username, w.platform)?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
+                              {getTipperNote(w.username, w.platform)?.note ? "📝 Note" : "📝"}
                             </button>
                             <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
                               className="heart-envelope-btn"
@@ -6863,7 +6879,7 @@ const stopImportMessageRotation = () => {
                       <EnvelopeHeartIcon size={18} /> Message Fan
                     </button>
                     <div style={{ fontSize: 11, color: C.text, textAlign: "center", marginTop: -4, marginBottom: 4 }}>Start a private conversation</div>
-                    <button onClick={() => setNoteTarget(w.username)}
+                    <button onClick={() => setNoteTarget(w)}
                       style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 16px", borderRadius: 10, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                       📝 Add Note
                     </button>
@@ -7206,7 +7222,7 @@ const stopImportMessageRotation = () => {
       {noteTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ ...glassCard, borderRadius:20, padding:28, width:"100%", maxWidth:440, border:"1px solid rgba(245,158,11,0.3)" }}>
-            <div style={{ fontSize:18, fontWeight:800, color:C.white, marginBottom:4 }}>📝 Note for {noteTarget}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.white, marginBottom:4 }}>📝 Note for {noteTarget.username}</div>
             <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>Private note — only you can see this</div>
             <textarea
               value={noteText}
@@ -7216,13 +7232,13 @@ const stopImportMessageRotation = () => {
               style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(245,158,11,0.3)", color:C.white, fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box" }}
             />
             <div style={{ display:"flex", gap:10, marginTop:14 }}>
-              <Button onClick={() => saveTipperNote(noteTarget, noteText)}
+              <Button onClick={() => saveTipperNote(noteTarget.username, noteText, false, noteTarget.platform)}
                 disabled={noteSaving}
                 style={{ flex:1, padding:"10px 0", fontSize:14 }}>
                 {noteSaving ? "Saving..." : "Save Note"}
               </Button>
-              {tipperNotes[noteTarget?.toLowerCase()]?.note && (
-                <button onClick={() => saveTipperNote(noteTarget, '')}
+              {getTipperNote(noteTarget.username, noteTarget.platform)?.note && (
+                <button onClick={() => saveTipperNote(noteTarget.username, '', false, noteTarget.platform)}
                   style={{ padding:"10px 14px", borderRadius:10, background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.3)", color:C.red, fontSize:13, cursor:"pointer" }}>
                   Delete
                 </button>
