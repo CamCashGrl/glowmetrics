@@ -1733,12 +1733,17 @@ export default function Dashboard() {
         if (count === 0 && !beta?.onboarding_complete) router.replace('/onboarding')
       })
       setUser(user)
-      supabase.from('profiles')
+      // Kicked off in parallel with the tips fetch below for speed, but
+      // loadData awaits this before deciding isPro for the FIRST analytics
+      // computation — `isPro` from render scope would otherwise be stale
+      // (still the pre-profile-load default) inside this same closure, since
+      // setProfile's re-render hasn't happened yet at this point in the code.
+      const profilePromise = supabase.from('profiles')
         .select('plan, primary_pro_platform, streaming_platforms')
         .eq('id', user.id)
         .maybeSingle()
-        .then(({ data }) => { if (data) setProfile(data) })
-      loadData(user.id)
+        .then(({ data }) => { if (data) setProfile(data); return data })
+      loadData(user.id, false, {}, profilePromise)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
         .then(({ data }) => { if (data) { setMonthlyGoal(data.target_usd); setGoalInput(data.target_usd.toString()) } })
@@ -1796,7 +1801,10 @@ export default function Dashboard() {
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const r = runEngine(updated, userTz)
+            // Free tier only ever analyzes each platform's most recent
+            // FREE_ANALYSIS_WINDOW_DAYS — `updated` (raw) stays untouched for
+            // platform-count/connection detection elsewhere.
+            const r = runEngine(isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }), userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
           } catch(e) { console.error('realtime runEngine failed:', e) }
@@ -1876,7 +1884,7 @@ export default function Dashboard() {
           }
           try {
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const r = runEngine(prev, userTz)
+            const r = runEngine(isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }), userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
           } catch(e) { console.error('refresh runEngine failed:', e) }
@@ -1983,7 +1991,7 @@ export default function Dashboard() {
     router.replace('/login')
   }
 
-  const loadData = async (uid, force = false, { silent = false } = {}) => {
+  const loadData = async (uid, force = false, { silent = false } = {}, profilePromise = null) => {
     // `silent` keeps the current screen mounted (e.g. after a CSV upload) instead of
     // replacing the whole dashboard with the full-page spinner, so the just-shown
     // success/error confirmation stays visible while data refreshes in the background.
@@ -2004,7 +2012,12 @@ export default function Dashboard() {
       if (allData.length) {
         setTips(allData)
         try {
-          const result = runEngine(allData, userTz)
+          // For the initial load, the freshly-resolved profile (if any) is
+          // authoritative over the render-scope `isPro` closure, which can
+          // still be stale here (see profilePromise's call site).
+          const resolvedProfile = profilePromise ? await profilePromise.catch(() => null) : null
+          const effectiveIsPro = resolvedProfile ? (resolvedProfile.plan === 'pro' || resolvedProfile.plan === 'unlimited') : isPro
+          const result = runEngine(effectiveIsPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }), userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {

@@ -1409,37 +1409,61 @@ export function computePaidSessionAnalytics(sessions) {
 // limit: callers must still persist every valid row regardless of what this
 // returns — it only describes what date range the "full" vs "recent" stats
 // cover, from data that's already been correctly parsed/validated upstream.
-export function computeSnapshotStats(rows, windowDays = 31) {
-  const dated = rows
+function normalizeDatedRows(rows) {
+  return rows
     .map(r => ({
-      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts),
+      raw: r,
+      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts || r.date_time),
       tokens: Number(r.tokens) || 0,
       usd: Number(r.usd) || 0,
     }))
     .filter(r => !isNaN(r.date.getTime()))
     .sort((a, b) => a.date - b.date)
+}
 
+// Window bounds for the most recent `windowDays`, anchored to the latest
+// row's OWN date — never `now()`. This is real activity-based freshness,
+// not upload-timestamp-based (a batch uploaded today covering old activity
+// must not look "recent"). `datedRowsAsc` must already be normalized +
+// sorted ascending (see normalizeDatedRows).
+export function getSnapshotWindowBounds(datedRowsAsc, windowDays) {
+  if (!datedRowsAsc.length) return null
+  const from = datedRowsAsc[0].date
+  const to = datedRowsAsc[datedRowsAsc.length - 1].date
+  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  const cutoff = windowStart < from ? from : windowStart
+  return { from, to, cutoff }
+}
+
+// Rows (in their original shape) whose date falls within the most recent
+// `windowDays` of THIS SAME row set's own latest activity.
+export function filterToRecentWindow(rows, windowDays) {
+  const dated = normalizeDatedRows(rows)
+  if (!dated.length) return []
+  const bounds = getSnapshotWindowBounds(dated, windowDays)
+  return dated.filter(r => r.date >= bounds.cutoff).map(r => r.raw)
+}
+
+export function computeSnapshotStats(rows, windowDays = 31) {
+  const dated = normalizeDatedRows(rows)
   const empty = { from: null, to: null, days: 0, tips: 0, tokens: 0, usd: 0 }
   if (!dated.length) return { full: empty, recent: { ...empty, isPartial: true } }
 
-  const from = dated[0].date
-  const to = dated[dated.length - 1].date
-  const fullDays = Math.floor((to - from) / 86400000) + 1
+  const bounds = getSnapshotWindowBounds(dated, windowDays)
+  const fullDays = Math.floor((bounds.to - bounds.from) / 86400000) + 1
 
   const full = {
-    from, to, days: fullDays,
+    from: bounds.from, to: bounds.to, days: fullDays,
     tips: dated.length,
     tokens: dated.reduce((s, r) => s + r.tokens, 0),
     usd: parseFloat(dated.reduce((s, r) => s + r.usd, 0).toFixed(2)),
   }
 
-  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
-  const recentStart = windowStart < from ? from : windowStart
-  const recentRows = dated.filter(r => r.date >= recentStart)
-  const recentDays = Math.floor((to - recentStart) / 86400000) + 1
+  const recentRows = dated.filter(r => r.date >= bounds.cutoff)
+  const recentDays = Math.floor((bounds.to - bounds.cutoff) / 86400000) + 1
 
   const recent = {
-    from: recentStart, to, days: recentDays,
+    from: bounds.cutoff, to: bounds.to, days: recentDays,
     tips: recentRows.length,
     tokens: recentRows.reduce((s, r) => s + r.tokens, 0),
     usd: parseFloat(recentRows.reduce((s, r) => s + r.usd, 0).toFixed(2)),
@@ -1447,4 +1471,43 @@ export function computeSnapshotStats(rows, windowDays = 31) {
   }
 
   return { full, recent }
+}
+
+// ── Free-tier live analysis window ───────────────────────────────────────
+// Applies the 31-day rolling window PER CONNECTED PLATFORM (not globally) —
+// a platform a creator hasn't streamed on in months would otherwise show
+// zero data just because another platform is more recently active. Older
+// rows are never deleted or modified; this only filters what a Free-tier
+// analysis pass sees. Pro should simply not call this (pass the full `tips`
+// array straight through).
+export function applyFreeAnalysisWindow(rows, { windowDays = 31 } = {}) {
+  const byPlatform = {}
+  rows.forEach(r => {
+    const p = r.platform || 'Unknown'
+    if (!byPlatform[p]) byPlatform[p] = []
+    byPlatform[p].push(r)
+  })
+  return Object.values(byPlatform).flatMap(platformRows => filterToRecentWindow(platformRows, windowDays))
+}
+
+// Real, non-fabricated basis for a Pro-upgrade teaser: how much real stored
+// history exists outside what Free's window currently shows. Relies on
+// `windowedRows` being the exact same row objects as a subset of `allRows`
+// (reference equality — true for applyFreeAnalysisWindow's output).
+export function summarizeWindowExclusion(allRows, windowedRows) {
+  const windowedSet = new Set(windowedRows)
+  const excluded = allRows.filter(r => !windowedSet.has(r))
+  if (!excluded.length) return { excludedCount: 0, oldestExcludedDate: null, byPlatform: {} }
+
+  const byPlatform = {}
+  excluded.forEach(r => {
+    const p = r.platform || 'Unknown'
+    byPlatform[p] = (byPlatform[p] || 0) + 1
+  })
+  const dates = excluded
+    .map(r => new Date(r.date || r.dateRaw || r.date_time))
+    .filter(d => !isNaN(d.getTime()))
+  const oldestExcludedDate = dates.length ? new Date(Math.min(...dates.map(d => d.getTime()))) : null
+
+  return { excludedCount: excluded.length, oldestExcludedDate, byPlatform }
 }
