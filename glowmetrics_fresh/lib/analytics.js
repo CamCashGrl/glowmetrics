@@ -164,6 +164,14 @@ export function parseCSV(text, platform = null) {
 
   if (!platform) platform = detectPlatform(text)
 
+  // Detect delimiter — must happen before any CSV parsing
+  const delimiter = detectDelimiter(text)
+  if (!delimiter) {
+    // Ambiguous delimiter — default to comma but warn
+    console.warn('[parseCSV] Could not detect delimiter; defaulting to comma')
+  }
+  const detectedDelimiter = delimiter || ','
+
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
@@ -173,7 +181,7 @@ export function parseCSV(text, platform = null) {
 
   let startIdx = 0
   for (let i = 0; i < Math.min(5, allLines.length); i++) {
-    const cols = parseCSVLine(allLines[i])
+    const cols = parseCSVLine(allLines[i], detectedDelimiter)
     if (cols.filter(c => c.trim()).length >= 2) { startIdx = i; break }
   }
 
@@ -181,7 +189,7 @@ export function parseCSV(text, platform = null) {
   if (lines.length === 0) return []
 
   const firstLower = lines[0].toLowerCase()
-  const firstCols = parseCSVLine(lines[0])
+  const firstCols = parseCSVLine(lines[0], detectedDelimiter)
 
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
@@ -196,7 +204,7 @@ export function parseCSV(text, platform = null) {
     firstLower.includes('user')
   )
 
-  const raw = hasHeaders ? parseWithHeaders(lines, platform) : parseHeaderless(lines, platform)
+  const raw = hasHeaders ? parseWithHeaders(lines, platform, detectedDelimiter) : parseHeaderless(lines, platform, detectedDelimiter)
   // Per-row format-based platform fallback — runs after both parsers
   raw.forEach(r => {
     if (r.platform && r.platform !== 'Unknown') return
@@ -282,9 +290,9 @@ function re_clean(h) {
   return h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
 }
 
-function parseCSVLine(line) {
+function parseCSVLine(line, delimiter = ',') {
   const trimmed = line.trim()
-  if (trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
+  if (delimiter === ',' && trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
     return trimmed.slice(1, -1).split(',').map(v => v.trim())
   }
   const result = []
@@ -293,7 +301,7 @@ function parseCSVLine(line) {
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === '"') { inQuotes = !inQuotes }
-    else if (char === ',' && !inQuotes) {
+    else if (char === delimiter && !inQuotes) {
       result.push(current.trim().replace(/^"|"$/g, ''))
       current = ''
     }
@@ -303,6 +311,37 @@ function parseCSVLine(line) {
   return result
 }
 
+// Detect whether a CSV uses comma or tab as delimiter
+// Returns 'comma', 'tab', or null if detection is ambiguous
+function detectDelimiter(text) {
+  const lines = text.trim().split('\n').slice(0, 10) // Check first 10 lines
+  if (lines.length === 0) return 'comma' // Default to comma
+
+  let commaCount = 0
+  let tabCount = 0
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+    // Count unquoted commas and tabs
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      if (char === '"') inQuotes = !inQuotes
+      else if (!inQuotes) {
+        if (char === ',') commaCount++
+        if (char === '\t') tabCount++
+      }
+    }
+  }
+
+  // If tabs are present and outnumber commas, it's tab-delimited
+  if (tabCount > 0 && tabCount >= commaCount) return 'tab'
+  // If commas are present and outnumber tabs, it's comma-delimited
+  if (commaCount > 0) return 'comma'
+  // Ambiguous or no delimiters found
+  return null
+}
+
 // BongaCams paid-chat/spy-mode session types, matched against a row's
 // "Chat Type" column (normalized to tip_type by normalizeHeaderName above).
 // Duplicated from the identical BC_PAID_TYPES list in app/onboarding/page.js
@@ -310,15 +349,15 @@ function parseCSVLine(line) {
 // and is out of scope here; consolidating the two is a separate follow-up.
 const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
 
-function parseWithHeaders(lines, platform) {
-  const rawHeaders = parseCSVLine(lines[0])
+function parseWithHeaders(lines, platform, delimiter = ',') {
+  const rawHeaders = parseCSVLine(lines[0], delimiter)
   const headers = rawHeaders.map(normalizeHeaderName)
   const results = []
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(line, delimiter)
     const row = {}
     headers.forEach((h, idx) => { row[h] = (vals[idx] ?? '').trim() })
 
@@ -399,11 +438,11 @@ function parseWithHeaders(lines, platform) {
   return results
 }
 
-function parseHeaderless(lines, platform) {
+function parseHeaderless(lines, platform, delimiter = ',') {
   const results = []
   for (const line of lines) {
     if (!line.trim()) continue
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(line, delimiter)
     if (vals.length === 0) continue
 
     if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from')) {

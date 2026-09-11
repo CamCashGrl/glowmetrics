@@ -30,8 +30,39 @@ export async function POST(req) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
 
-  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
+  // ── VALIDATE FORMAT ────────────────────────────────────────────────────
   const raw = await file.text()
+
+  // Check for tab-delimited format (TSV) — parseCSV cannot handle this
+  // Helper: detect if this is tab-delimited by checking first 5 non-empty lines
+  function isTabDelimited(text) {
+    const lines = text.trim().split('\n').filter(l => l.trim()).slice(0, 5)
+    if (lines.length === 0) return false
+    let tabCount = 0
+    let commaCount = 0
+    for (const line of lines) {
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i]
+        if (char === '"') inQuotes = !inQuotes
+        else if (!inQuotes) {
+          if (char === '\t') tabCount++
+          if (char === ',') commaCount++
+        }
+      }
+    }
+    return tabCount > 0 && tabCount > commaCount
+  }
+
+  if (isTabDelimited(raw)) {
+    return NextResponse.json({
+      error: 'Your file uses tab delimiters (TSV format). Glowmetrics requires comma-separated (CSV) format. Please convert your file to CSV in Excel or Google Sheets and try again.',
+      code: 'format_not_supported',
+      suggestion: 'Save your file as CSV (Comma Separated Values) instead of TSV or Excel format.'
+    }, { status: 400 })
+  }
+
+  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   // Prefer the platform the user explicitly selected in the UI — text-based
   // detection is a fallback for callers that don't pass one, and can't find
   // any platform keywords in a clean, already-normalized CSV (e.g. the
@@ -96,6 +127,14 @@ export async function POST(req) {
   // caller still relies on.
   const tipRows = rows.filter(r => !r.is_paid_session)
   const paidSessionRows = rows.filter(r => r.is_paid_session)
+
+  // ── VALIDATE BONGACAMS PAID SESSIONS ─────────────────────────────────────
+  // If BongaCams is detected but no paid sessions found, it likely means the
+  // "Chat Type" column is missing or has unexpected values. Warn the user.
+  if ((textDetectedPlatform === 'BongaCams' || detectedPlatform === 'BongaCams') &&
+      rows.length > 0 && paidSessionRows.length === 0) {
+    console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing "Chat Type" column.')
+  }
 
   // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
   // Two rows can legitimately share the same (user, username, tokens, usd,
