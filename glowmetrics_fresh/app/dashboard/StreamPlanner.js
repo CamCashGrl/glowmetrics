@@ -5,6 +5,15 @@ import {
   ResponsiveContainer, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts"
+// Single source of truth for data-confidence tiers (Very Low/Low/Medium/High
+// → "Not enough data yet"/"Early signal"/"Likely pattern"/"Strong pattern").
+// Reused here for the overall personalized Peak Earning Window claim — see
+// spec Step 3. Note: this file's own per-time-slot confidence badges
+// (bestWindows()'s cnt>=5/3/2 bands) are a separate, finer-grained concept
+// (confidence in ONE hour-of-day/day-of-week bucket, not in the dataset as a
+// whole) and are left as-is; flagged in the report as a parallel formula
+// worth reconciling in a dedicated follow-up rather than blindly merged here.
+import { calculateConfidence } from "../../lib/analytics"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -935,7 +944,7 @@ function ProgressTab({ tips, windows, prefs }) {
 
 const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id:"progress", label:"Progress" }]
 
-function StreamPlannerContent({ tips }) {
+function StreamPlannerContent({ tips, isPro }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -954,12 +963,54 @@ function StreamPlannerContent({ tips }) {
   const windows = useMemo(() => bestWindows(tips),  [tips])
   const whales  = useMemo(() => detectWhales(tips), [tips])
 
+  // Overall confidence in the dataset as a whole (spec Step 3) — drives
+  // whether a personalized Peak Earning Window claim is shown at all, using
+  // the planner's own valid-session-count/streamed-hours inputs against the
+  // single calculateConfidence() source of truth.
+  const { level: confidenceLevel, label: confidenceLabel } = useMemo(() => {
+    const sessions = groupIntoSessions(tips)
+    const validSessions = sessions.filter((s) => s.tips.length >= 2)
+    const streamedHours = validSessions.reduce((n, s) => n + (s.durationHrs || 0), 0)
+    return calculateConfidence(validSessions.length, streamedHours)
+  }, [tips])
+
+  const bestWindow = windows[0] || null
+  const showPersonalizedPeak = (confidenceLevel === 'Medium' || confidenceLevel === 'High') && !!bestWindow
+  const showProTeaser = confidenceLevel === 'Medium' && !isPro
+
   return (
     <div style={{ background:BG, minHeight:"100%", padding:24 }}>
       <div style={{ marginBottom:18 }}>
         <div style={{ color:PRIMARY, fontSize:20, fontWeight:800, letterSpacing:-0.5 }}>Stream Planner</div>
         <div style={{ color:MUTED, fontSize:13, marginTop:2 }}>What should I do next? Personalized from your earnings history.</div>
       </div>
+
+      {/* Confidence-tiered peak-window banner — spec Step 3 */}
+      {confidenceLevel === 'Very Low' && (
+        <div style={{ ...cardS(), marginBottom:20, borderColor:BORDER }}>
+          <div style={{ color:PRIMARY, fontSize:14, fontWeight:700, marginBottom:4 }}>Not enough data yet</div>
+          <div style={{ color:TEXT, fontSize:13 }}>Keep streaming and importing tip history — once you have a few valid sessions we can start spotting your best earning windows.</div>
+        </div>
+      )}
+      {confidenceLevel === 'Low' && (
+        <div style={{ ...cardS(), marginBottom:20, borderColor:`${GOLD}44` }}>
+          <div style={{ color:GOLD, fontSize:14, fontWeight:700, marginBottom:4 }}>Early signal</div>
+          <div style={{ color:TEXT, fontSize:13 }}>{bestWindow ? `${localHr(bestWindow.utcHour)} on ${localDay(bestWindow.utcDay)} looks promising so far, but there isn't enough history yet to call it a confirmed peak window.` : "A pattern may be forming, but there isn't enough history yet to call it a confirmed peak window."}</div>
+        </div>
+      )}
+      {showPersonalizedPeak && (
+        <div style={{ ...cardS(), marginBottom:20, borderColor:`${CYAN}44`, position:'relative' }}>
+          <div style={{ color:CYAN, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>{confidenceLabel}</div>
+          <div style={{ color:PRIMARY, fontSize:16, fontWeight:800, marginBottom:4 }}>Peak Earning Window: {localHr(bestWindow.utcHour)} on {localDay(bestWindow.utcDay)}</div>
+          <div style={{ color:TEXT, fontSize:13 }}>Averaging {fmt$(bestWindow.avgUsdPerHr)}/hr across {bestWindow.sessionCount} session{bestWindow.sessionCount === 1 ? '' : 's'} in this window.</div>
+          {showProTeaser && (
+            <div style={{ marginTop:12, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+              <span style={{ color:MUTED, fontSize:12 }}>Unlock full scheduling, whale windows, and lift tracking.</span>
+              <Button as="a" href="/pricing" style={{ padding:"8px 18px", fontSize:13 }}>Upgrade to Pro</Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display:"flex", borderBottom:`1px solid ${BORDER}`, marginBottom:24 }}>
         {TABS.map((t) => (
@@ -979,22 +1030,11 @@ function StreamPlannerContent({ tips }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
+// Per spec Step 3: no whole-module Pro gate. The confidence-tiered banner
+// inside StreamPlannerContent (Very Low/Low/Medium/High) now decides what
+// personalized claim, if any, is shown — the Pro teaser only appears at
+// Medium confidence, next to a real (not fabricated) personalized result.
 export default function StreamPlanner({ tips = [], isPro = false }) {
-  if (!isPro) {
-    return (
-      <div style={{ background:BG, minHeight:"100%", padding:"32px 24px", boxSizing:"border-box" }}>
-        <div style={{ background:"rgba(15,20,32,0.75)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:"16px", padding:"48px 40px", width:"100%", boxSizing:"border-box" }}>
-          <h2 style={{ color:"#f1f5f9", fontSize:"22px", fontWeight:"700", marginBottom:"10px", marginTop:0 }}>Stream Planner</h2>
-          <p style={{ color:"#94a3b8", fontSize:"14px", marginBottom:"32px" }}>Get a personalized streaming schedule with whale watch windows, peak earning times, and lift tracking.</p>
-          <div style={{ display:"flex", gap:"12px", flexWrap:"wrap" }}>
-            <a href="/live/demo" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:"rgba(34,211,238,0.12)", border:"1px solid rgba(34,211,238,0.3)", color:"#22d3ee", fontWeight:"600", padding:"10px 24px", borderRadius:"10px", textDecoration:"none", fontSize:"14px" }}>▶ Watch Demo</a>
-            <Button as="a" href="/pricing" style={{ padding:"10px 24px", fontSize:"14px" }}>Upgrade to Pro</Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1009,5 +1049,5 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
     )
   }
 
-  return <StreamPlannerContent tips={tips} />
+  return <StreamPlannerContent tips={tips} isPro={isPro} />
 }

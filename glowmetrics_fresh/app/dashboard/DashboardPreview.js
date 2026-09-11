@@ -853,17 +853,27 @@ const PI = {
 const PLATFORM_META = {
   Chaturbate: { short: 'CB', color: '#F05A2A' },
   BongaCams:  { short: 'BC', color: '#FF3B6E' },
-  MyFreeCams: { short: 'MFC', color: '#F6A33A' },
+  MyFreeCams: { short: 'MFC', color: '#F59E0B' },
+  Stripchat:  { short: 'SC', color: '#7C5CFF' },
+  CamSoda:    { short: 'CS', color: '#16F4FF' },
 }
 const ALL_PLATFORM_NAMES = Object.keys(PLATFORM_META)
 const _normPlatKey = (name) => (name || '').toString().toLowerCase().replace(/[^a-z]/g, '')
 
+// Onboarding persists lowercase keys ('chaturbate'); tips.platform stores the
+// display form ('Chaturbate'). This is the single place that reconciles them
+// so a casing mismatch never silently drops a user's platform.
 function resolvePlatformName(key) {
   if (!key) return null
   const norm = _normPlatKey(key)
   return ALL_PLATFORM_NAMES.find(name => _normPlatKey(name) === norm) || null
 }
 
+// Which platform is primary / secondary right now. Prefers the onboarding
+// selection (profiles.primary_pro_platform / streaming_platforms); falls
+// back to inferring from real tip data for accounts that onboarded before
+// that selection existed, so this never leaves an existing user with no
+// primary at all.
 export function resolvePlatformRoles({ primaryProPlatform, streamingPlatforms, tips = [] }) {
   const fromOnboarding = resolvePlatformName(primaryProPlatform)
   const selected = (streamingPlatforms || []).map(resolvePlatformName).filter(Boolean)
@@ -883,6 +893,10 @@ export function resolvePlatformRoles({ primaryProPlatform, streamingPlatforms, t
   return { primary: ranked[0] || null, secondary: ranked.slice(1), source: 'inferred' }
 }
 
+// Real, honest per-platform stats for the most recent `windowDays` of data.
+// Never fabricates: with zero tips for this platform it returns hasData:false
+// rather than a zero-looking card; with data, days reflects what's ACTUALLY
+// available (e.g. "8 days") when the user hasn't hit the full window yet.
 export function computePlatformCardStats(tips, sessions, platformName, windowDays = SNAPSHOT_WINDOW_DAYS, platformRoi = {}) {
   const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === platformName)
   if (!platTips.length) {
@@ -928,6 +942,9 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
   }
 }
 
+// Account-level "how much history do we actually have on file" — across all
+// platforms combined, used by the Data Vault card. Never invents a stored
+// count; if there's no data yet it reports 0, not a placeholder number.
 export function computeDataVaultStats(tips, windowDays = SNAPSHOT_WINDOW_DAYS) {
   const dated = (tips || [])
     .map(t => new Date(t.date_time || t.dateRaw))
@@ -938,6 +955,7 @@ export function computeDataVaultStats(tips, windowDays = SNAPSHOT_WINDOW_DAYS) {
   return { fullHistoryDays, visibleDays: Math.min(fullHistoryDays, windowDays), hasMoreThanWindow: fullHistoryDays > windowDays }
 }
 
+// Real, checkable milestones only — no points, streaks, or invented XP.
 export function computeMilestones({ primaryStats, secondaryConnectedCount, streamingPlatforms }) {
   return [
     { label: 'Primary platform connected', done: !!primaryStats?.hasData },
