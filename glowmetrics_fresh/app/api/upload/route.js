@@ -33,34 +33,9 @@ export async function POST(req) {
   // ── VALIDATE FORMAT ────────────────────────────────────────────────────
   const raw = await file.text()
 
-  // Check for tab-delimited format (TSV) — parseCSV cannot handle this
-  // Helper: detect if this is tab-delimited by checking first 5 non-empty lines
-  function isTabDelimited(text) {
-    const lines = text.trim().split('\n').filter(l => l.trim()).slice(0, 5)
-    if (lines.length === 0) return false
-    let tabCount = 0
-    let commaCount = 0
-    for (const line of lines) {
-      let inQuotes = false
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i]
-        if (char === '"') inQuotes = !inQuotes
-        else if (!inQuotes) {
-          if (char === '\t') tabCount++
-          if (char === ',') commaCount++
-        }
-      }
-    }
-    return tabCount > 0 && tabCount > commaCount
-  }
-
-  if (isTabDelimited(raw)) {
-    return NextResponse.json({
-      error: 'Your file uses tab delimiters (TSV format). Glowmetrics requires comma-separated (CSV) format. Please convert your file to CSV in Excel or Google Sheets and try again.',
-      code: 'format_not_supported',
-      suggestion: 'Save your file as CSV (Comma Separated Values) instead of TSV or Excel format.'
-    }, { status: 400 })
-  }
+  // Note: Tab-delimited (TSV) files are now supported via delimiter detection in parseCSV().
+  // The parser will automatically detect and handle both comma and tab delimiters.
+  // This enables support for platforms like BongaCams that export both formats.
 
   // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   // Prefer the platform the user explicitly selected in the UI — text-based
