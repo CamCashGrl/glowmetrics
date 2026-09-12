@@ -1,353 +1,262 @@
 // ============================================
-// PLATFORMS INTELLIGENCE ANALYTICS
-// Comprehensive calculations for the Platforms Intelligence page
-// Requirement 26: Reuse existing analytics where possible
+// PLATFORMS INTELLIGENCE — DERIVATION LAYER
+//
+// This file computes NO primary metrics. Every earnings, hours, rate, fan and
+// timing figure comes from the shared engine output (`aggregateRows` in
+// lib/analytics.js), so the Platforms page cannot disagree with the rest of the
+// dashboard. What lives here is presentation-level derivation only: shares of a
+// total, ranking, and differences between values the engine already produced.
+//
+// Consequences worth knowing:
+//   - The analysis window is whatever the caller ran the engine on. page.js
+//     applies the free-tier 31-day window before aggregating, so this layer
+//     inherits it rather than re-implementing it.
+//   - Hours exclude sessions with an unknown duration, and platform totals come
+//     from meaningful sessions, because analytics.platforms is built that way.
+//   - Fans are identified by platform + username (fanKey), so the same name on
+//     two platforms stays two people.
 // ============================================
 
-export const ANALYSIS_WINDOW_DAYS = 31
+import { calculateConfidence } from './analytics'
+
+const round2 = (n) => parseFloat((n || 0).toFixed(2))
+const pct = (part, whole) => whole > 0 ? Math.round((part / whole) * 100) : 0
 
 // =============================================
-// BUSINESS SNAPSHOT CALCULATIONS
-// Requirement 6: Your Cam Business metrics
+// YOUR CAM BUSINESS
 // =============================================
 
-export function calculateBusinessSnapshot(tips = [], sessions = [], paidSessions = []) {
-  const now = new Date()
-  const windowStart = new Date(now.getTime() - (ANALYSIS_WINDOW_DAYS - 1) * 86400000)
+export function buildBusinessSnapshot(analytics) {
+  if (!analytics) return null
 
-  const windowTips = tips.filter(t => new Date(t.date_time || t.dateRaw) >= windowStart)
-  const windowSessions = sessions.filter(s => new Date(s.startTime) >= windowStart)
-  const windowPaidSessions = paidSessions.filter(p => new Date(p.date_time || p.dateRaw) >= windowStart)
+  const platforms = analytics.platforms || []
+  const totalHours = (analytics.totalStreamMinutes || 0) / 60
+  const sessions = analytics.meaningfulSessionCount || 0
+  const totalTips = analytics.totalTips || 0
 
-  const totalEarnings = windowTips.reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
-  const totalTips = windowTips.length
-  // Hours match the dashboard engine's convention (lib/analytics.js): sessions
-  // with an unknown duration are excluded, not counted as zero-length. paid_sessions
-  // carry no duration column, so they contribute no hours.
-  const totalHours = windowSessions.reduce((sum, s) => s.durationUnknown ? sum : sum + (parseFloat(s.durationHours) || 0), 0)
-  const usdPerHour = totalHours > 0 ? totalEarnings / totalHours : null
-  const sessionCount = windowSessions.length
-  const activeDays = new Set(windowTips.map(t => new Date(t.date_time || t.dateRaw).toDateString())).size
-
-  // Secondary metrics
-  const avgEarningsPerSession = sessionCount > 0 ? totalEarnings / sessionCount : 0
-  const avgSessionLength = sessionCount > 0 ? totalHours / sessionCount : 0
-  const avgTipsPerSession = sessionCount > 0 ? totalTips / sessionCount : 0
-  const tipsPerHour = totalHours > 0 ? totalTips / totalHours : 0
+  // Earnings are the sum of the platform rows this page actually shows, not
+  // analytics.totalUSD. totalUSD includes tips from sessions too thin to
+  // analyse, so using it would leave the headline unreconcilable against the
+  // table beneath it and make every share-of-total quietly wrong.
+  const totalEarnings = platforms.reduce((s, p) => s + (p.totalUSD || 0), 0)
 
   return {
-    totalEarnings: parseFloat(totalEarnings.toFixed(2)),
+    totalEarnings: round2(totalEarnings),
     totalTips,
     totalHours: parseFloat(totalHours.toFixed(1)),
-    usdPerHour: usdPerHour ? parseFloat(usdPerHour.toFixed(2)) : null,
-    sessions: sessionCount,
-    activeDays,
-    avgEarningsPerSession: parseFloat(avgEarningsPerSession.toFixed(2)),
-    avgSessionLength: parseFloat(avgSessionLength.toFixed(2)),
-    avgTipsPerSession: parseFloat(avgTipsPerSession.toFixed(2)),
-    tipsPerHour: parseFloat(tipsPerHour.toFixed(2)),
+    // The engine's own estimate, derived from tip timestamps. Always an
+    // estimate — imported CSVs never carry real stream start/end times.
+    usdPerHour: analytics.estimatedHourlyRate ?? null,
+    rateHours: parseFloat(((analytics.hourlyRateTotalMinutes || 0) / 60).toFixed(1)),
+    sessions,
+    platformCount: platforms.length,
+    avgEarningsPerSession: sessions > 0 ? round2(totalEarnings / sessions) : 0,
+    avgTipSize: analytics.avgTipSize ?? 0,
+    tipsPerHour: totalHours > 0 ? parseFloat((totalTips / totalHours).toFixed(1)) : 0,
+    momentum: analytics.momentum || null,
   }
 }
 
 // =============================================
-// PLATFORM COMPARISON (WHERE YOUR MONEY COMES FROM)
-// Requirement 7: Platform comparison table
+// WHERE YOUR MONEY COMES FROM
+// Adds share-of-total to the engine's per-platform rows. Nothing is recomputed.
 // =============================================
 
-export function calculatePlatformComparison(platforms = [], tips = [], sessions = [], paidSessions = []) {
-  const now = new Date()
-  const windowStart = new Date(now.getTime() - (ANALYSIS_WINDOW_DAYS - 1) * 86400000)
+export function buildPlatformComparison(analytics) {
+  const platforms = analytics?.platforms || []
+  const totalEarnings = platforms.reduce((s, p) => s + (p.totalUSD || 0), 0)
+  const totalHours = platforms.reduce((s, p) => s + (p.hours || 0), 0)
 
-  const businessSnapshot = calculateBusinessSnapshot(tips, sessions, paidSessions)
-  const totalEarnings = businessSnapshot.totalEarnings
-  const totalHours = businessSnapshot.totalHours
-
-  return platforms.map(platform => {
-    const resolvePlatform = (p) => p?.toLowerCase().trim() || ''
-    const plat = resolvePlatform(platform)
-
-    const platTips = tips.filter(t => resolvePlatform(t.platform) === plat && new Date(t.date_time || t.dateRaw) >= windowStart)
-    const platSessions = sessions.filter(s => resolvePlatform(s.platform) === plat && new Date(s.startTime) >= windowStart)
-    const platPaidSessions = paidSessions.filter(p => resolvePlatform(p.platform) === plat && new Date(p.date_time || p.dateRaw) >= windowStart)
-
-    const earnings = platTips.reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
-    const tipCount = platTips.length
-    const hours = platSessions.reduce((sum, s) => s.durationUnknown ? sum : sum + (parseFloat(s.durationHours) || 0), 0)
-    const sessionsCount = platSessions.length
-    const activeDays = new Set(platTips.map(t => new Date(t.date_time || t.dateRaw).toDateString())).size
-    const usdPerHour = hours > 0 ? earnings / hours : 0
-    const earningsPerSession = sessionsCount > 0 ? earnings / sessionsCount : 0
-
-    const earningsPercent = totalEarnings > 0 ? Math.round((earnings / totalEarnings) * 100) : 0
-    const hoursPercent = totalHours > 0 ? Math.round((hours / totalHours) * 100) : 0
-
-    return {
-      platform,
-      earnings: parseFloat(earnings.toFixed(2)),
-      earningsPercent,
-      tips: tipCount,
-      hours: parseFloat(hours.toFixed(1)),
-      hoursPercent,
-      sessions: sessionsCount,
-      activeDays,
-      usdPerHour: parseFloat(usdPerHour.toFixed(2)),
-      earningsPerSession: parseFloat(earningsPerSession.toFixed(2)),
-      trend: null, // TODO: calculate trend if historical data available
-    }
-  }).filter(p => p.earnings > 0 || p.tips > 0 || p.sessions > 0)
-}
-
-// =============================================
-// EFFICIENCY COMPARISON (WHERE YOUR TIME PAYS BEST)
-// Requirement 8: Revenue vs Time analysis
-// =============================================
-
-export function calculateEfficiencyComparison(platforms = [], tips = [], sessions = [], paidSessions = []) {
-  const comparison = calculatePlatformComparison(platforms, tips, sessions, paidSessions)
-  const avgUsdPerHour = comparison.length > 0
-    ? comparison.reduce((sum, p) => sum + p.usdPerHour, 0) / comparison.length
-    : 0
-
-  return comparison.map(p => ({
-    ...p,
-    efficiencyRank: comparison.filter(x => x.usdPerHour >= p.usdPerHour).length,
-    vsAverage: avgUsdPerHour > 0 ? Math.round(((p.usdPerHour - avgUsdPerHour) / avgUsdPerHour) * 100) : 0,
-    isTopRevenue: p.earnings === Math.max(...comparison.map(x => x.earnings)),
-    isTopEfficiency: p.usdPerHour === Math.max(...comparison.map(x => x.usdPerHour)),
-  }))
-}
-
-// =============================================
-// TIME INTELLIGENCE (WHEN YOU EARN BEST)
-// Requirement 10: Cross-platform timing analysis
-// =============================================
-
-export function calculateTimeIntelligence(tips = [], sessions = []) {
-  const now = new Date()
-  const windowStart = new Date(now.getTime() - (ANALYSIS_WINDOW_DAYS - 1) * 86400000)
-
-  const windowTips = tips.filter(t => new Date(t.date_time || t.dateRaw) >= windowStart)
-
-  // Calculate by hour
-  const hourlyData = {}
-  for (let h = 0; h < 24; h++) hourlyData[h] = { earnings: 0, tips: 0, sessions: 0 }
-
-  windowTips.forEach(t => {
-    const hour = new Date(t.date_time || t.dateRaw).getHours()
-    hourlyData[hour].earnings += parseFloat(t.usd) || 0
-    hourlyData[hour].tips += 1
-  })
-
-  const bestHour = Object.entries(hourlyData)
-    .map(([hour, data]) => ({ hour: parseInt(hour), ...data }))
-    .filter(h => h.tips > 0)
-    .sort((a, b) => b.earnings - a.earnings)[0]
-
-  // Calculate by day of week
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const dailyData = {}
-  dayNames.forEach((day, idx) => {
-    dailyData[idx] = { day, earnings: 0, tips: 0 }
-  })
-
-  windowTips.forEach(t => {
-    const dayIndex = new Date(t.date_time || t.dateRaw).getDay()
-    dailyData[dayIndex].earnings += parseFloat(t.usd) || 0
-    dailyData[dayIndex].tips += 1
-  })
-
-  const bestDay = Object.values(dailyData)
-    .filter(d => d.tips > 0)
-    .sort((a, b) => b.earnings - a.earnings)[0]
-
-  const totalTips = windowTips.length
-  const dataQuality = totalTips < 10 ? 'insufficient' : totalTips < 50 ? 'limited' : 'adequate'
-
-  return {
-    bestHour: bestHour ? { ...bestHour, label: formatHour(bestHour.hour) } : null,
-    bestDay: bestDay || null,
-    dataQuality,
-    confidence: totalTips < 10 ? 'Not enough data yet' : 'Based on your available data',
-    hourlyData,
-    dailyData: Object.values(dailyData),
-  }
-}
-
-// =============================================
-// FAN REVENUE ANALYSIS (WHO DRIVES YOUR REVENUE)
-// Requirement 11: Fan contribution analysis
-// =============================================
-
-export function calculateFanRevenueSummary(tips = [], isPro = false) {
-  const now = new Date()
-  const windowStart = new Date(now.getTime() - (ANALYSIS_WINDOW_DAYS - 1) * 86400000)
-  const windowTips = tips.filter(t => new Date(t.date_time || t.dateRaw) >= windowStart)
-
-  const fanData = {}
-  let totalEarnings = 0
-
-  windowTips.forEach(t => {
-    const fan = t.username || 'Guest'
-    if (!fanData[fan]) fanData[fan] = { username: fan, earnings: 0, tipCount: 0, lastTip: null }
-    fanData[fan].earnings += parseFloat(t.usd) || 0
-    fanData[fan].tipCount += 1
-    fanData[fan].lastTip = new Date(t.date_time || t.dateRaw)
-    totalEarnings += parseFloat(t.usd) || 0
-  })
-
-  const sortedFans = Object.values(fanData)
-    .map(f => ({ ...f, earningsPercent: totalEarnings > 0 ? Math.round((f.earnings / totalEarnings) * 100) : 0 }))
+  return platforms
+    .map(p => ({
+      platform: p.platform,
+      earnings: round2(p.totalUSD),
+      earningsPercent: pct(p.totalUSD, totalEarnings),
+      hours: parseFloat((p.hours || 0).toFixed(1)),
+      hoursPercent: pct(p.hours, totalHours),
+      usdPerHour: p.usdPerHour ?? 0,
+      // Hours behind the rate, which is a subset of `hours` — only sessions
+      // with a duration reliable enough to divide by.
+      rateHours: p.rateHours ?? 0,
+      rateUSD: p.rateUSD ?? 0,
+      rateSessionCount: p.rateSessionCount ?? 0,
+      tips: p.tips || 0,
+      sessions: p.sessions || 0,
+      avgTipSize: p.avgTipSize ?? 0,
+      earningsPerSession: p.sessions > 0 ? round2(p.totalUSD / p.sessions) : 0,
+    }))
     .sort((a, b) => b.earnings - a.earnings)
+}
 
-  const uniqueTippers = sortedFans.length
-  const returningTippers = sortedFans.filter(f => f.tipCount >= 2).length
-  const topSpender = sortedFans[0] || null
-  const topThreeSpenders = sortedFans.slice(0, 3)
-  const topThreeContribution = topThreeSpenders.reduce((sum, f) => sum + f.earningsPercent, 0)
+// =============================================
+// WHERE YOUR TIME PAYS BEST
+// =============================================
+
+export function buildEfficiencyComparison(analytics) {
+  const rated = buildPlatformComparison(analytics).filter(p => p.rateHours > 0 && p.usdPerHour > 0)
+  if (rated.length === 0) return []
+
+  // Weighted average, not an average of per-platform rates: a short stint must
+  // not carry the same weight as a long one.
+  const totalUsd = rated.reduce((s, p) => s + p.rateUSD, 0)
+  const totalHours = rated.reduce((s, p) => s + p.rateHours, 0)
+  const avgUsdPerHour = totalHours > 0 ? totalUsd / totalHours : 0
+
+  return [...rated]
+    .sort((a, b) => b.usdPerHour - a.usdPerHour)
+    .map((p, i) => ({
+      ...p,
+      efficiencyRank: i + 1,
+      vsAverage: avgUsdPerHour > 0 ? Math.round(((p.usdPerHour - avgUsdPerHour) / avgUsdPerHour) * 100) : 0,
+    }))
+}
+
+// =============================================
+// WHEN YOU EARN BEST
+// Reuses the engine's bestHour/bestDay, which rank by median earnings per
+// active bucket and require at least 3 active buckets — never by raw total.
+// =============================================
+
+export function buildTimeIntelligence(analytics) {
+  if (!analytics) return null
+
+  const totalHours = (analytics.totalStreamMinutes || 0) / 60
+  const confidence = calculateConfidence(analytics.meaningfulSessionCount || 0, totalHours)
 
   return {
-    uniqueTippers,
-    returningTippers,
-    newTippers: uniqueTippers - returningTippers,
-    topSpender,
-    topThreeSpenders,
-    topThreeContribution,
-    totalEarnings: parseFloat(totalEarnings.toFixed(2)),
-    // Pro-only metrics
-    ...(isPro && {
-      fullSpenderRanking: sortedFans,
-      fanActivity: sortedFans.map(f => ({
-        fan: f.username,
-        lastTipDaysAgo: f.lastTip ? Math.floor((now - f.lastTip) / 86400000) : null,
-      })),
-    }),
+    bestHour: analytics.bestHour
+      ? { ...analytics.bestHour, hour: parseInt(analytics.bestHour.hour), label: formatHour(analytics.bestHour.hour) }
+      : null,
+    bestDay: analytics.bestDay || null,
+    platformBestTimes: analytics.platformBestTimes || {},
+    confidence,
+    // The engine withholds bestHour/bestDay until a pattern is supportable, so
+    // their absence is the signal that there is nothing trustworthy to show.
+    hasPattern: Boolean(analytics.bestHour || analytics.bestDay),
   }
 }
 
 // =============================================
-// CAMCASH NOTICED INSIGHTS
-// Requirement 12: Real data-driven observations
+// WHO IS DRIVING YOUR REVENUE
+// Fans come from the engine's whales list, keyed by platform + username.
 // =============================================
 
-export function generateCamCashNoticed(tips = [], sessions = [], paidSessions = [], platforms = [], isPro = false) {
+export function buildFanRevenue(analytics, isPro = false) {
+  const whales = analytics?.whales || []
+  const totalEarnings = analytics?.totalUSD || 0
+
+  const ranked = [...whales]
+    .sort((a, b) => b.totalUSD - a.totalUSD)
+    .map(f => ({
+      username: f.username,
+      platform: f.platform,
+      earnings: round2(f.totalUSD),
+      tipCount: f.tipCount || 0,
+      earningsPercent: pct(f.totalUSD, totalEarnings),
+    }))
+
+  const returning = analytics?.returningVsNew || null
+  const dependency = analytics?.topFanDependency || null
+
+  return {
+    uniqueTippers: ranked.length,
+    // Counts only — returningPct is deliberately not surfaced: the engine
+    // computes it against a different fan set than `whales`, so showing it
+    // beside these counts produces a figure that contradicts them.
+    returningTippers: returning?.returningCount ?? null,
+    newTippers: returning?.newCount ?? null,
+    topThreeContribution: dependency?.top3Pct ?? null,
+    topSpender: ranked[0] || null,
+    visibleSpenders: isPro ? ranked.slice(0, 8) : ranked.slice(0, 3),
+    totalEarnings: round2(totalEarnings),
+  }
+}
+
+// =============================================
+// CAMCASH NOTICED
+// Observations only where the engine's own numbers support them.
+// =============================================
+
+export function buildCamCashNoticed(analytics) {
   const insights = []
-  const snapshot = calculateBusinessSnapshot(tips, sessions, paidSessions)
-  const comparison = calculatePlatformComparison(platforms, tips, sessions, paidSessions)
-  const efficiency = calculateEfficiencyComparison(platforms, tips, sessions, paidSessions)
-  const fanSummary = calculateFanRevenueSummary(tips, isPro)
+  const comparison = buildPlatformComparison(analytics)
+  const efficiency = buildEfficiencyComparison(analytics)
+  const fans = buildFanRevenue(analytics)
 
-  // Insight 1: Revenue concentration
-  if (comparison.length > 0) {
-    const topPlatform = comparison[0]
-    if (topPlatform.earningsPercent >= 60) {
-      insights.push({
-        icon: '📊',
-        text: `${topPlatform.platform} generates ${topPlatform.earningsPercent}% of your connected earnings from ${topPlatform.hoursPercent}% of your streaming hours.`,
-        type: 'concentration',
-        data: { platform: topPlatform.platform, earningsPercent: topPlatform.earningsPercent },
-      })
-    }
-  }
-
-  // Insight 2: Efficiency mismatch
-  if (efficiency.length >= 2) {
-    const topRevenue = efficiency.sort((a, b) => b.earnings - a.earnings)[0]
-    const topEfficiency = efficiency.sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
-    if (topRevenue.platform !== topEfficiency.platform) {
-      insights.push({
-        icon: '⚡',
-        text: `${topRevenue.platform} generates the most revenue, but ${topEfficiency.platform} is currently more efficient (${topEfficiency.usdPerHour.toFixed(2)}/hr vs ${topRevenue.usdPerHour.toFixed(2)}/hr).`,
-        type: 'efficiency',
-        data: { topRevenue: topRevenue.platform, topEfficiency: topEfficiency.platform },
-      })
-    }
-  }
-
-  // Insight 3: Fan concentration
-  if (fanSummary.topThreeContribution >= 40) {
+  if (comparison.length > 1 && comparison[0].earningsPercent >= 60) {
+    const top = comparison[0]
     insights.push({
-      icon: '👥',
-      text: `Your top 3 supporters account for ${fanSummary.topThreeContribution}% of your tracked tips.`,
-      type: 'fans',
-      data: { concentration: fanSummary.topThreeContribution },
+      icon: '📊',
+      text: `${top.platform} brings in ${top.earningsPercent}% of your earnings from ${top.hoursPercent}% of your streaming hours.`,
     })
   }
 
-  // Insight 4: Platform underperformance
-  if (comparison.length > 1) {
-    const underperformer = comparison.find(p => p.hoursPercent > p.earningsPercent && p.hoursPercent - p.earningsPercent >= 15)
-    if (underperformer) {
+  if (efficiency.length >= 2 && comparison.length > 0) {
+    const topEfficiency = efficiency[0]
+    const topRevenue = comparison[0]
+    if (topEfficiency.platform !== topRevenue.platform && topRevenue.usdPerHour > 0) {
       insights.push({
-        icon: '📉',
-        text: `${underperformer.platform} consumes ${underperformer.hoursPercent}% of your streaming hours but generates only ${underperformer.earningsPercent}% of earnings.`,
-        type: 'performance',
-        data: { platform: underperformer.platform },
+        icon: '⚡',
+        text: `${topRevenue.platform} earns the most overall, but ${topEfficiency.platform} pays better per hour ($${topEfficiency.usdPerHour.toFixed(2)} vs $${topRevenue.usdPerHour.toFixed(2)}).`,
       })
     }
   }
 
-  return insights.slice(0, 4) // Max 4 insights
+  if (fans.topThreeContribution !== null && fans.topThreeContribution >= 40) {
+    insights.push({
+      icon: '👥',
+      text: `Your top 3 supporters account for ${fans.topThreeContribution}% of tracked earnings.`,
+    })
+  }
+
+  const underperformer = comparison.find(p => p.hours > 0 && p.hoursPercent - p.earningsPercent >= 15)
+  if (underperformer) {
+    insights.push({
+      icon: '📉',
+      text: `${underperformer.platform} takes ${underperformer.hoursPercent}% of your hours but returns ${underperformer.earningsPercent}% of earnings.`,
+    })
+  }
+
+  return insights.slice(0, 4)
 }
 
 // =============================================
-// PLATFORM-SPECIFIC CALCULATIONS (SPLIT VIEW)
+// SPLIT VIEW — one platform
 // =============================================
 
-export function calculatePlatformSnapshot(platformName, tips = [], sessions = [], paidSessions = []) {
-  const resolvePlatform = (p) => p?.toLowerCase().trim() || ''
-  const plat = resolvePlatform(platformName)
+export function buildPlatformSnapshot(analytics, platformName) {
+  const row = buildPlatformComparison(analytics).find(p => p.platform === platformName)
+  if (!row) return null
 
-  const platTips = tips.filter(t => resolvePlatform(t.platform) === plat)
-  const platSessions = sessions.filter(s => resolvePlatform(s.platform) === plat)
-  const platPaidSessions = paidSessions.filter(p => resolvePlatform(p.platform) === plat)
-
-  const now = new Date()
-  const windowStart = new Date(now.getTime() - (ANALYSIS_WINDOW_DAYS - 1) * 86400000)
-  const windowTips = platTips.filter(t => new Date(t.date_time || t.dateRaw) >= windowStart)
-  const windowSessions = platSessions.filter(s => new Date(s.startTime) >= windowStart)
-  const windowPaidSessions = platPaidSessions.filter(p => new Date(p.date_time || p.dateRaw) >= windowStart)
-
-  const earnings = windowTips.reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
-  const tipCount = windowTips.length
-  const hours = windowSessions.reduce((sum, s) => s.durationUnknown ? sum : sum + (parseFloat(s.durationHours) || 0), 0)
-  const sessionsCount = windowSessions.length
-  const activeDays = new Set(windowTips.map(t => new Date(t.date_time || t.dateRaw).toDateString())).size
-  const usdPerHour = hours > 0 ? earnings / hours : null
-  const earningsPerSession = sessionsCount > 0 ? earnings / sessionsCount : 0
-  const tipsPerHour = hours > 0 ? tipCount / hours : 0
-  const avgSessionLength = sessionsCount > 0 ? hours / sessionsCount : 0
-
-  // History
-  const allDates = platTips.map(t => new Date(t.date_time || t.dateRaw).getTime()).sort((a, b) => a - b)
-  const earliestDate = allDates.length > 0 ? new Date(Math.min(...allDates)) : null
-  const daysAvailable = earliestDate ? Math.floor((now - earliestDate) / 86400000) + 1 : 0
+  const times = analytics?.platformBestTimes?.[platformName] || null
+  const topFans = [...(analytics?.whales || [])]
+    .filter(f => f.platform === platformName)
+    .sort((a, b) => b.totalUSD - a.totalUSD)
+    .map(f => ({
+      username: f.username,
+      earnings: round2(f.totalUSD),
+      tipCount: f.tipCount || 0,
+      earningsPercent: pct(f.totalUSD, row.earnings),
+    }))
 
   return {
-    platform: platformName,
-    earnings: parseFloat(earnings.toFixed(2)),
-    tips: tipCount,
-    hours: parseFloat(hours.toFixed(1)),
-    usdPerHour: usdPerHour ? parseFloat(usdPerHour.toFixed(2)) : null,
-    sessions: sessionsCount,
-    activeDays,
-    earningsPerSession: parseFloat(earningsPerSession.toFixed(2)),
-    tipsPerHour: parseFloat(tipsPerHour.toFixed(2)),
-    avgSessionLength: parseFloat(avgSessionLength.toFixed(2)),
-    earliestDate,
-    daysAvailable,
-    hasData: earnings > 0 || tips > 0,
+    ...row,
+    bestHour: times?.hour ? { ...times.hour, label: formatHour(times.hour.hour) } : null,
+    bestDay: times?.day || null,
+    topFans,
+    missedRevenue: analytics?.missedRevenueByPlatform?.[platformName] || null,
   }
 }
 
 // =============================================
-// HELPER FUNCTIONS
+// HELPERS
 // =============================================
 
-function formatHour(hour) {
-  if (hour === 0) return '12 AM'
-  if (hour < 12) return `${hour} AM`
-  if (hour === 12) return '12 PM'
-  return `${hour - 12} PM`
+export function formatHour(hour) {
+  const h = parseInt(hour)
+  if (isNaN(h)) return '—'
+  if (h === 0) return '12 AM'
+  if (h < 12) return `${h} AM`
+  if (h === 12) return '12 PM'
+  return `${h - 12} PM`
 }
-
-export { formatHour }

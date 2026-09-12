@@ -1061,6 +1061,23 @@ export function aggregateRows(tips, tz = null) {
   const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
   const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
 
+  // ── HOURLY-RATE ELIGIBILITY ────────────────────────────────────────────
+  // Defined here, above the platform rollup, so that every hourly rate in the
+  // engine — overall and per platform — divides the same sessions' revenue by
+  // the same sessions' time. A session can be a meaningful *earning* event
+  // (e.g. one $75 tip, durationUnknown) while being unusable as a rate, since
+  // an unknown duration has no denominator. Counting such a session's revenue
+  // against only the timed sessions' hours inflates the rate, which is exactly
+  // what this rule exists to prevent.
+  const isHourlyRateEligible = (s) =>
+    s.tipCount >= 2 &&
+    !s.durationUnknown &&
+    Number.isFinite(s.durationMinutes) &&
+    s.durationMinutes >= 15 &&
+    s.totalUSD > 0
+
+  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
+
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
   const dayDateAmts = {}, hourBucketAmts = {}
   const UTC_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -1114,12 +1131,31 @@ export function aggregateRows(tips, tz = null) {
     platformMap[s.platform].tips        += s.tipCount
   })
 
-  const platforms = Object.values(platformMap).map(p => ({
-    ...p,
-    usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
-    tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
-    avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0
-  }))
+  // Per-platform rate basis — revenue and time from the same eligible sessions,
+  // so summing these across platforms reproduces estimatedHourlyRate exactly.
+  const platformRate = {}
+  hourlyRateSessions.forEach(s => {
+    if (!platformRate[s.platform]) platformRate[s.platform] = { usd: 0, minutes: 0, sessions: 0 }
+    platformRate[s.platform].usd     += s.totalUSD
+    platformRate[s.platform].minutes += s.durationMinutes
+    platformRate[s.platform].sessions += 1
+  })
+
+  const platforms = Object.values(platformMap).map(p => {
+    const rate = platformRate[p.platform] || { usd: 0, minutes: 0, sessions: 0 }
+    const rateHours = rate.minutes / 60
+    return {
+      ...p,
+      // Hours and revenue used for the rate, kept alongside it so a caller can
+      // show the rate with the sample it was actually built from.
+      rateHours:        parseFloat(rateHours.toFixed(2)),
+      rateUSD:          parseFloat(rate.usd.toFixed(2)),
+      rateSessionCount: rate.sessions,
+      usdPerHour:    rateHours > 0 ? parseFloat((rate.usd / rateHours).toFixed(2)) : 0,
+      tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)            : 0,
+      avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2)) : 0
+    }
+  })
 
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
@@ -1203,19 +1239,9 @@ export function aggregateRows(tips, tz = null) {
   // ── ESTIMATED $/HOUR ───────────────────────────────────────────────────
   // Imported CSV files carry tip timestamps only — never a creator's actual
   // stream start/end time — so this can only ever be an estimate inferred
-  // from the gap between a session's first and last recorded tip. A session
-  // can be a meaningful *earning* event (e.g. one $75 tip, durationUnknown)
-  // without being usable for a rate calculation, since a zero/unknown
-  // duration has no denominator. This eligibility rule is intentionally
-  // stricter than — and separate from — sessionQuality/meaningfulSessions.
-  const isHourlyRateEligible = (s) =>
-    s.tipCount >= 2 &&
-    !s.durationUnknown &&
-    Number.isFinite(s.durationMinutes) &&
-    s.durationMinutes >= 15 &&
-    s.totalUSD > 0
-
-  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
+  // from the gap between a session's first and last recorded tip. The
+  // eligibility rule this uses is defined above, next to meaningfulSessions,
+  // because the per-platform rates are built from the same sessions.
   const hourlyRateTotalUsd = parseFloat(hourlyRateSessions.reduce((s, x) => s + x.totalUSD, 0).toFixed(2))
   const hourlyRateTotalMinutes = hourlyRateSessions.reduce((s, x) => s + x.durationMinutes, 0)
   // Weighted overall average — numerator and denominator always come from the
@@ -1227,11 +1253,13 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // Same rate basis as platforms[].usdPerHour — these two must never disagree.
   const platformVelocity = {}
   Object.keys(platformMap).forEach(p => {
-    const pHours = platformMap[p].hours
-    const pUSD = platformMap[p].totalUSD
-    platformVelocity[p] = pHours > 0 ? parseFloat((pUSD / pHours).toFixed(2)) : null
+    const rate = platformRate[p]
+    platformVelocity[p] = rate && rate.minutes > 0
+      ? parseFloat((rate.usd / (rate.minutes / 60)).toFixed(2))
+      : null
   })
 
   // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
