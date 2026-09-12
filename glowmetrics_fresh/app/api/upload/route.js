@@ -31,8 +31,14 @@ export async function POST(req) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
 
-  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
+  // ── VALIDATE FORMAT ────────────────────────────────────────────────────
   const raw = await file.text()
+
+  // Note: Tab-delimited (TSV) files are now supported via delimiter detection in parseCSV().
+  // The parser will automatically detect and handle both comma and tab delimiters.
+  // This enables support for platforms like BongaCams that export both formats.
+
+  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   // Prefer the platform the user explicitly selected in the UI — text-based
   // detection is a fallback for callers that don't pass one, and can't find
   // any platform keywords in a clean, already-normalized CSV (e.g. the
@@ -97,6 +103,14 @@ export async function POST(req) {
   // caller still relies on.
   const tipRows = rows.filter(r => !r.is_paid_session)
   const paidSessionRows = rows.filter(r => r.is_paid_session)
+
+  // ── VALIDATE BONGACAMS PAID SESSIONS ─────────────────────────────────────
+  // If BongaCams is detected but no paid sessions found, it likely means the
+  // "Chat Type" column is missing or has unexpected values. Warn the user.
+  if ((textDetectedPlatform === 'BongaCams' || detectedPlatform === 'BongaCams') &&
+      rows.length > 0 && paidSessionRows.length === 0) {
+    console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing "Chat Type" column.')
+  }
 
   // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
   // Two rows can legitimately share the same (user, username, tokens, usd,
@@ -295,6 +309,14 @@ export async function POST(req) {
   if (paidErrors.length > 0) {
     response.paidSessionsWarnings = paidErrors
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
+  }
+
+  // ── BONGACAMS NO PAID SESSIONS WARNING ──────────────────────────────────
+  // If BongaCams detected but no paid sessions found, user may be missing a
+  // session-type column (Chat Type, Session Type, Activity Type, etc.)
+  if ((detectedPlatform === 'BongaCams') && paidSessionRows.length === 0 && tipRows.length > 0) {
+    response.bongaCamsWarning = 'No private/group/spy sessions detected. If your BongaCams export includes private chat sessions, verify it contains a session-type column (e.g., "Chat Type", "Session Type", "Activity Type").'
+    console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing a session-type column.')
   }
 
   // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────
