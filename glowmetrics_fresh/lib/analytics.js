@@ -317,7 +317,7 @@ function parseCSVLine(line, delimiter = ',') {
 // Returns 'comma', 'tab', or null if detection is ambiguous
 function detectDelimiter(text) {
   const lines = text.trim().split('\n').slice(0, 10) // Check first 10 lines
-  if (lines.length === 0) return 'comma' // Default to comma
+  if (lines.length === 0) return ',' // Default to comma
 
   let commaCount = 0
   let tabCount = 0
@@ -336,11 +336,15 @@ function detectDelimiter(text) {
     }
   }
 
-  // If tabs are present and outnumber commas, it's tab-delimited
-  if (tabCount > 0 && tabCount >= commaCount) return 'tab'
-  // If commas are present and outnumber tabs, it's comma-delimited
-  if (commaCount > 0) return 'comma'
-  // Ambiguous or no delimiters found
+  // Returns the actual delimiter CHARACTER, not a name. parseCSV passes this
+  // straight into parseCSVLine as the split token, so returning 'comma'/'tab'
+  // made it split on those literal words — which never occur in real data, so
+  // every line collapsed to a single column and every row failed isValidTip.
+  // Well-formed CSVs parsed to zero rows; only ambiguous files worked, because
+  // the null branch fell back to the correct ','.
+  if (tabCount > 0 && tabCount >= commaCount) return '\t'
+  if (commaCount > 0) return ','
+  // Ambiguous or no delimiters found — caller falls back to ','
   return null
 }
 
@@ -450,7 +454,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
       platform: rowPlatform || 'Unknown',
       tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(rowPlatform)),
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
-      tip_type: row.tip_type || 'Tip',
+      tip_type: sessionTypeValue || 'Tip',
       tip_note: row.note || row.tip_note || '',
       // Paid-chat/spy-mode/private-show rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat
