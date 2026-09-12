@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -1503,6 +1504,15 @@ export default function Dashboard() {
   // Compute windowed tips for free users; windowSummary feeds teaser signal detection
   const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
   const windowSummary = summarizeWindowExclusion(tips, analysisTips)
+
+  // Build Pro teaser cards (only shown to free users when real signal exists)
+  const proTeasers = buildProTeasers({
+    tips,
+    analysisTips,
+    whales,
+    windowSummary,
+    isPro
+  })
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
@@ -3544,6 +3554,81 @@ const stopImportMessageRotation = () => {
 
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+
+            {/* ═══════════════════════════════════════
+                PRO TEASER CARDS — Soft paywall signals for free users
+            ═══════════════════════════════════════ */}
+            {proTeasers.length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  {proTeasers.map((teaser, i) => (
+                    <div
+                      key={teaser.id}
+                      style={{
+                        ...glassCard,
+                        borderRadius: 16,
+                        padding: 18,
+                        border: '1px solid rgba(236,72,153,0.4)',
+                        background: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.08))',
+                        animation: `fadeUp 0.3s ease ${i * 0.08}s both`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = 'rgba(236,72,153,0.6)'
+                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(236,72,153,0.15), rgba(124,92,255,0.12))'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(236,72,153,0.2)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = 'rgba(236,72,153,0.4)'
+                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.08))'
+                        e.currentTarget.style.transform = ''
+                        e.currentTarget.style.boxShadow = ''
+                      }}
+                      onClick={() => handleTabChange(teaser.tab)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div style={{ fontSize: 24 }}>🔑</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, textTransform: 'uppercase', letterSpacing: 0.5 }}>Upgrade to unlock</div>
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.white, marginBottom: 8 }}>{teaser.title}</div>
+                      <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 12 }}>{teaser.description}</div>
+                      <div style={{ padding: 10, borderRadius: 9, background: 'rgba(236,72,153,0.1)', border: '1px solid rgba(236,72,153,0.25)', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>{teaser.requirement}</div>
+                      </div>
+                      <button
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          background: 'linear-gradient(135deg, #EC4899, #BE185D)',
+                          border: 'none',
+                          color: C.white,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #F472B6, #EC4899)'
+                          e.currentTarget.style.transform = 'scale(1.02)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #EC4899, #BE185D)'
+                          e.currentTarget.style.transform = ''
+                        }}
+                        onClick={(e) => { e.stopPropagation(); openUpgradeModal('pro_teaser_' + teaser.id) }}
+                      >
+                        {teaser.ctaLabel}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'24px 0' }} />
+              </div>
+            )}
+
             {/* ═══════════════════════════════════════
                 3. WHAT'S WORKING — Strategy
                 Platform performance + best time + best day merged
