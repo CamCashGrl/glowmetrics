@@ -1,15 +1,11 @@
 "use client"
-export const dynamic = 'force-dynamic'
-
-import dynamicModule from "next/dynamic"
 import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
 import { supabase } from "../../lib/supabase"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
-
-const dynamicLoader = dynamicModule.default || dynamicModule
 
 // Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
 // in the <style jsx> block below — same weights that @import requested).
@@ -21,7 +17,7 @@ const dmSans = DM_Sans({
 
 // Only needed once a visitor scrolls this far — deferred so its JS isn't
 // downloaded/parsed on every /landing visit.
-const FeedbackWidget = dynamicLoader(() => import('../components/FeedbackWidget'), { ssr: false })
+const FeedbackWidget = dynamic(() => import('../components/FeedbackWidget'), { ssr: false })
 
 // ── CAMCASH BRAND TOKENS (exact values from /mnt/skills/user/branding) ────
 const T = {

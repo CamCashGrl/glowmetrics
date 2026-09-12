@@ -1,6 +1,4 @@
 "use client"
-export const dynamic = 'force-dynamic'
-
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
@@ -11,6 +9,7 @@ import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import { computeCoachingState } from "../../lib/coaching/triggers"
+import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
@@ -28,21 +27,12 @@ const TAB_LOADING = (
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
   </div>
 )
-// Lazy-loaded components - import them normally, React.lazy will handle them during render
-// Commenting out to debug which component causes the issue
-// import AnalyticsCharts from './AnalyticsCharts'
-// import StreamPlanner from './StreamPlanner'
-// import MoneyMap from './MoneyMap'
-// import PrivateSessions from './PrivateSessions'
-// import DashboardGrowthCharts from './DashboardGrowthCharts'
-// import TokenCalculator from '../guides/cam-model-token-calculator/TokenCalculatorClient'
-
-const AnalyticsCharts = null
-const StreamPlanner = null
-const MoneyMap = null
-const PrivateSessions = null
-const DashboardGrowthCharts = null
-const TokenCalculator = null
+const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
+const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
+const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
+const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
+const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
+const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
@@ -1515,6 +1505,12 @@ export default function Dashboard() {
   const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
   const windowSummary = summarizeWindowExclusion(tips, analysisTips)
 
+  // whales must be declared before use here — buildProTeasers reads it below,
+  // and this runs unconditionally on every render (including before the
+  // loading gate), so declaring it later caused a TDZ ReferenceError on
+  // every single dashboard load.
+  const whales = analytics?.whales || []
+
   // Build Pro teaser cards (only shown to free users when real signal exists)
   const proTeasers = buildProTeasers({
     tips,
@@ -2230,7 +2226,6 @@ const stopImportMessageRotation = () => {
   }
 
   const sessions = analytics?.sessions || []
-  const whales = analytics?.whales || []
   // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
   // normalized username, never merged across platforms) -- reused by the
   // existing Top Fans list and now also by Private Sessions. If the fan has
