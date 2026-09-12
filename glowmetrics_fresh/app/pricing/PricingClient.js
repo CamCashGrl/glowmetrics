@@ -215,7 +215,7 @@ function PricingSection({
   user,
 }) {
   const freeFeatures = [
-    'Track 1 cam platform',
+    'Track up to 3 platforms (1 Primary + 2 Secondary)',
     'Upload tip history by CSV',
     'Basic earnings dashboard',
     'Basic session analytics',
@@ -223,23 +223,23 @@ function PricingSection({
     'Real-time alerts',
     'Basic Live Mode coaching',
     'Top 3 fans',
-    'Limited recent tip history',
+    '31-day rolling analysis per platform',
     'Basic fan insights',
   ]
 
   const standardFeatures = [
-    'Track all supported cam platforms',
-    'Full permanent tip history',
-    'Expanded fan insights',
+    'Unlimited platform tracking',
+    'Full permanent history (beyond 31 days)',
+    'Advanced churn and re-engagement insights',
     'Full fan profiles and CRM tools',
     'Cross-platform earnings comparisons',
     'Advanced Live Mode coaching',
     'Private-session analytics',
-    'Churn and re-engagement insights',
-    'Full best-time analysis',
-    'Stream Planner',
-    'Money Map',
-    'Advanced recommendations and reports',
+    'Deeper fan risk signals',
+    'Complete historical trend analysis',
+    'Stream Planner (advanced)',
+    'Money Map (advanced)',
+    'Comparative performance reports',
   ]
 
   return (
@@ -589,11 +589,11 @@ function PromiseSection() {
 const FAQ_ITEMS = [
   {
     q: 'Will the free plan always be available?',
-    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes one tracked platform, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and limited recent tip history.',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes tracking up to 3 platforms, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and 31-day rolling analysis per platform.',
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports one cam platform. Standard unlocks tracking across every supported platform and adds cross-platform comparisons.',
+    a: 'The free plan supports up to 3 platforms (1 Primary and 2 Secondary). Standard unlocks unlimited platform tracking and adds advanced cross-platform comparisons.',
   },
   {
     q: 'What does the Standard plan include?',

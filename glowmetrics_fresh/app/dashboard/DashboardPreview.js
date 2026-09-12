@@ -18,6 +18,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { FREE_PLATFORM_LIMIT, isProPlan, platformLimitMessage } from '../../lib/planLimits'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -120,31 +121,32 @@ export function getDashboardStage({ tipCount = 0, sessionCount = 0, totalEarning
 }
 
 export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0) {
-  const isPro = userPlan === 'pro'
+  const isPro = isProPlan(userPlan)
   return {
     isPro, isFree: !isPro,
     canTrackMultiplePlatforms: isPro,
     canComparePlatforms: isPro,
     canUseCrossPlatformInsights: isPro,
-    freePlatformLimitReached: !isPro && trackedPlatformCount >= 1,
+    freePlatformLimitReached: !isPro && trackedPlatformCount >= FREE_PLATFORM_LIMIT,
   }
 }
 
 export function getFeatureLockState({ feature, userPlan = 'free', totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0 }) {
-  const isPro = userPlan === 'pro'
+  const isPro = isProPlan(userPlan)
   const platformCount = importedPlatforms?.length || 0
   const rules = {
     bestStreamingTimes:    { needsData: totalSessions < 3 || totalTips < 25, requiresPro: false, dataMessage: 'Unlocks after 3+ sessions with timestamps.', proMessage: null },
     topFans:               { needsData: totalFans < 5 || totalTips < 10, requiresPro: false, dataMessage: 'Unlocks after more fan and tip activity.', proMessage: null },
     whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
     platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
-    multiPlatformTracking: { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to track more than one platform.' },
+    multiPlatformTracking: { needsData: platformCount >= FREE_PLATFORM_LIMIT, requiresPro: false, dataMessage: platformLimitMessage(), proMessage: null },
     crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
     sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
     averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
     liveScore:             { needsData: liveModeSessions < 1, requiresPro: false, dataMessage: 'Unlocks after your first Live Mode stream.', proMessage: null },
     retention:             { needsData: totalSessions < 5 || totalFans < 20, requiresPro: false, dataMessage: 'Unlocks after more repeat fan activity.', proMessage: null },
     forecasting:           { needsData: totalSessions < 8 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after more earnings history.', proMessage: null },
+    historicalDepth:       { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to unlock full historical analysis (beyond 31 days).' },
   }
   const rule = rules[feature]
   if (!rule) return { locked: false, lockType: null, message: null }
@@ -163,8 +165,8 @@ export const canShowHourlyRate   = ({ sessionCount, totalStreamMinutes }) => ses
 
 // ── MODULE LOCK STATE ─────────────────────────────────────────────────────────
 // Single source of truth for per-module data thresholds.
-// Only platformROI and multiPlatformTracking are ever Pro-gated.
-// Money Map and Stream Planner are data-gated only — never paywalled.
+// Only platformROI and multiPlatformTracking are ever Pro-gated at the module level.
+// Money Map and Stream Planner have component-level Pro gating (per-card inside the module).
 export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatformCount = 0, isPro = false, liveModeSessions = 0 }) {
   const rules = {
     bestStreamingTimes:   { needsData: totalTips < 25 || totalSessions < 3,          message: 'Peak Earning Windows unlock after 25+ tips and 3+ meaningful sessions.' },
@@ -173,7 +175,7 @@ export function getModuleLockState({ module, totalTips = 0, totalSessions = 0, t
     whales:               { needsData: totalFans < 10 || totalEarnings < 50,          message: 'Whale detection unlocks after enough repeat fan history.' },
     sessionBreakdown:     { needsData: totalSessions < 3,                             message: 'Session Breakdown unlocks after multiple completed sessions.' },
     platformROI:          { needsData: importedPlatformCount < 2, requiresPro: !isPro && importedPlatformCount >= 1, message: !isPro ? 'Platform ROI unlocks after upgrading to Pro and importing at least 2 platforms.' : 'Import at least 2 platforms to compare earnings.' },
-    multiPlatformTracking:{ needsData: false, requiresPro: !isPro,                   message: 'Upgrade to Pro to track more than one platform.' },
+    multiPlatformTracking:{ needsData: importedPlatformCount >= FREE_PLATFORM_LIMIT, requiresPro: false, message: platformLimitMessage() },
     fanRecovery:          { needsData: totalFans < 20 || totalEarnings < 50,          message: 'Fan Recovery unlocks after enough repeat fan history.' },
     moneyMap:             { needsData: totalTips < 50 || totalSessions < 5,           message: 'Money Map unlocks after 50+ tips and 5+ meaningful sessions.' },
     streamPlanner:        { needsData: totalTips < 25 || totalSessions < 3,           message: 'Stream Planner unlocks after 25+ tips and 3+ meaningful sessions.' },
