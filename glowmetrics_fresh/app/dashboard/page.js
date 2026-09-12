@@ -1718,6 +1718,18 @@ export default function Dashboard() {
           source:           'extension',
         }
         setLiveEvents(prev => [...prev, normalized])
+
+        // CRITICAL: Also merge live tips into main tips dataset so they flow through
+        // analytics. This ensures fan profiles, churn calculations, Money Map,
+        // Stream Planner, and all dashboard totals include live tips immediately.
+        setTips(prev => {
+          const newTip = {
+            ...tip,
+            date_time: tip.received_at || new Date().toISOString(),
+          }
+          return [...prev, newTip].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+        })
+
         setLiveActive(prev => {
           if (!prev) setLiveStartTime(st => st || new Date())
           return true
@@ -2037,6 +2049,19 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+
+      // CRITICAL: Merge live tips into main dataset so they flow through analytics.
+      // Live Mode tips should contribute to fan profiles, churn calculations,
+      // Money Map, Stream Planner, and all dashboard totals — exactly like CSV tips.
+      let liveTipsData = []
+      try {
+        const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("*").eq("user_id", uid)
+        if (!liveErr && liveRows?.length) {
+          liveTipsData = liveRows
+          allData = [...allData, ...liveTipsData].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+        }
+      } catch (e) { /* non-fatal — continue without live tips */ }
+
       if (allData.length) {
         setTips(allData)
         try {
@@ -2071,9 +2096,8 @@ export default function Dashboard() {
       }
       setPaidSessions(allPaidSessions)
 
-      // Live Mode total, for the Private Sessions page's revenue-sources
-      // summary only — kept as its own query against its own table, never
-      // merged into `tips`/`paidSessions` rows or the `analytics` totals.
+      // Live Mode total, for the Private Sessions page's revenue-sources summary.
+      // Also used here for display alongside CSV totals on the dashboard.
       try {
         const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("usd").eq("user_id", uid)
         if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
