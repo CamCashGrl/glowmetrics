@@ -1270,7 +1270,7 @@ export default function LivePage() {
                     { label: 'Revenue',  value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`,           color: C.green,      sub: velocity.label || null,         showSparkline: true },
                     { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00',                color: C.cyan,       sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
                     { label: 'Avg Tip',  value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`,            color: C.gold,       sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
-                    { label: 'Rev/hr',   value: `$${velocity.currentUPH.toFixed(0)}`,                      color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null, showSparkline: false },
+                    { label: 'Rev/hr',   value: state?.elapsedMins >= 2 ? `$${velocity.currentUPH.toFixed(0)}` : 'calculating…',                      color: state?.elapsedMins >= 2 ? velocity.color : C.muted, sub: state?.elapsedMins >= 2 && comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : (state?.elapsedMins < 2 ? `wait ${(2 - state.elapsedMins).toFixed(1)}m` : null), showSparkline: false },
                   ].map(({ label, value, color, sub, showSparkline }) => (
                     <div key={label} className="cc-card" style={{ ...glassCard, borderRadius: 12, padding: 18, transition: 'box-shadow 0.2s ease', cursor: 'default' }}
                       onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 0 20px ${color}28`; }}
@@ -1412,18 +1412,22 @@ export default function LivePage() {
                       <span style={{ marginLeft: 8, color: C.dim, fontWeight: 400, textTransform: 'none', fontSize: 10, letterSpacing: 0 }}>— {liveEvents.filter(e => !e._isHistory).length} live tips</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 280, overflowY: 'auto' }}>
-                      {[...liveEvents].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((ev, i) => {
+                      {[...liveEvents].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((ev) => {
                         const isFlash = ev._id && ev._id === flashTipId;
-                        const isNew   = i === 0 && !ev._isHistory;
+                        const isNew   = ev._id === liveEvents[liveEvents.length - 1]?._id && !ev._isHistory;
                         const isBig   = (ev.normalizedRevenue || 0) >= 5;
+                        const platformIcon = { Chaturbate: '💬', MyFreeCams: '🎀', BongaCams: '🎵', CamSoda: '🥤', Stripchat: '⭐', extension: '🧩' }[ev.platform || ev.source || 'extension'] || '💰';
                         return (
-                          <div key={ev._id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: isFlash ? 'rgba(168,85,247,0.18)' : isNew ? 'rgba(34,211,238,0.07)' : isBig ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.02)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : isNew ? '1px solid rgba(34,211,238,0.18)' : isBig ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(255,255,255,0.04)', boxShadow: isFlash ? '0 0 16px rgba(168,85,247,0.25)' : 'none', transition: 'all 0.35s ease', opacity: ev._isHistory ? 0.55 : 1, animation: isNew ? 'cc-slide-in 0.35s ease' : 'none' }}>
+                          <div key={ev._id || `${ev.username}-${ev.timestamp}-${Math.random()}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', borderRadius: 9, background: isFlash ? 'rgba(168,85,247,0.18)' : isNew ? 'rgba(34,211,238,0.07)' : isBig ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.02)', border: isFlash ? '1px solid rgba(168,85,247,0.5)' : isNew ? '1px solid rgba(34,211,238,0.18)' : isBig ? '1px solid rgba(245,158,11,0.18)' : '1px solid rgba(255,255,255,0.04)', boxShadow: isFlash ? '0 0 16px rgba(168,85,247,0.25)' : 'none', transition: 'all 0.35s ease', opacity: ev._isHistory ? 0.55 : 1, animation: isNew ? 'cc-slide-in 0.35s ease' : 'none' }}>
                             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                               <span style={{ fontSize: 14 }}>{isBig ? '🐋' : '💰'}</span>
                               <div>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: isFlash ? '#c084fc' : C.white }}>{ev.username}</span>
-                                {ev._isHistory && <span style={{ fontSize: 9, color: C.dim, marginLeft: 6 }}>history</span>}
-                                {isFlash && <span style={{ fontSize: 10, color: '#c084fc', marginLeft: 8, fontWeight: 800 }}>NEW ✨</span>}
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                                  <span style={{ fontSize: 10, color: C.muted }}>{platformIcon} {ev.platform || ev.source || 'manual'}</span>
+                                  {ev._isHistory && <span style={{ fontSize: 9, color: C.dim }}>history</span>}
+                                  {isFlash && <span style={{ fontSize: 10, color: '#c084fc', fontWeight: 800 }}>NEW ✨</span>}
+                                </div>
                               </div>
                               {ev.tokens > 0 && <span style={{ fontSize: 11, color: C.cyan }}>{ev.tokens}t</span>}
                             </div>
@@ -1615,12 +1619,18 @@ export default function LivePage() {
               {liveActive && firedAlertsLog.current.length > 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
                   <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }}>
                     {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
+                      <div key={`${entry.ts}-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                         <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
-                        <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                        <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 11, color: C.text, lineHeight: 1.4, marginBottom: 4 }}>{entry.text}</div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button onClick={() => respondToCoachingPrompt('performed')} style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 10, cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.target.style.background = 'rgba(16,185,129,0.35)'; }} onMouseLeave={e => { e.target.style.background = 'rgba(16,185,129,0.2)'; }}>✓ Done</button>
+                            <button onClick={() => respondToCoachingPrompt('skipped')} style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 10, cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.target.style.background = 'rgba(255,255,255,0.15)'; }} onMouseLeave={e => { e.target.style.background = 'rgba(255,255,255,0.08)'; }}>Skip</button>
+                            <span style={{ fontSize: 9, color: C.dim, marginLeft: 'auto', whiteSpace: 'nowrap' }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
