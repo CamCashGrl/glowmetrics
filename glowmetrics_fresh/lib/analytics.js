@@ -454,7 +454,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
       platform: rowPlatform || 'Unknown',
       tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(rowPlatform)),
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
-      tip_type: row.tip_type || 'Tip',
+      tip_type: sessionTypeValue || 'Tip',
       tip_note: row.note || row.tip_note || '',
       // Paid-chat/spy-mode/private-show rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat
