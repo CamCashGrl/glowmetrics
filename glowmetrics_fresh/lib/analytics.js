@@ -1587,3 +1587,93 @@ export function computeSnapshotStats(rows, windowDays = 31) {
 
   return { full, recent }
 }
+
+// ── FREE TIER 31-DAY WINDOW ENFORCEMENT ────────────────────────────────────────
+// Apply 31-day rolling window PER PLATFORM for free-tier analysis.
+// Free users see only the most recent 31 days per connected platform (activity-anchored,
+// not calendar-anchored). Pro users see full history.
+// This is a DISPLAY/ANALYSIS window, not a storage limit: all rows are persisted,
+// only what the analysis consumes changes.
+export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
+  if (!rows.length) return []
+
+  // Group by platform, compute window per platform (anchored to that platform's latest activity)
+  const byPlatform = {}
+  for (const row of rows) {
+    const platform = row.platform || 'unknown'
+    if (!byPlatform[platform]) {
+      byPlatform[platform] = []
+    }
+    byPlatform[platform].push(row)
+  }
+
+  const windowed = []
+  for (const platform in byPlatform) {
+    const platformRows = byPlatform[platform]
+    // Sort by date to find latest
+    const sorted = [...platformRows].sort((a, b) => {
+      const aDate = new Date(a.date_time || a.date || a.ts)
+      const bDate = new Date(b.date_time || b.date || b.ts)
+      return aDate - bDate
+    })
+
+    if (!sorted.length) continue
+
+    const latestDate = new Date(sorted[sorted.length - 1].date_time || sorted[sorted.length - 1].date || sorted[sorted.length - 1].ts)
+    const windowStart = new Date(latestDate.getTime() - (windowDays - 1) * 86400000)
+
+    // Keep only rows >= windowStart for this platform
+    const kept = sorted.filter(r => {
+      const rowDate = new Date(r.date_time || r.date || r.ts)
+      return rowDate >= windowStart
+    })
+
+    windowed.push(...kept)
+  }
+
+  return windowed
+}
+
+// ── Window exclusion summary for teaser signal detection ──────────────────────────
+// Summarizes what was excluded when applying the free-tier window.
+// Used to determine whether a Pro teaser card has "real signal" (there actually IS
+// excluded older data) vs. being fabricated/empty.
+export function summarizeWindowExclusion(allRows = [], windowedRows = []) {
+  if (allRows.length === windowedRows.length) {
+    // No exclusion happened
+    return {
+      excludedCount: 0,
+      oldestExcludedDate: null,
+      byPlatform: {},
+    }
+  }
+
+  // Find excluded rows
+  const windowedSet = new Set(windowedRows.map(r => `${r.username}|${r.platform}|${r.date_time || r.date || r.ts}`))
+  const excluded = allRows.filter(r => !windowedSet.has(`${r.username}|${r.platform}|${r.date_time || r.date || r.ts}`))
+
+  // Group excluded by platform
+  const byPlatform = {}
+  let oldestDate = null
+  for (const row of excluded) {
+    const platform = row.platform || 'unknown'
+    if (!byPlatform[platform]) {
+      byPlatform[platform] = { count: 0, oldestDate: null }
+    }
+    byPlatform[platform].count++
+
+    const rowDate = new Date(row.date_time || row.date || row.ts)
+    if (!byPlatform[platform].oldestDate || rowDate < new Date(byPlatform[platform].oldestDate)) {
+      byPlatform[platform].oldestDate = rowDate
+    }
+    if (!oldestDate || rowDate < oldestDate) {
+      oldestDate = rowDate
+    }
+  }
+
+  return {
+    excludedCount: excluded.length,
+    oldestExcludedDate: oldestDate,
+    byPlatform,
+  }
+}

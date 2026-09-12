@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 // Token rates — always imported from constants, never hardcoded
 import { tokenRate } from '../../../lib/constants'
+import { platformLimitMessage } from '../../../lib/planLimits'
 
 const BATCH_SIZE = 250
 
@@ -100,7 +101,7 @@ export async function POST(req) {
 
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
         return NextResponse.json({
-          error: 'Free tier tracks 1 platform. Upgrade to Standard ($19.99/mo) to track multiple platforms.',
+          error: platformLimitMessage(),
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
