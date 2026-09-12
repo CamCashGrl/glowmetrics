@@ -336,11 +336,15 @@ function detectDelimiter(text) {
     }
   }
 
-  // If tabs are present and outnumber commas, it's tab-delimited
-  if (tabCount > 0 && tabCount >= commaCount) return 'tab'
-  // If commas are present and outnumber tabs, it's comma-delimited
-  if (commaCount > 0) return 'comma'
-  // Ambiguous or no delimiters found
+  // Returns the actual delimiter CHARACTER, not a name. parseCSV passes this
+  // straight into parseCSVLine as the split token, so returning 'comma'/'tab'
+  // made it split on those literal words — which never occur in real data, so
+  // every line collapsed to a single column and every row failed isValidTip.
+  // Well-formed CSVs parsed to zero rows; only ambiguous files worked, because
+  // the null branch fell back to the correct ','.
+  if (tabCount > 0 && tabCount >= commaCount) return '\t'
+  if (commaCount > 0) return ','
+  // Ambiguous or no delimiters found — caller falls back to ','
   return null
 }
 

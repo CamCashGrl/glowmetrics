@@ -2162,7 +2162,22 @@ const stopImportMessageRotation = () => {
         body: fd,
       })
 
-      const result = await res.json()
+      // A timed-out or crashed function returns an empty/truncated body, and
+      // res.json() then throws "Unexpected end of JSON input" — which reads as
+      // a broken CSV when the file was actually fine. Read as text first and
+      // report what really happened.
+      const raw = await res.text()
+      let result
+      try {
+        result = raw ? JSON.parse(raw) : {}
+      } catch (parseErr) {
+        const tooLong = res.status === 504 || res.status === 413 || !raw
+        result = {
+          error: tooLong
+            ? 'The server stopped responding while importing this file — it may be too large to process in one upload. Try splitting it into smaller date ranges.'
+            : `Server returned an unreadable response (HTTP ${res.status}).`,
+        }
+      }
 
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
@@ -2221,7 +2236,10 @@ const stopImportMessageRotation = () => {
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
-    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); await loadData(user.id, false, { silent: true }) }
+    // Clear the cached tip list and force a refetch, exactly as deleteAllTips
+    // does. Without this the deleted row is served back from sessionStorage on
+    // the next load, so the tip reappears after a refresh.
+    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}; await loadData(user.id, true, { silent: true }) }
     catch (err) { showToast("❌ " + err.message) }
   }
 
