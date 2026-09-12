@@ -1,4 +1,5 @@
 "use client"
+export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
@@ -28,12 +29,20 @@ const TAB_LOADING = (
   </div>
 )
 // Lazy-loaded components - import them normally, React.lazy will handle them during render
-import AnalyticsCharts from './AnalyticsCharts'
-import StreamPlanner from './StreamPlanner'
-import MoneyMap from './MoneyMap'
-import PrivateSessions from './PrivateSessions'
-import DashboardGrowthCharts from './DashboardGrowthCharts'
-import TokenCalculator from '../guides/cam-model-token-calculator/TokenCalculatorClient'
+// Commenting out to debug which component causes the issue
+// import AnalyticsCharts from './AnalyticsCharts'
+// import StreamPlanner from './StreamPlanner'
+// import MoneyMap from './MoneyMap'
+// import PrivateSessions from './PrivateSessions'
+// import DashboardGrowthCharts from './DashboardGrowthCharts'
+// import TokenCalculator from '../guides/cam-model-token-calculator/TokenCalculatorClient'
+
+const AnalyticsCharts = null
+const StreamPlanner = null
+const MoneyMap = null
+const PrivateSessions = null
+const DashboardGrowthCharts = null
+const TokenCalculator = null
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
