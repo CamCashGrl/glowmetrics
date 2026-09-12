@@ -1020,6 +1020,46 @@ export function computeMilestones({ primaryStats, secondaryConnectedCount, strea
   ]
 }
 
+// Data import milestones: Show progress toward full 31-day window
+function calculateDataMilestones(maxHistoryDays) {
+  return [
+    { days: 1, label: 'Started tracking', done: maxHistoryDays >= 1 },
+    { days: 7, label: 'Weekly patterns visible', done: maxHistoryDays >= 7 },
+    { days: 14, label: 'Two-week trend established', done: maxHistoryDays >= 14 },
+    { days: 21, label: 'Monthly cycle emerging', done: maxHistoryDays >= 21 },
+    { days: 31, label: 'Full month of data', done: maxHistoryDays >= 31 },
+  ]
+}
+
+function DataMilestoneCard({ maxHistoryDays }) {
+  const milestones = calculateDataMilestones(maxHistoryDays)
+  const done = milestones.filter(m => m.done).length
+
+  // Only show when < 31 days
+  if (maxHistoryDays >= 31) return null
+
+  return (
+    <div className="pi-milestone-card" style={piCard({ padding: '14px 16px', marginTop: 14 })}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 900, color: PI.text, textTransform: 'uppercase', letterSpacing: '.08em' }}>Import progress</div>
+          <div style={{ fontSize: 11, color: PI.muted, marginTop: 3 }}>Unlock insights as you import more of your data.</div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 900, color: PI.cyan }}>{done} / {milestones.length}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 8 }}>
+        {milestones.map(m => (
+          <div key={m.days} style={{ padding: '9px 10px', borderRadius: 12, background: m.done ? 'rgba(89,217,142,.055)' : 'rgba(255,255,255,.022)', border: `1px solid ${m.done ? 'rgba(89,217,142,.15)' : 'rgba(255,255,255,.06)'}` }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: m.done ? PI.green : PI.muted }}>{m.done ? '✓' : '○'}</div>
+            <div style={{ fontSize: 9, color: m.done ? PI.body : PI.muted, lineHeight: 1.35, marginTop: 3 }}>{m.label}</div>
+            <div style={{ fontSize: 8, color: PI.muted, marginTop: 2, fontWeight: 700 }}>{m.days}d</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PlatformBadge({ name, size = 40, active = false }) {
   const meta = PLATFORM_META[name] || { short: '?', color: PI.muted }
   return (
@@ -1349,6 +1389,11 @@ export function PlatformIntelligenceHero({
   const secondaryConnectedCount = secondaryStats.filter(s => s.hasData).length
   const vault = computeDataVaultStats(tips)
   const milestones = computeMilestones({ primaryStats, secondaryConnectedCount, streamingPlatforms: profile?.streaming_platforms })
+
+  // Phase 2: Data milestones - max history across all connected platforms
+  const allStats = primaryStats ? [primaryStats, ...secondaryStats] : secondaryStats
+  const maxHistoryDays = allStats.length > 0 ? Math.max(...allStats.map(s => s?.fullHistoryDays || 0)) : 0
+
   const platformCount = [primary, ...secondary].filter(Boolean).length
   const comparisonCount = connectedSet.size
   const availableCount = Math.max(0, FREE_TIER_MAX_PLATFORMS - platformCount)
@@ -1380,6 +1425,9 @@ export function PlatformIntelligenceHero({
           </div>
         )}
       </div>
+
+      {/* Phase 2: Data import milestones card — shown when < 31 days of data */}
+      <DataMilestoneCard maxHistoryDays={maxHistoryDays} />
 
       <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} />
 
