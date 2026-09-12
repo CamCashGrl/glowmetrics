@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
+import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -46,6 +47,24 @@ export async function POST(req) {
   const explicitPlatform = (fd.get('platform') || '').toString().trim()
   const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
   const parsed = parseCSV(raw)
+
+  // Log parse attempt to track platform support and format issues
+  const formatAnalysis = analyzeFormat(raw)
+  await supabase.rpc('log_paste_parse_attempt', {
+    p_user_id: user.id,
+    p_source: 'dashboard',
+    p_attempted_platform: textDetectedPlatform,
+    p_claimed_platform: explicitPlatform || null,
+    p_supported: ['Chaturbate', 'BongaCams', 'MyFreeCams'].includes(textDetectedPlatform),
+    p_raw_text: raw.substring(0, 500),
+    p_line_count: formatAnalysis.line_count || null,
+    p_has_tabs: formatAnalysis.has_tabs || null,
+    p_has_commas: formatAnalysis.has_commas || null,
+    p_top_shapes: formatAnalysis.top_shapes || null,
+    p_parse_success: parsed.length > 0,
+    p_error_reason: parsed.length > 0 ? null : 'CSV parsing returned no rows',
+    p_error_details: formatAnalysis,
+  }).catch(err => console.error('Failed to log parse attempt:', err))
 
   const rows = parsed.map((row) => {
     const tokens = Number(row.tokens) || 0
