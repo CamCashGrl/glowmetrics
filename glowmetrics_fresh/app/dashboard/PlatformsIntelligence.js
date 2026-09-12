@@ -235,7 +235,7 @@ function UnifiedView({ analytics, isPro }) {
           { label: 'Earnings', value: fmt$0(snapshot.totalEarnings), color: C.green },
           { label: 'Tips', value: fmtN(snapshot.totalTips) },
           { label: 'Hours', value: hasHours ? fmtH(snapshot.totalHours) : '—', sub: hasHours ? null : 'no timed sessions' },
-          { label: '$ / hour', value: snapshot.usdPerHour === null ? '—' : fmt$(snapshot.usdPerHour), sub: snapshot.usdPerHour === null ? null : `est · ${snapshot.rateHours}h rated`, color: snapshot.usdPerHour === null ? C.muted : C.cyan },
+          { label: '$ / hour', value: snapshot.usdPerHour === null ? '—' : fmt$(snapshot.usdPerHour), sub: snapshot.usdPerHour === null ? null : `est · ${fmt$0(snapshot.rateUSD)} / ${snapshot.rateHours}h`, color: snapshot.usdPerHour === null ? C.muted : C.cyan },
           { label: 'Sessions', value: fmtN(snapshot.sessions) },
           { label: 'Platforms', value: fmtN(snapshot.platformCount) },
         ]} />
@@ -434,7 +434,9 @@ function SplitView({ analytics, platformName, isPro }) {
           { label: 'Share', value: `${snap.earningsPercent}%` },
           { label: 'Tips', value: fmtN(snap.tips) },
           { label: 'Hours', value: snap.hours > 0 ? fmtH(snap.hours) : '—' },
-          { label: '$ / hour', value: snap.usdPerHour > 0 ? fmt$(snap.usdPerHour) : '—', color: snap.usdPerHour > 0 ? accent : C.muted },
+          // Sub-label names the hours the rate divides by, which is a subset of
+          // Hours beside it — without it the two read as failing to divide.
+          { label: '$ / hour', value: snap.usdPerHour > 0 ? fmt$(snap.usdPerHour) : '—', sub: snap.rateHours > 0 ? `est · ${fmt$0(snap.rateUSD)} / ${snap.rateHours}h` : null, color: snap.usdPerHour > 0 ? accent : C.muted },
           { label: 'Sessions', value: fmtN(snap.sessions) },
         ]} />
       </Section>

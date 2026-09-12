@@ -2322,14 +2322,15 @@ const stopImportMessageRotation = () => {
   const platformBestTimes     = analytics?.platformBestTimes     || {}
   const earningsVelocity      = analytics?.earningsVelocity      ?? null
   const platformVelocity      = analytics?.platformVelocity      || {}
-  // Platform $/hr, single source of truth — mirrors the exact formula used by
-  // the "Platform ROI ($/hr streamed)" card below (What's Working section) so
-  // every $/hr shown on this page always agrees for the same platform. Do not
-  // give the Overview hero its own session-eligibility or time-window rule for
-  // this figure; if the ROI card's formula ever changes, update it here too.
+  // Platform $/hr, single source of truth — taken straight from the engine,
+  // which builds every hourly rate from one set of eligible sessions. Never
+  // substitute a locally computed rate when the engine reports none: a platform
+  // can have streamed hours without any session whose duration is reliable
+  // enough to divide by, and dividing its full revenue by those hours produces
+  // a rate far above the one shown everywhere else. No rate is correct there.
   const platformRoiMap = {}
   ;(analytics?.platforms || []).forEach(p => {
-    platformRoiMap[p.platform] = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : null)
+    platformRoiMap[p.platform] = platformVelocity[p.platform] ?? null
   })
   const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
   const returningVsNew        = analytics?.returningVsNew        || null
@@ -3700,7 +3701,7 @@ const stopImportMessageRotation = () => {
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
                     <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
                       {allPlats.map((p, i) => {
-                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : null)
+                        const roi = platformRoiMap[p.platform] ?? null
                         const bestTime = platformBestTimes[p.platform]
                         const col = platColors[p.platform] || C.blue
                         const isTop = i === 0
