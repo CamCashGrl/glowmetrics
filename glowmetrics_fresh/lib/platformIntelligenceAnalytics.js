@@ -48,6 +48,7 @@ export function buildBusinessSnapshot(analytics) {
     // estimate — imported CSVs never carry real stream start/end times.
     usdPerHour: analytics.estimatedHourlyRate ?? null,
     rateHours: parseFloat(((analytics.hourlyRateTotalMinutes || 0) / 60).toFixed(1)),
+    rateUSD: analytics.hourlyRateTotalUsd ?? 0,
     sessions,
     platformCount: platforms.length,
     avgEarningsPerSession: sessions > 0 ? round2(totalEarnings / sessions) : 0,
