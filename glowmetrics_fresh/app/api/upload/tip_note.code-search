@@ -1,0 +1,76 @@
+# Query: tip_note
+# ContextLines: 1
+
+22 results - 4 files
+
+glowmetrics_fresh\app\api\upload\route.js:
+  52        // normalize notes safely
+  53:       tip_note:
+  54:        row.tip_note ??
+  row.note ??
+  row.message ??
+  row['tip message'] ??
+  '',
+
+glowmetrics_fresh\app\dashboard\page.js:
+  976            usd,
+  977:           tip_note: r.tip_note || r.note || ""
+  978          }
+
+glowmetrics_fresh\lib\analytics.js:
+   130    let inferred = 'Unknown'
+   131:   const note = ((tip.tip_note || '') + ' ' + (tip.tip_type || '')).toLowerCase()
+   132    if (note.includes('chaturbate') || note.includes('tip from')) inferred = 'Chaturbate'
+
+   835    if ([
+   836:     'note', 'tip_note', 'message', 'tip_message', 'comment',
+   837      'comment_text', 'msg', 'text', 'note_text', 'tip_comment',
+
+   976        tip_type: row.tip_type || 'Tip',
+   977:       tip_note: row.note || row.tip_note || ''
+   978      })
+
+  1010          usd: parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
+  1011:         tip_type: 'Tip', tip_note: ''
+  1012        })
+
+  1031          usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * getTokenRate(platform)).toFixed(2)),
+  1032:         tip_type: vals[2] || 'Tip', tip_note: ''
+  1033        })
+
+  1077          usd: parseFloat(usd.toFixed(2)),
+  1078:         tip_type: 'Tip', tip_note: ''
+  1079        })
+
+  1235      fanMap[key].tips.push(t)
+  1236:     if (t.tip_note) fanMap[key].tipNotes.push(t.tip_note)
+  1237    })
+
+  1277        t.tip_type?.toLowerCase().includes('private') ||
+  1278:       t.tip_note?.toLowerCase().includes('private')
+  1279      )
+
+glowmetrics_fresh\lib\engine.js:
+  317        tip_type: row.tip_type || 'Tip',
+  318:       tip_note: row.note || row.tip_note || ''
+  319      })
+
+  351          usd: parseFloat((tokens * 0.05).toFixed(2)),
+  352:         tip_type: 'Tip', tip_note: ''
+  353        })
+
+  372          usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * 0.05).toFixed(2)),
+  373:         tip_type: vals[2] || 'Tip', tip_note: ''
+  374        })
+
+  418          usd: parseFloat(usd.toFixed(2)),
+  419:         tip_type: 'Tip', tip_note: ''
+  420        })
+
+  527      fanMap[key].tips.push(t)
+  528:     if (t.tip_note) fanMap[key].tipNotes.push(t.tip_note)
+  529    })
+
+  563        t.tip_type?.toLowerCase().includes('private') ||
+  564:       t.tip_note?.toLowerCase().includes('private')
+  565      )

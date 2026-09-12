@@ -1,0 +1,34 @@
+{
+  "name": "glowmetrics",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "jest",
+    "indexnow": "node scripts/indexnow-submit.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@vercel/analytics": "^1.3.1",
+    "@vercel/edge-config": "^1.4.3",
+    "next": "14.2.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^2.10.0",
+    "resend": "^6.12.3",
+    "stripe": "^14.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "autoprefixer": "^10.4.16",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0"
+  }
+}

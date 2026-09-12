@@ -1,0 +1,11 @@
+{
+  "name": "camcash-extension-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node popup-harness.mjs && node background-harness.mjs && node content-harness.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.47.0"
+  }
+}
