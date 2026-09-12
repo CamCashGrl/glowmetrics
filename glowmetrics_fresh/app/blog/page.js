@@ -8,6 +8,51 @@ export const metadata = {
 
 const posts = [
   {
+    slug: 'chaturbate-earnings-tracker',
+    title: 'Chaturbate Earnings Tracker for Cam Models',
+    description: 'Track Chaturbate earnings, tips, hours, and performance patterns with a structured workbook.',
+  },
+  {
+    slug: 'chaturbate-earnings-growth-bundle',
+    title: 'Chaturbate Earnings & Growth Bundle',
+    description: 'Earnings tracking + planning + testing + follow-ups in one workbook for Chaturbate cam models.',
+  },
+  {
+    slug: 'cam-model-tip-menu-templates',
+    title: '320 Cam Model Tip Menu Ideas & Templates',
+    description: '320 organized tip-menu ideas, 20 editable templates, and performance tracking for your cam room.',
+  },
+  {
+    slug: 'vip-client-tracker',
+    title: 'VIP Client Tracker for Cam Models',
+    description: 'Track high-value fans, spending, preferences, and follow-up plans in one place.',
+  },
+  {
+    slug: 'roll-the-dice-game-pack',
+    title: 'Cam Room Dice Game Ideas and Results Tracker',
+    description: 'Game ideas, pricing guides, and tracking for organizing tip games in your cam room.',
+  },
+  {
+    slug: 'sph-script-pack',
+    title: 'SPH Script Pack for Cam Creators',
+    description: 'Organized session prompts and transitions for structured content creation.',
+  },
+  {
+    slug: 'daddys-girl-roleplay-script-pack',
+    title: "Daddy's Girl Roleplay Script Pack",
+    description: 'Creator-focused prompts and transitions for organized roleplay sessions.',
+  },
+  {
+    slug: 'sissy-training-obedience-bundle',
+    title: 'Sissy Training & Obedience Bundle for Adult Creators',
+    description: 'Complete workbook with agreements, planning, tracking, and session organization.',
+  },
+  {
+    slug: '101-sexting-tips-long-distance',
+    title: '101 Sexting Tips for Long-Distance Relationships',
+    description: 'Ideas and planning for intimate digital communication in long-distance relationships.',
+  },
+  {
     slug: 'how-to-upload-csv-to-camcash',
     title: 'How to Upload a CSV to CamCash (Step-by-Step SOP + Video)',
     description: 'A step-by-step walkthrough for exporting your tip history, formatting it in Google Sheets, and uploading it to CamCash — plus the browser extension alternative.',
