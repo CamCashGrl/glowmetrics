@@ -993,9 +993,9 @@ function PiLabel({ children }) {
 
 function PiMetric({ label, value, accent = PI.text }) {
   return (
-    <div>
+    <div style={{ flex: '1 1 auto', minWidth: 0 }}>
       <div style={{ fontSize: 10, color: PI.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 21, lineHeight: 1.05, fontWeight: 900, color: accent, letterSpacing: '-0.03em' }}>{value}</div>
+      <div style={{ fontSize: 21, lineHeight: 1.05, fontWeight: 900, color: accent, letterSpacing: '-0.03em', whiteSpace: 'nowrap' }}>{value}</div>
     </div>
   )
 }
@@ -1025,7 +1025,10 @@ function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
             <div style={{ marginTop: 18, marginBottom: 14 }}>
               <PiLabel>{stats.windowDays < SNAPSHOT_WINDOW_DAYS ? `${stats.windowDays} days available` : `Most recent ${SNAPSHOT_WINDOW_DAYS} days`}</PiLabel>
             </div>
-            <div className="pi-primary-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14 }}>
+            {/* flex-wrap, not a fixed 4-col grid: grid columns size to the
+                container, so a long earnings value (e.g. $219.70) overflowed
+                its track and collided with the tip count beside it. */}
+            <div className="pi-primary-metrics" style={{ display: 'flex', flexWrap: 'wrap', columnGap: 14, rowGap: 12 }}>
               <PiMetric label="Earnings" value={fmt$(stats.usd)} accent={PI.gold} />
               <PiMetric label="Tips" value={fmtN(stats.tipCount)} />
               <PiMetric label="Hours" value={stats.hours > 0 ? `${stats.hours}h` : '—'} />
