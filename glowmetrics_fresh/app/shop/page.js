@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { PRODUCTS } from "../../lib/shop-products";
 
