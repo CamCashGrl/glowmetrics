@@ -317,7 +317,7 @@ function parseCSVLine(line, delimiter = ',') {
 // Returns 'comma', 'tab', or null if detection is ambiguous
 function detectDelimiter(text) {
   const lines = text.trim().split('\n').slice(0, 10) // Check first 10 lines
-  if (lines.length === 0) return 'comma' // Default to comma
+  if (lines.length === 0) return ',' // Default to comma
 
   let commaCount = 0
   let tabCount = 0
