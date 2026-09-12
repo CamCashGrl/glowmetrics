@@ -1506,6 +1506,12 @@ export default function Dashboard() {
   const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
   const windowSummary = summarizeWindowExclusion(tips, analysisTips)
 
+  // whales must be declared before use here — buildProTeasers reads it below,
+  // and this runs unconditionally on every render (including before the
+  // loading gate), so declaring it later caused a TDZ ReferenceError on
+  // every single dashboard load.
+  const whales = analytics?.whales || []
+
   // Build Pro teaser cards (only shown to free users when real signal exists)
   const proTeasers = buildProTeasers({
     tips,
@@ -2005,6 +2011,35 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+      // Fetch live tips and merge into main analytics dataset
+      // Live tips (real-time earnings from extension) are as important as CSV tips
+      let allLiveTips = []
+      try {
+        const { data: liveRows, error: liveErr } = await supabase
+          .from("live_tips")
+          .select("*")
+          .eq("user_id", uid)
+          .order("received_at", { ascending: true })
+        if (!liveErr && liveRows?.length) {
+          // Convert live_tips rows to same format as tips rows for analytics
+          allLiveTips = liveRows.map(lt => ({
+            ...lt,
+            date_time: lt.received_at, // normalize field name for analytics
+            source: 'live_mode' // mark as live for visibility
+          }))
+          // Track live tips total for Private Sessions page
+          setLiveTipsTotalUSD(allLiveTips.reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
+        }
+      } catch (e) { /* non-fatal — analytics just excludes live tips */ }
+
+      // Merge live tips into main dataset for analytics
+      // Sort by date so runEngine sees chronological order
+      if (allLiveTips.length > 0) {
+        allData = [...allData, ...allLiveTips].sort((a, b) =>
+          new Date(a.date_time || a.received_at) - new Date(b.date_time || b.received_at)
+        )
+      }
+
       if (allData.length) {
         setTips(allData)
         try {
@@ -2035,14 +2070,6 @@ export default function Dashboard() {
         paidFrom += PAGE
       }
       setPaidSessions(allPaidSessions)
-
-      // Live Mode total, for the Private Sessions page's revenue-sources
-      // summary only — kept as its own query against its own table, never
-      // merged into `tips`/`paidSessions` rows or the `analytics` totals.
-      try {
-        const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("usd").eq("user_id", uid)
-        if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
-      } catch (e) { /* non-fatal — Private Sessions page just omits this total */ }
 
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
@@ -2217,7 +2244,6 @@ const stopImportMessageRotation = () => {
   }
 
   const sessions = analytics?.sessions || []
-  const whales = analytics?.whales || []
   // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
   // normalized username, never merged across platforms) -- reused by the
   // existing Top Fans list and now also by Private Sessions. If the fan has

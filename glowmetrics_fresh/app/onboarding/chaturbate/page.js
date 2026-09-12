@@ -1,16 +1,22 @@
 'use client'
+export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { track } from '../../../lib/track'
 
 export default function ChaturbateOnboardingPage() {
   const router = useRouter()
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  )
+  const supabaseRef = useRef(null)
+
+  if (!supabaseRef.current && typeof window !== 'undefined') {
+    supabaseRef.current = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    )
+  }
+  const supabase = supabaseRef.current || { auth: {}, session: null }
 
   const [step, setStep] = useState(1) // 1 = Stats, 2 = Tips (CSV), 3 = Done
   const [broadcasterType, setBroadcasterType] = useState('female')
