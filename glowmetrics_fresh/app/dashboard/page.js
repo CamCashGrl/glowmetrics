@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
@@ -2076,6 +2077,23 @@ const stopImportMessageRotation = () => {
     setLastUploadResult(null)
     setLockedPreview({ platform: detectedLabel, preview })
     setImportStage('locked_preview')
+
+    // Log parse attempt for analysis
+    if (user?.id && rawText) {
+      const formatAnalysis = analyzeFormat(rawText)
+      logParseAttempt({
+        userId: user.id,
+        source: 'dashboard',
+        attemptedPlatform: detectedLabel,
+        claimedPlatform: platformLabel,
+        rawText,
+        formatAnalysis,
+        parseSuccess: !!preview,
+        errorReason: preview ? null : "Could not parse file — no valid rows found",
+        errorDetails: formatAnalysis,
+      })
+    }
+
     // Only play the celebratory checkmark/sparkle when we actually found
     // something to preview — an unparseable file isn't a "confirmation".
     if (preview) {
