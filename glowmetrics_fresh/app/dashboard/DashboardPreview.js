@@ -1060,6 +1060,235 @@ function DataMilestoneCard({ maxHistoryDays }) {
   )
 }
 
+// Phase 3: Platform breakdown calculations
+function calculateSessionTypeBreakdown(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, _source: 'tip', session_type: t.tip_type || 'Tip' })),
+    ...platPaid.map(p => ({ ...p, _source: 'paid', session_type: p.session_type || 'Private' }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => new Date(r.date_time || r.dateRaw) >= windowStart)
+
+  const breakdown = {}
+  let totalUSD = 0
+
+  windowRevenue.forEach(r => {
+    const type = r.session_type || 'Other'
+    if (!breakdown[type]) breakdown[type] = { usd: 0, count: 0 }
+    breakdown[type].usd += parseFloat(r.usd) || 0
+    breakdown[type].count += 1
+    totalUSD += parseFloat(r.usd) || 0
+  })
+
+  return Object.entries(breakdown).map(([type, data]) => ({
+    type,
+    usd: parseFloat(data.usd.toFixed(2)),
+    count: data.count,
+    pct: totalUSD > 0 ? Math.round((data.usd / totalUSD) * 100) : 0
+  })).sort((a, b) => b.usd - a.usd)
+}
+
+function calculateDayOfWeekBreakdown(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, date: new Date(t.date_time) })),
+    ...platPaid.map(p => ({ ...p, date: new Date(p.date_time) }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => r.date >= windowStart)
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const breakdown = {}
+
+  dayNames.forEach((day, idx) => {
+    breakdown[day] = { usd: 0, count: 0, dayNum: idx }
+  })
+
+  windowRevenue.forEach(r => {
+    if (isNaN(r.date.getTime())) return
+    const dayName = dayNames[r.date.getDay()]
+    breakdown[dayName].usd += parseFloat(r.usd) || 0
+    breakdown[dayName].count += 1
+  })
+
+  return dayNames.map(day => ({
+    day,
+    usd: parseFloat(breakdown[day].usd.toFixed(2)),
+    count: breakdown[day].count
+  }))
+}
+
+function calculatePeakHours(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, date: new Date(t.date_time) })),
+    ...platPaid.map(p => ({ ...p, date: new Date(p.date_time) }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => r.date >= windowStart)
+
+  const breakdown = {}
+  for (let h = 0; h < 24; h++) {
+    breakdown[h] = { usd: 0, count: 0 }
+  }
+
+  windowRevenue.forEach(r => {
+    if (isNaN(r.date.getTime())) return
+    const hour = r.date.getHours()
+    breakdown[hour].usd += parseFloat(r.usd) || 0
+    breakdown[hour].count += 1
+  })
+
+  return Object.entries(breakdown)
+    .map(([hour, data]) => ({
+      hour: parseInt(hour),
+      hourLabel: `${String(hour).padStart(2, '0')}:00`,
+      usd: parseFloat(data.usd.toFixed(2)),
+      count: data.count
+    }))
+    .filter(h => h.count > 0)
+    .sort((a, b) => b.usd - a.usd)
+    .slice(0, 7)
+}
+
+function calculateTopFans(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ username: t.username || 'Guest', usd: t.usd, date: new Date(t.date_time) })),
+    ...platPaid.map(p => ({ username: 'Private', usd: p.usd, date: new Date(p.date_time) }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => r.date >= windowStart)
+
+  const breakdown = {}
+  let totalUSD = 0
+
+  windowRevenue.forEach(r => {
+    const name = r.username
+    if (!breakdown[name]) breakdown[name] = 0
+    breakdown[name] += parseFloat(r.usd) || 0
+    totalUSD += parseFloat(r.usd) || 0
+  })
+
+  return Object.entries(breakdown)
+    .map(([name, usd]) => ({
+      name,
+      usd: parseFloat(usd.toFixed(2)),
+      pct: totalUSD > 0 ? Math.round((usd / totalUSD) * 100) : 0
+    }))
+    .sort((a, b) => b.usd - a.usd)
+    .slice(0, 5)
+}
+
+function PlatformBreakdown({ tips, paidSessions, platform, windowDays = 31 }) {
+  const [open, setOpen] = useState(false)
+
+  const sessionTypes = calculateSessionTypeBreakdown(tips, paidSessions, platform, windowDays)
+  const daysOfWeek = calculateDayOfWeekBreakdown(tips, paidSessions, platform, windowDays)
+  const peakHours = calculatePeakHours(tips, paidSessions, platform, windowDays)
+  const topFans = calculateTopFans(tips, paidSessions, platform, windowDays)
+
+  if (!sessionTypes.length) return null
+
+  const fmt$ = (n) => `$${(n || 0).toFixed(2)}`
+
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid ${PI.border}`, paddingTop: 10 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: 'none', border: 'none', color: PI.cyan, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+      >
+        {open ? '▼ Hide breakdown' : '▶ View breakdown →'}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Session Type Breakdown */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Earnings by type</div>
+            {sessionTypes.map(st => (
+              <div key={st.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 4, color: PI.body }}>
+                <div>{st.type}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ width: 40, textAlign: 'right' }}>{st.pct}%</div>
+                  <div style={{ width: 50, textAlign: 'right' }}>{fmt$(st.usd)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Day of Week Breakdown */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Earnings by day</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+              {daysOfWeek.map(d => (
+                <div key={d.day} style={{ textAlign: 'center', fontSize: 9 }}>
+                  <div style={{ color: d.count > 0 ? PI.cyan : PI.muted, fontWeight: 700 }}>{d.day.slice(0, 3)}</div>
+                  <div style={{ color: PI.body, marginTop: 2, fontSize: 10, fontWeight: 700 }}>{fmt$(d.usd)}</div>
+                  <div style={{ color: PI.muted, fontSize: 8, marginTop: 1 }}>{d.count} {d.count === 1 ? 'tip' : 'tips'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Peak Hours */}
+          {peakHours.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Peak hours (top 7)</div>
+              {peakHours.map(h => (
+                <div key={h.hour} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 4, color: PI.body }}>
+                  <div>{h.hourLabel}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ width: 50, textAlign: 'right' }}>{fmt$(h.usd)}</div>
+                    <div style={{ fontSize: 9, color: PI.muted }}>({h.count})</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top Fans */}
+          {topFans.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Top supporters</div>
+              {topFans.map((f, i) => (
+                <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 4, color: PI.body }}>
+                  <div>{i + 1}. {f.name}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ width: 40, textAlign: 'right' }}>{f.pct}%</div>
+                    <div style={{ width: 50, textAlign: 'right', fontWeight: 700 }}>{fmt$(f.usd)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlatformBadge({ name, size = 40, active = false }) {
   const meta = PLATFORM_META[name] || { short: '?', color: PI.muted }
   return (
@@ -1100,7 +1329,7 @@ function PiMetric({ label, value, accent = PI.text }) {
   )
 }
 
-function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
+function PlatformCard({ platform, stats, primary, onConnect, onUnlock, tips = [], paidSessions = [] }) {
   const connected = !!stats?.hasData
   const meta = PLATFORM_META[platform] || { color: PI.muted, short: '?' }
   return (
@@ -1178,6 +1407,9 @@ function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
                 )}
               </div>
             </div>
+
+            {/* Phase 3: Platform breakdown */}
+            <PlatformBreakdown tips={tips} paidSessions={paidSessions} platform={platform} windowDays={SNAPSHOT_WINDOW_DAYS} />
           </>
         ) : (
           <div style={{ marginTop: 20 }}>
@@ -1414,8 +1646,8 @@ export function PlatformIntelligenceHero({
       </div>
 
       <div className={`pi-platform-grid pi-platform-grid-${Math.min(platformCount || 1, 3)}`}>
-        {primary && <PlatformCard platform={primary} stats={primaryStats} primary onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(primary)} />}
-        {secondary.map((p, i) => <PlatformCard key={p} platform={p} stats={secondaryStats[i]} onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(p)} />)}
+        {primary && <PlatformCard platform={primary} stats={primaryStats} primary onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(primary)} tips={tips} paidSessions={paidSessions} />}
+        {secondary.map((p, i) => <PlatformCard key={p} platform={p} stats={secondaryStats[i]} onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(p)} tips={tips} paidSessions={paidSessions} />)}
         {!primary && (
           <div style={piCard({ padding: 22, minHeight: 160, display: 'flex', flexDirection: 'column', justifyContent: 'center' })}>
             <PiLabel>Platform setup</PiLabel>
