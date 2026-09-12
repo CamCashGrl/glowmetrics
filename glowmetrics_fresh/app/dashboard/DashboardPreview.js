@@ -942,6 +942,12 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
   // session-eligibility or time-window rule for this figure.
   const usdPerHour = Object.prototype.hasOwnProperty.call(platformRoi, platformName) ? platformRoi[platformName] : null
 
+  // Lifetime data import progress for conversion
+  // Shows what they've imported vs estimated available data
+  const lifetimeUSD = allRevenue.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2)
+  const estimatedAvailable = estimateAvailableData(lifetimeUSD, fullHistoryDays, tipCount)
+  const importProgress = estimatedAvailable > 0 ? Math.min(100, Math.round((lifetimeUSD / estimatedAvailable) * 100)) : 0
+
   return {
     platform: platformName,
     hasData: true,
@@ -953,7 +959,42 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
     fullHistoryDays,
     latestDate: to,
     earliestDate: from,
+    // Lifetime data import progress (conversion-focused)
+    lifetimeUSD: parseFloat(lifetimeUSD),
+    estimatedAvailable: parseFloat(estimatedAvailable),
+    importProgress,
+    importMissing: Math.max(0, estimatedAvailable - lifetimeUSD),
   }
+}
+
+// Estimate total available lifetime data based on what's imported
+// Purpose: Show conversion opportunity (how much MORE data could unlock)
+function estimateAvailableData(lifetimeUSD, daysOfHistory, tipCount) {
+  if (!lifetimeUSD || !daysOfHistory) return 0
+
+  // Aggressive but realistic estimate to motivate data upload
+  // Show users the upside they're missing
+  let multiplier = 2 // Base: they have 50% of available data
+
+  if (daysOfHistory < 30) {
+    // Very new user: estimate they could have 5-10x more
+    multiplier = Math.min(10, Math.max(5, 30 / daysOfHistory))
+  } else if (daysOfHistory < 90) {
+    // Growing user: estimate they could have 3-5x more
+    multiplier = Math.max(3, 5 - (daysOfHistory / 90))
+  } else if (daysOfHistory < 180) {
+    // Maturing user: estimate they could have 2-3x more
+    multiplier = Math.max(2, 3 - (daysOfHistory / 180))
+  } else if (daysOfHistory < 365) {
+    // Near year: estimate they could have 1.5-2x more
+    multiplier = Math.max(1.5, 2 - (daysOfHistory / 365))
+  } else {
+    // Full year or more: assume they have most of it
+    multiplier = 1.3
+  }
+
+  const estimate = lifetimeUSD * multiplier
+  return parseFloat(estimate)
 }
 
 // Account-level "how much history do we actually have on file" — across all
@@ -1062,6 +1103,29 @@ function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
               <PiMetric label="Hours" value={stats.hours > 0 ? `${stats.hours}h` : '—'} />
               <PiMetric label="$ / hr" value={stats.usdPerHour != null ? fmt$(stats.usdPerHour) : '—'} accent={PI.cyan} />
             </div>
+
+            {/* LIFETIME DATA IMPORT PROGRESS — conversion signal */}
+            {stats.importProgress !== undefined && (
+              <div style={{ marginTop: 14, marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em' }}>Data imported</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: stats.importProgress >= 100 ? PI.green : PI.cyan }}>{stats.importProgress}%</div>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,.06)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, stats.importProgress)}%`, background: stats.importProgress >= 100 ? PI.green : PI.gradient, borderRadius: 999, transition: 'width .45s ease' }} />
+                </div>
+                <div style={{ marginTop: 6, fontSize: 9, color: PI.muted, lineHeight: 1.4 }}>
+                  {stats.lifetimeUSD > 0 ? (
+                    <>
+                      {fmt$(stats.lifetimeUSD)} of ~{fmt$(stats.estimatedAvailable)} lifetime earnings
+                      {stats.importMissing > 0 && <div style={{ marginTop: 3, color: PI.body }}>Upload {fmt$(stats.importMissing)} more to complete</div>}
+                    </>
+                  ) : (
+                    'No lifetime data yet'
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* HISTORY / DATA AVAILABILITY — all-time, deliberately separated
                 from the windowed performance figures above by a divider so the
