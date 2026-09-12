@@ -53,14 +53,21 @@ export const hasProAccess = async (userId) => {
     return false
   }
 
-  // Has pro plan
-  if (profile.plan === 'pro') {
-    // Check if trial is still valid
-    if (profile.trial_ends_at) {
-      return new Date(profile.trial_ends_at) > new Date()
-    }
-    // No trial or trial expired, check subscription status
-    return profile.subscription_status === 'active' || profile.subscription_status === 'trialing'
+  if (profile.plan !== 'pro') {
+    return false
+  }
+
+  // subscription_status is authoritative — Stripe leaves trial_end populated
+  // with the original trial date even after the subscription goes active, so
+  // checking trial_ends_at first would incorrectly lock out paying customers
+  // once that date passes.
+  if (profile.subscription_status === 'active' || profile.subscription_status === 'trialing') {
+    return true
+  }
+
+  // subscription_status missing/unknown — fall back to the trial window.
+  if (!profile.subscription_status && profile.trial_ends_at) {
+    return new Date(profile.trial_ends_at) > new Date()
   }
 
   return false

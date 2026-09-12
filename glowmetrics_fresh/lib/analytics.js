@@ -1611,37 +1611,61 @@ export function computePaidSessionAnalytics(sessions) {
 // limit: callers must still persist every valid row regardless of what this
 // returns — it only describes what date range the "full" vs "recent" stats
 // cover, from data that's already been correctly parsed/validated upstream.
-export function computeSnapshotStats(rows, windowDays = 31) {
-  const dated = rows
+function normalizeDatedRows(rows) {
+  return rows
     .map(r => ({
-      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts),
+      raw: r,
+      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts || r.date_time),
       tokens: Number(r.tokens) || 0,
       usd: Number(r.usd) || 0,
     }))
     .filter(r => !isNaN(r.date.getTime()))
     .sort((a, b) => a.date - b.date)
+}
 
+// Window bounds for the most recent `windowDays`, anchored to the latest
+// row's OWN date — never `now()`. This is real activity-based freshness,
+// not upload-timestamp-based (a batch uploaded today covering old activity
+// must not look "recent"). `datedRowsAsc` must already be normalized +
+// sorted ascending (see normalizeDatedRows).
+export function getSnapshotWindowBounds(datedRowsAsc, windowDays) {
+  if (!datedRowsAsc.length) return null
+  const from = datedRowsAsc[0].date
+  const to = datedRowsAsc[datedRowsAsc.length - 1].date
+  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  const cutoff = windowStart < from ? from : windowStart
+  return { from, to, cutoff }
+}
+
+// Rows (in their original shape) whose date falls within the most recent
+// `windowDays` of THIS SAME row set's own latest activity.
+export function filterToRecentWindow(rows, windowDays) {
+  const dated = normalizeDatedRows(rows)
+  if (!dated.length) return []
+  const bounds = getSnapshotWindowBounds(dated, windowDays)
+  return dated.filter(r => r.date >= bounds.cutoff).map(r => r.raw)
+}
+
+export function computeSnapshotStats(rows, windowDays = 31) {
+  const dated = normalizeDatedRows(rows)
   const empty = { from: null, to: null, days: 0, tips: 0, tokens: 0, usd: 0 }
   if (!dated.length) return { full: empty, recent: { ...empty, isPartial: true } }
 
-  const from = dated[0].date
-  const to = dated[dated.length - 1].date
-  const fullDays = Math.floor((to - from) / 86400000) + 1
+  const bounds = getSnapshotWindowBounds(dated, windowDays)
+  const fullDays = Math.floor((bounds.to - bounds.from) / 86400000) + 1
 
   const full = {
-    from, to, days: fullDays,
+    from: bounds.from, to: bounds.to, days: fullDays,
     tips: dated.length,
     tokens: dated.reduce((s, r) => s + r.tokens, 0),
     usd: parseFloat(dated.reduce((s, r) => s + r.usd, 0).toFixed(2)),
   }
 
-  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
-  const recentStart = windowStart < from ? from : windowStart
-  const recentRows = dated.filter(r => r.date >= recentStart)
-  const recentDays = Math.floor((to - recentStart) / 86400000) + 1
+  const recentRows = dated.filter(r => r.date >= bounds.cutoff)
+  const recentDays = Math.floor((bounds.to - bounds.cutoff) / 86400000) + 1
 
   const recent = {
-    from: recentStart, to, days: recentDays,
+    from: bounds.cutoff, to: bounds.to, days: recentDays,
     tips: recentRows.length,
     tokens: recentRows.reduce((s, r) => s + r.tokens, 0),
     usd: parseFloat(recentRows.reduce((s, r) => s + r.usd, 0).toFixed(2)),
@@ -1651,92 +1675,43 @@ export function computeSnapshotStats(rows, windowDays = 31) {
   return { full, recent }
 }
 
-// ── FREE TIER 31-DAY WINDOW ENFORCEMENT ────────────────────────────────────────
-// Apply 31-day rolling window PER PLATFORM for free-tier analysis.
-// Free users see only the most recent 31 days per connected platform (activity-anchored,
-// not calendar-anchored). Pro users see full history.
-// This is a DISPLAY/ANALYSIS window, not a storage limit: all rows are persisted,
-// only what the analysis consumes changes.
-export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
-  if (!rows.length) return []
-
-  // Group by platform, compute window per platform (anchored to that platform's latest activity)
+// ── Free-tier live analysis window ───────────────────────────────────────
+// Applies the 31-day rolling window PER CONNECTED PLATFORM (not globally) —
+// a platform a creator hasn't streamed on in months would otherwise show
+// zero data just because another platform is more recently active. Older
+// rows are never deleted or modified; this only filters what a Free-tier
+// analysis pass sees. Pro should simply not call this (pass the full `tips`
+// array straight through). Reuses filterToRecentWindow so the date math has
+// exactly one implementation (see computeSnapshotStats above).
+export function applyFreeAnalysisWindow(rows, { windowDays = 31 } = {}) {
   const byPlatform = {}
-  for (const row of rows) {
-    const platform = row.platform || 'unknown'
-    if (!byPlatform[platform]) {
-      byPlatform[platform] = []
-    }
-    byPlatform[platform].push(row)
-  }
-
-  const windowed = []
-  for (const platform in byPlatform) {
-    const platformRows = byPlatform[platform]
-    // Sort by date to find latest
-    const sorted = [...platformRows].sort((a, b) => {
-      const aDate = new Date(a.date_time || a.date || a.ts)
-      const bDate = new Date(b.date_time || b.date || b.ts)
-      return aDate - bDate
-    })
-
-    if (!sorted.length) continue
-
-    const latestDate = new Date(sorted[sorted.length - 1].date_time || sorted[sorted.length - 1].date || sorted[sorted.length - 1].ts)
-    const windowStart = new Date(latestDate.getTime() - (windowDays - 1) * 86400000)
-
-    // Keep only rows >= windowStart for this platform
-    const kept = sorted.filter(r => {
-      const rowDate = new Date(r.date_time || r.date || r.ts)
-      return rowDate >= windowStart
-    })
-
-    windowed.push(...kept)
-  }
-
-  return windowed
+  rows.forEach(r => {
+    const p = r.platform || 'Unknown'
+    if (!byPlatform[p]) byPlatform[p] = []
+    byPlatform[p].push(r)
+  })
+  return Object.values(byPlatform).flatMap(platformRows => filterToRecentWindow(platformRows, windowDays))
 }
 
-// ── Window exclusion summary for teaser signal detection ──────────────────────────
-// Summarizes what was excluded when applying the free-tier window.
-// Used to determine whether a Pro teaser card has "real signal" (there actually IS
-// excluded older data) vs. being fabricated/empty.
-export function summarizeWindowExclusion(allRows = [], windowedRows = []) {
-  if (allRows.length === windowedRows.length) {
-    // No exclusion happened
-    return {
-      excludedCount: 0,
-      oldestExcludedDate: null,
-      byPlatform: {},
-    }
-  }
+// Real, non-fabricated basis for a Pro-upgrade teaser: how much real stored
+// history exists outside what Free's window currently shows. Relies on
+// `windowedRows` being the exact same row objects as a subset of `allRows`
+// (reference equality — true for applyFreeAnalysisWindow's output, since
+// filterToRecentWindow returns the original row references, not copies).
+export function summarizeWindowExclusion(allRows, windowedRows) {
+  const windowedSet = new Set(windowedRows)
+  const excluded = allRows.filter(r => !windowedSet.has(r))
+  if (!excluded.length) return { excludedCount: 0, oldestExcludedDate: null, byPlatform: {} }
 
-  // Find excluded rows
-  const windowedSet = new Set(windowedRows.map(r => `${r.username}|${r.platform}|${r.date_time || r.date || r.ts}`))
-  const excluded = allRows.filter(r => !windowedSet.has(`${r.username}|${r.platform}|${r.date_time || r.date || r.ts}`))
-
-  // Group excluded by platform
   const byPlatform = {}
-  let oldestDate = null
-  for (const row of excluded) {
-    const platform = row.platform || 'unknown'
-    if (!byPlatform[platform]) {
-      byPlatform[platform] = { count: 0, oldestDate: null }
-    }
-    byPlatform[platform].count++
+  excluded.forEach(r => {
+    const p = r.platform || 'Unknown'
+    byPlatform[p] = (byPlatform[p] || 0) + 1
+  })
+  const dates = excluded
+    .map(r => new Date(r.date || r.dateRaw || r.date_time))
+    .filter(d => !isNaN(d.getTime()))
+  const oldestExcludedDate = dates.length ? new Date(Math.min(...dates.map(d => d.getTime()))) : null
 
-    const rowDate = new Date(row.date_time || row.date || row.ts)
-    if (!byPlatform[platform].oldestDate || rowDate < new Date(byPlatform[platform].oldestDate)) {
-      byPlatform[platform].oldestDate = rowDate
-    }
-    if (!oldestDate || rowDate < oldestDate) {
-      oldestDate = rowDate
-    }
-  }
-
-  return {
-    excludedCount: excluded.length,
-    oldestExcludedDate: oldestDate,
-    byPlatform,
-  }
+  return { excludedCount: excluded.length, oldestExcludedDate, byPlatform }
 }

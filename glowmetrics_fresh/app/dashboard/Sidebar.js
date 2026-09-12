@@ -36,12 +36,13 @@ const NAV = [
   {
     group: "TOOLS",
     items: [
-      { id: "titles",    icon: "🎬", label: "Room Titles" },
-      { id: "calc",      icon: "🪙", label: "Token Calc"  },
-      { id: "data",      icon: "📝", label: "Edit Data" },
-      { id: "analytics", icon: "📊", label: "Analytics" },
-      { id: "planner",   icon: "🗓️", label: "Stream Planner" },
-      { id: "moneymap",  icon: "🗺️", label: "Money Map" },
+      { id: "titles",         icon: "🎬", label: "Room Titles" },
+      { id: "calc",           icon: "🪙", label: "Token Calc"  },
+      { id: "profile-studio", icon: "✍️", label: "Profile Studio", href: "/tools/profile-studio" },
+      { id: "data",           icon: "📝", label: "Edit Data" },
+      { id: "analytics",      icon: "📊", label: "Analytics" },
+      { id: "planner",        icon: "🗓️", label: "Stream Planner" },
+      { id: "moneymap",       icon: "🗺️", label: "Money Map" },
     ]
   },
   {
@@ -57,24 +58,21 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const renderItem = (id, icon, label) => {
+  const renderItem = (id, icon, label, href) => {
     const isActive  = activeTab === id
     const isHovered = hoveredId === id
-    return (
-      <button key={id}
-        onClick={() => { onTabChange(id); setMobileOpen(false) }}
-        onMouseEnter={() => setHoveredId(id)}
-        onMouseLeave={() => setHoveredId(null)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 10,
-          padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
-          background: isActive
-            ? "linear-gradient(135deg,rgba(34,211,238,0.14),rgba(124,92,255,0.08))"
-            : isHovered ? "rgba(255,255,255,0.05)" : "transparent",
-          borderLeft: isActive ? "2px solid #22D3EE" : "2px solid transparent",
-          transition: "all 0.15s", marginBottom: 2,
-        }}
-      >
+    const sharedStyle = {
+      width: "100%", display: "flex", alignItems: "center", gap: 10,
+      padding: "8px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+      background: isActive
+        ? "linear-gradient(135deg,rgba(34,211,238,0.14),rgba(124,92,255,0.08))"
+        : isHovered ? "rgba(255,255,255,0.05)" : "transparent",
+      borderLeft: isActive ? "2px solid #22D3EE" : "2px solid transparent",
+      transition: "all 0.15s", marginBottom: 2,
+      textDecoration: "none",
+    }
+    const inner = (
+      <>
         <span style={{ fontSize: 16, flexShrink: 0, opacity: isActive ? 1 : 0.7 }}>{icon}</span>
         <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? C.white : C.text, letterSpacing: -0.2 }}>
           {label}
@@ -82,6 +80,29 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         {isActive && (
           <div style={{ marginLeft: "auto", width: 5, height: 5, borderRadius: "50%", background: C.cyan, boxShadow: "0 0 5px #22D3EE" }} />
         )}
+      </>
+    )
+    // href items (e.g. Profile Studio) open a separate standalone page rather
+    // than switching the dashboard's own activeTab, so they're a real link.
+    if (href) {
+      return (
+        <a key={id} href={href} target="_blank" rel="noopener noreferrer"
+          onMouseEnter={() => setHoveredId(id)}
+          onMouseLeave={() => setHoveredId(null)}
+          style={sharedStyle}
+        >
+          {inner}
+        </a>
+      )
+    }
+    return (
+      <button key={id}
+        onClick={() => { onTabChange(id); setMobileOpen(false) }}
+        onMouseEnter={() => setHoveredId(id)}
+        onMouseLeave={() => setHoveredId(null)}
+        style={sharedStyle}
+      >
+        {inner}
       </button>
     )
   }
@@ -108,7 +129,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
                 {group.group}
               </div>
             )}
-            {group.items.map(({ id, icon, label }) => renderItem(id, icon, label))}
+            {group.items.map(({ id, icon, label, href }) => renderItem(id, icon, label, href))}
           </div>
         ))}
       </div>
