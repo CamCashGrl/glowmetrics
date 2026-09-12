@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
+import { PRODUCTS } from "../../lib/shop-products"
 // NEW (marketing visual only) — see components/landing/*.js. Safe to remove:
 // deleting this import + the <FloatingDashboardPreview>/<PlatformsTypewriter>
 // block below fully reverts this addition.
@@ -936,6 +937,7 @@ export default function LandingClient() {
         <div style={{ display: "flex", alignItems: "center", gap: 20, marginRight: 8 }}>
           <a href="/landing#features" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Features</a>
           <a href="/pricing" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Pricing</a>
+          <a href="/shop" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Shop</a>
           <a href="/blog" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Blog</a>
           <a href="/affiliates" style={{ fontSize: 13, color: T.textMuted, textDecoration: "none" }}>Affiliates</a>
           <a href="/contact" style={{ fontSize: 13, color: T.purple, fontWeight: 700, textDecoration: "none" }}>Contact Us</a>
@@ -1410,6 +1412,74 @@ export default function LandingClient() {
         <AuthPanel id="lp-auth-bottom-panel" {...authPanelProps} />
       </div>
 
+      {/* ── PRETTY PROFITZ SHOP ── */}
+      <div style={{ position: "relative", zIndex: 1, padding: "0 32px 88px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 48 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: T.cyanSoft, marginBottom: 14 }}>Pretty Profitz Shop</div>
+          <h2 style={{ fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.05, color: "#FFFFFF", margin: "0 0 14px" }}>Scripts, kits & tools for cam creators</h2>
+          <p style={{ fontSize: 16, color: T.textSoft, maxWidth: 560, margin: "0 auto" }}>Roleplay bundles, tip menus, trackers, and templates — made by a creator, for creators.</p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 22, marginBottom: 32 }}>
+          {PRODUCTS.slice(0, 6).map((product) => (
+            <a
+              key={product.slug}
+              href={`/shop/${product.slug}`}
+              onClick={() => {
+                try { track('shop_product_clicked', { product_slug: product.slug, product_title: product.shortTitle }) } catch {}
+              }}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                borderRadius: 20,
+                background: "rgba(13, 17, 38, 0.72)",
+                border: "1px solid rgba(255, 255, 255, 0.09)",
+                boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.05)",
+                overflow: "hidden",
+                textDecoration: "none",
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)"
+                e.currentTarget.style.boxShadow = "0 0 0 1px rgba(22, 244, 255, 0.24), 0 0 24px rgba(22, 244, 255, 0.24), inset 0 0 28px rgba(22, 244, 255, 0.08)"
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)"
+                e.currentTarget.style.boxShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.05)"
+              }}
+            >
+              <div style={{ width: "100%", aspectRatio: "1 / 1", background: "rgba(5, 9, 24, 0.72)", overflow: "hidden" }}>
+                <img src={product.coverImage} alt={product.shortTitle} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+
+              <div style={{ padding: "16px 18px 20px", flex: 1, display: "flex", flexDirection: "column" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", margin: "0 0 6px", lineHeight: 1.3 }}>
+                  {product.shortTitle}
+                </h3>
+
+                <p style={{ fontSize: 12, color: "#8D93AA", margin: "0 0 12px", lineHeight: 1.5 }}>
+                  {product.description.split('\n')[0]}
+                </p>
+
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#8D93AA", marginBottom: 14 }}>
+                  {product.price}
+                </span>
+
+                <div style={{ marginTop: "auto", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 18px", borderRadius: 14, fontSize: 14, fontWeight: 800, color: "#FFFFFF", background: "linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)", boxShadow: "0 0 18px rgba(22, 244, 255, 0.28), 0 0 26px rgba(255, 43, 174, 0.24), 0 10px 24px rgba(0, 0, 0, 0.4)" }}>
+                  View Details →
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+
+        <div style={{ textAlign: "center" }}>
+          <a href="/shop" onClick={() => { try { track('shop_browse_all_clicked') } catch {} }} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", borderRadius: 12, background: T.gradientPrimary, fontSize: 14.5, fontWeight: 800, color: "#06101A", textDecoration: "none", boxShadow: "0 0 20px rgba(22,244,255,0.24), 0 0 26px rgba(255,43,174,0.22)" }}>
+            Browse all products →
+          </a>
+        </div>
+      </div>
+
       {/* ── FREE TOOLS SECTION ── */}
       <div style={{ position: "relative", zIndex: 1, padding: "0 32px 64px", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
@@ -1479,6 +1549,7 @@ export default function LandingClient() {
                 ["Chrome Extension", "/extension"],
                 ["Pricing", "/pricing"],
                 ["Live Demo", "/demo"],
+                ["Shop", "/shop"],
               ].map(([label, href]) => (
                 <a key={href} href={href} style={{ display: "block", fontSize: 13, lineHeight: 1.6, marginBottom: 6, color: T.textMuted, textDecoration: "none" }}
                   onMouseEnter={e => e.target.style.color = T.purple}
