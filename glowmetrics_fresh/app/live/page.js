@@ -269,6 +269,23 @@ export default function LivePage() {
 
   // ── INLINE LIVE ENGINE (same logic as dashboard live tab) ────────────
 
+  const computePlatformStats = (events) => {
+    const stats = {};
+    events.forEach(ev => {
+      const platform = ev.platform || ev.source || 'manual';
+      if (!stats[platform]) {
+        stats[platform] = { revenue: 0, tips: 0, tokens: 0, lastTip: null };
+      }
+      stats[platform].revenue += ev.normalizedRevenue || 0;
+      stats[platform].tips += 1;
+      stats[platform].tokens += ev.tokens || 0;
+      if (!stats[platform].lastTip || new Date(ev.timestamp) > new Date(stats[platform].lastTip)) {
+        stats[platform].lastTip = ev.timestamp;
+      }
+    });
+    return stats;
+  };
+
   const computeState = () => {
     // For V2-engine users, only count tips tagged to the CURRENT session
     // (live_session_id) — otherwise older tips from a previous, already-ended
@@ -1063,14 +1080,21 @@ export default function LivePage() {
               </>
             ) : !liveActive ? (
               <button onClick={handleStartStream}
-                style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
-                ▶ Start Stream
+                style={{ padding: '10px 24px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)', transition: 'all 0.2s' }}
+                onMouseEnter={e => { e.target.style.boxShadow = '0 0 28px rgba(16,185,129,0.6)'; }}
+                onMouseLeave={e => { e.target.style.boxShadow = '0 0 20px rgba(16,185,129,0.4)'; }}>
+                ▶ START STREAM
               </button>
             ) : (
-              <button onClick={handleStopStream}
-                style={{ padding: '7px 18px', borderRadius: 8, background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: C.red, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                ⏹ End
-              </button>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: C.muted }}>Platform: <span style={{ color: C.white, fontWeight: 700 }}>{livePlatform}</span></div>
+                <button onClick={handleStopStream}
+                  style={{ padding: '10px 24px', borderRadius: 8, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.5)', color: C.red, fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s' }}
+                  onMouseEnter={e => { e.target.style.background = 'rgba(248,113,113,0.35)'; }}
+                  onMouseLeave={e => { e.target.style.background = 'rgba(248,113,113,0.2)'; }}>
+                  ⏹ END STREAM
+                </button>
+              </div>
             )}
           </div>
 
@@ -1111,16 +1135,29 @@ export default function LivePage() {
 
         {/* ── NOT STARTED ───────────────────────────────────────────── */}
         {!liveActive && !liveEvents.length && (
-          <div style={{ ...glassCard, borderRadius: 20, padding: '64px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.06), rgba(34,211,238,0.05))', position: 'relative', overflow: 'hidden', animation: 'cc-bar 4s ease infinite alternate' }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #a855f7, #ec4899, #22d3ee)', animation: 'cc-bar 2s ease infinite alternate' }} />
-            <div style={{ fontSize: 56, marginBottom: 16 }}>🔴</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.white, marginBottom: 10 }}>Live Command Center</div>
-            <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
-              Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
+          <div style={{ ...glassCard, borderRadius: 20, padding: '48px 48px', textAlign: 'center', marginBottom: 24, background: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(236,72,153,0.08), rgba(34,211,238,0.08))', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #10B981, #22d3ee, #ec4899)', animation: 'cc-bar 2s ease infinite alternate' }} />
+            <div style={{ fontSize: 48, marginBottom: 12 }}>🎬</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: C.white, marginBottom: 8, letterSpacing: -0.5 }}>Live Command Center Ready</div>
+            <div style={{ fontSize: 13, color: C.muted, maxWidth: 480, margin: '0 auto 24px', lineHeight: 1.7 }}>
+              Start streaming and your AI coach will watch the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to maximize earnings.
+            </div>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted }}>
+                <span>📊</span> Multi-platform tracking
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted }}>
+                <span>🤖</span> Real-time coaching
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted }}>
+                <span>⚡</span> Instant alerts
+              </div>
             </div>
             <button onClick={handleStartStream}
-              style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
-              ▶ Start Streaming
+              style={{ padding: '16px 48px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981 0%, #06B6D4 100%)', border: 'none', color: C.white, fontWeight: 900, fontSize: 18, cursor: 'pointer', boxShadow: '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(6,182,212,0.3)', transition: 'all 0.3s ease' }}
+              onMouseEnter={e => { e.target.style.transform = 'scale(1.05)'; e.target.style.boxShadow = '0 0 60px rgba(16,185,129,0.7), 0 0 120px rgba(6,182,212,0.5)'; }}
+              onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(6,182,212,0.3)'; }}>
+              ▶ START STREAM
             </button>
           </div>
         )}
@@ -1308,6 +1345,31 @@ export default function LivePage() {
                     {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
                   </div>
                 </div>
+
+                {/* Platform Stats */}
+                {liveActive && state && (() => {
+                  const platformStats = computePlatformStats(liveEvents.filter(e => !e._isHistory));
+                  const platforms = Object.keys(platformStats).sort();
+                  if (platforms.length === 0) return null;
+                  return (
+                    <div style={{ borderRadius: 12, padding: '14px 18px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10, fontWeight: 700 }}>Platform Breakdown</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: platforms.length > 1 ? `repeat(auto-fit, minmax(120px, 1fr))` : '1fr', gap: 10 }}>
+                        {platforms.map(platform => {
+                          const s = platformStats[platform];
+                          const platformIcons = { Chaturbate: '💬', MyFreeCams: '🎀', BongaCams: '🎵', CamSoda: '🥤', Stripchat: '⭐', extension: '🧩', manual: '⌨️' };
+                          return (
+                            <div key={platform} style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{platformIcons[platform] || '📱'} {platform}</div>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: C.green, marginBottom: 2 }}>${s.revenue.toFixed(2)}</div>
+                              <div style={{ fontSize: 9, color: C.muted }}>{s.tips} tip{s.tips !== 1 ? 's' : ''}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── GOAL PACE PREDICTOR + PERSONAL BEST + MILESTONES ── */}
                 {liveActive && state && (goalPaceData || personalBest !== null || nextMilestone) && (
