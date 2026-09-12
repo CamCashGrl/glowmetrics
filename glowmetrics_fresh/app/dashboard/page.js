@@ -4196,6 +4196,7 @@ const stopImportMessageRotation = () => {
           <PlatformsIntelligence
             platforms={platforms}
             tips={tips}
+            sessions={sessions}
             paidSessions={paidSessions}
             isPro={isPro}
           />
