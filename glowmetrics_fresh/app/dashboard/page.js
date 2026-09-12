@@ -3229,6 +3229,7 @@ const stopImportMessageRotation = () => {
             <PlatformIntelligenceHero
               tips={tips}
               sessions={sessions}
+              paidSessions={paidSessions}
               profile={profile}
               isPro={isPro}
               totalSessions={analytics?.meaningfulSessionCount || 0}

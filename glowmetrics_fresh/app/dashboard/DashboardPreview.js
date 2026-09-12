@@ -892,13 +892,22 @@ export function resolvePlatformRoles({ primaryProPlatform, streamingPlatforms, t
 // Never fabricates: with zero tips for this platform it returns hasData:false
 // rather than a zero-looking card; with data, days reflects what's ACTUALLY
 // available (e.g. "8 days") when the user hasn't hit the full window yet.
-export function computePlatformCardStats(tips, sessions, platformName, windowDays = SNAPSHOT_WINDOW_DAYS, platformRoi = {}) {
+export function computePlatformCardStats(tips, sessions, platformName, windowDays = SNAPSHOT_WINDOW_DAYS, platformRoi = {}, paidSessions = []) {
+  // Combine free tips with paid session data (private chats, spy mode, group chats, etc.)
   const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === platformName)
-  if (!platTips.length) {
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === platformName)
+
+  // Merge tips and paid sessions into one revenue stream for display
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, _source: 'tip' })),
+    ...platPaid.map(p => ({ ...p, _source: 'paid', date_time: p.date_time, dateRaw: p.date_time, usd: p.usd, tokens: p.tokens }))
+  ]
+
+  if (!allRevenue.length) {
     return { platform: platformName, hasData: false, usd: 0, tipCount: 0, hours: 0, usdPerHour: null, windowDays: 0, fullHistoryDays: 0, latestDate: null, earliestDate: null }
   }
 
-  const dated = platTips
+  const dated = allRevenue
     .map(t => ({ ...t, _d: new Date(t.date_time || t.dateRaw) }))
     .filter(t => !isNaN(t._d.getTime()))
     .sort((a, b) => a._d - b._d)
@@ -910,11 +919,11 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
   const fullHistoryDays = Math.max(1, Math.floor((to - from) / 86400000) + 1)
   const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
   const recentStart = windowStart < from ? from : windowStart
-  const recentTips = dated.filter(t => t._d >= recentStart)
+  const recentRevenue = dated.filter(t => t._d >= recentStart)
   const visibleDays = Math.min(fullHistoryDays, windowDays)
 
-  const usd = parseFloat(recentTips.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2))
-  const tipCount = recentTips.length
+  const usd = parseFloat(recentRevenue.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2))
+  const tipCount = recentRevenue.length
 
   const platSessions = (sessions || []).filter(s => resolvePlatformName(s.platform) === platformName && new Date(s.startTime) >= recentStart)
   const hours = parseFloat(platSessions.reduce((s, x) => s + (Number(x.durationHours) || 0), 0).toFixed(1))
@@ -1230,7 +1239,7 @@ function ActionCards({ onOpenLiveMode }) {
 }
 
 export function PlatformIntelligenceHero({
-  tips = [], sessions = [], profile, isPro = false,
+  tips = [], sessions = [], paidSessions = [], profile, isPro = false,
   totalSessions = 0, platformRoi = {},
   onConnectPlatform, onUnlockPro, onOpenStreamPlanner, onOpenMoneyMap, onOpenLiveMode,
 }) {
@@ -1240,8 +1249,8 @@ export function PlatformIntelligenceHero({
     tips,
   })
 
-  const primaryStats = primary ? computePlatformCardStats(tips, sessions, primary, SNAPSHOT_WINDOW_DAYS, platformRoi) : null
-  const secondaryStats = secondary.map(p => computePlatformCardStats(tips, sessions, p, SNAPSHOT_WINDOW_DAYS, platformRoi))
+  const primaryStats = primary ? computePlatformCardStats(tips, sessions, primary, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions) : null
+  const secondaryStats = secondary.map(p => computePlatformCardStats(tips, sessions, p, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions))
   const connectedSet = new Set([primary, ...secondary].filter((p, i) => i === 0 ? primaryStats?.hasData : secondaryStats[i - 1]?.hasData))
   const secondaryConnectedCount = secondaryStats.filter(s => s.hasData).length
   const vault = computeDataVaultStats(tips)
