@@ -248,6 +248,25 @@ export async function POST(req) {
     console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
   }
 
+  // ── VALIDATE IMPORTED TIPS ──────────────────────────────────────────────
+  // After all batches complete, validate the newly inserted tips for data
+  // quality issues (future dates, unrealistic amounts, missing usernames, etc.)
+  if (inserted > 0) {
+    try {
+      const { data: validationResult, error: validationError } = await supabase.rpc(
+        'validate_imported_tips',
+        { p_user_id: user.id }
+      )
+      if (validationError) {
+        console.warn('[UPLOAD] Data validation RPC failed:', validationError.message)
+      } else if (validationResult?.violation_count > 0) {
+        console.log(`[UPLOAD] Validation found ${validationResult.violation_count} issues:`, validationResult.violations)
+      }
+    } catch (validationErr) {
+      console.warn('[UPLOAD] Data validation error:', validationErr.message)
+    }
+  }
+
   await logCsvUpload(errors.length > 0 ? 'partial' : 'complete')
 
   // ── BATCH INSERT PAID CHAT / SPY-MODE SESSIONS ──────────────────────────
