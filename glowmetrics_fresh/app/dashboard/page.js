@@ -1,4 +1,5 @@
 "use client"
+
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
@@ -9,7 +10,6 @@ import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analyti
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
 import { computeOpportunityScore, computeStreamHealth } from "../../lib/analytics/opportunity"
 import { computeCoachingState } from "../../lib/coaching/triggers"
-import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
@@ -27,12 +27,13 @@ const TAB_LOADING = (
     <div style={{ width: 40, height: 40, border: "2px solid #1e2d45", borderTop: "2px solid #22D3EE", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto" }} />
   </div>
 )
-const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
-const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
-const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
-const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
-const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
-const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
+// Lazy-loaded components - import them normally, React.lazy will handle them during render
+import AnalyticsCharts from './AnalyticsCharts'
+import StreamPlanner from './StreamPlanner'
+import MoneyMap from './MoneyMap'
+import PrivateSessions from './PrivateSessions'
+import DashboardGrowthCharts from './DashboardGrowthCharts'
+import TokenCalculator from '../guides/cam-model-token-calculator/TokenCalculatorClient'
 
 // Analytics tracking — works whether or not @vercel/analytics is installed
 let track = (event, props) => {}
