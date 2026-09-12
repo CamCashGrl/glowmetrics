@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats } from '../../lib/analytics'
 import { track } from '../../lib/track'
+import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
@@ -819,8 +820,38 @@ export default function OnboardingPage(){
     if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
       setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.")
       track('onboarding_paste_parse_failed',{platform:platformId})
+
+      // Log detailed parse attempt for analysis
+      if(user?.id){
+        const formatAnalysis=analyzeFormat(pasteText)
+        logParseAttempt({
+          userId:user.id,
+          source:'onboarding',
+          attemptedPlatform:platformId,
+          claimedPlatform:platformId,
+          rawText:pasteText,
+          formatAnalysis,
+          parseSuccess:false,
+          errorReason:"We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.",
+          errorDetails:formatAnalysis,
+        })
+      }
       return
     }
+
+    // Log successful parse
+    if(user?.id){
+      logParseAttempt({
+        userId:user.id,
+        source:'onboarding',
+        attemptedPlatform:platformId,
+        claimedPlatform:platformId,
+        rawText:pasteText,
+        formatAnalysis:analyzeFormat(pasteText),
+        parseSuccess:true,
+      })
+    }
+
     setPreview(p)
     handleImport(p)
   }

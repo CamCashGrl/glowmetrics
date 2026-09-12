@@ -2,6 +2,21 @@ import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
 import { platformLimitMessage } from '../../../../lib/planLimits';
 
+async function logLiveFailure(supabaseAdmin, userId, liveSessionId, failureType, severity, errorMessage, errorContext) {
+  try {
+    await supabaseAdmin.rpc('log_live_mode_failure', {
+      p_user_id: userId,
+      p_live_session_id: liveSessionId,
+      p_failure_type: failureType,
+      p_severity: severity,
+      p_error_message: errorMessage,
+      p_error_context: errorContext
+    })
+  } catch (err) {
+    console.warn('[LIVE] Failed to log live mode failure:', err.message)
+  }
+}
+
 export const dynamic = 'force-dynamic';
 
 function corsHeaders(req) {
@@ -45,6 +60,7 @@ export async function POST(req) {
     const token = authHeader.substring(7);
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     if (authError || !user) {
+      // Can't log failure without user_id, so just return error
       return Response.json({ error: 'Invalid or expired token' }, { status: 401, headers: cors });
     }
 
@@ -52,6 +68,8 @@ export async function POST(req) {
     const { username, amount, platform, timestamp, isTest } = body;
 
     if (!username || !amount || !platform) {
+      const missingFields = [!username && 'username', !amount && 'amount', !platform && 'platform'].filter(Boolean).join(', ');
+      await logLiveFailure(supabaseAdmin, user.id, null, 'data_fetch_error', 'error', `Missing required fields: ${missingFields}`, { received_fields: Object.keys(body) });
       return Response.json(
         { error: 'Missing required fields: username, amount, platform' },
         { status: 400, headers: cors }
@@ -150,12 +168,14 @@ export async function POST(req) {
       }
       console.error('Supabase insert error:', error);
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
+        await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'critical', 'Platform limit reached during live tip insertion', { platform, error_code: error.code, error_message: error.message });
         return Response.json({
           error: platformLimitMessage(),
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402, headers: cors });
       }
+      await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'error', `Failed to insert live tip: ${error.message}`, { platform, error_code: error.code, username });
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
@@ -170,13 +190,17 @@ export async function POST(req) {
     const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
 
     if (savedToHistory) {
-      await supabaseAdmin.from('tips').insert({
+      const { error: historyError } = await supabaseAdmin.from('tips').insert({
         user_id:   user.id,
         username:  username.trim(),
         tokens:    parseInt(amount, 10),
         platform:  platform.toLowerCase(),
         date_time: receivedAt,
       });
+      if (historyError) {
+        console.warn('[LIVE] Failed to save tip to permanent history:', historyError);
+        await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'warning', `Failed to save to history: ${historyError.message}`, { platform, error_code: historyError.code });
+      }
     }
 
     return Response.json(
@@ -186,6 +210,7 @@ export async function POST(req) {
 
   } catch (err) {
     console.error('Tip POST error:', err);
+    // Can't reliably log without user context at this point
     return Response.json({ error: err.message }, { status: 500, headers: cors });
   }
 }
