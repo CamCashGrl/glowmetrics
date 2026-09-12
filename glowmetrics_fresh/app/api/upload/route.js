@@ -6,7 +6,29 @@ import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
+// Rows are inserted in sequential BATCH_SIZE chunks, one Supabase round-trip
+// each, so a large export takes far longer than Vercel's 10s default. When the
+// function was killed mid-run the client received a truncated body and
+// res.json() threw "Unexpected end of JSON input" — which looked like a parse
+// error but was really a timeout. 60s is the Hobby-plan ceiling.
+export const maxDuration = 60
+
+// Any throw below would otherwise produce a response the client cannot parse,
+// surfacing as the same misleading JSON error. Every failure path must return
+// real JSON so the UI can show the actual reason.
 export async function POST(req) {
+  try {
+    return await handleUpload(req)
+  } catch (err) {
+    console.error('[UPLOAD] Unhandled error:', err)
+    return NextResponse.json(
+      { error: err?.message || 'Upload failed unexpectedly. Please try again.' },
+      { status: 500 }
+    )
+  }
+}
+
+async function handleUpload(req) {
   const auth = req.headers.get('Authorization')
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
