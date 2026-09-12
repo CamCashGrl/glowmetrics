@@ -242,6 +242,22 @@ export default function LivePage() {
         .select()
         .single();
       if (session) setCurrentSessionId(session.id);
+      // Broadcast stream start to extension via real-time channel
+      supabase.channel(`extension_${user.id}`).send('broadcast', {
+        event: 'stream_started',
+        timestamp: startTime.toISOString(),
+        platform: livePlatform,
+        session_id: session?.id,
+      }).catch(() => {});
+      // Also notify via localStorage for extension to pick up immediately
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('camcash_stream_state', JSON.stringify({
+          active: true,
+          startTime: startTime.toISOString(),
+          platform: livePlatform,
+          sessionId: session?.id,
+        }));
+      }
     }
   };
 
@@ -263,6 +279,22 @@ export default function LivePage() {
           tip_count:     sessionTips.length,
         })
         .eq('id', currentSessionId);
+      // Broadcast stream stop to extension via real-time channel
+      supabase.channel(`extension_${user.id}`).send('broadcast', {
+        event: 'stream_stopped',
+        timestamp: endTime.toISOString(),
+        sessionId: currentSessionId,
+        earnings: parseFloat(totalUsd.toFixed(2)),
+        tips: sessionTips.length,
+      }).catch(() => {});
+      // Also notify via localStorage for extension to pick up immediately
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('camcash_stream_state', JSON.stringify({
+          active: false,
+          endTime: endTime.toISOString(),
+          earnings: parseFloat(totalUsd.toFixed(2)),
+        }));
+      }
       setCurrentSessionId(null);
     }
   };
