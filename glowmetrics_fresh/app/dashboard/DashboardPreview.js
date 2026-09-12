@@ -1281,18 +1281,7 @@ export function PlatformIntelligenceHero({
         )}
       </div>
 
-      <PlatformCoverage primary={primary} secondary={secondary} connectedSet={connectedSet} onConnectMore={handleConnectMore} />
-
-      {comparisonCount > 0 && (
-        <NoticeStrip>
-          <strong style={{ color: PI.text }}>{comparisonCount} platform{comparisonCount === 1 ? '' : 's'} connected.</strong>{' '}
-          {comparisonCount === 1 ? 'Connect another platform to unlock the full side-by-side comparison experience.' : `You have ${availableCount} platform slot${availableCount === 1 ? '' : 's'} available in the current Free setup.`}
-        </NoticeStrip>
-      )}
-
       <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} />
-
-      {vault.hasMoreThanWindow && <DataVaultCard vault={vault} onUnlock={onUnlockPro} isPro={isPro} />}
 
       <MilestoneStrip milestones={milestones} />
 
