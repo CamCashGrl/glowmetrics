@@ -746,6 +746,81 @@ export default function LandingClient() {
   const [authError, setAuthError]     = useState("")
   const [pendingPlan, setPendingPlan] = useState(null)
 
+  // Build Organization schema
+  const organizationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    'name': 'CamCash',
+    'url': 'https://www.camcashgrl.com',
+    'logo': 'https://www.camcashgrl.com/logo.png',
+    'description': 'Free analytics dashboard for cam models on Chaturbate, BongaCams, MyFreeCams, CamSoda, and Stripchat',
+    'sameAs': ['https://twitter.com/daphneslive'],
+    'contactPoint': {
+      '@type': 'ContactPoint',
+      'url': 'https://www.camcashgrl.com/contact',
+      'contactType': 'Customer Support'
+    }
+  }
+
+  // Build FAQ schema
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    'mainEntity': [
+      {
+        '@type': 'Question',
+        'name': 'Is CamCash free to use?',
+        'acceptedAnswer': {
+          '@type': 'Answer',
+          'text': 'Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks 1 platform (live via the extension, or by uploading your tip data). Premium analytics and multi-platform tracking are optional upgrades.'
+        }
+      },
+      {
+        '@type': 'Question',
+        'name': 'What file formats do you support?',
+        'acceptedAnswer': {
+          '@type': 'Answer',
+          'text': 'CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension.'
+        }
+      },
+      {
+        '@type': 'Question',
+        'name': 'Can I track more than one platform for free?',
+        'acceptedAnswer': {
+          '@type': 'Answer',
+          'text': 'The free tier tracks 1 platform at a time. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once.'
+        }
+      },
+      {
+        '@type': 'Question',
+        'name': 'Is my data safe and private?',
+        'acceptedAnswer': {
+          '@type': 'Answer',
+          'text': 'Yes. Your data is encrypted, never shared, and never sold.'
+        }
+      }
+    ]
+  }
+
+  // Build Product schemas for shop items
+  const productSchemas = PRODUCTS.slice(0, 6).map(product => ({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    'name': product.shortTitle,
+    'description': product.description.substring(0, 160),
+    'price': product.price.replace('$', ''),
+    'priceCurrency': 'USD',
+    'url': `https://www.camcashgrl.com/shop/${product.slug}`,
+    'image': `https://www.camcashgrl.com${product.coverImage}`,
+    'offers': {
+      '@type': 'Offer',
+      'price': product.price.replace('$', ''),
+      'priceCurrency': 'USD',
+      'url': `https://www.camcashgrl.com/shop/${product.slug}`,
+      'availability': 'https://schema.org/InStock'
+    }
+  }))
+
   // Demo cycling state for feature cards
   const [msgIndex, setMsgIndex]       = useState(0)
   const [whaleIndex, setWhaleIndex]   = useState(0)
@@ -919,6 +994,13 @@ export default function LandingClient() {
 
   return (
     <div className={dmSans.className} style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, overflowX: "hidden" }}>
+
+      {/* ── SCHEMA MARKUP ── */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+      {productSchemas.map((schema, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+      ))}
 
       {/* ── AMBIENT BACKGROUND ── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
@@ -1416,8 +1498,8 @@ export default function LandingClient() {
       <div style={{ position: "relative", zIndex: 1, padding: "0 32px 88px", maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: T.cyanSoft, marginBottom: 14 }}>Pretty Profitz Shop</div>
-          <h2 style={{ fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.05, color: "#FFFFFF", margin: "0 0 14px" }}>Scripts, kits & tools for cam creators</h2>
-          <p style={{ fontSize: 16, color: T.textSoft, maxWidth: 560, margin: "0 auto" }}>Roleplay bundles, tip menus, trackers, and templates — made by a creator, for creators.</p>
+          <h2 style={{ fontSize: "clamp(28px, 5vw, 42px)", fontWeight: 800, letterSpacing: "-0.04em", lineHeight: 1.05, color: "#FFFFFF", margin: "0 0 14px" }}>Premium cam model scripts, templates & tools</h2>
+          <p style={{ fontSize: 16, color: T.textSoft, maxWidth: 680, margin: "0 auto", lineHeight: 1.6 }}>Pretty Profitz offers premium templates and tools designed specifically for cam creators on Chaturbate, BongaCams, MyFreeCams, CamSoda, and Stripchat. From roleplay scripts to client trackers to tip menu templates, every product is created by a cam model, for cam models. Increase your earnings, organize your fans, and build your brand with proven tools that help thousands of creators earn more.</p>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 22, marginBottom: 32 }}>
