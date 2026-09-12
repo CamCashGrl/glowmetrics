@@ -17,15 +17,19 @@ create table if not exists tips (
 );
 
 -- 2. TIPPER NOTES (CRM)
+-- Fan identity is platform + username, never username alone (see
+-- lib/analytics.js identifyWhales) — platform is part of the unique key so
+-- the same username on two platforms never shares a note.
 create table if not exists tipper_notes (
   id               bigserial primary key,
   user_id          uuid references auth.users(id) on delete cascade not null,
   tipper_username  text not null,
+  platform         text,
   note             text,
   follow_up        boolean default false,
   contact_pref     text,
   updated_at       timestamptz default now(),
-  unique(user_id, tipper_username)
+  unique(user_id, tipper_username, platform)
 );
 
 -- 3. PROFILES
@@ -79,7 +83,7 @@ create trigger on_auth_user_created
 create index if not exists idx_tips_user_id    on tips(user_id);
 create index if not exists idx_tips_date       on tips(user_id, date_time);
 create index if not exists idx_tips_username   on tips(user_id, username);
-create index if not exists idx_notes_user      on tipper_notes(user_id, tipper_username);
+create index if not exists idx_notes_user      on tipper_notes(user_id, tipper_username, platform);
 
 -- ── OPTIONAL ADVANCED ANALYTICS TABLES ───────────────────────────────────────
 -- These tables support stream/session-level analytics, show tagging,

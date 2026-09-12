@@ -4,7 +4,7 @@
 // ============================================================
 
 // Platform connection limits (Free vs Pro)
-// DB enforcer: supabase/migrations/20260910b_document_primary_and_streaming_platform_columns.sql
+// DB enforcer: supabase/migrations/20260910_free_tier_three_platform_limit.sql
 // Free tier allows 3 platforms (1 Primary + 2 Secondary); Pro allows unlimited.
 export const FREE_PLATFORM_LIMIT = 3
 
@@ -20,17 +20,12 @@ export function isProPlan(plan) {
 
 // ── Platform role resolution ─────────────────────────────────────────────────
 // Extracts primary (index 0) and secondary (index 1+) platforms from the
-// user's streaming_platforms array and primary_pro_platform marker.
-// Falls back to inferring from tip totals if these columns are missing
-// (for accounts that onboarded before multi-platform selection existed).
+// user's streaming_platforms array. profiles.streaming_platforms is populated
+// by onboarding; index 0 is the primary. primaryProPlatform is a fallback.
 export function resolvePlatformRoles(streamingPlatforms, primaryProPlatform) {
-  if (!streamingPlatforms || !Array.isArray(streamingPlatforms) || streamingPlatforms.length === 0) {
-    return { primary: null, secondary: [] }
-  }
-
-  const primary = streamingPlatforms[0] || primaryProPlatform || null
-  const secondary = streamingPlatforms.slice(1) || []
-
+  const list = Array.isArray(streamingPlatforms) ? streamingPlatforms : []
+  const primary = primaryProPlatform || list[0] || null
+  const secondary = list.filter(p => p !== primary)
   return { primary, secondary }
 }
 
@@ -38,7 +33,7 @@ export function resolvePlatformRoles(streamingPlatforms, primaryProPlatform) {
 // Single canonical string for all PLATFORM_LIMIT_REACHED surfaces.
 // Used by: upload UI, API error responses, tooltip copy.
 export function platformLimitMessage() {
-  return `Free plan tracks ${FREE_PLATFORM_LIMIT} platforms (1 Primary + 2 Secondary). Upgrade to Pro to add more.`
+  return `Free plan tracks up to ${FREE_PLATFORM_LIMIT} platforms (1 Primary + ${FREE_PLATFORM_LIMIT - 1} Secondary). Upgrade to Pro for unlimited platforms.`
 }
 
 // ── Module data thresholds ───────────────────────────────────────────────────

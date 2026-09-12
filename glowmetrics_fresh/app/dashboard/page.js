@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
@@ -16,7 +16,7 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard, PlatformIntelligenceHero } from './DashboardPreview'
-import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
+import { FREE_PLATFORM_LIMIT, FREE_ANALYSIS_WINDOW_DAYS, resolvePlatformRoles, platformLimitMessage } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
@@ -1443,9 +1443,6 @@ export default function Dashboard() {
   const [liveTick, setLiveTick] = useState(0)
   const [minuteTick, setMinuteTick] = useState(0) // increments every 60s to refresh time-based alerts
   const [betaCount, setBetaCount] = useState(null)
-  const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
-  const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
-  const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackType, setFeedbackType] = useState('feature')
   const [feedbackText, setFeedbackText] = useState('')
@@ -1459,8 +1456,8 @@ export default function Dashboard() {
   const [monthlyGoal, setMonthlyGoal] = useState(null)
   const [goalInput, setGoalInput] = useState('')
   const [showGoalEditor, setShowGoalEditor] = useState(false)
-  const [tipperNotes, setTipperNotes] = useState({}) // { username: { note, followUp } }
-  const [noteTarget, setNoteTarget] = useState(null)
+  const [tipperNotes, setTipperNotes] = useState({}) // { "platform::username": { note, followUp } }
+  const [noteTarget, setNoteTarget] = useState(null) // { username, platform } | null
   const [noteText, setNoteText] = useState('')
   const [noteSaving, setNoteSaving] = useState(false)
   const [engineInsights, setEngineInsights] = useState(null)
@@ -1502,17 +1499,31 @@ export default function Dashboard() {
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
 
-  // Compute windowed tips for free users; windowSummary feeds teaser signal detection
-  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
-  const windowSummary = summarizeWindowExclusion(tips, analysisTips)
+  // Compute which tips feed the analysis (windowed for free, full for pro).
+  // Raw `tips` stays unchanged for platform detection, dedupe, and DB writes.
+  // Money Map / Stream Planner / charts read `analysisTips` instead.
+  const analysisTips = useMemo(() =>
+    isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }),
+    [tips, isPro]
+  )
 
-  // Build Pro teaser cards (only shown to free users when real signal exists)
-  const proTeasers = buildProTeasers({
-    tips,
-    analysisTips,
-    whales,
-    windowSummary,
-    isPro
+  // Summarize what was excluded by the window for Phase 4 teasers.
+  const windowSummary = useMemo(() =>
+    isPro ? { excludedCount: 0, oldestExcludedDate: null, byPlatform: {} } : summarizeWindowExclusion(tips, analysisTips),
+    [tips, analysisTips, isPro]
+  )
+
+  // Build honest soft-paywall teasers based on real signals.
+  const proTeasers = useMemo(() =>
+    buildProTeasers({ tips, analysisTips, whales: analytics?.whales, windowSummary, isPro }),
+    [tips, analysisTips, analytics?.whales, windowSummary, isPro]
+  )
+
+  // Map internal teaser tab names to actual activeTab values
+  const teaserTabMap = { 'map': 'moneymap', 'trends': 'analytics' }
+  const getTeasersForTab = (tabName) => proTeasers.filter(t => {
+    const mappedTab = teaserTabMap[t.tab] || t.tab
+    return mappedTab === tabName
   })
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
@@ -1525,19 +1536,29 @@ export default function Dashboard() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3500) }
 
+  // Fan identity is platform + username (see lib/analytics.js identifyWhales)
+  // — a note key must include platform so the same username on two
+  // platforms never shares a note. Notes saved before platform tracking
+  // existed have no platform on the row; those are looked up by username
+  // alone as a fallback so nothing already saved is lost or hidden.
+  const noteKey = (username, platform) => `${(platform || '').toLowerCase()}::${(username || '').toLowerCase()}`
+  const getTipperNote = (username, platform) =>
+    tipperNotes[noteKey(username, platform)] || tipperNotes[(username || '').toLowerCase()]
+
   // ── SAVE TIPPER NOTE ─────────────────────────────────────────────
-  const saveTipperNote = async (username, note, followUp = false) => {
+  const saveTipperNote = async (username, note, followUp = false, platform = null) => {
     if (!user) return
     setNoteSaving(true)
     try {
       await supabase.from('tipper_notes').upsert({
         user_id: user.id,
         tipper_username: username.toLowerCase(),
+        platform: platform || null,
         note,
         follow_up: followUp,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,tipper_username' })
-      setTipperNotes(prev => ({ ...prev, [username.toLowerCase()]: { note, followUp } }))
+      }, { onConflict: 'user_id,tipper_username,platform' })
+      setTipperNotes(prev => ({ ...prev, [noteKey(username, platform)]: { note, followUp } }))
       showToast('✅ Note saved')
       setNoteTarget(null)
     } catch(e) { showToast('❌ Failed to save note') }
@@ -1698,6 +1719,18 @@ export default function Dashboard() {
           source:           'extension',
         }
         setLiveEvents(prev => [...prev, normalized])
+
+        // CRITICAL: Also merge live tips into main tips dataset so they flow through
+        // analytics. This ensures fan profiles, churn calculations, Money Map,
+        // Stream Planner, and all dashboard totals include live tips immediately.
+        setTips(prev => {
+          const newTip = {
+            ...tip,
+            date_time: tip.received_at || new Date().toISOString(),
+          }
+          return [...prev, newTip].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+        })
+
         setLiveActive(prev => {
           if (!prev) setLiveStartTime(st => st || new Date())
           return true
@@ -1741,12 +1774,17 @@ export default function Dashboard() {
         if (count === 0 && !beta?.onboarding_complete) router.replace('/onboarding')
       })
       setUser(user)
-      supabase.from('profiles')
+      // Kicked off in parallel with the tips fetch below for speed, but
+      // loadData awaits this before deciding isPro for the FIRST analytics
+      // computation — `isPro` from render scope would otherwise be stale
+      // (still the pre-profile-load default) inside this same closure, since
+      // setProfile's re-render hasn't happened yet at this point in the code.
+      const profilePromise = supabase.from('profiles')
         .select('plan, primary_pro_platform, streaming_platforms')
         .eq('id', user.id)
         .maybeSingle()
-        .then(({ data }) => { if (data) setProfile(data) })
-      loadData(user.id)
+        .then(({ data }) => { if (data) setProfile(data); return data })
+      loadData(user.id, false, {}, profilePromise)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
         .then(({ data }) => { if (data) { setMonthlyGoal(data.target_usd); setGoalInput(data.target_usd.toString()) } })
@@ -1755,7 +1793,13 @@ export default function Dashboard() {
         .then(({ data }) => {
           if (data?.length) {
             const map = {}
-            data.forEach(n => { map[n.tipper_username.toLowerCase()] = { note: n.note, followUp: n.follow_up } })
+            data.forEach(n => {
+              // Platform-specific key for real lookups, plus the bare
+              // username as a legacy fallback for pre-migration rows that
+              // have no platform (n.platform is null) — see getTipperNote.
+              map[noteKey(n.tipper_username, n.platform)] = { note: n.note, followUp: n.follow_up }
+              if (!n.platform) map[n.tipper_username.toLowerCase()] = { note: n.note, followUp: n.follow_up }
+            })
             setTipperNotes(map)
           }
         })
@@ -1798,8 +1842,10 @@ export default function Dashboard() {
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31 })
-            const r = runEngine(analysisTips, userTz)
+            // Free tier only ever analyzes each platform's most recent
+            // FREE_ANALYSIS_WINDOW_DAYS — `updated` (raw) stays untouched for
+            // platform-count/connection detection elsewhere.
+            const r = runEngine(isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }), userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
           } catch(e) { console.error('realtime runEngine failed:', e) }
@@ -1879,8 +1925,7 @@ export default function Dashboard() {
           }
           try {
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31 })
-            const r = runEngine(analysisTips, userTz)
+            const r = runEngine(isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }), userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
           } catch(e) { console.error('refresh runEngine failed:', e) }
@@ -1987,7 +2032,7 @@ export default function Dashboard() {
     router.replace('/login')
   }
 
-  const loadData = async (uid, force = false, { silent = false } = {}) => {
+  const loadData = async (uid, force = false, { silent = false } = {}, profilePromise = null) => {
     // `silent` keeps the current screen mounted (e.g. after a CSV upload) instead of
     // replacing the whole dashboard with the full-page spinner, so the just-shown
     // success/error confirmation stays visible while data refreshes in the background.
@@ -2005,12 +2050,28 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+
+      // CRITICAL: Merge live tips into main dataset so they flow through analytics.
+      // Live Mode tips should contribute to fan profiles, churn calculations,
+      // Money Map, Stream Planner, and all dashboard totals — exactly like CSV tips.
+      let liveTipsData = []
+      try {
+        const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("*").eq("user_id", uid)
+        if (!liveErr && liveRows?.length) {
+          liveTipsData = liveRows
+          allData = [...allData, ...liveTipsData].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+        }
+      } catch (e) { /* non-fatal — continue without live tips */ }
+
       if (allData.length) {
         setTips(allData)
         try {
-          // Apply 31-day rolling window for free users (per-platform, activity-anchored)
-          const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31 })
-          const result = runEngine(analysisTips, userTz)
+          // For the initial load, the freshly-resolved profile (if any) is
+          // authoritative over the render-scope `isPro` closure, which can
+          // still be stale here (see profilePromise's call site).
+          const resolvedProfile = profilePromise ? await profilePromise.catch(() => null) : null
+          const effectiveIsPro = resolvedProfile ? (resolvedProfile.plan === 'pro' || resolvedProfile.plan === 'unlimited') : isPro
+          const result = runEngine(effectiveIsPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: FREE_ANALYSIS_WINDOW_DAYS }), userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
@@ -2036,9 +2097,8 @@ export default function Dashboard() {
       }
       setPaidSessions(allPaidSessions)
 
-      // Live Mode total, for the Private Sessions page's revenue-sources
-      // summary only — kept as its own query against its own table, never
-      // merged into `tips`/`paidSessions` rows or the `analytics` totals.
+      // Live Mode total, for the Private Sessions page's revenue-sources summary.
+      // Also used here for display alongside CSV totals on the dashboard.
       try {
         const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("usd").eq("user_id", uid)
         if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
@@ -2105,8 +2165,9 @@ const stopImportMessageRotation = () => {
 
   const handleCSV = async (file, forcePlatform = null) => {
     if (!file || !user) return
-    // Free plan tracks a single platform — instead of a hard block, show a
-    // quick preview of the file's contents plus a soft paywall below it.
+    // Free plan tracks up to FREE_PLATFORM_LIMIT platforms — instead of a
+    // hard block once that's reached, show a quick preview of the file's
+    // contents plus a soft paywall below it.
     if (freePlatformLimitReached && forcePlatform && !allPlatforms.includes(forcePlatform)) {
       await denyWithPlatformPreview(file, forcePlatform)
       return
@@ -2311,7 +2372,7 @@ const stopImportMessageRotation = () => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
-      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase() && t.platform === w.platform)
       const tippedOnDay = fanTips.some(t => {
         const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
         return dayShort === chartDrillDay
@@ -2322,7 +2383,11 @@ const stopImportMessageRotation = () => {
   }))
 
   const allPlatforms = memoOn(derivedCacheRef.current, 'allPlatforms', [tips], () => [...new Set(tips.map(t => t.platform))])
-  const freePlatformLimitReached = !isPro && allPlatforms.length > 0
+  // Free tracks up to FREE_PLATFORM_LIMIT platforms (see lib/planLimits.js);
+  // the real enforcement is the DB trigger in
+  // supabase/migrations/20260910_free_tier_three_platform_limit.sql — this
+  // just needs to match it for UI purposes.
+  const freePlatformLimitReached = !isPro && allPlatforms.length >= FREE_PLATFORM_LIMIT
 
   // ── Build "What's Next" alerts — smarter, personalized, prioritized
   const buildWhatsNextAlerts = () => {
@@ -2401,7 +2466,7 @@ const stopImportMessageRotation = () => {
       if (w.tipCount < 5) return
       const fanTips = (w.tips && w.tips.length > 0)
         ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase() && t.platform === w.platform)
       if (fanTips.length < 5) return
       const hourCounts = {}
       fanTips.forEach(t => {
@@ -2748,7 +2813,7 @@ const stopImportMessageRotation = () => {
     topWhales.forEach(w => {
       const fanTips = (w.tips && w.tips.length > 0)
         ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase() && t.platform === w.platform)
       if (fanTips.length < 3) return
 
       // Use local hours — tips' date_time is UTC but getHours() converts to browser local
@@ -3813,7 +3878,7 @@ const stopImportMessageRotation = () => {
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
-                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase() && t.platform === w.platform)
                   const hourCounts = {}
                   fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
@@ -4462,6 +4527,19 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 13, color: C.muted }}>Import your CSV files to see how your platforms compare</div>
                 </div>
               )}
+
+              {getTeasersForTab('platforms').map(teaser => (
+                <div key={teaser.id} style={{ marginTop: 24 }}>
+                  <LockedInsightCard
+                    title={teaser.title}
+                    description={teaser.description}
+                    requirement={teaser.requirement}
+                    lockType="requires_pro"
+                    ctaLabel="Upgrade to Pro"
+                    ctaAction={() => openUpgradeModal('pro_teaser_' + teaser.id)}
+                  />
+                </div>
+              ))}
             </div>
           )
         })()}
@@ -4677,7 +4755,7 @@ const stopImportMessageRotation = () => {
                           aria-label={`Message ${w.username}`}
                           title="Message fan"
                           style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
-                        <button onClick={() => setNoteTarget(w.username)}
+                        <button onClick={() => setNoteTarget(w)}
                           aria-label={`Add note for ${w.username}`}
                           title="Add note"
                           style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
@@ -4779,9 +4857,9 @@ const stopImportMessageRotation = () => {
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
                             <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
-                            <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
-                              style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
-                              {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
+                            <button onClick={() => { setNoteTarget(w); setNoteText(getTipperNote(w.username, w.platform)?.note || '') }}
+                              style={{ padding: "4px 8px", borderRadius: 6, background: getTipperNote(w.username, w.platform)?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: getTipperNote(w.username, w.platform)?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: getTipperNote(w.username, w.platform)?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
+                              {getTipperNote(w.username, w.platform)?.note ? "📝 Note" : "📝"}
                             </button>
                             <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
                               className="heart-envelope-btn"
@@ -4863,6 +4941,19 @@ const stopImportMessageRotation = () => {
                 </button>
               </div>
             )}
+
+            {getTeasersForTab('whales').map(teaser => (
+              <div key={teaser.id} style={{ marginTop: 24 }}>
+                <LockedInsightCard
+                  title={teaser.title}
+                  description={teaser.description}
+                  requirement={teaser.requirement}
+                  lockType="requires_pro"
+                  ctaLabel="Upgrade to Pro"
+                  ctaAction={() => openUpgradeModal('pro_teaser_' + teaser.id)}
+                />
+              </div>
+            ))}
           </div>
         )}
 
@@ -6248,7 +6339,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `${platformLimitMessage()} Auto-removes duplicates.` : `Free plan tracks up to ${FREE_PLATFORM_LIMIT} platforms. Auto-removes duplicates.`}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms.join(', ')}. Auto-removes duplicates.` : `Free plan tracks up to ${FREE_PLATFORM_LIMIT} platforms. Auto-removes duplicates.`}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -6258,7 +6349,7 @@ const stopImportMessageRotation = () => {
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.25)", marginBottom: 16 }}>
                 <span style={{ fontSize: 18 }}>🔒</span>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
-                  You're on the free plan (1 platform). Upgrade to Pro to add BongaCams, MyFreeCams, and more.
+                  {platformLimitMessage()}
                 </div>
                 <Button as="a" href="/pricing" style={{ flexShrink: 0, padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap" }}>Upgrade →</Button>
               </div>
@@ -6838,12 +6929,27 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={analysisTips} isPro={isPro} />
+            : <StreamPlanner tips={analysisTips} isPro={isPro} whales={analytics?.whales} windowSummary={windowSummary} />
         )}
         {activeTab === 'moneymap' && (
-          _moneyMapLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={analysisTips} isPro={isPro} />
+          <div>
+            {_moneyMapLock.locked
+              ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
+              : <MoneyMap tips={analysisTips} isPro={isPro} whales={analytics?.whales} windowSummary={windowSummary} analytics={analytics} />
+            }
+            {getTeasersForTab('moneymap').map(teaser => (
+              <div key={teaser.id} style={{ marginTop: 24, padding: '0 0' }}>
+                <LockedInsightCard
+                  title={teaser.title}
+                  description={teaser.description}
+                  requirement={teaser.requirement}
+                  lockType="requires_pro"
+                  ctaLabel="Upgrade to Pro"
+                  ctaAction={() => openUpgradeModal('pro_teaser_' + teaser.id)}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -7042,7 +7148,7 @@ const stopImportMessageRotation = () => {
                       <EnvelopeHeartIcon size={18} /> Message Fan
                     </button>
                     <div style={{ fontSize: 11, color: C.text, textAlign: "center", marginTop: -4, marginBottom: 4 }}>Start a private conversation</div>
-                    <button onClick={() => setNoteTarget(w.username)}
+                    <button onClick={() => setNoteTarget(w)}
                       style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 16px", borderRadius: 10, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                       📝 Add Note
                     </button>
@@ -7233,51 +7339,16 @@ const stopImportMessageRotation = () => {
               <div style={{ textAlign: "center", padding: "12px 16px", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 10, marginBottom: 24 }}>
                 <div style={{ fontSize: 13, color: C.gold, fontWeight: 600 }}>💡 Most creators miss 30–60% of their earning potential without this</div>
               </div>
-              {earlyAccessSubmitted ? (
-                <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>You're on the list!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>We'll email you with a founding user discount when we launch.</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ padding: "10px 28px", borderRadius: 10, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>Close</button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="email"
-                    value={earlyAccessEmail}
-                    onChange={e => setEarlyAccessEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    style={{ width: "100%", padding: "13px 16px", borderRadius: 12, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 14, outline: "none", marginBottom: 10, boxSizing: "border-box" }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-                  />
-                  <Button
-                    disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                    onClick={async () => {
-                      if (!earlyAccessEmail.trim()) return
-                      setEarlyAccessSubmitting(true)
-                      track('early_access_signup', { email: earlyAccessEmail })
-                      try {
-                        const { data: { user: currentUser } } = await supabase.auth.getUser()
-                        await supabase.from('early_access').insert({
-                          email: earlyAccessEmail.trim(),
-                          user_id: currentUser?.id || null,
-                          signed_up_at: new Date().toISOString()
-                        }).then(() => {})
-                      } catch(e) {}
-                      setEarlyAccessSubmitted(true)
-                      setEarlyAccessSubmitting(false)
-                      showToast("🎉 You're on the founding user list!")
-                    }}
-                    style={{ width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12 }}>
-                    {earlyAccessSubmitting ? "Saving..." : "🔓 Get Early Access"}
-                  </Button>
-                  <div style={{ textAlign: "center", fontSize: 12, color: C.muted, marginBottom: 20 }}>Launching soon • Founding users get lifetime discount</div>
-                  <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                    Maybe later
-                  </button>
-                </>
-              )}
+              <Button
+                as="a"
+                href="/pricing"
+                onClick={() => track('upgrade_modal_checkout_click')}
+                style={{ display: "block", width: "100%", padding: "16px", borderRadius: 14, fontSize: 16, marginBottom: 12, textAlign: "center" }}>
+                ✦ Upgrade to Pro →
+              </Button>
+              <button onClick={() => setShowUpgradeModal(false)} style={{ width: "100%", padding: "11px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
+                Maybe later
+              </button>
             </div>
           </div>
         </div>
@@ -7420,7 +7491,7 @@ const stopImportMessageRotation = () => {
       {noteTarget && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ ...glassCard, borderRadius:20, padding:28, width:"100%", maxWidth:440, border:"1px solid rgba(245,158,11,0.3)" }}>
-            <div style={{ fontSize:18, fontWeight:800, color:C.white, marginBottom:4 }}>📝 Note for {noteTarget}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.white, marginBottom:4 }}>📝 Note for {noteTarget.username}</div>
             <div style={{ fontSize:12, color:C.muted, marginBottom:16 }}>Private note — only you can see this</div>
             <textarea
               value={noteText}
@@ -7430,13 +7501,13 @@ const stopImportMessageRotation = () => {
               style={{ width:"100%", padding:"10px 12px", borderRadius:10, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(245,158,11,0.3)", color:C.white, fontSize:13, outline:"none", resize:"vertical", fontFamily:"inherit", boxSizing:"border-box" }}
             />
             <div style={{ display:"flex", gap:10, marginTop:14 }}>
-              <Button onClick={() => saveTipperNote(noteTarget, noteText)}
+              <Button onClick={() => saveTipperNote(noteTarget.username, noteText, false, noteTarget.platform)}
                 disabled={noteSaving}
                 style={{ flex:1, padding:"10px 0", fontSize:14 }}>
                 {noteSaving ? "Saving..." : "Save Note"}
               </Button>
-              {tipperNotes[noteTarget?.toLowerCase()]?.note && (
-                <button onClick={() => saveTipperNote(noteTarget, '')}
+              {getTipperNote(noteTarget.username, noteTarget.platform)?.note && (
+                <button onClick={() => saveTipperNote(noteTarget.username, '', false, noteTarget.platform)}
                   style={{ padding:"10px 14px", borderRadius:10, background:"rgba(248,113,113,0.15)", border:"1px solid rgba(248,113,113,0.3)", color:C.red, fontSize:13, cursor:"pointer" }}>
                   Delete
                 </button>

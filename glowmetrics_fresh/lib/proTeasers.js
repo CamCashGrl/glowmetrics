@@ -1,80 +1,60 @@
-// ============================================================
-// CAMCASH — PRO TEASER CARDS (Soft Paywall)
-// Builds honest teaser cards with real signal detection.
-// ============================================================
+// Soft-paywall teasers: honest upgrade prompts that ONLY render when real
+// signals exist. Never fabricate. Used in app/dashboard/page.js to render
+// LockedInsightCards at strategic points for Free users.
 
-// Never fabricate or show teasers when real signal doesn't exist.
-// A teaser only renders when:
-// 1. Real underlying data exists (e.g., excluded older history, lapsed fans)
-// 2. hasRealSignal === true (caller verified the signal before building the teaser)
-
-export function buildProTeasers({
-  tips = [],
-  analysisTips = [],
-  whales = [],
-  windowSummary = {},
-  isPro = false,
-} = {}) {
-  if (isPro) return [] // Pro users don't see teasers
+export function buildProTeasers({ tips, analysisTips, whales, windowSummary, isPro }) {
+  if (isPro) return [] // No teasers for Pro users
 
   const teasers = []
 
-  // ── TEASER: Older history exists (map/trends tabs) ────────────────────────
-  if (windowSummary.excludedCount > 0) {
+  // ── HISTORICAL DEPTH: Old data excluded by the 31-day window ──────────────
+  // Signal: windowSummary.excludedCount > 0 (real older data exists on file)
+  if (windowSummary?.excludedCount > 0) {
+    const oldestDate = windowSummary.excludedCount > 0 ? windowSummary.oldestExcludedDate : null
     teasers.push({
-      id: 'older_history',
-      tab: 'map',
+      id: 'historical_depth',
+      tab: 'map', // or 'trends' — appears alongside time-series analysis
       title: 'CamCash found a change worth watching',
-      description: 'See trend analysis spanning your full history (beyond 31 days).',
-      requirement: 'Upgrade to Pro to unlock full historical analysis.',
-      hasRealSignal: true, // Real excluded data exists
-      ctaLabel: 'View Plans →',
-    })
-
-    teasers.push({
-      id: 'older_trends',
-      tab: 'trends',
-      title: 'Complete earning trends',
-      description: 'Analyze your full earnings history, not just the recent 31 days.',
-      requirement: 'Pro users see trends across all imported data.',
+      description: 'Your earnings history goes back further. Full historical analysis is Pro-only.',
+      requirement: `Upgrade to Pro to analyze beyond the most recent 31 days.${oldestDate ? ` Your oldest data is from ${new Date(oldestDate).toLocaleDateString()}.` : ''}`,
       hasRealSignal: true,
-      ctaLabel: 'Upgrade →',
     })
   }
 
-  // ── TEASER: Multi-platform insight (platforms tab) ──────────────────────────
-  const platforms = [...new Set(tips.map(t => t.platform).filter(Boolean))]
-  if (platforms.length >= 2) {
-    teasers.push({
-      id: 'cross_platform',
-      tab: 'platforms',
-      title: 'Compare platforms side-by-side',
-      description: 'See which cam site pays you best by hour, day, and fan type.',
-      requirement: 'Pro users unlock detailed cross-platform ROI analysis.',
-      hasRealSignal: true, // Real multi-platform data exists
-      ctaLabel: 'Upgrade →',
-    })
-  }
-
-  // ── TEASER: Churn detection (fan recovery/stream planner logic) ──────────────
-  // Only show if there are actually lapsed fans (reuse existing churn detection)
-  const lapsedFans = whales.filter(w => {
-    // A fan is lapsed if they haven't tipped in >30 days
-    const daysSinceLast = w.daysSinceLastTip || Infinity
-    return daysSinceLast > 30 && daysSinceLast < 90 // "Lapsed" not "Dormant"
+  // ── MULTI-PLATFORM COMPARISON ──────────────────────────────────────────────
+  // Signal: ≥2 platforms with real revenue (not tiny test data)
+  const platformsWithRevenue = [...new Set(analysisTips.map(t => t.platform))].filter(p => {
+    const platformTips = analysisTips.filter(t => t.platform === p)
+    const revenue = platformTips.reduce((s, t) => s + (t.usd || 0), 0)
+    return revenue >= 10 // Threshold: at least $10 real revenue to count
   })
 
-  if (lapsedFans.length > 0) {
+  if (platformsWithRevenue.length >= 2) {
     teasers.push({
-      id: 'fan_churn',
-      tab: 'fans',
-      title: 'Re-engage your top fans',
-      description: 'Get targeted insights on fans who might be slipping away.',
-      requirement: `Pro users see churn risk for your ${lapsedFans.length} at-risk fan${lapsedFans.length === 1 ? '' : 's'}.`,
+      id: 'multi_platform',
+      tab: 'platforms',
+      title: 'See your performance across platforms',
+      description: 'Compare earnings, audience, and timing between your platforms.',
+      requirement: 'Upgrade to Pro to unlock cross-platform comparison.',
       hasRealSignal: true,
-      ctaLabel: 'Upgrade →',
     })
   }
 
-  return teasers.filter(t => t.hasRealSignal) // Never show teasers without real signal
+  // ── FAN CHURN & RE-ENGAGEMENT ───────────────────────────────────────────────
+  // Signal: whales contains fans in 'At Risk' or 'Dormant' behavioral states
+  // (from main's calcFanBehavioralState, not invented here)
+  const atRiskFans = whales?.filter(w => w.behavioralState === 'At Risk' || w.behavioralState === 'Dormant') || []
+
+  if (atRiskFans.length > 0) {
+    teasers.push({
+      id: 'fan_churn',
+      tab: 'whales', // StreamPlanner context where re-engagement is discussed
+      title: 'Key fans need your attention',
+      description: 'Track which fans are at risk of churning and get re-engagement strategies.',
+      requirement: `${atRiskFans.length} of your top fans show early signs of disengagement. Upgrade to Pro for detailed re-engagement coaching.`,
+      hasRealSignal: true,
+    })
+  }
+
+  return teasers
 }

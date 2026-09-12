@@ -124,14 +124,14 @@ export function getPlanAccess(userPlan = 'free', trackedPlatformCount = 0) {
   const isPro = isProPlan(userPlan)
   return {
     isPro, isFree: !isPro,
-    canTrackMultiplePlatforms: isPro,
+    canTrackMultiplePlatforms: true,
     canComparePlatforms: isPro,
     canUseCrossPlatformInsights: isPro,
     freePlatformLimitReached: !isPro && trackedPlatformCount >= FREE_PLATFORM_LIMIT,
   }
 }
 
-export function getFeatureLockState({ feature, userPlan = 'free', totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0 }) {
+export function getFeatureLockState({ feature, userPlan = 'free', totalTips = 0, totalSessions = 0, totalFans = 0, totalEarnings = 0, totalStreamMinutes = 0, importedPlatforms = [], liveModeSessions = 0, platformLimitReached = false }) {
   const isPro = isProPlan(userPlan)
   const platformCount = importedPlatforms?.length || 0
   const rules = {
@@ -139,18 +139,23 @@ export function getFeatureLockState({ feature, userPlan = 'free', totalTips = 0,
     topFans:               { needsData: totalFans < 5 || totalTips < 10, requiresPro: false, dataMessage: 'Unlocks after more fan and tip activity.', proMessage: null },
     whales:                { needsData: totalFans < 10 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after enough repeat fan activity.', proMessage: null },
     platformComparison:    { needsData: isPro && platformCount < 2, requiresPro: !isPro, dataMessage: 'Import at least 2 platforms to compare earnings.', proMessage: 'Upgrade to Pro to compare earnings across platforms.' },
-    multiPlatformTracking: { needsData: platformCount >= FREE_PLATFORM_LIMIT, requiresPro: false, dataMessage: platformLimitMessage(), proMessage: null },
+    // Free can connect multiple platforms (up to FREE_PLATFORM_LIMIT) — this
+    // is now a platform-count gate, never a Pro gate. See lib/planLimits.js.
+    multiPlatformTracking: { needsData: false, requiresPro: false, locked: !isPro && platformLimitReached, dataMessage: null, proMessage: null, lockedMessage: platformLimitMessage() },
     crossPlatformBestTimes:{ needsData: isPro && (platformCount < 2 || totalSessions < 3), requiresPro: !isPro, dataMessage: 'Import sessions from at least 2 platforms to unlock cross-platform timing insights.', proMessage: 'Upgrade to Pro to unlock cross-platform best times.' },
     sessionPerformance:    { needsData: totalSessions < 3, requiresPro: false, dataMessage: 'Unlocks after multiple completed sessions.', proMessage: null },
     averageHourly:         { needsData: totalSessions < 3 || totalStreamMinutes < 60, requiresPro: false, dataMessage: 'Unlocks after at least 60 minutes of tracked stream time.', proMessage: null },
     liveScore:             { needsData: liveModeSessions < 1, requiresPro: false, dataMessage: 'Unlocks after your first Live Mode stream.', proMessage: null },
     retention:             { needsData: totalSessions < 5 || totalFans < 20, requiresPro: false, dataMessage: 'Unlocks after more repeat fan activity.', proMessage: null },
     forecasting:           { needsData: totalSessions < 8 || totalEarnings < 50, requiresPro: false, dataMessage: 'Unlocks after more earnings history.', proMessage: null },
-    historicalDepth:       { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Upgrade to Pro to unlock full historical analysis (beyond 31 days).' },
+    // The real Free/Pro line for historical depth: Free only analyzes the
+    // most recent 31 days per platform (see lib/analytics.js applyFreeAnalysisWindow).
+    historicalDepth:       { needsData: false, requiresPro: !isPro, dataMessage: null, proMessage: 'Free analyzes the most recent 31 days per platform. Pro unlocks full history.' },
   }
   const rule = rules[feature]
   if (!rule) return { locked: false, lockType: null, message: null }
   if (rule.requiresPro) return { locked: true, lockType: 'requires_pro', message: rule.proMessage }
+  if (rule.locked) return { locked: true, lockType: 'platform_limit', message: rule.lockedMessage }
   if (rule.needsData) return { locked: true, lockType: 'needs_data', message: rule.dataMessage }
   return { locked: false, lockType: null, message: null }
 }

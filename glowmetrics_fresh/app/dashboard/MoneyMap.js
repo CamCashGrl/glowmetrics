@@ -696,16 +696,16 @@ function TrendsTab({ tips, sessions }) {
 }
 
 // ─── Inner content (all hooks here) ──────────────────────────────────────────
-function MoneyMapContent({ tips, isPro }) {
+function MoneyMapContent({ tips, isPro, whales: passedWhales, windowSummary, analytics }) {
   const [tab, setTab] = useState("map")
 
   const sessions = useMemo(()=>groupIntoSessions(tips),[tips])
 
   const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
   const totalTokens = useMemo(()=>tips.reduce((s,t)=>s+Number(t.tokens||0),0),[tips])
-  // Reuse the single fan-tiering source of truth (lib/analytics.js) instead
-  // of a locally invented whale threshold.
-  const whales      = useMemo(()=>identifyWhales(tips).filter(w=>w.tier==="Whale"),[tips])
+  // Use passed whales (from parent analytics on windowed tips) if available;
+  // fall back to computing locally for backward compatibility.
+  const whales      = useMemo(()=>passedWhales ? passedWhales.filter(w=>w.tier==="Whale") : identifyWhales(tips).filter(w=>w.tier==="Whale"),[passedWhales, tips])
   const avgSession  = useMemo(()=>{
     if (!sessions.length) return 0
     return sessions.reduce((s,x)=>s+x.usd,0)/sessions.length
@@ -754,7 +754,10 @@ function MoneyMapContent({ tips, isPro }) {
 // has passed the same eligibility bar as lib/analytics.js's tiering (i.e. it
 // is never a blurred teaser built from insufficient evidence — with zero
 // tips there's nothing to blur, so the low-data screen below takes over first).
-export default function MoneyMap({ tips = [], isPro = false }) {
+//
+// `tips` here is analysisTips (windowed for Free, full for Pro); `whales` comes
+// from the same analytics run so it matches the windowed data.
+export default function MoneyMap({ tips = [], isPro = false, whales = null, windowSummary = null, analytics = null }) {
   if (tips.length < 20) {
     return (
       <div style={{textAlign:"center",padding:"60px 24px"}}>
@@ -766,5 +769,5 @@ export default function MoneyMap({ tips = [], isPro = false }) {
     )
   }
 
-  return <MoneyMapContent tips={tips} isPro={isPro}/>
+  return <MoneyMapContent tips={tips} isPro={isPro} whales={whales} windowSummary={windowSummary} analytics={analytics}/>
 }
