@@ -164,6 +164,14 @@ export function parseCSV(text, platform = null) {
 
   if (!platform) platform = detectPlatform(text)
 
+  // Detect delimiter — must happen before any CSV parsing
+  const delimiter = detectDelimiter(text)
+  if (!delimiter) {
+    // Ambiguous delimiter — default to comma but warn
+    console.warn('[parseCSV] Could not detect delimiter; defaulting to comma')
+  }
+  const detectedDelimiter = delimiter || ','
+
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
@@ -173,7 +181,7 @@ export function parseCSV(text, platform = null) {
 
   let startIdx = 0
   for (let i = 0; i < Math.min(5, allLines.length); i++) {
-    const cols = parseCSVLine(allLines[i])
+    const cols = parseCSVLine(allLines[i], detectedDelimiter)
     if (cols.filter(c => c.trim()).length >= 2) { startIdx = i; break }
   }
 
@@ -181,7 +189,7 @@ export function parseCSV(text, platform = null) {
   if (lines.length === 0) return []
 
   const firstLower = lines[0].toLowerCase()
-  const firstCols = parseCSVLine(lines[0])
+  const firstCols = parseCSVLine(lines[0], detectedDelimiter)
 
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
@@ -196,7 +204,7 @@ export function parseCSV(text, platform = null) {
     firstLower.includes('user')
   )
 
-  const raw = hasHeaders ? parseWithHeaders(lines, platform) : parseHeaderless(lines, platform)
+  const raw = hasHeaders ? parseWithHeaders(lines, platform, detectedDelimiter) : parseHeaderless(lines, platform, detectedDelimiter)
   // Per-row format-based platform fallback — runs after both parsers
   raw.forEach(r => {
     if (r.platform && r.platform !== 'Unknown') return
@@ -270,7 +278,9 @@ function normalizeHeaderName(h) {
   if (['your_payout','usd_amount','payout','usd','earnings','amount_usd'].includes(clean)) return 'usd'
   if (['date_and_time','date_time','datetime','timestamp','date','time'].includes(clean)) return 'date_time'
   if (['member','username','user','tipper','sender','nickname','from'].includes(clean)) return 'username'
-  if (['transaction_type','chat_type','tip_type','type'].includes(clean)) return 'tip_type'
+  // Session type column variations: chat_type, session_type, activity_type, show_type, paid_chat_type, etc.
+  // Maps different platform export formats to the unified tip_type field for BC_PAID_CHAT_TYPES matching
+  if (['transaction_type','chat_type','tip_type','type','session_type','activity_type','show_type','paid_chat_type'].includes(clean)) return 'tip_type'
   if (clean === 'action') return 'action'
   if (clean === 'note') return 'note'
   if (clean === 'platform') return 'platform'
@@ -282,9 +292,9 @@ function re_clean(h) {
   return h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
 }
 
-function parseCSVLine(line) {
+function parseCSVLine(line, delimiter = ',') {
   const trimmed = line.trim()
-  if (trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
+  if (delimiter === ',' && trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
     return trimmed.slice(1, -1).split(',').map(v => v.trim())
   }
   const result = []
@@ -293,7 +303,7 @@ function parseCSVLine(line) {
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === '"') { inQuotes = !inQuotes }
-    else if (char === ',' && !inQuotes) {
+    else if (char === delimiter && !inQuotes) {
       result.push(current.trim().replace(/^"|"$/g, ''))
       current = ''
     }
@@ -303,6 +313,37 @@ function parseCSVLine(line) {
   return result
 }
 
+// Detect whether a CSV uses comma or tab as delimiter
+// Returns 'comma', 'tab', or null if detection is ambiguous
+function detectDelimiter(text) {
+  const lines = text.trim().split('\n').slice(0, 10) // Check first 10 lines
+  if (lines.length === 0) return 'comma' // Default to comma
+
+  let commaCount = 0
+  let tabCount = 0
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+    // Count unquoted commas and tabs
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      if (char === '"') inQuotes = !inQuotes
+      else if (!inQuotes) {
+        if (char === ',') commaCount++
+        if (char === '\t') tabCount++
+      }
+    }
+  }
+
+  // If tabs are present and outnumber commas, it's tab-delimited
+  if (tabCount > 0 && tabCount >= commaCount) return 'tab'
+  // If commas are present and outnumber tabs, it's comma-delimited
+  if (commaCount > 0) return 'comma'
+  // Ambiguous or no delimiters found
+  return null
+}
+
 // BongaCams paid-chat/spy-mode session types, matched against a row's
 // "Chat Type" column (normalized to tip_type by normalizeHeaderName above).
 // Duplicated from the identical BC_PAID_TYPES list in app/onboarding/page.js
@@ -310,29 +351,43 @@ function parseCSVLine(line) {
 // and is out of scope here; consolidating the two is a separate follow-up.
 const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
 
-function parseWithHeaders(lines, platform) {
-  const rawHeaders = parseCSVLine(lines[0])
+// Chaturbate private show detection — matched against Action column
+// "Private Show:" indicates a paid private show, "Tip From:" indicates free tips
+const CB_PRIVATE_SHOW_PATTERN = /^Private Show:/i
+
+// MyFreeCams private session detection — matched against Type column
+// Type = "Private" indicates paid private earnings, "Tip" indicates free tips
+const MFC_PRIVATE_TYPE = 'Private'
+
+function parseWithHeaders(lines, platform, delimiter = ',') {
+  const rawHeaders = parseCSVLine(lines[0], delimiter)
   const headers = rawHeaders.map(normalizeHeaderName)
   const results = []
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(line, delimiter)
     const row = {}
     headers.forEach((h, idx) => { row[h] = (vals[idx] ?? '').trim() })
 
-    const action = (row.action || '').toLowerCase()
+    const action = (row.action || '')
+    const actionLower = action.toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
-    // Exact (case-insensitive) match against the four BongaCams paid-chat
-    // types — same match semantics as onboarding's detectBCPaidRow(), just
-    // applied to the already header-mapped tip_type field instead of
-    // scanning raw columns.
+
+    // Platform-specific private session detection:
+    // 1. BongaCams: Chat Type column matches one of the paid session types
     const bcPaidChatType = BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipType) || null
 
-    if (action.includes('transfer') || action.includes('cash') ||
-        action.includes('outbound tip') || action.includes('promoted room') ||
-        action.includes('referral')) continue
+    // 2. Chaturbate: Action field starts with "Private Show:" (paid), "Tip From:" (free)
+    const cbIsPrivateShow = CB_PRIVATE_SHOW_PATTERN.test(action)
+
+    // 3. MyFreeCams: Type column equals "Private" (paid), "Tip" (free)
+    const mfcIsPrivate = tipType === MFC_PRIVATE_TYPE.toLowerCase()
+
+    if (actionLower.includes('transfer') || actionLower.includes('cash') ||
+        actionLower.includes('outbound tip') || actionLower.includes('promoted room') ||
+        actionLower.includes('referral')) continue
 
     if (tipType && !tipType.includes('tip') && !tipType.includes('private') &&
         !tipType.includes('spy') && !tipType.includes('show') && !tipType.includes('chat') &&
@@ -383,6 +438,13 @@ function parseWithHeaders(lines, platform) {
         : row.platform || platform)
       : platform
 
+    // Determine if this is a paid session based on platform-specific patterns:
+    // - BongaCams: checked via Chat Type column values
+    // - Chaturbate: checked via Action field prefix "Private Show:"
+    // - MyFreeCams: checked via Type column value "Private"
+    const isPaidSession = bcPaidChatType || cbIsPrivateShow || mfcIsPrivate
+    const sessionTypeValue = bcPaidChatType || (cbIsPrivateShow ? 'Private Show' : (mfcIsPrivate ? 'Private' : null))
+
     results.push({
       dateRaw, date_time: dateRaw, username,
       platform: rowPlatform || 'Unknown',
@@ -390,20 +452,21 @@ function parseWithHeaders(lines, platform) {
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
       tip_type: row.tip_type || 'Tip',
       tip_note: row.note || row.tip_note || '',
-      // Paid-chat/spy-mode rows must be routed to paid_sessions, not tips —
+      // Paid-chat/spy-mode/private-show rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat
       // parseCSV() result without re-deriving the classification themselves.
-      ...(bcPaidChatType ? { is_paid_session: true, session_type: bcPaidChatType } : {}),
+      // Applies to: BongaCams paid chat types, Chaturbate private shows, MyFreeCams private sessions
+      ...(isPaidSession ? { is_paid_session: true, session_type: sessionTypeValue } : {}),
     })
   }
   return results
 }
 
-function parseHeaderless(lines, platform) {
+function parseHeaderless(lines, platform, delimiter = ',') {
   const results = []
   for (const line of lines) {
     if (!line.trim()) continue
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(line, delimiter)
     if (vals.length === 0) continue
 
     if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from')) {
