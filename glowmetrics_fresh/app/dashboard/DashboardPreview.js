@@ -916,7 +916,17 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
   const usd = parseFloat(recentTips.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2))
   const tipCount = recentTips.length
 
-  const platSessions = (sessions || []).filter(s => resolvePlatformName(s.platform) === platformName && new Date(s.startTime) >= recentStart)
+  // Hours must exclude durationUnknown sessions, matching the platform hours
+  // in lib/analytics.js (`if (!s.durationUnknown) platformMap[...].hours += ...`)
+  // which is what $/hr below is derived from. Counting untimed sessions here
+  // produced a card reading "3.8h" beside "$/hr —": the hours came from
+  // sessions whose duration was never actually known, so the ROI engine
+  // correctly refused to divide by them. Same rule, one definition of "hours".
+  const platSessions = (sessions || []).filter(s =>
+    resolvePlatformName(s.platform) === platformName &&
+    !s.durationUnknown &&
+    new Date(s.startTime) >= recentStart
+  )
   const hours = parseFloat(platSessions.reduce((s, x) => s + (Number(x.durationHours) || 0), 0).toFixed(1))
   // $/hr is never derived locally — it must always equal the "Platform ROI"
   // card's number for this platform (single source of truth). No independent
@@ -1004,39 +1014,56 @@ function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
   const connected = !!stats?.hasData
   const meta = PLATFORM_META[platform] || { color: PI.muted, short: '?' }
   return (
-    <div className={primary ? 'pi-platform-card pi-platform-card-primary' : 'pi-platform-card'} style={piCard({ padding: 20, minWidth: 0, height: '100%', background: primary ? `linear-gradient(145deg, ${meta.color}12, rgba(10,16,36,.88))` : PI.panelStrong })}>
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(circle at 85% 10%, ${meta.color}12, transparent 36%)` }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <PlatformBadge name={platform} size={44} active={connected} />
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 900, color: PI.text }}>{platform}</div>
-              <div style={{ display: 'inline-flex', marginTop: 5, padding: '3px 8px', borderRadius: 999, background: primary ? 'linear-gradient(90deg,#16F4FF,#7C5CFF)' : 'rgba(124,92,255,.14)', color: primary ? '#06101A' : '#B9AEFF', fontSize: 9, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+    <div className={primary ? 'pi-platform-card pi-platform-card-primary' : 'pi-platform-card'} style={piCard({ padding: 0, minWidth: 0, height: '100%', background: PI.panelStrong })}>
+      {/* Platform colour appears only as a hairline accent rule. The card body
+          stays the neutral dashboard panel — no platform-tinted gradient fill
+          and no radial glow, which read as promotional rather than as data. */}
+      <div style={{ height: 2, background: meta.color, opacity: connected ? 0.85 : 0.25 }} />
+      <div style={{ position: 'relative', zIndex: 1, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+            <PlatformBadge name={platform} size={38} active={connected} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: PI.text, letterSpacing: '-0.01em' }}>{platform}</div>
+              {/* Primary/Secondary is metadata, not a promotional pill. */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: PI.muted, marginTop: 3 }}>
                 {primary ? 'Primary' : 'Secondary'}
               </div>
             </div>
           </div>
-          {connected ? <span style={{ fontSize: 10, fontWeight: 800, color: PI.green }}>● Connected</span> : <span style={{ fontSize: 10, fontWeight: 800, color: PI.muted }}>○ Not connected</span>}
+          {connected
+            ? <span style={{ fontSize: 10, fontWeight: 700, color: PI.green, whiteSpace: 'nowrap' }}>● Connected</span>
+            : <span style={{ fontSize: 10, fontWeight: 700, color: PI.muted, whiteSpace: 'nowrap' }}>○ Not connected</span>}
         </div>
 
         {connected ? (
           <>
-            <div style={{ marginTop: 18, marginBottom: 14 }}>
-              <PiLabel>{stats.windowDays < SNAPSHOT_WINDOW_DAYS ? `${stats.windowDays} days available` : `Most recent ${SNAPSHOT_WINDOW_DAYS} days`}</PiLabel>
+            {/* PERFORMANCE — scoped strictly to the rolling window. */}
+            <div style={{ marginTop: 16, marginBottom: 12 }}>
+              <PiLabel>{stats.windowDays < SNAPSHOT_WINDOW_DAYS
+                ? `Most recent ${stats.windowDays} ${stats.windowDays === 1 ? 'day' : 'days'} available`
+                : `Most recent ${SNAPSHOT_WINDOW_DAYS} days`}</PiLabel>
             </div>
             {/* flex-wrap, not a fixed 4-col grid: grid columns size to the
                 container, so a long earnings value (e.g. $219.70) overflowed
                 its track and collided with the tip count beside it. */}
-            <div className="pi-primary-metrics" style={{ display: 'flex', flexWrap: 'wrap', columnGap: 14, rowGap: 12 }}>
+            <div className="pi-primary-metrics" style={{ display: 'flex', flexWrap: 'wrap', columnGap: 16, rowGap: 14 }}>
               <PiMetric label="Earnings" value={fmt$(stats.usd)} accent={PI.gold} />
               <PiMetric label="Tips" value={fmtN(stats.tipCount)} />
               <PiMetric label="Hours" value={stats.hours > 0 ? `${stats.hours}h` : '—'} />
               <PiMetric label="$ / hr" value={stats.usdPerHour != null ? fmt$(stats.usdPerHour) : '—'} accent={PI.cyan} />
             </div>
-            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 11, color: PI.muted }}>
-              <span>{stats.earliestDate ? `History starts ${fmtDate(stats.earliestDate)}` : ''}</span>
-              {primary && stats.fullHistoryDays > SNAPSHOT_WINDOW_DAYS && <span style={{ color: PI.pink, fontWeight: 800 }}>{stats.fullHistoryDays} days on file</span>}
+
+            {/* HISTORY / DATA AVAILABILITY — all-time, deliberately separated
+                from the windowed performance figures above by a divider so the
+                two date scopes are never read as one. */}
+            <div style={{ marginTop: 16, paddingTop: 13, borderTop: `1px solid ${PI.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', fontSize: 11, color: PI.muted }}>
+                <span>{stats.earliestDate ? `History starts ${fmtDate(stats.earliestDate)}` : 'No history recorded'}</span>
+                {stats.fullHistoryDays > SNAPSHOT_WINDOW_DAYS && (
+                  <span style={{ color: PI.body, fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtN(stats.fullHistoryDays)} days on file</span>
+                )}
+              </div>
             </div>
           </>
         ) : (
