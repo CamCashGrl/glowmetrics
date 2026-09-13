@@ -15,7 +15,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
-import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard, CamCashNoticed, resolvePlatformRoles, computePlatformCardStats } from './DashboardPreview'
 import PlatformsIntelligence from './PlatformsIntelligence'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
@@ -3339,7 +3339,7 @@ const stopImportMessageRotation = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+                      {atPeak ? 'Go Live Now — Peak Window LIVE' : 'What\'s Next — Your Best Window Today'}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
                   </div>
@@ -3349,6 +3349,7 @@ const stopImportMessageRotation = () => {
                     ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
                     : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
                   }
+                  <button onClick={() => handleTabChange('stream-planner')} title="Build your streaming schedule based on your peak window" style={{ padding: '6px 14px', borderRadius: 12, background: 'linear-gradient(135deg,#22D3EE,#7C5CFF)', border: 'none', color: C.white, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>Build my stream plan →</button>
                 </div>
               </div>
 
@@ -3511,6 +3512,23 @@ const stopImportMessageRotation = () => {
             </div>
           )
         })()}
+
+            {/* ═══════════════════════════════════════
+                CAMCASH NOTICED — Platform intelligence carousel
+                Shows below the Go Live Now / What's Next card
+            ═══════════════════════════════════════ */}
+            {(() => {
+              const { primary, secondary } = resolvePlatformRoles({
+                primaryProPlatform: profile?.primary_pro_platform,
+                streamingPlatforms: profile?.streaming_platforms,
+                tips,
+              })
+              const SNAPSHOT_WINDOW_DAYS = 31
+              const platformRoi = analytics?.platformRoi || {}
+              const primaryStats = primary ? computePlatformCardStats(tips, sessions, primary, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions) : null
+              const secondaryStats = secondary.map(p => computePlatformCardStats(tips, sessions, p, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions))
+              return <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} />
+            })()}
 
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />

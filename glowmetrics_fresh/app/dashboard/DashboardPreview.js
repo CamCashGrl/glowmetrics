@@ -1517,7 +1517,7 @@ function NoticeStrip({ children, accent = PI.cyan }) {
   return <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 12, border: `1px solid ${accent}20`, background: `${accent}07`, color: PI.body, fontSize: 11, lineHeight: 1.55 }}>{children}</div>
 }
 
-function CamCashNoticed({ primary, primaryStats, secondary, secondaryStats }) {
+export function CamCashNoticed({ primary, primaryStats, secondary, secondaryStats }) {
   const comparisons = secondaryStats.filter(s => s.hasData && s.usdPerHour != null && primaryStats?.usdPerHour != null)
   const rateLead = comparisons.sort((a,b) => (b.usdPerHour || 0) - (a.usdPerHour || 0))[0]
   const recentPlatforms = [primaryStats, ...secondaryStats].filter(s => s?.hasData).sort((a,b) => b.usd - a.usd)
