@@ -3429,31 +3429,21 @@ const stopImportMessageRotation = () => {
               })()}
 
               {/* ═══ CAMCASH NOTICED — Platform Intelligence ═══ */}
-              <CamCashNoticed
-                engineInsights={engineInsights}
-                tips={tips}
-                style={{ marginBottom: 20 }}
-              />
+              {(() => {
+                const { primary, secondary } = resolvePlatformRoles({
+                  primaryProPlatform: profile?.primary_pro_platform,
+                  streamingPlatforms: profile?.streaming_platforms,
+                  tips,
+                })
+                const SNAPSHOT_WINDOW_DAYS = 31
+                const platformRoi = analytics?.platformRoi || {}
+                const primaryStats = primary ? computePlatformCardStats(tips, sessions, primary, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions) : null
+                const secondaryStats = secondary.map(p => computePlatformCardStats(tips, sessions, p, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions))
+                return <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} style={{ marginBottom: 20 }} />
+              })()}
             </>
           )
         })()}
-
-            {/* ═══════════════════════════════════════
-                CAMCASH NOTICED — Platform intelligence carousel
-                Shows below the Go Live Now / What's Next card
-            ═══════════════════════════════════════ */}
-            {(() => {
-              const { primary, secondary } = resolvePlatformRoles({
-                primaryProPlatform: profile?.primary_pro_platform,
-                streamingPlatforms: profile?.streaming_platforms,
-                tips,
-              })
-              const SNAPSHOT_WINDOW_DAYS = 31
-              const platformRoi = analytics?.platformRoi || {}
-              const primaryStats = primary ? computePlatformCardStats(tips, sessions, primary, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions) : null
-              const secondaryStats = secondary.map(p => computePlatformCardStats(tips, sessions, p, SNAPSHOT_WINDOW_DAYS, platformRoi, paidSessions))
-              return <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} />
-            })()}
 
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
