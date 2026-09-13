@@ -1130,39 +1130,6 @@ export default function LivePage() {
             )}
           </div>
 
-          {/* Intelligence strip */}
-          {liveActive && state && (
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', width: '100%', marginTop: 8 }}>
-              <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: roomHealth.bg, border: `1px solid ${roomHealth.border}` }}>
-                <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Room Heat</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: roomHealth.color }}>{roomHealth.emoji} {roomHealth.label}</div>
-                <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{roomHealth.confidence}% confidence</div>
-              </div>
-              <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Opportunity</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: oppScore.color }}>{oppScore.score}<span style={{ fontSize: 11, fontWeight: 400 }}>/100</span></div>
-              </div>
-              <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Stream Health</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
-                  <span style={{ fontSize: 13, color: C.muted }}>{streamHealth.score}/100</span>
-                </div>
-              </div>
-              <div style={{ flex: '1 1 160px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Revenue Velocity</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: velocity.color }}>${velocity.currentUPH.toFixed(2)}/hr</div>
-              </div>
-              {comparison.vsAvgPct !== null && (
-                <div style={{ flex: '1 1 130px', borderRadius: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>vs Your Average</div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: (comparison.vsAvgPct ?? 0) >= 0 ? C.green : C.red }}>
-                    {(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}{comparison.vsAvgPct}%
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* ── NOT STARTED ───────────────────────────────────────────── */}
@@ -1216,6 +1183,9 @@ export default function LivePage() {
                       <div>
                         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 3 }}>Room State</div>
                         <div style={{ fontSize: 30, fontWeight: 900, color: roomHealth.color, letterSpacing: -0.5 }}>{roomHealth.emoji} {roomHealth.label}</div>
+                        {liveActive && state && roomHealth.confidence != null && (
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{roomHealth.confidence}% confidence</div>
+                        )}
                       </div>
                       {liveActive && state && (
                         <div style={{ padding: '6px 14px', borderRadius: 20, background: phaseConfig.bg, border: `1px solid ${phaseConfig.border}`, fontSize: 12, fontWeight: 700, color: phaseConfig.color }}>
