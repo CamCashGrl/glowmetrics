@@ -22,6 +22,7 @@ export default function sitemap() {
   }))
 
   const blogSlugs = [
+    '101-sexting-tips-long-distance',
     'benefits-of-cam-model-bookkeeping',
     'best-cam-model-tools',
     'best-cam-sites-for-beginners',
@@ -40,16 +41,25 @@ export default function sitemap() {
     'cam-model-mental-health-burnout-prevention',
     'cam-model-self-employment-tax-prep',
     'cam-model-taxes',
+    'cam-model-tip-menu-templates',
     'cam-model-tipping-pattern-data-examples',
     'cam-model-token-to-dollar-ratio-explained',
     'camcash-vs-camdash-vs-cb-cam-insights',
 
     // New creator-product articles
-    'cam-room-dice-game-ideas',
+    'cam-room-dice-game-pack',
+    'cam-room-dice-games',
     'what-to-do-when-cam-room-is-slow',
     'cam-session-scripts-for-models',
+    'chaturbate-earnings-growth-bundle',
+    'chaturbate-earnings-tracker',
+    'daddys-girl-roleplay-script-pack',
     'femdom-message-scripts-for-creators',
+    'roll-the-dice-game-pack',
+    'sissy-training-obedience-bundle',
+    'sph-script-pack',
     'spin-the-wheel-cam-game',
+    'vip-client-tracker',
 
     'chaturbate-best-month-real-numbers',
     'chaturbate-first-30-days-real-earnings',
