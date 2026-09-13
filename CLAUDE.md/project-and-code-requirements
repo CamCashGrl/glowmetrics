@@ -424,4 +424,59 @@ When asked for a status summary, progress update, or daily report, include:
 
 ---
 
+## TIME ZONES — NEVER READ A DAY OR HOUR IN UTC
+
+A stream time only means something to a creator as their own wall-clock time.
+This rule exists because the mistake has been made repeatedly, including
+deliberately: `app/dashboard/page.js` still carries comments reading
+*"FIX: use getUTCHours() — tips stored in UTC"*.
+
+**That reasoning is wrong.** Timestamps being *stored* in UTC is true and
+irrelevant. Storage format and display basis are different questions. A tip
+stored as `2026-09-15T05:00:00Z` was earned at 10 PM on Monday by a creator in
+Los Angeles. Reading it in UTC calls it 5 AM Tuesday — a different hour and a
+different day.
+
+What this broke in practice:
+
+- Stream Planner bucketed by `getUTCDay()`/`getUTCHours()`, then converted for
+  display using a sample date in January — so every hour displayed one hour
+  early in any daylight-saving timezone, and the weekday was wrong for anyone
+  west of UTC. The feature whose whole job is saying when to stream was wrong
+  for every creator.
+- `missedRevenueByPlatform` compared a UTC session hour against a local
+  `bestHour`, so the dollar figure it reported was computed from a mismatch.
+- Money Map bucketed hours locally but keyed dates in UTC, putting a
+  late-evening tip on the following day.
+
+### The rule
+
+Creator-facing days and hours are read on the creator's clock:
+
+```js
+import { toLocalHour, toLocalDow } from '@/lib/analytics'
+const hour = toLocalHour(tip.date_time, userTz)
+const dow  = toLocalDow(tip.date_time, userTz)
+```
+
+In a client component the browser clock is already the creator's, so plain
+`.getHours()` / `.getDay()` is correct there — but never mix the two bases in
+one feature.
+
+`getUTCFullYear/Month/Date` are acceptable for duration arithmetic. They are
+not acceptable as a **date key** sitting beside a locally-bucketed hour: that
+splits one feature across two clocks.
+
+### Enforcement
+
+`scripts/check-timezone.mjs` runs in CI and fails the build on any new
+`getUTCDay()`/`getUTCHours()`. It carries a baseline of pre-existing sites so
+old debt does not block every PR. **Lower a baseline number when you fix one;
+never raise one.** If a flagged use really is duration arithmetic, add it to
+the baseline with a comment explaining why.
+
+Regression coverage: `lib/analytics/__tests__/timezone-consistency.test.js`.
+
+---
+
 *Last updated: June 2026 — Port of all CamCash claude.ai skills into Claude Code format*

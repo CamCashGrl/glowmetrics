@@ -1272,7 +1272,11 @@ export function aggregateRows(tips, tz = null) {
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
     const bestHourAvg = bestHourData.avg
     if (bestHourAvg <= overallAvg * 1.2) return
-    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bestHourData.hour) > 1).length
+    // bestHourData.hour came from toLocalHour, so the session hour has to be
+    // read on the same clock. Comparing a UTC hour against a local one made
+    // this count every session "not at the best hour" for any creator whose
+    // offset exceeded an hour, inflating the missed-revenue figure below.
+    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bestHourData.hour) > 1).length
     const missedRevenue = parseFloat(((bestHourAvg - overallAvg) * sessionsNotAtBestHour).toFixed(2))
     if (missedRevenue > 5) {
       missedRevenueByPlatform[p] = { bestHour: bestHourData.hour, bestHourAvg, overallAvg: parseFloat(overallAvg.toFixed(2)), sessionsNotAtBestHour, missedRevenue, multiplier: parseFloat((bestHourAvg / overallAvg).toFixed(1)) }
