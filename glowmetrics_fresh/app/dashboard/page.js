@@ -2596,43 +2596,24 @@ const stopImportMessageRotation = () => {
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
-    // Best platform per hour
-    const platHourUSD = {}; const platHourSessions = {}
-    tips.forEach(t => {
-      const p = t.platform || 'Chaturbate'
-      const d = new Date(t.date_time || t.dateRaw)
-      const h = d.getHours() // local hour to match analytics.js toLocalHour
-      const bucket = Math.floor(d.getTime() / 3600000)
-      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
-      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
-      platHourUSD[p][h] += t.usd || 0
-      platHourSessions[p][h].add(bucket)
-    })
-    let bestPlatNow = null; let bestPlatNowAvg = 0
-    Object.keys(platHourUSD).forEach(plat => {
-      const sessions = platHourSessions[plat][utcHour]?.size || 0
-      if (sessions === 0) return
-      const avg = platHourUSD[plat][utcHour] / sessions
-      if (avg > bestPlatNowAvg) { bestPlatNowAvg = avg; bestPlatNow = plat }
-    })
-    let bestPlatPeak = null; let bestPlatPeakAvg = 0
-    if (bh !== null) {
-      Object.keys(platHourUSD).forEach(plat => {
-        const sessions = platHourSessions[plat][bh]?.size || 0
-        if (sessions === 0) return
-        const avg = platHourUSD[plat][bh] / sessions
-        if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
-      })
-    }
-    // todayBestPlat/bestPlatPeak/bestPlatNow are time-bucketed (need 3+ session
-    // buckets at a specific hour/day) and are often null for sparse accounts.
-    // Real fallback: the platform with the highest total earnings across all
-    // tips — needs only 1 tip to resolve, so it's never a fake/wrong platform.
+    // BEST PLATFORM: Use the platform with highest lifetime revenue (ALL tips)
+    // This is the true platform comparison metric
     const platTotalUSD = {}
-    tips.forEach(t => { const p = t.platform || 'Unknown'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
-    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || null
-    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
-    const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
+    tips.forEach(t => { const p = t.platform || 'Chaturbate'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
+    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chaturbate'
+    const displayPlat = topEarningPlat
+
+    // Peak hour average for this platform (for context/forecast only)
+    // Do NOT use hour-bucket calculations for session averages — these aren't actual sessions
+    let peakHourAvgForPlatform = bestHour?.avg || 0
+    if (bh !== null && analytics?.platformBestTimes?.[displayPlat]) {
+      const platTimes = analytics.platformBestTimes[displayPlat]
+      const peakHourEntry = platTimes.allHours?.find(h => h.hour === bh)
+      if (peakHourEntry?.avg) {
+        peakHourAvgForPlatform = peakHourEntry.avg
+      }
+    }
+    const displayAvg = peakHourAvgForPlatform
 
     // Best day
     const bestDay = analytics?.bestDay
@@ -2640,14 +2621,18 @@ const stopImportMessageRotation = () => {
     const sessionAvg = analytics?.sessions?.length
       ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
 
-    // Income prediction for peak window — use median-based displayAvg as single source of truth
+    // Income prediction for peak window
+    // Use bestHour?.avg (median-based from analytics) as canonical metric
+    // This is calculated from ALL tips and represents typical earnings at that hour
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
       const h = new Date(s.startTime).getHours() // local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    const peakAvg = displayAvg || bestHour?.avg || sessionAvg
-    const predictionLow = Math.max(0, Math.round(peakAvg - (peakAvg * 0.4)))
-    const predictionHigh = Math.round(peakAvg + (peakAvg * 0.4))
+    // Use displayAvg (which is now consistently the peak hour value) for prediction
+    const predictionLow = displayAvg > 0 ? Math.max(0, Math.round(displayAvg - (displayAvg * 0.4))) : 0
+    const predictionHigh = displayAvg > 0 ? Math.round(displayAvg + (displayAvg * 0.4)) : 0
+    // Fallback to sessionAvg only if no best hour data exists
+    const peakAvg = displayAvg > 0 ? displayAvg : (sessionAvg || 0)
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
