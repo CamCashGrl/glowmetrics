@@ -86,6 +86,26 @@ describe('Hourly rate consistency', () => {
     expect(hours * 60).toBeCloseTo(a.hourlyRateTotalMinutes, 0)
   })
 
+  test('per-platform revenue mix sums to that platform reported earnings', () => {
+    const rows = [
+      ...timedSession('Chaturbate', 0, 20, 10),
+      ...timedSession('Chaturbate', 1, 20, 10),
+      ...timedSession('Stripchat', 2, 21, 6),
+      // A lone tip that never becomes a meaningful session. It must be absent
+      // from both the platform's earnings and its revenue mix, or the mix
+      // shown under the earnings figure would total more than it.
+      ...untimedSession('Chaturbate', 3, 500),
+    ]
+
+    const a = aggregateRows(rows, 'UTC')
+    a.platforms.forEach(p => {
+      const mix = a.platformTipTypes[p.platform] || []
+      const mixTotal = mix.reduce((s, t) => s + t.usd, 0)
+      expect(mixTotal).toBeCloseTo(p.totalUSD, 1)
+      expect(mix.reduce((s, t) => s + t.count, 0)).toBe(p.tips)
+    })
+  })
+
   test('a platform with no rate-eligible session reports no rate, not zero hours divided', () => {
     const rows = [
       ...timedSession('Chaturbate', 0, 20, 10),

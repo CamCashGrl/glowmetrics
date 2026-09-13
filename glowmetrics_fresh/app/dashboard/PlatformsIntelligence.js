@@ -8,8 +8,10 @@ import {
   buildFanRevenue,
   buildCamCashNoticed,
   buildPlatformSnapshot,
+  buildDataCoverage,
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
+import { computeDataVaultStats } from './DashboardPreview'
 
 const C = {
   card: "#0d1322", card2: "#111829", border: "#1e2d45", border2: "#2a3f5f",
@@ -208,11 +210,49 @@ function NextBestMove({ comparison, efficiency, timeIntel }) {
   )
 }
 
+// Coverage of the analysis window, in days actually imported. No estimate of
+// what is "missing" — that number is not knowable from the data on file.
+function DataCoverage({ coverage }) {
+  if (!coverage || coverage.historyDays === 0) return null
+  const complete = coverage.historyDays >= coverage.windowDays
+
+  return (
+    <Section
+      title="Your data"
+      note={coverage.hasMoreThanWindow
+        ? `${fmtN(coverage.historyDays)} days on file · ${coverage.windowDays}-day window analysed`
+        : `${fmtN(coverage.historyDays)} of ${coverage.windowDays} days imported`}
+    >
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+        {!complete && (
+          <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', marginBottom: 12 }}>
+            <div style={{ width: `${coverage.windowCoveragePct}%`, height: '100%', background: C.cyan, borderRadius: 2 }} />
+          </div>
+        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {coverage.milestones.map((m, i) => (
+            <span key={i} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 11, padding: '3px 9px', borderRadius: 6,
+              color: m.done ? C.white : C.muted,
+              background: m.done ? `${C.green}14` : 'transparent',
+              border: `1px solid ${m.done ? `${C.green}44` : C.border}`,
+            }}>
+              <span style={{ color: m.done ? C.green : C.muted }}>{m.done ? '✓' : `${m.days}d`}</span>
+              {m.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Section>
+  )
+}
+
 // ============================================
 // UNIFIED VIEW
 // ============================================
 
-function UnifiedView({ analytics, isPro }) {
+function UnifiedView({ analytics, coverage, isPro }) {
   const snapshot = useMemo(() => buildBusinessSnapshot(analytics), [analytics])
   const comparison = useMemo(() => buildPlatformComparison(analytics), [analytics])
   const efficiency = useMemo(() => buildEfficiencyComparison(analytics), [analytics])
@@ -340,12 +380,31 @@ function UnifiedView({ analytics, isPro }) {
                 <FactRow label="Strongest platform" accent={accentFor(topRevenue.platform)}
                   facts={`${topRevenue.platform} · ${fmt$(topRevenue.earnings)} · ${topRevenue.earningsPercent}% of earnings`} />
               )}
-              {!isPro && <LockedRow text="Best hour and day broken out per platform" />}
+              {isPro ? (
+                (() => {
+                  const rows = comparison
+                    .map(p => ({ platform: p.platform, t: timeIntel.platformBestTimes[p.platform] }))
+                    .filter(r => r.t && (r.t.hour || r.t.bestDay))
+                  if (rows.length === 0) return null
+                  return (
+                    <DataTable
+                      columns={[{ label: 'Per platform', align: 'left' }, { label: 'Best hour' }, { label: 'Best day' }]}
+                      rows={rows.map(r => [
+                        <PlatformCell key="p" platform={r.platform} />,
+                        r.t.hour ? formatHour(r.t.hour.hour) : '—',
+                        r.t.bestDay ? r.t.bestDay.day : '—',
+                      ])}
+                    />
+                  )
+                })()
+              ) : (
+                <LockedRow text="Best hour and day broken out per platform" />
+              )}
             </div>
           )}
         </Section>
 
-        <Section title="Who is driving your revenue" style={{ marginBottom: 0 }}>
+        <Section title="Who is driving your revenue" note="Share of all tracked tips" style={{ marginBottom: 0 }}>
           {fans.uniqueTippers === 0 ? (
             <Empty>No supporters recorded yet.</Empty>
           ) : (
@@ -407,6 +466,8 @@ function UnifiedView({ analytics, isPro }) {
         </Section>
       )}
 
+      <DataCoverage coverage={coverage} />
+
       <Section title="Your next best move">
         <NextBestMove comparison={comparison} efficiency={efficiency} timeIntel={timeIntel} />
       </Section>
@@ -456,6 +517,23 @@ function SplitView({ analytics, platformName, isPro }) {
           )}
         </Section>
 
+        <Section title="Revenue mix" style={{ marginBottom: 0 }}>
+          {snap.revenueMix.length === 0 ? (
+            <Empty>No revenue-type detail recorded for this platform.</Empty>
+          ) : (
+            <DataTable
+              columns={[{ label: 'Type', align: 'left' }, { label: 'Count' }, { label: 'Avg' }, { label: 'Earnings' }, { label: 'Share' }]}
+              rows={snap.revenueMix.slice(0, 6).map(t => [
+                t.type, fmtN(t.count), fmt$(t.avgUsd), fmt$(t.usd),
+                <ShareBar key="s" percent={t.pct} color={accent} />,
+              ])}
+            />
+          )}
+        </Section>
+
+      </div>
+
+      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
         <Section title={`When ${platformName} pays`} style={{ marginBottom: 0 }}>
           {!snap.bestHour && !snap.bestDay ? (
             <Empty>Not enough repeat activity on this platform to name a reliable time.</Empty>
@@ -471,7 +549,30 @@ function SplitView({ analytics, platformName, isPro }) {
                 <FactRow label="Best day" accent={C.purple}
                   facts={`${snap.bestDay.day} · ${fmt$(snap.bestDay.avg)} typical · ${fmtN(snap.bestDay.activeDays)} days`} />
               )}
+              {snap.hourly.length > 1 && (
+                <DataTable
+                  columns={[{ label: 'Hour', align: 'left' }, { label: 'Typical' }, { label: 'Sessions' }]}
+                  rows={snap.hourly.slice(0, 6).map(h => [
+                    formatHour(h.hour), fmt$(h.avg), fmtN(h.sessionCount),
+                  ])}
+                />
+              )}
             </div>
+          )}
+        </Section>
+        <Section title="Day of week" style={{ marginBottom: 0 }}>
+          {snap.weekdays.length === 0 ? (
+            <Empty>No weekday has three separate active days yet, so there is no dependable pattern to show.</Empty>
+          ) : (
+            <DataTable
+              // No total column: these come from every tip, while the earnings
+              // above count meaningful sessions only, so a total here would
+              // invite a sum that does not match the snapshot.
+              columns={[{ label: 'Day', align: 'left' }, { label: 'Typical day' }, { label: 'Active days' }]}
+              rows={snap.weekdays.map(d => [
+                d.day, fmt$(d.avg), fmtN(d.activeDays),
+              ])}
+            />
           )}
         </Section>
       </div>
@@ -502,9 +603,13 @@ function SplitView({ analytics, platformName, isPro }) {
 // PAGE
 // ============================================
 
-export default function PlatformsIntelligence({ analytics = null, isPro = false }) {
+export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false }) {
   const [view, setView] = useState('unified')
   const [selectedPlatform, setSelectedPlatform] = useState(null)
+
+  // Coverage reads the account's real import span via the canonical vault
+  // helper rather than deriving its own.
+  const coverage = useMemo(() => buildDataCoverage(computeDataVaultStats(tips)), [tips])
 
   const platformNames = useMemo(
     () => buildPlatformComparison(analytics).map(p => p.platform),
@@ -553,7 +658,7 @@ export default function PlatformsIntelligence({ analytics = null, isPro = false 
           No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
         </Empty>
       ) : view === 'unified' ? (
-        <UnifiedView analytics={analytics} isPro={isPro} />
+        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} />
       ) : (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>

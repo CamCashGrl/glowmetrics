@@ -32,13 +32,14 @@ export function buildBusinessSnapshot(analytics) {
   const platforms = analytics.platforms || []
   const totalHours = (analytics.totalStreamMinutes || 0) / 60
   const sessions = analytics.meaningfulSessionCount || 0
-  const totalTips = analytics.totalTips || 0
 
-  // Earnings are the sum of the platform rows this page actually shows, not
-  // analytics.totalUSD. totalUSD includes tips from sessions too thin to
-  // analyse, so using it would leave the headline unreconcilable against the
-  // table beneath it and make every share-of-total quietly wrong.
+  // Every headline total is the sum of the platform rows this page actually
+  // shows — never analytics.totalUSD / totalTips, which also count tips from
+  // sessions too thin to analyse. Mixing the two bases leaves the headline
+  // unreconcilable against the table beneath it (639 tips above, 590 in the
+  // rows) and makes every share-of-total quietly wrong.
   const totalEarnings = platforms.reduce((s, p) => s + (p.totalUSD || 0), 0)
+  const totalTips = platforms.reduce((s, p) => s + (p.tips || 0), 0)
 
   return {
     totalEarnings: round2(totalEarnings),
@@ -52,7 +53,7 @@ export function buildBusinessSnapshot(analytics) {
     sessions,
     platformCount: platforms.length,
     avgEarningsPerSession: sessions > 0 ? round2(totalEarnings / sessions) : 0,
-    avgTipSize: analytics.avgTipSize ?? 0,
+    avgTipSize: totalTips > 0 ? round2(totalEarnings / totalTips) : 0,
     tipsPerHour: totalHours > 0 ? parseFloat((totalTips / totalHours).toFixed(1)) : 0,
     momentum: analytics.momentum || null,
   }
@@ -142,6 +143,10 @@ export function buildTimeIntelligence(analytics) {
 // Fans come from the engine's whales list, keyed by platform + username.
 // =============================================
 
+// Fan figures are the engine's whales list, which is built from every tip —
+// a wider base than the platform rows above. Percentages here are therefore
+// shares of all tracked tips, and the section says so rather than implying
+// they divide the platform subtotal.
 export function buildFanRevenue(analytics, isPro = false) {
   const whales = analytics?.whales || []
   const totalEarnings = analytics?.totalUSD || 0
@@ -242,10 +247,51 @@ export function buildPlatformSnapshot(analytics, platformName) {
 
   return {
     ...row,
+    // The engine names this `bestDay`, not `day` — reading the wrong key here
+    // silently blanked the best-day row on every platform.
     bestHour: times?.hour ? { ...times.hour, label: formatHour(times.hour.hour) } : null,
-    bestDay: times?.day || null,
+    bestDay: times?.bestDay || null,
+    // Full per-platform breakdowns the engine already publishes.
+    // Named `hourly`, not `hours`: the spread row above already carries a
+    // numeric `hours`, and clobbering it with an array would blank the snapshot.
+    weekdays: times?.allDays || [],
+    hourly: times?.allHours || [],
+    revenueMix: analytics?.platformTipTypes?.[platformName] || [],
     topFans,
     missedRevenue: analytics?.missedRevenueByPlatform?.[platformName] || null,
+  }
+}
+
+// =============================================
+// YOUR DATA (Phase 1 + 2 — coverage and milestones)
+//
+// Reports only what is on file. The earlier version of this paired the real
+// history span with an "estimated available earnings" figure derived by
+// multiplying lifetime revenue by a hand-picked multiplier, then showed the
+// ratio as an import-progress bar. That denominator was invented, so both the
+// "of ~$X lifetime" line and the percentage were fiction. Coverage is reported
+// here in days actually imported, which is checkable.
+// =============================================
+
+export const FULL_WINDOW_DAYS = 31
+
+export function buildDataCoverage(vaultStats) {
+  const historyDays = vaultStats?.fullHistoryDays || 0
+
+  return {
+    historyDays,
+    visibleDays: vaultStats?.visibleDays || 0,
+    hasMoreThanWindow: Boolean(vaultStats?.hasMoreThanWindow),
+    windowDays: FULL_WINDOW_DAYS,
+    // Share of the analysis window actually covered by imported history.
+    windowCoveragePct: Math.min(100, Math.round((historyDays / FULL_WINDOW_DAYS) * 100)),
+    milestones: [
+      { days: 1,  label: 'Started tracking',          done: historyDays >= 1 },
+      { days: 7,  label: 'Weekly patterns visible',   done: historyDays >= 7 },
+      { days: 14, label: 'Two-week trend',            done: historyDays >= 14 },
+      { days: 21, label: 'Monthly cycle emerging',    done: historyDays >= 21 },
+      { days: 31, label: 'Full month of data',        done: historyDays >= 31 },
+    ],
   }
 }
 
