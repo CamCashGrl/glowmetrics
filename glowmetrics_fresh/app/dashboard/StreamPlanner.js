@@ -45,9 +45,10 @@ const fmtK  = (v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(Math.round
 const TIP_S = { background: "#0f1726", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", color: PRIMARY, fontSize: 12 }
 
 // UTC hour → local display e.g. "9 PM"
-const localHr  = (utcH) => new Date(Date.UTC(2000, 0, 1, ((utcH % 24) + 24) % 24)).toLocaleTimeString([], { hour: "numeric", hour12: true })
+const localHr  = (h) => { const x = ((h % 24) + 24) % 24; return `${((x + 11) % 12) + 1} ${x < 12 ? "AM" : "PM"}` }
 // UTC day index → local weekday name (2024-01-07 is a Sunday)
-const localDay = (utcD) => new Date(Date.UTC(2024, 0, 7 + utcD)).toLocaleDateString("en-US", { weekday: "long" })
+const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+const localDay = (d) => DAY_NAMES[((d % 7) + 7) % 7] ?? "—"
 const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "long" })
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -79,7 +80,11 @@ function groupIntoSessions(tips) {
     return {
       start: s.start, end: s.end, durationHrs, totalUsd, totalTokens,
       usdHr: totalUsd / durationHrs,
-      utcDay: s.start.getUTCDay(), utcHour: s.start.getUTCHours(),
+      // Bucket in the creator's own clock. Session times only mean anything
+      // to them as local wall-clock time, and the analytics engine buckets
+      // the same way (toLocalDow/toLocalHour), so the planner and the rest of
+      // the dashboard name the same window identically.
+      day: s.start.getDay(), hour: s.start.getHours(),
       platform:  Object.entries(pc).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
       platforms: Object.keys(pc),
       tips: s.tips,
@@ -87,7 +92,7 @@ function groupIntoSessions(tips) {
   })
 }
 
-// Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestUtcDay, bestUtcHour } }
+// Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestDay, bestHour } }
 function platformEfficiency(tips) {
   const sessions = groupIntoSessions(tips)
   const acc = {}
@@ -96,8 +101,8 @@ function platformEfficiency(tips) {
     if (!acc[s.platform]) acc[s.platform] = { usd: 0, tokens: 0, hrs: 0, tipCount: 0, slots: {} }
     const a = acc[s.platform]
     a.usd += s.totalUsd; a.tokens += s.totalTokens; a.hrs += s.durationHrs; a.tipCount += s.tips.length
-    const k = `${s.utcDay}-${s.utcHour}`
-    if (!a.slots[k]) a.slots[k] = { utcDay: s.utcDay, utcHour: s.utcHour, sum: 0, n: 0 }
+    const k = `${s.day}-${s.hour}`
+    if (!a.slots[k]) a.slots[k] = { day: s.day, hour: s.hour, sum: 0, n: 0 }
     a.slots[k].sum += s.usdHr; a.slots[k].n++
   })
   const out = {}
@@ -108,14 +113,14 @@ function platformEfficiency(tips) {
       tokensPerHr:  a.hrs > 0 ? a.tokens / a.hrs : 0,
       avgTip:       a.tipCount > 0 ? a.usd / a.tipCount : 0,
       sessionCount: Object.values(a.slots).reduce((n, s) => n + s.n, 0),
-      bestUtcDay:   best?.utcDay ?? null,
-      bestUtcHour:  best?.utcHour ?? null,
+      bestDay:   best?.day ?? null,
+      bestHour:  best?.hour ?? null,
     }
   })
   return out
 }
 
-// Returns [{ utcDay, utcHour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
+// Returns [{ day, hour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
 function bestWindows(tips) {
   const sessions = groupIntoSessions(tips)
   const firstSeen = {}
@@ -125,8 +130,8 @@ function bestWindows(tips) {
   })
   const map = {}
   sessions.forEach((s) => {
-    const k = `${s.utcDay}-${s.utcHour}`
-    if (!map[k]) map[k] = { utcDay: s.utcDay, utcHour: s.utcHour, sessions: [], pu: {}, newTips: 0, allTips: 0 }
+    const k = `${s.day}-${s.hour}`
+    if (!map[k]) map[k] = { day: s.day, hour: s.hour, sessions: [], pu: {}, newTips: 0, allTips: 0 }
     const m = map[k]
     m.sessions.push(s)
     if (s.platform) m.pu[s.platform] = (m.pu[s.platform] || 0) + s.totalUsd
@@ -139,7 +144,7 @@ function bestWindows(tips) {
   return Object.values(map).map((m) => {
     const cnt = m.sessions.length
     return {
-      utcDay: m.utcDay, utcHour: m.utcHour,
+      day: m.day, hour: m.hour,
       avgUsdPerHr:   m.sessions.reduce((n, s) => n + s.usdHr, 0) / cnt,
       totalUsd:      m.sessions.reduce((n, s) => n + s.totalUsd, 0),
       sessionCount:  cnt,
@@ -156,7 +161,7 @@ function untestedWindows(tips, allWindows) {
     ? allWindows.reduce((n, w) => n + w.avgUsdPerHr, 0) / allWindows.length
     : 0
   const byKey = {}
-  allWindows.forEach((w) => { byKey[`${w.utcDay}-${w.utcHour}`] = w })
+  allWindows.forEach((w) => { byKey[`${w.day}-${w.hour}`] = w })
   const strong = allWindows.filter((w) => w.sessionCount >= 3 && w.avgUsdPerHr >= overallAvg)
   const out = []
   // Under-tested (1 session) with above-average early results
@@ -168,13 +173,13 @@ function untestedWindows(tips, allWindows) {
   // Untested but adjacent (±1-2 hrs same day) to a strong window
   strong.forEach((s) => {
     for (const dh of [-2, -1, 1, 2]) {
-      const h = ((s.utcHour + dh) % 24 + 24) % 24
-      const k = `${s.utcDay}-${h}`
-      if (!byKey[k] && !out.some((o) => o.utcDay === s.utcDay && o.utcHour === h)) {
+      const h = ((s.hour + dh) % 24 + 24) % 24
+      const k = `${s.day}-${h}`
+      if (!byKey[k] && !out.some((o) => o.day === s.day && o.hour === h)) {
         out.push({
-          utcDay: s.utcDay, utcHour: h, sessionCount: 0, avgUsdPerHr: 0,
+          day: s.day, hour: h, sessionCount: 0, avgUsdPerHr: 0,
           confidence: "untested", topPlatform: s.topPlatform, newTipperRate: 0,
-          reason: `Right next to your strong ${localHr(s.utcHour)} window (${fmt$(s.avgUsdPerHr)}/hr).`,
+          reason: `Right next to your strong ${localHr(s.hour)} window (${fmt$(s.avgUsdPerHr)}/hr).`,
           testsNeeded: 3,
         })
       }
@@ -198,7 +203,7 @@ function detectWhales(tips) {
     const slots = {}
     u.tips.forEach((t) => {
       const dt = new Date(t.date_time)
-      const k  = `${dt.getUTCDay()}-${dt.getUTCHours()}`
+      const k  = `${dt.getDay()}-${dt.getHours()}`
       slots[k] = (slots[k] || 0) + 1
     })
     const top      = Object.entries(slots).sort((a, b) => b[1] - a[1])[0]
@@ -210,7 +215,7 @@ function detectWhales(tips) {
     return {
       username, platform: u.platform, totalTokens, usdValue, lastSeen,
       daysSince: Math.floor((Date.now() - lastSeen.getTime()) / 86_400_000),
-      bestUtcDay: bd, bestUtcHour: bh, avgReturnDays,
+      bestDay: bd, bestHour: bh, avgReturnDays,
     }
   }).filter((w) => w.totalTokens >= 500).sort((a, b) => b.usdValue - a.usdValue)
 }
@@ -232,7 +237,7 @@ function monthlyTotals(tips) {
   const map = {}
   tips.forEach((t) => {
     const dt = new Date(t.date_time)
-    const k  = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`
+    const k  = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`
     map[k]   = (map[k] || 0) + (parseFloat(t.usd) || 0)
   })
   const sorted = Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
@@ -251,8 +256,8 @@ function planMatchScore(tips, recommendedWindows) {
   if (!tips.length || !recommendedWindows.length) return 0
   const inPlan = tips.filter((t) => {
     const dt = new Date(t.date_time)
-    const d = dt.getUTCDay(), h = dt.getUTCHours()
-    return recommendedWindows.some((w) => w.utcDay === d && Math.abs(w.utcHour - h) <= 1)
+    const d = dt.getDay(), h = dt.getHours()
+    return recommendedWindows.some((w) => w.day === d && Math.abs(w.hour - h) <= 1)
   })
   return Math.round((inPlan.length / tips.length) * 100)
 }
@@ -267,7 +272,7 @@ const DEFAULT_PREFS = {
   minSession: "90min",
   mode:       "Max Earnings",
   goal:       "",
-  testPlan:   [],   // "utcDay-utcHour" keys added from Hidden Peak Finder
+  testPlan:   [],   // "day-hour" keys added from Hidden Peak Finder
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -325,19 +330,15 @@ const PLAN_MODES = ["💰 Max Earnings","📈 Growth Mode","🐋 Whale Watch","�
 const modeName = (m) => m.replace(/^\S+\s/, "")
 
 // Local-hour of a UTC hour (for availability block filtering)
-function localHourOf(utcHour) {
-  const parts = new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false })
-    .formatToParts(new Date(Date.UTC(2000, 0, 1, utcHour)))
-  return parseInt(parts.find((p) => p.type === "hour")?.value ?? "0") % 24
-}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PLAN TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function gridCell(windows, whaleKeys, prefs, utcDay, blockHours) {
-  const wk = blockHours.some((h) => whaleKeys.has(`${utcDay}-${h}`))
-  const matching = windows.filter((w) => w.utcDay === utcDay && blockHours.includes(w.utcHour))
+function gridCell(windows, whaleKeys, prefs, day, blockHours) {
+  const wk = blockHours.some((h) => whaleKeys.has(`${day}-${h}`))
+  const matching = windows.filter((w) => w.day === day && blockHours.includes(w.hour))
   if (wk) return { status: "whale", avg: matching.length ? Math.max(...matching.map((m) => m.avgUsdPerHr)) : null }
   if (!matching.length) return { status: "untested", avg: null }
   const best = matching.sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)[0]
@@ -376,12 +377,12 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
 
   const whaleKeys = useMemo(() => {
     const m = {}
-    whales.forEach((w) => { const k = `${w.bestUtcDay}-${w.bestUtcHour}`; m[k] = (m[k] || 0) + 1 })
+    whales.forEach((w) => { const k = `${w.bestDay}-${w.bestHour}`; m[k] = (m[k] || 0) + 1 })
     return new Set(Object.entries(m).filter(([, n]) => n >= 2).map(([k]) => k))
   }, [whales])
 
-  const blockEnabled = useCallback((utcHour) => {
-    const lh = localHourOf(utcHour)
+  const blockEnabled = useCallback((hour) => {
+    const lh = ((hour % 24) + 24) % 24
     return (
       (prefs.blocks.Morning   && lh >= 6  && lh < 12) ||
       (prefs.blocks.Afternoon && lh >= 12 && lh < 18) ||
@@ -393,30 +394,30 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
   const weekPlan = useMemo(() => {
     const today = todayLocalName()
     const mode  = prefs.mode
-    return Array.from({ length: 7 }, (_, utcDay) => {
-      const dayName = localDay(utcDay)
-      if (!prefs.days[dayName]) return { utcDay, dayName, off: true, isToday: dayName === today }
-      let cands = windows.filter((w) => w.utcDay === utcDay && blockEnabled(w.utcHour))
+    return Array.from({ length: 7 }, (_, day) => {
+      const dayName = localDay(day)
+      if (!prefs.days[dayName]) return { day, dayName, off: true, isToday: dayName === today }
+      let cands = windows.filter((w) => w.day === day && blockEnabled(w.hour))
       if (mode === "Growth Mode")        cands = [...cands].sort((a, b) => b.newTipperRate - a.newTipperRate || b.avgUsdPerHr - a.avgUsdPerHr)
-      else if (mode === "Whale Watch")   cands = [...cands].sort((a, b) => (whaleKeys.has(`${b.utcDay}-${b.utcHour}`) ? 1 : 0) - (whaleKeys.has(`${a.utcDay}-${a.utcHour}`) ? 1 : 0) || b.avgUsdPerHr - a.avgUsdPerHr)
+      else if (mode === "Whale Watch")   cands = [...cands].sort((a, b) => (whaleKeys.has(`${b.day}-${b.hour}`) ? 1 : 0) - (whaleKeys.has(`${a.day}-${a.hour}`) ? 1 : 0) || b.avgUsdPerHr - a.avgUsdPerHr)
       else if (mode === "Testing Mode") {
-        const t = hidden.filter((h) => h.utcDay === utcDay && blockEnabled(h.utcHour))
+        const t = hidden.filter((h) => h.day === day && blockEnabled(h.hour))
         if (t.length) cands = t
         else cands = [...cands].sort((a, b) => a.sessionCount - b.sessionCount || b.avgUsdPerHr - a.avgUsdPerHr)
       }
       else if (mode === "Low Burnout")   cands = [...cands].filter((w) => w.sessionCount >= 3).sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)
       else if (mode === "Emergency Goal") cands = [...cands].sort((a, b) => b.totalUsd - a.totalUsd)
       else                                cands = [...cands].sort((a, b) => b.avgUsdPerHr - a.avgUsdPerHr)
-      return { utcDay, dayName, off: false, window: cands[0] ?? null, isToday: dayName === today, isWhale: whaleKeys.has(cands[0] ? `${cands[0].utcDay}-${cands[0].utcHour}` : "") }
+      return { day, dayName, off: false, window: cands[0] ?? null, isToday: dayName === today, isWhale: whaleKeys.has(cands[0] ? `${cands[0].day}-${cands[0].hour}` : "") }
     })
   }, [windows, prefs, whaleKeys, hidden, blockEnabled])
 
   const tonight = weekPlan.find((d) => d.isToday && !d.off && d.window)
 
   const whaleTonight = useMemo(() => {
-    const todayUTC = new Date().getUTCDay()
-    const active = whales.filter((w) => w.bestUtcDay === todayUTC && w.daysSince < 14)
-    return active.length ? { hour: active[0].bestUtcHour, count: active.length } : null
+    const today = new Date().getDay()
+    const active = whales.filter((w) => w.bestDay === today && w.daysSince < 14)
+    return active.length ? { hour: active[0].bestHour, count: active.length } : null
   }, [whales])
 
   const sessions       = useMemo(() => groupIntoSessions(tips), [tips])
@@ -432,7 +433,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
   }
 
   const addToTestPlan = (slot) => {
-    const k = `${slot.utcDay}-${slot.utcHour}`
+    const k = `${slot.day}-${slot.hour}`
     if (!prefs.testPlan.includes(k)) savePrefs({ ...prefs, testPlan: [...prefs.testPlan, k] })
   }
 
@@ -448,7 +449,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                   <span style={{ fontSize:18 }}>⚡</span>
                   <span style={{ color:PRIMARY, fontWeight:800, fontSize:15 }}>
-                    Tonight: {localHr(tonight.window.utcHour)}–{localHr(tonight.window.utcHour + 2)} on {tonight.window.topPlatform || "your top platform"}
+                    Tonight: {localHr(tonight.window.hour)}–{localHr(tonight.window.hour + 2)} on {tonight.window.topPlatform || "your top platform"}
                   </span>
                   <ConfBadge level={tonight.window.confidence} />
                 </div>
@@ -532,7 +533,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
             <span>Day</span><span>Best Window</span><span>Platform</span><span>$/hr</span><span>Confidence</span><span/>
           </div>
           {weekPlan.map((row) => (
-            <React.Fragment key={row.utcDay}>
+            <React.Fragment key={row.day}>
               <div style={{ display:"grid", gridTemplateColumns:"95px 1fr 130px 80px 120px 60px", gap:8, alignItems:"center", padding:"10px", borderRadius:8, background:row.isToday ? "rgba(34,211,238,0.04)" : "rgba(255,255,255,0.02)", border:`1px solid ${row.isToday ? "rgba(34,211,238,0.18)" : BORDER}` }}>
                 <span style={{ color:row.off ? MUTED : row.isToday ? CYAN : PRIMARY, fontSize:13, fontWeight:600 }}>
                   {row.dayName.slice(0, 3)}{row.isToday ? " 📍" : ""}{row.isWhale ? " 🐋" : ""}
@@ -541,17 +542,17 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
                   <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7" }}>Day off</span>
                 ) : row.window ? (
                   <>
-                    <span style={{ color:TEXT, fontSize:12 }}>{localHr(row.window.utcHour)}–{localHr(row.window.utcHour + 2)}</span>
+                    <span style={{ color:TEXT, fontSize:12 }}>{localHr(row.window.hour)}–{localHr(row.window.hour + 2)}</span>
                     <PlatChip name={row.window.topPlatform} />
                     <span style={{ color:PRIMARY, fontSize:13, fontWeight:600 }}>{row.window.sessionCount ? fmt$(row.window.avgUsdPerHr) : "—"}</span>
                     <ConfBadge level={row.window.confidence} />
-                    <button onClick={() => setWhyOpen(whyOpen === row.utcDay ? null : row.utcDay)} style={{ background:"none", border:`1px solid ${BORDER}`, borderRadius:6, color:FAINT, fontSize:11, cursor:"pointer", padding:"3px 8px" }}>Why?</button>
+                    <button onClick={() => setWhyOpen(whyOpen === row.day ? null : row.day)} style={{ background:"none", border:`1px solid ${BORDER}`, borderRadius:6, color:FAINT, fontSize:11, cursor:"pointer", padding:"3px 8px" }}>Why?</button>
                   </>
                 ) : (
                   <span style={{ color:MUTED, fontSize:12, gridColumn:"2/7" }}>No matching window — adjust availability or stream this day to collect data</span>
                 )}
               </div>
-              {whyOpen === row.utcDay && row.window && (
+              {whyOpen === row.day && row.window && (
                 <div style={{ margin:"0 10px", padding:"10px 14px", background:"rgba(34,211,238,0.04)", border:`1px solid rgba(34,211,238,0.15)`, borderRadius:8 }}>
                   {whyReasons(row).map((r, i) => (
                     <div key={i} style={{ color:TEXT, fontSize:12, lineHeight:1.7 }}>• {r}</div>
@@ -569,12 +570,12 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
           <SecHead title="Untested Opportunities" sub="Windows worth testing based on your existing patterns" />
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:10 }}>
             {hidden.map((slot) => {
-              const k     = `${slot.utcDay}-${slot.utcHour}`
+              const k     = `${slot.day}-${slot.hour}`
               const added = prefs.testPlan.includes(k)
               return (
                 <div key={k} style={{ background:"rgba(99,102,241,0.05)", border:"1px solid rgba(99,102,241,0.22)", borderRadius:10, padding:14 }}>
                   <div style={{ color:INDIGO, fontWeight:700, fontSize:13, marginBottom:4 }}>
-                    🧪 {localDay(slot.utcDay)} {localHr(slot.utcHour)}–{localHr(slot.utcHour + 2)}
+                    🧪 {localDay(slot.day)} {localHr(slot.hour)}–{localHr(slot.hour + 2)}
                   </div>
                   <div style={{ color:TEXT, fontSize:12, lineHeight:1.6, marginBottom:8 }}>{slot.reason}</div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
@@ -605,11 +606,11 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
             {GRID_BLOCKS.map((blk) => (
               <div key={blk.id} style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", gap:3, marginBottom:3 }}>
                 <div style={{ color:MUTED, fontSize:10, display:"flex", alignItems:"center" }}>{localHr(blk.hours[0])}</div>
-                {UTC_DAYS.map((_, utcDay) => {
-                  const cell = gridCell(windows, whaleKeys, prefs, utcDay, blk.hours)
+                {UTC_DAYS.map((_, day) => {
+                  const cell = gridCell(windows, whaleKeys, prefs, day, blk.hours)
                   const st   = CELL_STYLE[cell.status]
                   return (
-                    <div key={utcDay} title={`${UTC_DAYS[utcDay]} ${blk.label} UTC: ${cell.status}`} style={{ height:36, borderRadius:5, background:st.bg, border:`1px solid ${st.bdr}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <div key={day} title={`${UTC_DAYS[day]} ${blk.label} UTC: ${cell.status}`} style={{ height:36, borderRadius:5, background:st.bg, border:`1px solid ${st.bdr}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
                       <span style={{ color:st.txt, fontSize:10, fontWeight:600 }}>
                         {cell.avg !== null ? `$${cell.avg.toFixed(0)}` : "—"}
                       </span>
@@ -648,10 +649,10 @@ function WhalesTab({ tips, whales }) {
   }, [whales, sortBy])
 
   const whaleTonight = useMemo(() => {
-    const todayUTC = new Date().getUTCDay()
-    const active = whales.filter((w) => w.bestUtcDay === todayUTC && w.daysSince < 14)
+    const today = new Date().getDay()
+    const active = whales.filter((w) => w.bestDay === today && w.daysSince < 14)
     if (!active.length) return null
-    const h = active[0].bestUtcHour
+    const h = active[0].bestHour
     return { startHr: h, count: active.length }
   }, [whales])
 
@@ -663,7 +664,7 @@ function WhalesTab({ tips, whales }) {
       const tok = parseFloat(t.tokens) || 0
       if (!whales.some((w) => w.username === (t.username || "unknown"))) return
       const dt = new Date(t.date_time)
-      const k  = `${dt.getUTCDay()}-${Math.floor(dt.getUTCHours() / 4)}`
+      const k  = `${dt.getDay()}-${Math.floor(dt.getHours() / 4)}`
       freq[k] = (freq[k] || 0) + 1
       if (freq[k] > max) max = freq[k]
     })
@@ -728,7 +729,7 @@ function WhalesTab({ tips, whales }) {
                     <div style={{ display:"flex", gap:6, marginTop:3, flexWrap:"wrap", alignItems:"center" }}>
                       <PlatChip name={w.platform} i={i} />
                       <span style={{ color:MUTED, fontSize:11 }}>
-                        Appears: {localDay(w.bestUtcDay).slice(0, 3)} {localHr(w.bestUtcHour)}–{localHr(w.bestUtcHour + 2)}
+                        Appears: {localDay(w.bestDay).slice(0, 3)} {localHr(w.bestHour)}–{localHr(w.bestHour + 2)}
                       </span>
                     </div>
                   </div>
@@ -757,11 +758,11 @@ function WhalesTab({ tips, whales }) {
             {GRID_BLOCKS.map((blk, bi) => (
               <div key={blk.id} style={{ display:"grid", gridTemplateColumns:"64px repeat(7,1fr)", gap:3, marginBottom:3 }}>
                 <div style={{ color:MUTED, fontSize:10, display:"flex", alignItems:"center" }}>{localHr(blk.hours[0])}</div>
-                {UTC_DAYS.map((_, utcDay) => {
-                  const n = whaleGrid.freq[`${utcDay}-${bi}`] || 0
+                {UTC_DAYS.map((_, day) => {
+                  const n = whaleGrid.freq[`${day}-${bi}`] || 0
                   const t = whaleGrid.max ? n / whaleGrid.max : 0
                   return (
-                    <div key={utcDay} title={n ? `${n} whale tip${n !== 1 ? "s" : ""}` : "No whale activity"} style={{ height:28, borderRadius:5, background:n ? `rgba(168,85,247,${(0.08 + t * 0.5).toFixed(2)})` : "rgba(255,255,255,0.03)", border:`1px solid ${n ? "rgba(168,85,247,0.3)" : BORDER}` }}/>
+                    <div key={day} title={n ? `${n} whale tip${n !== 1 ? "s" : ""}` : "No whale activity"} style={{ height:28, borderRadius:5, background:n ? `rgba(168,85,247,${(0.08 + t * 0.5).toFixed(2)})` : "rgba(255,255,255,0.03)", border:`1px solid ${n ? "rgba(168,85,247,0.3)" : BORDER}` }}/>
                   )
                 })}
               </div>
@@ -808,13 +809,13 @@ function ProgressTab({ tips, windows, prefs }) {
     const testedPct = prefs.testPlan.length
       ? Math.round(prefs.testPlan.filter((k) => {
           const [d, h] = k.split("-").map(Number)
-          return sessions.some((s) => s.utcDay === d && Math.abs(s.utcHour - h) <= 1)
+          return sessions.some((s) => s.day === d && Math.abs(s.hour - h) <= 1)
         }).length / prefs.testPlan.length * 100)
       : 0
     return { windowPct: score, platPct, testedPct }
   }, [tips, sessions, score, prefs.testPlan])
 
-  const isOnPlan = useCallback((s) => topWindows.some((w) => w.utcDay === s.utcDay && Math.abs(w.utcHour - s.utcHour) <= 1), [topWindows])
+  const isOnPlan = useCallback((s) => topWindows.some((w) => w.day === s.day && Math.abs(w.hour - s.hour) <= 1), [topWindows])
 
   const onPlanSessions  = useMemo(() => sessions.filter(isOnPlan), [sessions, isOnPlan])
   const offPlanSessions = useMemo(() => sessions.filter((s) => !isOnPlan(s)), [sessions, isOnPlan])
@@ -831,9 +832,9 @@ function ProgressTab({ tips, windows, prefs }) {
     const weeks = {}
     sessions.forEach((s) => {
       const d   = s.start
-      const dow = d.getUTCDay()
-      const mon = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - (dow === 0 ? 6 : dow - 1)))
-      const k   = mon.toISOString().slice(0, 10)
+      const dow = d.getDay()
+      const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (dow === 0 ? 6 : dow - 1))
+      const k   = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, "0")}-${String(mon.getDate()).padStart(2, "0")}`
       if (!weeks[k]) weeks[k] = { on: [], off: [], ts: mon.getTime() }
       weeks[k][isOnPlan(s) ? "on" : "off"].push(s.usdHr)
     })
@@ -853,9 +854,9 @@ function ProgressTab({ tips, windows, prefs }) {
     const recentSessions = sessions.filter((s) => s.start.getTime() > weekAgo)
     const top = topWindows[0]
     if (top) {
-      const hits = recentSessions.filter((s) => s.utcDay === top.utcDay && Math.abs(s.utcHour - top.utcHour) <= 1).length
+      const hits = recentSessions.filter((s) => s.day === top.day && Math.abs(s.hour - top.hour) <= 1).length
       if (hits === 0) {
-        out.push(`You missed your top ${top.topPlatform || ""} window (${localDay(top.utcDay)} ${localHr(top.utcHour)}) this week.`)
+        out.push(`You missed your top ${top.topPlatform || ""} window (${localDay(top.day)} ${localHr(top.hour)}) this week.`)
       }
     }
     const offRecent = recentSessions.filter((s) => !isOnPlan(s))
@@ -995,13 +996,13 @@ function StreamPlannerContent({ tips, isPro }) {
       {confidenceLevel === 'Low' && (
         <div style={{ ...cardS(), marginBottom:20, borderColor:`${GOLD}44` }}>
           <div style={{ color:GOLD, fontSize:14, fontWeight:700, marginBottom:4 }}>Early signal</div>
-          <div style={{ color:TEXT, fontSize:13 }}>{bestWindow ? `${localHr(bestWindow.utcHour)} on ${localDay(bestWindow.utcDay)} looks promising so far, but there isn't enough history yet to call it a confirmed peak window.` : "A pattern may be forming, but there isn't enough history yet to call it a confirmed peak window."}</div>
+          <div style={{ color:TEXT, fontSize:13 }}>{bestWindow ? `${localHr(bestWindow.hour)} on ${localDay(bestWindow.day)} looks promising so far, but there isn't enough history yet to call it a confirmed peak window.` : "A pattern may be forming, but there isn't enough history yet to call it a confirmed peak window."}</div>
         </div>
       )}
       {showPersonalizedPeak && (
         <div style={{ ...cardS(), marginBottom:20, borderColor:`${CYAN}44`, position:'relative' }}>
           <div style={{ color:CYAN, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>{confidenceLabel}</div>
-          <div style={{ color:PRIMARY, fontSize:16, fontWeight:800, marginBottom:4 }}>Peak Earning Window: {localHr(bestWindow.utcHour)} on {localDay(bestWindow.utcDay)}</div>
+          <div style={{ color:PRIMARY, fontSize:16, fontWeight:800, marginBottom:4 }}>Peak Earning Window: {localHr(bestWindow.hour)} on {localDay(bestWindow.day)}</div>
           <div style={{ color:TEXT, fontSize:13 }}>Averaging {fmt$(bestWindow.avgUsdPerHr)}/hr across {bestWindow.sessionCount} session{bestWindow.sessionCount === 1 ? '' : 's'} in this window.</div>
           {showProTeaser && (
             <div style={{ marginTop:12, display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
