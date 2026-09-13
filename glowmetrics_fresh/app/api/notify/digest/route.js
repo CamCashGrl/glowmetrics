@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js'
 
 const FOUNDER_EMAIL = 'daphneoncam@gmail.com'
 
+// Same build-time prerendering hazard as the cron routes that call this —
+// it constructs a Supabase admin client with SUPABASE_SERVICE_ROLE_KEY,
+// which isn't set in the build environment.
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY)

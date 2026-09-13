@@ -1,10 +1,34 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV, detectPlatform } from '../../../lib/analytics'
+import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
+import { platformLimitMessage } from '../../../lib/planLimits'
+import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
+// Rows are inserted in sequential BATCH_SIZE chunks, one Supabase round-trip
+// each, so a large export takes far longer than Vercel's 10s default. When the
+// function was killed mid-run the client received a truncated body and
+// res.json() threw "Unexpected end of JSON input" — which looked like a parse
+// error but was really a timeout. 60s is the Hobby-plan ceiling.
+export const maxDuration = 60
+
+// Any throw below would otherwise produce a response the client cannot parse,
+// surfacing as the same misleading JSON error. Every failure path must return
+// real JSON so the UI can show the actual reason.
 export async function POST(req) {
+  try {
+    return await handleUpload(req)
+  } catch (err) {
+    console.error('[UPLOAD] Unhandled error:', err)
+    return NextResponse.json(
+      { error: err?.message || 'Upload failed unexpectedly. Please try again.' },
+      { status: 500 }
+    )
+  }
+}
+
+async function handleUpload(req) {
   const auth = req.headers.get('Authorization')
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -30,8 +54,14 @@ export async function POST(req) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
 
-  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
+  // ── VALIDATE FORMAT ────────────────────────────────────────────────────
   const raw = await file.text()
+
+  // Note: Tab-delimited (TSV) files are now supported via delimiter detection in parseCSV().
+  // The parser will automatically detect and handle both comma and tab delimiters.
+  // This enables support for platforms like BongaCams that export both formats.
+
+  // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
   // Prefer the platform the user explicitly selected in the UI — text-based
   // detection is a fallback for callers that don't pass one, and can't find
   // any platform keywords in a clean, already-normalized CSV (e.g. the
@@ -39,6 +69,24 @@ export async function POST(req) {
   const explicitPlatform = (fd.get('platform') || '').toString().trim()
   const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
   const parsed = parseCSV(raw)
+
+  // Log parse attempt to track platform support and format issues
+  const formatAnalysis = analyzeFormat(raw)
+  await supabase.rpc('log_paste_parse_attempt', {
+    p_user_id: user.id,
+    p_source: 'dashboard',
+    p_attempted_platform: textDetectedPlatform,
+    p_claimed_platform: explicitPlatform || null,
+    p_supported: ['Chaturbate', 'BongaCams', 'MyFreeCams'].includes(textDetectedPlatform),
+    p_raw_text: raw.substring(0, 500),
+    p_line_count: formatAnalysis.line_count || null,
+    p_has_tabs: formatAnalysis.has_tabs || null,
+    p_has_commas: formatAnalysis.has_commas || null,
+    p_top_shapes: formatAnalysis.top_shapes || null,
+    p_parse_success: parsed.length > 0,
+    p_error_reason: parsed.length > 0 ? null : 'CSV parsing returned no rows',
+    p_error_details: formatAnalysis,
+  }).catch(err => console.error('Failed to log parse attempt:', err))
 
   const rows = parsed.map((row) => {
     const tokens = Number(row.tokens) || 0
@@ -97,6 +145,14 @@ export async function POST(req) {
   const tipRows = rows.filter(r => !r.is_paid_session)
   const paidSessionRows = rows.filter(r => r.is_paid_session)
 
+  // ── VALIDATE BONGACAMS PAID SESSIONS ─────────────────────────────────────
+  // If BongaCams is detected but no paid sessions found, it likely means the
+  // "Chat Type" column is missing or has unexpected values. Warn the user.
+  if ((textDetectedPlatform === 'BongaCams' || detectedPlatform === 'BongaCams') &&
+      rows.length > 0 && paidSessionRows.length === 0) {
+    console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing "Chat Type" column.')
+  }
+
   // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
   // Two rows can legitimately share the same (user, username, tokens, usd,
   // date_time) — e.g. the same fan tipping the same amount at the same
@@ -128,6 +184,14 @@ export async function POST(req) {
   const summaryDateTo   = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
   const summaryTotalUsd = parseFloat(tipRows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
   const summaryTotalTokens = tipRows.reduce((sum, r) => sum + (r.tokens || 0), 0)
+  // Free-tier 31-day analysis window — same computeSnapshotStats() the
+  // onboarding paste flow uses, so a CSV file upload and a pasted-then-
+  // uploaded import report identical, real (not estimated) full-range vs
+  // recent-window numbers.
+  const snapshot = computeSnapshotStats(
+    tipRows.map(r => ({ date: r.date_time, tokens: r.tokens, usd: r.usd })),
+    31
+  )
 
   // ── LOG TO csv_uploads ─────────────────────────────────────────────────
   // Shared by the success path below and the platform-limit block path, so a
@@ -190,7 +254,7 @@ export async function POST(req) {
         // indistinguishable from a request that never ran at all.
         await logCsvUpload('blocked')
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: platformLimitMessage(),
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -204,6 +268,25 @@ export async function POST(req) {
     skipped  += data?.skipped  || 0
 
     console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
+  }
+
+  // ── VALIDATE IMPORTED TIPS ──────────────────────────────────────────────
+  // After all batches complete, validate the newly inserted tips for data
+  // quality issues (future dates, unrealistic amounts, missing usernames, etc.)
+  if (inserted > 0) {
+    try {
+      const { data: validationResult, error: validationError } = await supabase.rpc(
+        'validate_imported_tips',
+        { p_user_id: user.id }
+      )
+      if (validationError) {
+        console.warn('[UPLOAD] Data validation RPC failed:', validationError.message)
+      } else if (validationResult?.violation_count > 0) {
+        console.log(`[UPLOAD] Validation found ${validationResult.violation_count} issues:`, validationResult.violations)
+      }
+    } catch (validationErr) {
+      console.warn('[UPLOAD] Data validation error:', validationErr.message)
+    }
   }
 
   await logCsvUpload(errors.length > 0 ? 'partial' : 'complete')
@@ -241,7 +324,7 @@ export async function POST(req) {
         // the paid-session half, same as onboarding's two independent
         // requests would behave if the paid-sessions call failed on its own.
         return NextResponse.json({
-          error: `You're on the free plan, which tracks one platform. Upgrade to add ${detectedPlatform} alongside your existing platform data.`,
+          error: platformLimitMessage(),
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
@@ -271,6 +354,7 @@ export async function POST(req) {
     dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
+    snapshot,
   }
 
   if (errors.length > 0) {
@@ -285,6 +369,14 @@ export async function POST(req) {
   if (paidErrors.length > 0) {
     response.paidSessionsWarnings = paidErrors
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
+  }
+
+  // ── BONGACAMS NO PAID SESSIONS WARNING ──────────────────────────────────
+  // If BongaCams detected but no paid sessions found, user may be missing a
+  // session-type column (Chat Type, Session Type, Activity Type, etc.)
+  if ((detectedPlatform === 'BongaCams') && paidSessionRows.length === 0 && tipRows.length > 0) {
+    response.bongaCamsWarning = 'No private/group/spy sessions detected. If your BongaCams export includes private chat sessions, verify it contains a session-type column (e.g., "Chat Type", "Session Type", "Activity Type").'
+    console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing a session-type column.')
   }
 
   // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────

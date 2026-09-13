@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "jest",
     "indexnow": "node scripts/indexnow-submit.mjs"
   },
   "dependencies": {
@@ -22,7 +23,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "autoprefixer": "^10.4.16",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0"
   }

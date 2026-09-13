@@ -164,6 +164,14 @@ export function parseCSV(text, platform = null) {
 
   if (!platform) platform = detectPlatform(text)
 
+  // Detect delimiter — must happen before any CSV parsing
+  const delimiter = detectDelimiter(text)
+  if (!delimiter) {
+    // Ambiguous delimiter — default to comma but warn
+    console.warn('[parseCSV] Could not detect delimiter; defaulting to comma')
+  }
+  const detectedDelimiter = delimiter || ','
+
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
@@ -173,7 +181,7 @@ export function parseCSV(text, platform = null) {
 
   let startIdx = 0
   for (let i = 0; i < Math.min(5, allLines.length); i++) {
-    const cols = parseCSVLine(allLines[i])
+    const cols = parseCSVLine(allLines[i], detectedDelimiter)
     if (cols.filter(c => c.trim()).length >= 2) { startIdx = i; break }
   }
 
@@ -181,7 +189,7 @@ export function parseCSV(text, platform = null) {
   if (lines.length === 0) return []
 
   const firstLower = lines[0].toLowerCase()
-  const firstCols = parseCSVLine(lines[0])
+  const firstCols = parseCSVLine(lines[0], detectedDelimiter)
 
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
@@ -196,7 +204,7 @@ export function parseCSV(text, platform = null) {
     firstLower.includes('user')
   )
 
-  const raw = hasHeaders ? parseWithHeaders(lines, platform) : parseHeaderless(lines, platform)
+  const raw = hasHeaders ? parseWithHeaders(lines, platform, detectedDelimiter) : parseHeaderless(lines, platform, detectedDelimiter)
   // Per-row format-based platform fallback — runs after both parsers
   raw.forEach(r => {
     if (r.platform && r.platform !== 'Unknown') return
@@ -270,7 +278,9 @@ function normalizeHeaderName(h) {
   if (['your_payout','usd_amount','payout','usd','earnings','amount_usd'].includes(clean)) return 'usd'
   if (['date_and_time','date_time','datetime','timestamp','date','time'].includes(clean)) return 'date_time'
   if (['member','username','user','tipper','sender','nickname','from'].includes(clean)) return 'username'
-  if (['transaction_type','chat_type','tip_type','type'].includes(clean)) return 'tip_type'
+  // Session type column variations: chat_type, session_type, activity_type, show_type, paid_chat_type, etc.
+  // Maps different platform export formats to the unified tip_type field for BC_PAID_CHAT_TYPES matching
+  if (['transaction_type','chat_type','tip_type','type','session_type','activity_type','show_type','paid_chat_type'].includes(clean)) return 'tip_type'
   if (clean === 'action') return 'action'
   if (clean === 'note') return 'note'
   if (clean === 'platform') return 'platform'
@@ -282,9 +292,9 @@ function re_clean(h) {
   return h.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
 }
 
-function parseCSVLine(line) {
+function parseCSVLine(line, delimiter = ',') {
   const trimmed = line.trim()
-  if (trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
+  if (delimiter === ',' && trimmed.startsWith('"') && trimmed.endsWith('"') && !trimmed.slice(1, -1).includes('"')) {
     return trimmed.slice(1, -1).split(',').map(v => v.trim())
   }
   const result = []
@@ -293,11 +303,49 @@ function parseCSVLine(line) {
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === '"') { inQuotes = !inQuotes }
-    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = '' }
+    else if (char === delimiter && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''))
+      current = ''
+    }
     else { current += char }
   }
-  result.push(current.trim())
+  result.push(current.trim().replace(/^"|"$/g, ''))
   return result
+}
+
+// Detect whether a CSV uses comma or tab as delimiter
+// Returns 'comma', 'tab', or null if detection is ambiguous
+function detectDelimiter(text) {
+  const lines = text.trim().split('\n').slice(0, 10) // Check first 10 lines
+  if (lines.length === 0) return ',' // Default to comma
+
+  let commaCount = 0
+  let tabCount = 0
+
+  for (const line of lines) {
+    if (!line.trim()) continue
+    // Count unquoted commas and tabs
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+      if (char === '"') inQuotes = !inQuotes
+      else if (!inQuotes) {
+        if (char === ',') commaCount++
+        if (char === '\t') tabCount++
+      }
+    }
+  }
+
+  // Returns the actual delimiter CHARACTER, not a name. parseCSV passes this
+  // straight into parseCSVLine as the split token, so returning 'comma'/'tab'
+  // made it split on those literal words — which never occur in real data, so
+  // every line collapsed to a single column and every row failed isValidTip.
+  // Well-formed CSVs parsed to zero rows; only ambiguous files worked, because
+  // the null branch fell back to the correct ','.
+  if (tabCount > 0 && tabCount >= commaCount) return '\t'
+  if (commaCount > 0) return ','
+  // Ambiguous or no delimiters found — caller falls back to ','
+  return null
 }
 
 // BongaCams paid-chat/spy-mode session types, matched against a row's
@@ -307,29 +355,43 @@ function parseCSVLine(line) {
 // and is out of scope here; consolidating the two is a separate follow-up.
 const BC_PAID_CHAT_TYPES = ['Private Chat', 'Full-Private Chat', 'Group Chat', 'Spy Mode']
 
-function parseWithHeaders(lines, platform) {
-  const rawHeaders = parseCSVLine(lines[0])
+// Chaturbate private show detection — matched against Action column
+// "Private Show:" indicates a paid private show, "Tip From:" indicates free tips
+const CB_PRIVATE_SHOW_PATTERN = /^Private Show:/i
+
+// MyFreeCams private session detection — matched against Type column
+// Type = "Private" indicates paid private earnings, "Tip" indicates free tips
+const MFC_PRIVATE_TYPE = 'Private'
+
+function parseWithHeaders(lines, platform, delimiter = ',') {
+  const rawHeaders = parseCSVLine(lines[0], delimiter)
   const headers = rawHeaders.map(normalizeHeaderName)
   const results = []
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(line, delimiter)
     const row = {}
     headers.forEach((h, idx) => { row[h] = (vals[idx] ?? '').trim() })
 
-    const action = (row.action || '').toLowerCase()
+    const action = (row.action || '')
+    const actionLower = action.toLowerCase()
     const tipType = (row.tip_type || '').toLowerCase()
-    // Exact (case-insensitive) match against the four BongaCams paid-chat
-    // types — same match semantics as onboarding's detectBCPaidRow(), just
-    // applied to the already header-mapped tip_type field instead of
-    // scanning raw columns.
+
+    // Platform-specific private session detection:
+    // 1. BongaCams: Chat Type column matches one of the paid session types
     const bcPaidChatType = BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipType) || null
 
-    if (action.includes('transfer') || action.includes('cash') ||
-        action.includes('outbound tip') || action.includes('promoted room') ||
-        action.includes('referral')) continue
+    // 2. Chaturbate: Action field starts with "Private Show:" (paid), "Tip From:" (free)
+    const cbIsPrivateShow = CB_PRIVATE_SHOW_PATTERN.test(action)
+
+    // 3. MyFreeCams: Type column equals "Private" (paid), "Tip" (free)
+    const mfcIsPrivate = tipType === MFC_PRIVATE_TYPE.toLowerCase()
+
+    if (actionLower.includes('transfer') || actionLower.includes('cash') ||
+        actionLower.includes('outbound tip') || actionLower.includes('promoted room') ||
+        actionLower.includes('referral')) continue
 
     if (tipType && !tipType.includes('tip') && !tipType.includes('private') &&
         !tipType.includes('spy') && !tipType.includes('show') && !tipType.includes('chat') &&
@@ -380,27 +442,35 @@ function parseWithHeaders(lines, platform) {
         : row.platform || platform)
       : platform
 
+    // Determine if this is a paid session based on platform-specific patterns:
+    // - BongaCams: checked via Chat Type column values
+    // - Chaturbate: checked via Action field prefix "Private Show:"
+    // - MyFreeCams: checked via Type column value "Private"
+    const isPaidSession = bcPaidChatType || cbIsPrivateShow || mfcIsPrivate
+    const sessionTypeValue = bcPaidChatType || (cbIsPrivateShow ? 'Private Show' : (mfcIsPrivate ? 'Private' : null))
+
     results.push({
       dateRaw, date_time: dateRaw, username,
       platform: rowPlatform || 'Unknown',
       tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(rowPlatform)),
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
-      tip_type: row.tip_type || 'Tip',
+      tip_type: sessionTypeValue || 'Tip',
       tip_note: row.note || row.tip_note || '',
-      // Paid-chat/spy-mode rows must be routed to paid_sessions, not tips —
+      // Paid-chat/spy-mode/private-show rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat
       // parseCSV() result without re-deriving the classification themselves.
-      ...(bcPaidChatType ? { is_paid_session: true, session_type: bcPaidChatType } : {}),
+      // Applies to: BongaCams paid chat types, Chaturbate private shows, MyFreeCams private sessions
+      ...(isPaidSession ? { is_paid_session: true, session_type: sessionTypeValue } : {}),
     })
   }
   return results
 }
 
-function parseHeaderless(lines, platform) {
+function parseHeaderless(lines, platform, delimiter = ',') {
   const results = []
   for (const line of lines) {
     if (!line.trim()) continue
-    const vals = parseCSVLine(line)
+    const vals = parseCSVLine(line, delimiter)
     if (vals.length === 0) continue
 
     if (vals.length >= 3 && vals[1] && vals[1].toLowerCase().includes('tip from')) {
@@ -438,7 +508,6 @@ function parseHeaderless(lines, platform) {
         if (isNaN(num) || num <= 0) continue
         if (raw.includes('$')) { usd = num }
         else if (i === 2 && tokens === 0) { tokens = Math.round(num) }
-        else if (i === 3 && usd === 0) { usd = num }
       }
       if (tokens === 0 && usd > 0) tokens = Math.round(usd / tokenRate(platform))
       if (usd === 0 && tokens > 0) usd = parseFloat((tokens * tokenRate(platform)).toFixed(2))
@@ -452,10 +521,152 @@ function parseHeaderless(lines, platform) {
 // detectSessions/finalizeSession live in ./analytics/sessions.js — shared with
 // app/live/page.js. Do not redefine this grouping logic here.
 
-export function identifyWhales(tips) {
+// ── FAN IDENTITY ─────────────────────────────────────────────────────────
+// "Never merge fans across platforms by username alone" (formula-requirments
+// skill). A username is only unique within one platform.
+function fanKey(platform, username) {
+  return `${platform || 'Unknown'}:${(username || '').toLowerCase()}`
+}
+
+// Minimum tip count before we trust a fan's own history as a baseline for
+// tiering or risk — reused as the single source of truth for both the tier
+// split (New/Developing) and the behavioral-state split below, so the two
+// dimensions never disagree about what counts as "not enough history yet."
+// Carried over from the original calcChurnRisk's `count < 3` floor.
+const FAN_MIN_TIPS_FOR_BASELINE = 3
+
+// ── CREATOR/PLATFORM ACTIVITY CONTEXT ────────────────────────────────────
+// A fan's absence can only be evidence of that FAN's decline if the creator
+// actually had the opportunity to be tipped on that same platform recently,
+// and if the fan data itself isn't stale. This computes that context once,
+// per platform, from the creator's own meaningfulSessions (the existing
+// "creator had a meaningful opportunity" concept — sessionQuality ===
+// 'meaningful') and the tips' own event timestamps (never import time).
+//
+// RISK_SIGNALS_PAUSE_DAYS reuses the same 60-day floor already used for the
+// pre-existing fan-tier Dormant rule below (`daysSinceLastTip > max(60, ...)`)
+// — one constant, not a new invented one.
+const RISK_SIGNALS_PAUSE_DAYS = 60
+// DATA_STALE_GAP_DAYS is NEW and NOT derived from existing logic — flagged in
+// the report as unvalidated and needing product sign-off. It only decides
+// when to show "Data Needs Updating" instead of suppressing risk silently.
+const DATA_STALE_GAP_DAYS = 14
+
+export function getPlatformRiskContext(tips, meaningfulSessions = []) {
+  const now = Date.now()
+  const platforms = new Set()
+  tips.forEach(t => platforms.add(t.platform || 'Unknown'))
+  meaningfulSessions.forEach(s => platforms.add(s.platform || 'Unknown'))
+
+  const ctx = {}
+  platforms.forEach(p => {
+    const platTips = tips.filter(t => (t.platform || 'Unknown') === p)
+    const platSessions = meaningfulSessions.filter(s => (s.platform || 'Unknown') === p)
+    const lastTipMs = platTips.length
+      ? Math.max(...platTips.map(t => new Date(t.dateRaw || t.date_time).getTime()))
+      : null
+    const lastSessionMs = platSessions.length
+      ? Math.max(...platSessions.map(s => new Date(s.startTime).getTime()))
+      : null
+    const lastTipDaysAgo = lastTipMs !== null && !isNaN(lastTipMs) ? Math.floor((now - lastTipMs) / 86400000) : null
+    const lastMeaningfulSessionDaysAgo = lastSessionMs !== null && !isNaN(lastSessionMs)
+      ? Math.floor((now - lastSessionMs) / 86400000) : null
+
+    // No meaningful same-platform session at all, or none recently enough —
+    // the creator hasn't had the opportunity to be tipped, so absence of fan
+    // tips cannot be attributed to fan decline.
+    const riskSignalsPaused = lastMeaningfulSessionDaysAgo === null || lastMeaningfulSessionDaysAgo > RISK_SIGNALS_PAUSE_DAYS
+
+    // Creator has streamed meaningfully on this platform more recently than
+    // the newest tip on record for it, by more than the gap threshold — the
+    // fan/tip import is behind the creator's real activity, so "no tips"
+    // reflects a data gap, not fan behavior.
+    const dataNeedsUpdating = !riskSignalsPaused && lastTipDaysAgo !== null &&
+      (lastTipDaysAgo - lastMeaningfulSessionDaysAgo) > DATA_STALE_GAP_DAYS
+
+    ctx[p] = {
+      platform: p,
+      riskSignalsPaused,
+      dataNeedsUpdating,
+      lastMeaningfulSessionDaysAgo,
+      lastTipDaysAgo,
+      dataAgeDays: lastTipDaysAgo,
+    }
+  })
+  return ctx
+}
+
+// ── FAN BEHAVIORAL STATE ─────────────────────────────────────────────────
+// Single source of truth for churn/risk labeling — replaces calcChurnRisk.
+// Two independent dimensions, per the spec: `tier` (relationship/type,
+// computed in identifyWhales below) and `behavioralState` (this function).
+// A fan can only be labeled At Risk when ALL of:
+//   (a) an established per-fan baseline exists (tipCount >= FAN_MIN_TIPS_FOR_BASELINE)
+//   (b) the creator had meaningful same-platform opportunity recently (platformCtx)
+//   (c) the comparison is same-platform (platformCtx is keyed by the fan's own platform)
+//   (d) the fan's own data isn't stale relative to the creator's recent activity (platformCtx)
+//   (e) there is a meaningful decline from the fan's own baseline — frequency
+//       (daysSinceLastTip vs avgDaysBetweenTips) OR spend amount (this fan's
+//       own recent tip sizes vs their own earlier tip sizes)
+function calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, tipCount, spendDeclineRatio, platformCtx }) {
+  // Fewer than 3 tips: never enough baseline to claim decline of any kind.
+  if (tipCount < FAN_MIN_TIPS_FOR_BASELINE) {
+    if (tipCount <= 0) return { state: 'Insufficient Data', reason: 'No tip history yet.' }
+    // Still within a plausible early window since their (only) tip(s) — treat
+    // as a developing relationship, not a risk signal either way.
+    if (daysSinceLastTip <= 45) {
+      return { state: 'New/Developing', reason: `Only ${tipCount} tip${tipCount === 1 ? '' : 's'} so far — too early to assess a pattern.` }
+    }
+    return { state: 'Insufficient Data', reason: `Only ${tipCount} tip${tipCount === 1 ? '' : 's'} on record and no recent activity — not enough history to assess behavior.` }
+  }
+
+  const r = avgDaysBetweenTips > 0 ? daysSinceLastTip / avgDaysBetweenTips : (daysSinceLastTip > 0 ? Infinity : 0)
+  const hasSpendDecline = spendDeclineRatio !== null && spendDeclineRatio !== undefined && spendDeclineRatio <= 0.5
+  const stillOnSchedule = r < 1 && !hasSpendDecline
+  const evidenceOfDecline = r >= 2 || hasSpendDecline
+
+  // Creator context must support attributing an absence to the FAN — never
+  // fabricated from "time passed" alone.
+  const creatorEligible = !!platformCtx && !platformCtx.riskSignalsPaused && !platformCtx.dataNeedsUpdating
+
+  if (!creatorEligible) {
+    if (stillOnSchedule) return { state: 'Active', reason: 'Tipping on their normal schedule.' }
+    const reason = !platformCtx || platformCtx.riskSignalsPaused
+      ? "Creator hasn't had meaningful activity on this platform recently, so this fan's absence can't be attributed to fan decline."
+      : "This platform's fan/tip data may be behind the creator's recent activity, so current behavior may not be complete."
+    return { state: 'Dormant', reason }
+  }
+
+  if (stillOnSchedule) return { state: 'Active', reason: 'Tipping on their normal schedule.' }
+  if (evidenceOfDecline) {
+    const reason = hasSpendDecline && r < 2
+      ? "Tip amounts have dropped well below this fan's own baseline while the creator remains active on this platform."
+      : `Hasn't tipped in ${Math.round(daysSinceLastTip)} days vs. their usual ~${Math.round(avgDaysBetweenTips)}-day pattern.`
+    return { state: 'At Risk', reason }
+  }
+  return { state: 'Watch', reason: "Some deviation from this fan's normal pattern, but not enough evidence yet to call it at risk." }
+}
+
+// Backward-compatible shape for existing UI (app/dashboard/page.js) that
+// reads `fan.churnRisk.level` / `.risk` — derived from the one behavioral
+// state above rather than computed separately, so there is exactly one
+// churn formula, just exposed under two field names during migration.
+function legacyChurnRiskShape(state) {
+  switch (state) {
+    case 'Active':          return { level: 'Low',      risk: 'Active' }
+    case 'Watch':           return { level: 'Medium',   risk: 'Watch closely' }
+    case 'At Risk':         return { level: 'High',     risk: 'At risk' }
+    case 'Dormant':         return { level: 'Dormant',  risk: 'Dormant' }
+    case 'New/Developing':
+    case 'Insufficient Data':
+    default:                return { level: 'Unknown',  risk: 'Insufficient data' }
+  }
+}
+
+export function identifyWhales(tips, meaningfulSessions = []) {
   const fanMap = {}
   tips.forEach(t => {
-    const key = t.username.toLowerCase()
+    const key = fanKey(t.platform, t.username)
     if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
@@ -467,8 +678,10 @@ export function identifyWhales(tips) {
   const allFans = Object.values(fanMap)
   const sorted = [...allFans].sort((a, b) => b.totalUSD - a.totalUSD)
   const totalFans = sorted.length
-  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2))
-  const rankByUsername = new Map(sorted.map((s, i) => [s.username.toLowerCase(), i]))
+  // O(1) rank lookup instead of sorted.findIndex(...) per fan (was O(fans^2)).
+  // Keyed by platform+username now, matching the fan-identity fix above.
+  const rankByFanKey = new Map(sorted.map((s, i) => [fanKey(s.platform, s.username), i]))
+  const platformRiskContext = getPlatformRiskContext(tips, meaningfulSessions)
 
   return allFans.map(f => {
     const fanSorted = [...f.tips].sort((a, b) => new Date(b.dateRaw || b.date_time) - new Date(a.dateRaw || a.date_time))
@@ -478,21 +691,46 @@ export function identifyWhales(tips) {
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
     const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
-    const fanRankIndex = rankByUsername.get(f.username.toLowerCase())
+    const fanRankIndex = rankByFanKey.get(fanKey(f.platform, f.username))
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
+
+    // ── TIER (relationship/type) — independent of behavioral state ────────
+    // Whale/Shark/Dormant thresholds and priority order preserved exactly as
+    // before. New/Developing and Occasional fill the previously-uniform
+    // "Regular" bucket for low-history/low-frequency fans.
     let tier = 'Regular'
     if (percentileRank <= 0.05) tier = 'Whale'
     else if (percentileRank <= 0.20) tier = 'Shark'
+    else if (f.tipCount < FAN_MIN_TIPS_FOR_BASELINE) tier = 'New/Developing'
     else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+    else if (f.tipCount < 5) tier = 'Occasional' // NEW threshold (unvalidated) — see report
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
     f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const spendPercentile = Math.round((1 - percentileRank) * 100)
-    const tipDates = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time)).map(t => new Date(t.dateRaw || t.date_time))
+    const tipsAsc = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
+    const tipDates = tipsAsc.map(t => new Date(t.dateRaw || t.date_time))
     const daysBetweenTipsArr = []
     for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
+
+    // Spend-decline baseline: this fan's own recent tip amounts vs their own
+    // earlier tip amounts (split their history in half chronologically).
+    // Needs at least 4 tips to form two non-trivial halves; otherwise null
+    // (not computable — never fabricated).
+    let spendDeclineRatio = null
+    if (f.tipCount >= 4) {
+      const mid = Math.floor(tipsAsc.length / 2)
+      const earlier = tipsAsc.slice(0, mid)
+      const recent = tipsAsc.slice(mid)
+      const earlierAvg = earlier.reduce((s, t) => s + (t.usd || 0), 0) / earlier.length
+      const recentAvg = recent.reduce((s, t) => s + (t.usd || 0), 0) / recent.length
+      if (earlierAvg > 0) spendDeclineRatio = parseFloat((recentAvg / earlierAvg).toFixed(3))
+    }
+
+    const platformCtx = platformRiskContext[f.platform || 'Unknown'] || null
+    const behavioral = calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, tipCount: f.tipCount, spendDeclineRatio, platformCtx })
 
     return {
       username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)), totalTokens: f.totalTokens,
@@ -501,7 +739,13 @@ export function identifyWhales(tips) {
       lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
       tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      churnRisk: calcChurnRisk(daysSinceLastTip, avgDaysBetweenTips, f.tipCount),
+      trend: calcFanTrend(tipsAsc),
+      // behavioralState: the new, correct, eligibility-gated status (spec Step 1).
+      behavioralState: behavioral.state, behavioralStateReason: behavioral.reason,
+      spendDeclineRatio, platformRiskContext: platformCtx,
+      // churnRisk: kept only for backward compatibility with existing UI —
+      // derived 1:1 from behavioralState above, not a second formula.
+      churnRisk: legacyChurnRiskShape(behavioral.state),
       lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
       expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
@@ -520,15 +764,6 @@ function calcTipProbability(d, avg) {
   return                     { level: 'Low',           percentage: 15 }
 }
 
-function calcChurnRisk(d, avg, count) {
-  if (count < 3) return { level: 'Unknown', risk: 'Insufficient data' }
-  const r = d / avg
-  if (r < 1) return { level: 'Low',      risk: 'Active' }
-  if (r < 2) return { level: 'Medium',   risk: 'Watch closely' }
-  if (r < 3) return { level: 'High',     risk: 'At risk' }
-  return           { level: 'Critical',  risk: 'Likely churned' }
-}
-
 function calcLifetimeValue(spent, days, count) {
   if (days < 7 || count < 2) return { prediction: spent, confidence: 'Low' }
   const p = (spent / days) * 365
@@ -542,6 +777,46 @@ function calcExpectedNextTip(d, avg) {
   if (n <= 3)  return `In ${n} days`
   if (n <= 7)  return `In ~${n} days`
   return `In ~${Math.round(n / 7)} weeks`
+}
+
+// ── FAN TREND SIGNAL ─────────────────────────────────────────────────────
+// Trending is a separate signal from tier/behavioralState — describes whether a
+// fan's own spending is moving relative to their own established pattern,
+// never relative to other fans or a single outlier tip.
+// tipsAsc: this fan's tips, sorted oldest -> newest (usd required).
+// NOTE: TREND_CHANGE_THRESHOLD of 0.25 is a starting point, not yet
+// validated against real fan spending distributions — flag per formula-requirements.
+const TREND_CHANGE_THRESHOLD = 0.25
+
+function calcFanTrend(tipsAsc) {
+  const count = tipsAsc.length
+  // Fewer than 4 tips isn't enough to compare a "before" and "after" window
+  // without a single tip dominating either side.
+  if (count < 4) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const mid = Math.floor(count / 2)
+  const priorHalf = tipsAsc.slice(0, mid)
+  const recentHalf = tipsAsc.slice(mid)
+  const avg = arr => arr.reduce((s, t) => s + (t.usd || 0), 0) / arr.length
+  const priorAvg = avg(priorHalf)
+  const recentAvg = avg(recentHalf)
+
+  if (priorAvg <= 0) {
+    return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
+  }
+
+  const pctChange = (recentAvg - priorAvg) / priorAvg
+  const confidence = count >= 8 ? 'Medium' : 'Low'
+
+  if (pctChange >= TREND_CHANGE_THRESHOLD) {
+    return { direction: 'up', label: 'Trending Up', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  if (pctChange <= -TREND_CHANGE_THRESHOLD) {
+    return { direction: 'down', label: 'Trending Down', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
+  }
+  return { direction: 'stable', label: 'Stable', confidence, pctChange: parseFloat((pctChange * 100).toFixed(1)) }
 }
 
 export function generateWhaleAlerts(whales) {
@@ -659,7 +934,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
-  const whales = precomputedWhales || identifyWhales(tips)
+  const whales = precomputedWhales || identifyWhales(tips, sessions)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
   const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
@@ -753,13 +1028,14 @@ export function aggregateRows(tips, tz = null) {
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
-      monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
+      monthlyData: [], bestMonth: null, tipTypeBreakdown: [], platformTipTypes: {},
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
-      platformVelocity: {}, missedRevenueByPlatform: {},
+      platformVelocity: {}, missedRevenueByPlatform: {}, platformMomentum: {},
       returningVsNew: null, topFanDependency: null,
-      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: []
+      dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+      platformRiskContext: {}
     }
   }
 
@@ -784,6 +1060,23 @@ export function aggregateRows(tips, tz = null) {
 
   const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
   const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
+
+  // ── HOURLY-RATE ELIGIBILITY ────────────────────────────────────────────
+  // Defined here, above the platform rollup, so that every hourly rate in the
+  // engine — overall and per platform — divides the same sessions' revenue by
+  // the same sessions' time. A session can be a meaningful *earning* event
+  // (e.g. one $75 tip, durationUnknown) while being unusable as a rate, since
+  // an unknown duration has no denominator. Counting such a session's revenue
+  // against only the timed sessions' hours inflates the rate, which is exactly
+  // what this rule exists to prevent.
+  const isHourlyRateEligible = (s) =>
+    s.tipCount >= 2 &&
+    !s.durationUnknown &&
+    Number.isFinite(s.durationMinutes) &&
+    s.durationMinutes >= 15 &&
+    s.totalUSD > 0
+
+  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
 
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
   const dayDateAmts = {}, hourBucketAmts = {}
@@ -817,7 +1110,8 @@ export function aggregateRows(tips, tz = null) {
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales      = identifyWhales(tips)
+  const whales      = identifyWhales(tips, meaningfulSessions)
+  const platformRiskContext = getPlatformRiskContext(tips, meaningfulSessions)
   const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
   const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
@@ -827,22 +1121,61 @@ export function aggregateRows(tips, tz = null) {
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
 
+  // FINANCIAL TRUTH: Platform revenue breakdown from ALL tips (not filtered)
+  // This ensures platform rows reconcile to totalUSD
   const platformMap = {}
-  meaningfulSessions.forEach(s => {
-    if (!platformMap[s.platform]) { platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
-    platformMap[s.platform].totalUSD    += s.totalUSD
-    platformMap[s.platform].totalTokens += s.totalTokens
-    platformMap[s.platform].sessions    += 1
-    if (!s.durationUnknown) platformMap[s.platform].hours += s.durationHours
-    platformMap[s.platform].tips        += s.tipCount
+  const platformSessionMap = {}
+  const platformHoursMap = {}
+
+  // Sum all tips by platform
+  tips.forEach(t => {
+    const p = t.platform || 'Chaturbate'
+    if (!platformMap[p]) { platformMap[p] = { platform: p, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
+    platformMap[p].totalUSD += t.usd || 0
+    platformMap[p].totalTokens += t.tokens || 0
+    platformMap[p].tips += 1
   })
 
-  const platforms = Object.values(platformMap).map(p => ({
-    ...p,
-    usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
-    tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
-    avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0
-  }))
+  // Add session and hours data from meaningful sessions (for context, but revenue is from all tips)
+  meaningfulSessions.forEach(s => {
+    if (!platformSessionMap[s.platform]) platformSessionMap[s.platform] = { sessions: 0, hours: 0 }
+    platformSessionMap[s.platform].sessions += 1
+    if (!s.durationUnknown) platformSessionMap[s.platform].hours += s.durationHours
+  })
+
+  // Merge session/hours data into platform map
+  Object.keys(platformMap).forEach(p => {
+    if (platformSessionMap[p]) {
+      platformMap[p].sessions = platformSessionMap[p].sessions
+      platformMap[p].hours = platformSessionMap[p].hours
+    }
+  })
+
+  // Per-platform rate basis — revenue and time from the same eligible sessions,
+  // so summing these across platforms reproduces estimatedHourlyRate exactly.
+  const platformRate = {}
+  hourlyRateSessions.forEach(s => {
+    if (!platformRate[s.platform]) platformRate[s.platform] = { usd: 0, minutes: 0, sessions: 0 }
+    platformRate[s.platform].usd     += s.totalUSD
+    platformRate[s.platform].minutes += s.durationMinutes
+    platformRate[s.platform].sessions += 1
+  })
+
+  const platforms = Object.values(platformMap).map(p => {
+    const rate = platformRate[p.platform] || { usd: 0, minutes: 0, sessions: 0 }
+    const rateHours = rate.minutes / 60
+    return {
+      ...p,
+      // Hours and revenue used for the rate, kept alongside it so a caller can
+      // show the rate with the sample it was actually built from.
+      rateHours:        parseFloat(rateHours.toFixed(2)),
+      rateUSD:          parseFloat(rate.usd.toFixed(2)),
+      rateSessionCount: rate.sessions,
+      usdPerHour:    rateHours > 0 ? parseFloat((rate.usd / rateHours).toFixed(2)) : 0,
+      tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)            : 0,
+      avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2)) : 0
+    }
+  })
 
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
@@ -926,19 +1259,9 @@ export function aggregateRows(tips, tz = null) {
   // ── ESTIMATED $/HOUR ───────────────────────────────────────────────────
   // Imported CSV files carry tip timestamps only — never a creator's actual
   // stream start/end time — so this can only ever be an estimate inferred
-  // from the gap between a session's first and last recorded tip. A session
-  // can be a meaningful *earning* event (e.g. one $75 tip, durationUnknown)
-  // without being usable for a rate calculation, since a zero/unknown
-  // duration has no denominator. This eligibility rule is intentionally
-  // stricter than — and separate from — sessionQuality/meaningfulSessions.
-  const isHourlyRateEligible = (s) =>
-    s.tipCount >= 2 &&
-    !s.durationUnknown &&
-    Number.isFinite(s.durationMinutes) &&
-    s.durationMinutes >= 15 &&
-    s.totalUSD > 0
-
-  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
+  // from the gap between a session's first and last recorded tip. The
+  // eligibility rule this uses is defined above, next to meaningfulSessions,
+  // because the per-platform rates are built from the same sessions.
   const hourlyRateTotalUsd = parseFloat(hourlyRateSessions.reduce((s, x) => s + x.totalUSD, 0).toFixed(2))
   const hourlyRateTotalMinutes = hourlyRateSessions.reduce((s, x) => s + x.durationMinutes, 0)
   // Weighted overall average — numerator and denominator always come from the
@@ -950,11 +1273,13 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // Same rate basis as platforms[].usdPerHour — these two must never disagree.
   const platformVelocity = {}
   Object.keys(platformMap).forEach(p => {
-    const pHours = platformMap[p].hours
-    const pUSD = platformMap[p].totalUSD
-    platformVelocity[p] = pHours > 0 ? parseFloat((pUSD / pHours).toFixed(2)) : null
+    const rate = platformRate[p]
+    platformVelocity[p] = rate && rate.minutes > 0
+      ? parseFloat((rate.usd / (rate.minutes / 60)).toFixed(2))
+      : null
   })
 
   // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
@@ -1041,6 +1366,33 @@ export function aggregateRows(tips, tz = null) {
     avgUsd: d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0
   })).sort((a, b) => b.usd - a.usd)
 
+  // Same breakdown split by platform. Built from the meaningful sessions'
+  // own tips rather than every tip, so each platform's mix sums to the same
+  // revenue that platform reports in `platforms` — a mix built from all tips
+  // would total more than the earnings shown beside it.
+  // Percentages are shares of that platform's own revenue, so a row never
+  // reads as a share of the whole business on a single-platform view.
+  const platformTipTypeMap = {}
+  meaningfulSessions.forEach(s => (s.tips || []).forEach(t => {
+    const plat = s.platform || t.platform || 'Unknown'
+    const type = t.tip_type || 'Tip'
+    if (!platformTipTypeMap[plat]) platformTipTypeMap[plat] = { total: 0, types: {} }
+    if (!platformTipTypeMap[plat].types[type]) platformTipTypeMap[plat].types[type] = { usd: 0, count: 0, fans: new Set() }
+    platformTipTypeMap[plat].total += t.usd || 0
+    platformTipTypeMap[plat].types[type].usd += t.usd || 0
+    platformTipTypeMap[plat].types[type].count += 1
+    platformTipTypeMap[plat].types[type].fans.add((t.username || '').toLowerCase())
+  }))
+
+  const platformTipTypes = {}
+  Object.entries(platformTipTypeMap).forEach(([plat, d]) => {
+    platformTipTypes[plat] = Object.entries(d.types).map(([type, x]) => ({
+      type, usd: parseFloat(x.usd.toFixed(2)), count: x.count, fans: x.fans.size,
+      pct: d.total > 0 ? Math.round((x.usd / d.total) * 100) : 0,
+      avgUsd: x.count > 0 ? parseFloat((x.usd / x.count).toFixed(2)) : 0
+    })).sort((a, b) => b.usd - a.usd)
+  })
+
   // ── PRIVATE & SPY SHOW FANS ───────────────────────────────────────────
   const privateFanMap = {}, spyFanSet = new Set()
   tips.forEach(t => {
@@ -1093,22 +1445,66 @@ export function aggregateRows(tips, tz = null) {
 
   const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
 
+  // ── PLATFORM MOMENTUM ─────────────────────────────────────────────────
+  // Per-platform version of the same last-30 vs prior-30 comparison, built
+  // from the meaningful sessions' own tips so a platform's trend rests on the
+  // same revenue its earnings row reports.
+  //
+  // A trend is only claimed when the prior period actually contains data. The
+  // free tier feeds this engine a 31-day window (applyFreeAnalysisWindow), so
+  // the prior period is empty by construction for those accounts — treating
+  // that emptiness as growth would label every free user's platforms as
+  // surging off the back of data that was never supplied. No prior period
+  // means no trend, not a flattering one.
+  const platformMomentum = {}
+  Object.keys(platformMap).forEach(p => {
+    let last = 0, prior = 0, priorTips = 0
+    meaningfulSessions.forEach(s => {
+      if ((s.platform || 'Unknown') !== p) return
+      ;(s.tips || []).forEach(t => {
+        const d = new Date(t.dateRaw || t.date_time)
+        if (isNaN(d.getTime())) return
+        if (d >= thirtyDaysAgo) last += t.usd || 0
+        else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
+      })
+    })
+
+    if (priorTips === 0) {
+      platformMomentum[p] = { pct: null, label: 'Not enough history', emoji: '—', last30USD: parseFloat(last.toFixed(2)), prior30USD: 0 }
+      return
+    }
+
+    const pct = ((last - prior) / prior) * 100
+    let label = 'Steady', emoji = '→'
+    if (last === 0)      { label = 'Inactive';  emoji = '💤' }
+    else if (pct > 50)   { label = 'Surging';   emoji = '🚀' }
+    else if (pct > 10)   { label = 'Growing';   emoji = '📈' }
+    else if (pct > -10)  { label = 'Steady';    emoji = '→'  }
+    else                 { label = 'Declining'; emoji = '📉' }
+
+    platformMomentum[p] = {
+      pct: parseFloat(pct.toFixed(1)), label, emoji,
+      last30USD: parseFloat(last.toFixed(2)), prior30USD: parseFloat(prior.toFixed(2)),
+    }
+  })
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
     totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
-    topTippers, platforms, sessions: allValidSessions,
+    topTippers, platforms, sessions: meaningfulSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
-    tipTypeBreakdown, privateShowFans, spyShowFans,
+    tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
+    platformRiskContext, platformMomentum,
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
@@ -1325,5 +1721,144 @@ export function computePaidSessionAnalytics(sessions) {
       prior30USD: parseFloat(prior30USD.toFixed(2)),
     },
     dateRange,
+  }
+}
+
+// ── Snapshot window (Free-tier 31-day analysis window) ──────────────────
+// Single source of truth for "full imported history" vs "the most recent
+// N days of it" — used by both the onboarding paste flow (client-side, over
+// already-parsed rows) and the CSV-upload API route (server-side, over
+// tipRows about to be inserted), so the two import paths never compute this
+// two different ways. This is a DISPLAY window, not a storage/retention
+// limit: callers must still persist every valid row regardless of what this
+// returns — it only describes what date range the "full" vs "recent" stats
+// cover, from data that's already been correctly parsed/validated upstream.
+export function computeSnapshotStats(rows, windowDays = 31) {
+  const dated = rows
+    .map(r => ({
+      date: r.date instanceof Date ? r.date : new Date(r.date || r.dateRaw || r.ts),
+      tokens: Number(r.tokens) || 0,
+      usd: Number(r.usd) || 0,
+    }))
+    .filter(r => !isNaN(r.date.getTime()))
+    .sort((a, b) => a.date - b.date)
+
+  const empty = { from: null, to: null, days: 0, tips: 0, tokens: 0, usd: 0 }
+  if (!dated.length) return { full: empty, recent: { ...empty, isPartial: true } }
+
+  const from = dated[0].date
+  const to = dated[dated.length - 1].date
+  const fullDays = Math.floor((to - from) / 86400000) + 1
+
+  const full = {
+    from, to, days: fullDays,
+    tips: dated.length,
+    tokens: dated.reduce((s, r) => s + r.tokens, 0),
+    usd: parseFloat(dated.reduce((s, r) => s + r.usd, 0).toFixed(2)),
+  }
+
+  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  const recentStart = windowStart < from ? from : windowStart
+  const recentRows = dated.filter(r => r.date >= recentStart)
+  const recentDays = Math.floor((to - recentStart) / 86400000) + 1
+
+  const recent = {
+    from: recentStart, to, days: recentDays,
+    tips: recentRows.length,
+    tokens: recentRows.reduce((s, r) => s + r.tokens, 0),
+    usd: parseFloat(recentRows.reduce((s, r) => s + r.usd, 0).toFixed(2)),
+    isPartial: fullDays < windowDays,
+  }
+
+  return { full, recent }
+}
+
+// ── FREE TIER 31-DAY WINDOW ENFORCEMENT ────────────────────────────────────────
+// Apply 31-day rolling window PER PLATFORM for free-tier analysis.
+// Free users see only the most recent 31 days per connected platform (activity-anchored,
+// not calendar-anchored). Pro users see full history.
+// This is a DISPLAY/ANALYSIS window, not a storage limit: all rows are persisted,
+// only what the analysis consumes changes.
+export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
+  if (!rows.length) return []
+
+  // Group by platform, compute window per platform (anchored to that platform's latest activity)
+  const byPlatform = {}
+  for (const row of rows) {
+    const platform = row.platform || 'unknown'
+    if (!byPlatform[platform]) {
+      byPlatform[platform] = []
+    }
+    byPlatform[platform].push(row)
+  }
+
+  const windowed = []
+  for (const platform in byPlatform) {
+    const platformRows = byPlatform[platform]
+    // Sort by date to find latest
+    const sorted = [...platformRows].sort((a, b) => {
+      const aDate = new Date(a.date_time || a.date || a.ts)
+      const bDate = new Date(b.date_time || b.date || b.ts)
+      return aDate - bDate
+    })
+
+    if (!sorted.length) continue
+
+    const latestDate = new Date(sorted[sorted.length - 1].date_time || sorted[sorted.length - 1].date || sorted[sorted.length - 1].ts)
+    const windowStart = new Date(latestDate.getTime() - (windowDays - 1) * 86400000)
+
+    // Keep only rows >= windowStart for this platform
+    const kept = sorted.filter(r => {
+      const rowDate = new Date(r.date_time || r.date || r.ts)
+      return rowDate >= windowStart
+    })
+
+    windowed.push(...kept)
+  }
+
+  return windowed
+}
+
+// ── Window exclusion summary for teaser signal detection ──────────────────────────
+// Summarizes what was excluded when applying the free-tier window.
+// Used to determine whether a Pro teaser card has "real signal" (there actually IS
+// excluded older data) vs. being fabricated/empty.
+export function summarizeWindowExclusion(allRows = [], windowedRows = []) {
+  if (allRows.length === windowedRows.length) {
+    // No exclusion happened
+    return {
+      excludedCount: 0,
+      oldestExcludedDate: null,
+      byPlatform: {},
+    }
+  }
+
+  // Find excluded rows
+  const windowedSet = new Set(windowedRows.map(r => `${r.username}|${r.platform}|${r.date_time || r.date || r.ts}`))
+  const excluded = allRows.filter(r => !windowedSet.has(`${r.username}|${r.platform}|${r.date_time || r.date || r.ts}`))
+
+  // Group excluded by platform
+  const byPlatform = {}
+  let oldestDate = null
+  for (const row of excluded) {
+    const platform = row.platform || 'unknown'
+    if (!byPlatform[platform]) {
+      byPlatform[platform] = { count: 0, oldestDate: null }
+    }
+    byPlatform[platform].count++
+
+    const rowDate = new Date(row.date_time || row.date || row.ts)
+    if (!byPlatform[platform].oldestDate || rowDate < new Date(byPlatform[platform].oldestDate)) {
+      byPlatform[platform].oldestDate = rowDate
+    }
+    if (!oldestDate || rowDate < oldestDate) {
+      oldestDate = rowDate
+    }
+  }
+
+  return {
+    excludedCount: excluded.length,
+    oldestExcludedDate: oldestDate,
+    byPlatform,
   }
 }

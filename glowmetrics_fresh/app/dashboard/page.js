@@ -2,7 +2,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
+import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
 import { computeRevenueVelocity, computeLiveComparison } from "../../lib/analytics/velocity"
 import { detectSessionPhase, PHASES, getRecoveryActions, getGoalStrategy } from "../../lib/analytics/sessionPhase"
@@ -14,8 +16,9 @@ import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
+import PlatformsIntelligence from './PlatformsIntelligence'
+import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
-import EarlyAdopterOffer from './EarlyAdopterOffer'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
@@ -1395,7 +1398,6 @@ export default function Dashboard() {
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
-  const [showBetaPrompt, setShowBetaPrompt] = useState(false)
   const [fanSearchOpen, setFanSearchOpen] = useState(false)
   const [fanSearchQuery, setFanSearchQuery] = useState("")
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -1500,6 +1502,25 @@ export default function Dashboard() {
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
   const uploadLimit = Infinity
+
+  // Compute windowed tips for free users; windowSummary feeds teaser signal detection
+  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
+  const windowSummary = summarizeWindowExclusion(tips, analysisTips)
+
+  // whales must be declared before use here — buildProTeasers reads it below,
+  // and this runs unconditionally on every render (including before the
+  // loading gate), so declaring it later caused a TDZ ReferenceError on
+  // every single dashboard load.
+  const whales = analytics?.whales || []
+
+  // Build Pro teaser cards (only shown to free users when real signal exists)
+  const proTeasers = buildProTeasers({
+    tips,
+    analysisTips,
+    whales,
+    windowSummary,
+    isPro
+  })
 
   const fmtHour = h => { if (h == null || isNaN(h)) return 'N/A'; return h === 0 ? '12 AM' : h < 12 ? h+' AM' : h === 12 ? '12 PM' : (h-12)+' PM' }
 
@@ -1728,7 +1749,7 @@ export default function Dashboard() {
       })
       setUser(user)
       supabase.from('profiles')
-        .select('plan')
+        .select('plan, primary_pro_platform, streaming_platforms')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -1784,7 +1805,8 @@ export default function Dashboard() {
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const r = runEngine(updated, userTz)
+            const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31 })
+            const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
           } catch(e) { console.error('realtime runEngine failed:', e) }
@@ -1864,7 +1886,8 @@ export default function Dashboard() {
           }
           try {
             const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
-            const r = runEngine(prev, userTz)
+            const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31 })
+            const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
           } catch(e) { console.error('refresh runEngine failed:', e) }
@@ -1989,10 +2012,41 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+      // Fetch live tips and merge into main analytics dataset
+      // Live tips (real-time earnings from extension) are as important as CSV tips
+      let allLiveTips = []
+      try {
+        const { data: liveRows, error: liveErr } = await supabase
+          .from("live_tips")
+          .select("*")
+          .eq("user_id", uid)
+          .order("received_at", { ascending: true })
+        if (!liveErr && liveRows?.length) {
+          // Convert live_tips rows to same format as tips rows for analytics
+          allLiveTips = liveRows.map(lt => ({
+            ...lt,
+            date_time: lt.received_at, // normalize field name for analytics
+            source: 'live_mode' // mark as live for visibility
+          }))
+          // Track live tips total for Private Sessions page
+          setLiveTipsTotalUSD(allLiveTips.reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
+        }
+      } catch (e) { /* non-fatal — analytics just excludes live tips */ }
+
+      // Merge live tips into main dataset for analytics
+      // Sort by date so runEngine sees chronological order
+      if (allLiveTips.length > 0) {
+        allData = [...allData, ...allLiveTips].sort((a, b) =>
+          new Date(a.date_time || a.received_at) - new Date(b.date_time || b.received_at)
+        )
+      }
+
       if (allData.length) {
         setTips(allData)
         try {
-          const result = runEngine(allData, userTz)
+          // Apply 31-day rolling window for free users (per-platform, activity-anchored)
+          const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31 })
+          const result = runEngine(analysisTips, userTz)
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
@@ -2017,14 +2071,6 @@ export default function Dashboard() {
         paidFrom += PAGE
       }
       setPaidSessions(allPaidSessions)
-
-      // Live Mode total, for the Private Sessions page's revenue-sources
-      // summary only — kept as its own query against its own table, never
-      // merged into `tips`/`paidSessions` rows or the `analytics` totals.
-      try {
-        const { data: liveRows, error: liveErr } = await supabase.from("live_tips").select("usd").eq("user_id", uid)
-        if (!liveErr) setLiveTipsTotalUSD((liveRows || []).reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
-      } catch (e) { /* non-fatal — Private Sessions page just omits this total */ }
 
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       setEngineInsights(engineData)
@@ -2059,6 +2105,23 @@ const stopImportMessageRotation = () => {
     setLastUploadResult(null)
     setLockedPreview({ platform: detectedLabel, preview })
     setImportStage('locked_preview')
+
+    // Log parse attempt for analysis
+    if (user?.id && rawText) {
+      const formatAnalysis = analyzeFormat(rawText)
+      logParseAttempt({
+        userId: user.id,
+        source: 'dashboard',
+        attemptedPlatform: detectedLabel,
+        claimedPlatform: platformLabel,
+        rawText,
+        formatAnalysis,
+        parseSuccess: !!preview,
+        errorReason: preview ? null : "Could not parse file — no valid rows found",
+        errorDetails: formatAnalysis,
+      })
+    }
+
     // Only play the celebratory checkmark/sparkle when we actually found
     // something to preview — an unparseable file isn't a "confirmation".
     if (preview) {
@@ -2100,7 +2163,22 @@ const stopImportMessageRotation = () => {
         body: fd,
       })
 
-      const result = await res.json()
+      // A timed-out or crashed function returns an empty/truncated body, and
+      // res.json() then throws "Unexpected end of JSON input" — which reads as
+      // a broken CSV when the file was actually fine. Read as text first and
+      // report what really happened.
+      const raw = await res.text()
+      let result
+      try {
+        result = raw ? JSON.parse(raw) : {}
+      } catch (parseErr) {
+        const tooLong = res.status === 504 || res.status === 413 || !raw
+        result = {
+          error: tooLong
+            ? 'The server stopped responding while importing this file — it may be too large to process in one upload. Try splitting it into smaller date ranges.'
+            : `Server returned an unreadable response (HTTP ${res.status}).`,
+        }
+      }
 
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
@@ -2159,7 +2237,10 @@ const stopImportMessageRotation = () => {
 
   const deleteTip = async (tipId) => {
     if (!confirm("Delete this tip?")) return
-    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); await loadData(user.id, false, { silent: true }) }
+    // Clear the cached tip list and force a refetch, exactly as deleteAllTips
+    // does. Without this the deleted row is served back from sessionStorage on
+    // the next load, so the tip reappears after a refresh.
+    try { const { error } = await supabase.from("tips").delete().eq("id", tipId); if (error) throw error; showToast("✅ Tip deleted"); try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}; await loadData(user.id, true, { silent: true }) }
     catch (err) { showToast("❌ " + err.message) }
   }
 
@@ -2182,7 +2263,6 @@ const stopImportMessageRotation = () => {
   }
 
   const sessions = analytics?.sessions || []
-  const whales = analytics?.whales || []
   // Opens the Whale Profile Modal for a fan, matched by fanKey (platform +
   // normalized username, never merged across platforms) -- reused by the
   // existing Top Fans list and now also by Private Sessions. If the fan has
@@ -2242,6 +2322,16 @@ const stopImportMessageRotation = () => {
   const platformBestTimes     = analytics?.platformBestTimes     || {}
   const earningsVelocity      = analytics?.earningsVelocity      ?? null
   const platformVelocity      = analytics?.platformVelocity      || {}
+  // Platform $/hr, single source of truth — taken straight from the engine,
+  // which builds every hourly rate from one set of eligible sessions. Never
+  // substitute a locally computed rate when the engine reports none: a platform
+  // can have streamed hours without any session whose duration is reliable
+  // enough to divide by, and dividing its full revenue by those hours produces
+  // a rate far above the one shown everywhere else. No rate is correct there.
+  const platformRoiMap = {}
+  ;(analytics?.platforms || []).forEach(p => {
+    platformRoiMap[p.platform] = platformVelocity[p.platform] ?? null
+  })
   const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
   const returningVsNew        = analytics?.returningVsNew        || null
   const topFanDependency      = analytics?.topFanDependency      || null
@@ -3085,9 +3175,6 @@ const stopImportMessageRotation = () => {
                 </div>
                 </div>
                 <div style={{ paddingLeft:12, borderLeft:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', gap:8 }}>
-                  <a href="/shop" style={{ display:'flex', alignItems:'center', padding:'8px 20px', borderRadius:11, background:'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', textDecoration:'none', boxShadow:'0 0 14px rgba(22,244,255,0.3)', letterSpacing:0.3 }}>
-                    🛍️ Shop
-                  </a>
                   <button onClick={() => { setActiveTab('live'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab','live'); window.scrollTo({top:0,behavior:'instant'}); } }} style={{ padding:'8px 20px', borderRadius:11, background:'linear-gradient(135deg,#10B981,#22D3EE)', border:'none', color:'#fff', fontWeight:800, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 0 14px rgba(16,185,129,0.3)', letterSpacing:0.3 }}>
                     ⚡ Go Live
                   </button>
@@ -3121,8 +3208,10 @@ const stopImportMessageRotation = () => {
           )}
         </div>
 
-        {/* ── DASHBOARD PROGRESS CARD — visible on all tabs when data is warming up ── */}
-        {_isLowData && (
+        {/* ── DASHBOARD PROGRESS CARD — on other tabs only; Overview leads with
+             Platform Intelligence instead so the first view is never just a
+             checklist ── */}
+        {_isLowData && activeTab !== 'overview' && (
           <DashboardProgressCard
             totalTips={tips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
@@ -3135,6 +3224,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+
 
             {/* ═══════════════════════════════════════
                 1. MONEY SNAPSHOT
@@ -3509,6 +3599,81 @@ const stopImportMessageRotation = () => {
 
             {/* section divider */}
             <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'4px 0 24px' }} />
+
+            {/* ═══════════════════════════════════════
+                PRO TEASER CARDS — Soft paywall signals for free users
+            ═══════════════════════════════════════ */}
+            {proTeasers.length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                  {proTeasers.map((teaser, i) => (
+                    <div
+                      key={teaser.id}
+                      style={{
+                        ...glassCard,
+                        borderRadius: 16,
+                        padding: 18,
+                        border: '1px solid rgba(236,72,153,0.4)',
+                        background: 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.08))',
+                        animation: `fadeUp 0.3s ease ${i * 0.08}s both`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = 'rgba(236,72,153,0.6)'
+                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(236,72,153,0.15), rgba(124,92,255,0.12))'
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(236,72,153,0.2)'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = 'rgba(236,72,153,0.4)'
+                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(236,72,153,0.1), rgba(124,92,255,0.08))'
+                        e.currentTarget.style.transform = ''
+                        e.currentTarget.style.boxShadow = ''
+                      }}
+                      onClick={() => handleTabChange(teaser.tab)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div style={{ fontSize: 24 }}>🔑</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, textTransform: 'uppercase', letterSpacing: 0.5 }}>Upgrade to unlock</div>
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.white, marginBottom: 8 }}>{teaser.title}</div>
+                      <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 12 }}>{teaser.description}</div>
+                      <div style={{ padding: 10, borderRadius: 9, background: 'rgba(236,72,153,0.1)', border: '1px solid rgba(236,72,153,0.25)', marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, color: C.pink, fontWeight: 600 }}>{teaser.requirement}</div>
+                      </div>
+                      <button
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          background: 'linear-gradient(135deg, #EC4899, #BE185D)',
+                          border: 'none',
+                          color: C.white,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #F472B6, #EC4899)'
+                          e.currentTarget.style.transform = 'scale(1.02)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, #EC4899, #BE185D)'
+                          e.currentTarget.style.transform = ''
+                        }}
+                        onClick={(e) => { e.stopPropagation(); openUpgradeModal('pro_teaser_' + teaser.id) }}
+                      >
+                        {teaser.ctaLabel}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)', margin:'24px 0' }} />
+              </div>
+            )}
+
             {/* ═══════════════════════════════════════
                 3. WHAT'S WORKING — Strategy
                 Platform performance + best time + best day merged
@@ -3536,7 +3701,7 @@ const stopImportMessageRotation = () => {
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Platform ROI ($/hr streamed)</div>
                     <div className="platform-roi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 18 }}>
                       {allPlats.map((p, i) => {
-                        const roi = platformVelocity[p.platform] ?? (p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : null)
+                        const roi = platformRoiMap[p.platform] ?? null
                         const bestTime = platformBestTimes[p.platform]
                         const col = platColors[p.platform] || C.blue
                         const isTop = i === 0
@@ -4025,313 +4190,17 @@ const stopImportMessageRotation = () => {
               </div>
             )}
 
-            <EarlyAdopterOffer isPro={isPro} />
-
           </div>
         )}
 
-        {activeTab === "platforms" && (() => {
-          // ── Time filter
-          const now = Date.now()
-          const filterMs = platformTimeFilter === "7D" ? 7 * 86400000
-                         : platformTimeFilter === "30D" ? 30 * 86400000
-                         : platformTimeFilter === "90D" ? 90 * 86400000
-                         : null
-
-          const filteredTips = filterMs
-            ? tips.filter(t => now - new Date(t.date_time).getTime() <= filterMs)
-            : tips
-
-          // Rebuild platform stats from filtered tips using same logic as engine
-          const pfMap = {}
-          filteredTips.forEach(t => {
-            const k = t.platform || "Unknown"
-            if (!pfMap[k]) pfMap[k] = { platform: k, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
-            pfMap[k].totalUSD += t.usd || 0
-            pfMap[k].tips += 1
-          })
-          // Overlay session data for hour counts
-          const filteredSessions = filterMs
-            ? sessions.filter(s => now - new Date(s.startTime).getTime() <= filterMs)
-            : sessions
-          filteredSessions.forEach(s => {
-            if (!pfMap[s.platform]) pfMap[s.platform] = { platform: s.platform, totalUSD: 0, tips: 0, sessions: new Set(), hours: 0 }
-            pfMap[s.platform].sessions.add(s.id || s.startTime)
-            pfMap[s.platform].hours += s.durationHours || 0
-          })
-          const filteredPlatforms = Object.values(pfMap).map(p => ({
-            platform: p.platform,
-            totalUSD: parseFloat((p.totalUSD || 0).toFixed(2)),
-            sessions: p.sessions.size,
-            hours: parseFloat((p.hours || 0).toFixed(1)),
-            usdPerHour: p.hours > 0 ? parseFloat((p.totalUSD / Math.max(p.hours, 0.5)).toFixed(2)) : 0,
-            avgTipSize: p.tips > 0 ? parseFloat((p.totalUSD / p.tips).toFixed(2)) : 0,
-            tipCount: p.tips
-          })).sort((a, b) => b.totalUSD - a.totalUSD)
-
-          const displayPlatforms = filteredPlatforms.length > 0 ? filteredPlatforms : platforms
-          const maxUSD = Math.max(...displayPlatforms.map(p => p.totalUSD), 1)
-          const maxUPH = Math.max(...displayPlatforms.map(p => p.usdPerHour), 1)
-
-          const getPlatformInsights = (p) => {
-            const insights = []
-            const avgUPH = displayPlatforms.reduce((s, x) => s + x.usdPerHour, 0) / (displayPlatforms.length || 1)
-            const pctAbove = displayPlatforms.length > 1 ? Math.round(((p.usdPerHour - avgUPH) / avgUPH) * 100) : null
-            const bHour = Object.entries(platformTimes[p.platform]?.hours || {}).sort((a, b) => b[1] - a[1])[0]
-
-            // For best day: compute avg per active day (not raw total which is misleading)
-            const dayData = platformTimes[p.platform]?.days || {}
-            const dayAvgs = Object.entries(dayData).map(([day, total]) => {
-              // Count distinct calendar dates for this platform+day combo
-              const activeDates = new Set(
-                tips.filter(t => {
-                  if (t.platform !== p.platform) return false
-                  const dt = new Date(t.date_time || t.dateRaw)
-                  return UTC_DAYS_LONG[dt.getUTCDay()] === day
-                }).map(t => new Date(t.date_time || t.dateRaw).toISOString().slice(0,10))
-              ).size
-              return [day, activeDates > 0 ? total / activeDates : 0]
-            })
-            const bDay = dayAvgs.sort((a, b) => b[1] - a[1])[0]
-
-            const isTop = displayPlatforms.length > 1 && p.totalUSD === maxUSD
-            const isTopUPH = displayPlatforms.length > 1 && p.usdPerHour === maxUPH
-            if (isTop)    insights.push({ icon: "🏆", text: "Your highest revenue platform", color: C.gold })
-            if (isTopUPH && !isTop) insights.push({ icon: "⚡", text: "Most efficient — highest $/hour", color: C.cyan })
-            if (pctAbove !== null && pctAbove >= 20)  insights.push({ icon: "🔥", text: `Earns ${pctAbove}% more per hour than your average`, color: C.green })
-            if (pctAbove !== null && pctAbove <= -20) insights.push({ icon: "📉", text: `${Math.abs(pctAbove)}% below your avg $/hour — consider shifting time`, color: C.orange })
-            if (bDay)  insights.push({ icon: "📅", text: `Best day: ${bDay[0]} ($${parseFloat(bDay[1]).toFixed(0)} avg/stream day)`, color: C.white })
-            if (bHour) insights.push({ icon: "🕐", text: `Peak time: ${formatHour(bHour[0])} ($${parseFloat(bHour[1]).toFixed(0)} total earned)`, color: C.white })
-            if (p.sessions >= 5 && p.hours / p.sessions < 1) insights.push({ icon: "⏱️", text: "Short sessions — try streaming longer to boost earnings", color: C.muted })
-            return insights
-          }
-
-          const PLATFORM_EMOJI = { Chaturbate: "🟣", BongaCams: "🔴", MyFreeCams: "🟠", CamSoda: "🟢", Stripchat: "🔵", Flirt4Free: "💜" }
-
-          return (
-            <div>
-              {/* HEADER + TIME FILTER */}
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
-                <div>
-                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 6 }}>🎯 Platform Comparison</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>See exactly where your time is most valuable</p>
-                </div>
-                <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,0.04)", padding: 4, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
-                  {[["ALL","All Time"],["7D","7 Days"],["30D","30 Days"],["90D","90 Days"]].map(([val, label]) => (
-                    <button key={val} onClick={() => setPlatformTimeFilter(val)} style={{
-                      padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", transition: "all 0.15s",
-                      background: platformTimeFilter === val ? "linear-gradient(135deg, #3b82f6, #ec4899)" : "transparent",
-                      color: platformTimeFilter === val ? C.white : C.muted,
-                      boxShadow: platformTimeFilter === val ? "0 0 12px rgba(59,130,246,0.4)" : "none"
-                    }}>{label}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* PLATFORM RECOMMENDATION BANNER */}
-              {displayPlatforms.length >= 2 && (() => {
-                const sorted = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)
-                const top = sorted[0]
-                const bottom = sorted[sorted.length - 1]
-                if (top.usdPerHour > 0 && bottom.usdPerHour > 0 && top.usdPerHour >= bottom.usdPerHour * 2) {
-                  const mult = (top.usdPerHour / bottom.usdPerHour).toFixed(1)
-                  return (
-                    <div style={{ padding: "14px 18px", borderRadius: 12, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(124,92,255,0.1))", border: "1px solid rgba(34,211,238,0.3)", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 20 }}>⚡</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>You earn {mult}x more per hour on {top.platform} than {bottom.platform}</div>
-                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>${(top.usdPerHour || 0).toFixed(2)}/hr vs ${(bottom.usdPerHour || 0).toFixed(2)}/hr — consider shifting more time to {top.platform}</div>
-                      </div>
-                    </div>
-                  )
-                }
-                return null
-              })()}
-
-              {/* SUMMARY ROW — only when 2+ platforms */}
-              {displayPlatforms.length >= 2 && (() => {
-                const topRev = [...displayPlatforms].sort((a, b) => b.totalUSD - a.totalUSD)[0]
-                const topEff = [...displayPlatforms].sort((a, b) => b.usdPerHour - a.usdPerHour)[0]
-                const totalHours = displayPlatforms.reduce((s, p) => s + p.hours, 0)
-                const totalEarned = displayPlatforms.reduce((s, p) => s + p.totalUSD, 0)
-                return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-                    {[
-                      { icon: "💰", label: "Top Revenue", value: topRev.platform, sub: `$${(topRev.totalUSD || 0).toFixed(2)} total`, color: C.gold },
-                      { icon: "⚡", label: "Most Efficient", value: topEff.platform, sub: `$${(topEff.usdPerHour || 0).toFixed(2)}/hour`, color: C.cyan },
-                      { icon: "🕒", label: "Total Hours", value: `${totalHours.toFixed(1)}h`, sub: `across ${displayPlatforms.length} platforms`, color: C.pink },
-                      { icon: "💵", label: "Combined Earned", value: `$${totalEarned.toFixed(2)}`, sub: platformTimeFilter === "ALL" ? "all time" : `last ${platformTimeFilter}`, color: C.green },
-                    ].map(({ icon, label, value, sub, color }) => (
-                      <div key={label} className="dash-card" style={{ ...glassCard, borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{icon} {label}</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{sub}</div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
-
-              {/* PLATFORM CARDS */}
-              {displayPlatforms.map((p, i) => {
-                const insights = getPlatformInsights(p)
-                const revenueBarPct = Math.round((p.totalUSD / maxUSD) * 100)
-                const uphBarPct     = Math.round((p.usdPerHour / maxUPH) * 100)
-                const isTop = p.totalUSD === maxUSD && displayPlatforms.length > 1
-                const avgSessionUSD = p.sessions > 0 ? (p.totalUSD / p.sessions) : 0
-                const emoji = PLATFORM_EMOJI[p.platform] || "🎥"
-
-                return (
-                  <div key={i} className="dash-card" style={{
-                    ...glassCard, borderRadius: 16, padding: 28, marginBottom: 20,
-                    border: isTop ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.08)",
-                    boxShadow: isTop ? "0 0 30px rgba(245,158,11,0.1), 0 0 60px rgba(236,72,153,0.08)" : glassCard.boxShadow
-                  }}>
-                    {/* HEADER */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 44, height: 44, borderRadius: 12, background: isTop ? "linear-gradient(135deg, rgba(245,158,11,0.3), rgba(251,146,60,0.2))" : "rgba(255,255,255,0.06)", border: isTop ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-                          {emoji}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 20, fontWeight: 800, color: C.white }}>{p.platform}</div>
-                          <div style={{ fontSize: 12, color: C.muted }}>{p.sessions} sessions · {(p.hours || 0).toFixed(1)}h streamed</div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        {isTop && <div style={{ padding: "4px 12px", borderRadius: 20, background: "rgba(245,158,11,0.2)", border: "1px solid rgba(245,158,11,0.4)", fontSize: 11, fontWeight: 700, color: C.gold }}>🏆 Top Platform</div>}
-                        <div style={{ fontSize: 11, color: C.muted, padding: "4px 10px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>#{i + 1} of {displayPlatforms.length}</div>
-                      </div>
-                    </div>
-
-                    {/* STAT GRID */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
-                      {[
-                        { label: "Total Revenue", value: `$${(p.totalUSD || 0).toFixed(2)}`, color: C.green },
-                        { label: "$/Hour", value: `$${(p.usdPerHour || 0).toFixed(2)}`, color: C.cyan },
-                        { label: "Avg Session", value: `$${(avgSessionUSD || 0).toFixed(2)}`, color: C.pink },
-                        { label: "Avg Tip Size", value: `$${(p.avgTipSize || 0).toFixed(2)}`, color: C.gold },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-                          <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* PERFORMANCE BARS */}
-                    <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[
-                        { label: "Revenue share", pct: revenueBarPct, color: C.green },
-                        { label: "$/Hour efficiency", pct: uphBarPct, color: C.cyan },
-                      ].map(({ label, pct, color }) => (
-                        <div key={label}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                            <span style={{ fontSize: 11, color: C.muted }}>{label}</span>
-                            <span style={{ fontSize: 11, fontWeight: 600, color }}>{pct}%</span>
-                          </div>
-                          <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${pct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${color}, ${color}80)`, transition: "width 0.6s ease" }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* HOURLY HEATMAP — uses trueHourlyAvg (avg per active day per UTC hour) */}
-                    {(() => {
-                      // Filter trueHourlyAvg to this platform using platformTimes for totals
-                      const hourData = platformTimes[p.platform]?.hours || {}
-                      const maxEarning = Math.max(...Object.values(hourData), 1)
-                      return (
-                        <div style={{ marginBottom: 20 }}>
-                          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>⏰ Earnings by hour of day (UTC total)</div>
-                          <div style={{ display: "flex", gap: 2, flexWrap: "nowrap", overflowX: "auto" }}>
-                            {Array.from({ length: 24 }, (_, h) => {
-                              const val = hourData[h] || 0
-                              const intensity = val / maxEarning
-                              const bg = intensity === 0
-                                ? "rgba(255,255,255,0.04)"
-                                : intensity < 0.33
-                                ? "rgba(34,211,238,0.2)"
-                                : intensity < 0.66
-                                ? "rgba(34,211,238,0.55)"
-                                : "rgba(34,211,238,0.95)"
-                              const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?"12a":_lh<12?`${_lh}a`:_lh===12?"12p":`${_lh-12}p` })()
-                              return (
-                                <div key={h} title={`${label}: $${val.toFixed(0)}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: "0 0 auto" }}>
-                                  <div style={{ width: 18, height: 24, borderRadius: 3, background: bg, border: "1px solid rgba(255,255,255,0.06)" }} />
-                                  {h % 6 === 0 && <div style={{ fontSize: 8, color: C.muted }}>{label}</div>}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {/* FAN LOYALTY + BEST STREAM LENGTH */}
-                    {(() => {
-                      const platTips = tips.filter(t => t.platform === p.platform)
-                      const fanCounts = {}
-                      platTips.forEach(t => { fanCounts[t.username] = (fanCounts[t.username] || 0) + 1 })
-                      const loyalFans = Object.values(fanCounts).filter(c => c >= 3).length
-
-                      const platSessions = sessions.filter(s => s.platform === p.platform)
-                      const longS = platSessions.filter(s => s.durationMinutes > 60)
-                      const shortS = platSessions.filter(s => s.durationMinutes <= 60)
-                      const longAvg = longS.length ? longS.reduce((s, x) => s + x.totalUSD, 0) / longS.length : 0
-                      const shortAvg = shortS.length ? shortS.reduce((s, x) => s + x.totalUSD, 0) / shortS.length : 0
-                      const streamLengthPct = shortAvg > 0 && longAvg > shortAvg ? Math.round(((longAvg - shortAvg) / shortAvg) * 100) : 0
-
-                      return (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-                          <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>👥 Fan Loyalty</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: C.pink }}>{loyalFans}</div>
-                            <div style={{ fontSize: 11, color: C.muted }}>fans tipped 3+ times</div>
-                          </div>
-                          {streamLengthPct >= 10 && longS.length >= 2 && shortS.length >= 2 ? (
-                            <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>⏱️ Stream Length</div>
-                              <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>+{streamLengthPct}%</div>
-                              <div style={{ fontSize: 11, color: C.muted }}>more earned over 60 min</div>
-                            </div>
-                          ) : (
-                            <div style={{ padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                              <div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>📊 Sessions</div>
-                              <div style={{ fontSize: 18, fontWeight: 800, color: C.cyan }}>{p.sessions}</div>
-                              <div style={{ fontSize: 11, color: C.muted }}>total streams</div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })()}
-
-                    {/* INSIGHTS */}
-                    {insights.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {insights.map((ins, j) => (
-                          <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <span style={{ fontSize: 16, flexShrink: 0 }}>{ins.icon}</span>
-                            <span style={{ fontSize: 13, color: ins.color || C.text }}>{ins.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {displayPlatforms.length === 0 && (
-                <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 8 }}>No platform data yet</div>
-                  <div style={{ fontSize: 13, color: C.muted }}>Import your CSV files to see how your platforms compare</div>
-                </div>
-              )}
-            </div>
-          )
-        })()}
+        {activeTab === "platforms" && (
+          <PlatformsIntelligence
+            analytics={analytics}
+            tips={tips}
+            isPro={isPro}
+            onOpenPlanner={() => handleTabChange('planner')}
+          />
+        )}
 
         {activeTab === "whales" && (
           <div>
@@ -4380,6 +4249,75 @@ const stopImportMessageRotation = () => {
               )}
             </div>
 
+            {/* RISK CONTEXT BANNER(S) — surfaces Risk Signals Paused / Data
+                Needs Updating per platform instead of silently mislabeling
+                fans. Scoped to whichever platform(s) are currently in view. */}
+            {(() => {
+              const ctx = analytics?.platformRiskContext || {}
+              const platformsInView = platformFilter === "ALL" ? allPlatforms : [platformFilter]
+              const flagged = platformsInView
+                .map(p => ctx[p])
+                .filter(c => c && (c.riskSignalsPaused || c.dataNeedsUpdating))
+              if (!flagged.length) return null
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {flagged.map(c => (
+                    <div key={c.platform} style={{ padding: '10px 14px', borderRadius: 10, background: c.riskSignalsPaused ? 'rgba(148,163,184,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${c.riskSignalsPaused ? 'rgba(148,163,184,0.25)' : 'rgba(245,158,11,0.3)'}`, fontSize: 12, color: C.text }}>
+                      <strong style={{ color: c.riskSignalsPaused ? C.muted : C.gold }}>{c.riskSignalsPaused ? `Risk Signals Paused — ${c.platform}` : `Data Needs Updating — ${c.platform}`}</strong>
+                      <div style={{ marginTop: 2, color: C.muted }}>
+                        {c.riskSignalsPaused
+                          ? "You haven't had a meaningful stream here recently, so CamCash isn't labeling inactive fans as at risk."
+                          : `Your ${c.platform} fan data is ${c.dataAgeDays ?? '?'} days old, so current fan behavior may not be complete.`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+
+            {/* CONVERSION CARD — free plan only. Only ever built from a REAL
+                fan who is both a top tipper (Whale/Shark tier) and has
+                genuinely passed the evidence-gated At Risk bar in
+                lib/analytics.js (same behavioralState used everywhere else
+                — never a separate/fabricated risk claim). If no such fan
+                exists, nothing renders — we do not manufacture urgency. */}
+            {!isPro && (() => {
+              const atRiskTopFan = [...whales]
+                .filter(w => (w.tier === 'Whale' || w.tier === 'Shark') && w.behavioralState === 'At Risk')
+                .sort((a, b) => b.totalUSD - a.totalUSD)[0]
+              if (!atRiskTopFan) return null
+              return (
+                <a href="/pricing" style={{ textDecoration: 'none', display: 'block' }}>
+                  <div style={{
+                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
+                    border: '1.5px solid rgba(248,113,113,0.6)',
+                    background: 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.05))',
+                    boxShadow: '0 0 24px rgba(248,113,113,0.15)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <span style={{ fontSize: 18 }}>🚨</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: C.red, textTransform: 'uppercase', letterSpacing: 0.6 }}>Top Fan At Risk</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', filter: 'blur(7px)' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div aria-hidden style={{ filter: 'blur(6px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 14, marginBottom: 3 }}>••••••••••</div>
+                        <div style={{ fontSize: 12, color: C.muted }}>{atRiskTopFan.platform} · last tipped {atRiskTopFan.daysSinceLastTip}d ago</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white }}>${atRiskTopFan.totalUSD.toFixed(0)}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>lifetime spend</div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(248,113,113,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>⚠️ One of your top tippers has broken their pattern — unlock Fan Intelligence to see who and win them back</span>
+                      <span style={{ fontSize: 12, color: C.red, fontWeight: 800, whiteSpace: 'nowrap' }}>Upgrade to Pro →</span>
+                    </div>
+                  </div>
+                </a>
+              )
+            })()}
+
             {/* ALL TIPPERS — CRM Card Grid */}
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
@@ -4394,18 +4332,16 @@ const stopImportMessageRotation = () => {
                   const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
                   const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
                   const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  // Reuse the shared churn-risk formula from analytics.js (w.churnRisk)
-                  // instead of a second, inconsistent day-threshold calc — that duplicate
-                  // was why nearly every card showed "High" regardless of actual pattern.
-                  const cr = w.churnRisk?.level
-                  const riskLevel = cr === "Low" ? { label: "Low", color: C.green, pct: 20 }
-                    : cr === "Medium" ? { label: "Medium", color: C.gold, pct: 55 }
-                    : cr === "High" ? { label: "High", color: C.red, pct: 80 }
-                    : cr === "Critical" ? { label: "Critical", color: C.red, pct: 95 }
-                    : null
-                  const riskReason = riskLevel && (riskLevel.label === "High" || riskLevel.label === "Critical")
-                    ? `Inactive for ${days} days`
-                    : riskLevel?.label === "Medium" ? "Spend has slowed" : null
+                  // Reuse the shared behavioral-state formula from analytics.js
+                  // (w.behavioralState / w.behavioralStateReason) — evidence-gated
+                  // per Fan Intelligence rules, never a raw days-since guess.
+                  const bs = w.behavioralState
+                  const riskLevel = bs === "Active" ? { label: "Active", color: C.green, pct: 15 }
+                    : bs === "Watch" ? { label: "Watch", color: C.gold, pct: 55 }
+                    : bs === "At Risk" ? { label: "At Risk", color: C.red, pct: 85 }
+                    : bs === "Dormant" ? { label: "Dormant", color: C.muted, pct: 40 }
+                    : null // New/Developing, Insufficient Data → no risk meter at all
+                  const riskReason = w.behavioralStateReason || null
                   return (
                     <div key={i}
                       className="hoverable"
@@ -4505,7 +4441,7 @@ const stopImportMessageRotation = () => {
                     if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })
                     if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper", color: C.cyan })
                     if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
-                    if (w.churnRisk?.level === "High" || w.churnRisk?.level === "Critical") tags.push({ label: "🚨 At churn risk", color: C.red })
+                    if (w.behavioralState === "At Risk") tags.push({ label: "🚨 At churn risk", color: C.red })
                     if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
                     if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
                     if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
@@ -6048,7 +5984,7 @@ const stopImportMessageRotation = () => {
           <div style={{ maxWidth: 600, margin: "0 auto" }}>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 8 }}>📥 Import CSV</h1>
             <p style={{ fontSize: 14, color: C.muted, marginBottom: 12 }}>
-              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `Free plan — tracking ${allPlatforms[0]}. Auto-removes duplicates.` : "Free plan tracks 1 platform. Auto-removes duplicates."}
+              {isPro ? "Unlimited platforms • Auto-removes duplicates" : freePlatformLimitReached ? `${platformLimitMessage()} Auto-removes duplicates.` : `Free plan tracks up to ${FREE_PLATFORM_LIMIT} platforms. Auto-removes duplicates.`}
             </p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: freePlatformLimitReached ? 16 : 32 }}>
               <a href="/blog/how-to-upload-csv-to-camcash" style={{ fontSize: 13, color: C.cyan, textDecoration: "none", fontWeight: 600 }}>📹 Watch the SOP: How to upload a CSV →</a>
@@ -6207,7 +6143,7 @@ const stopImportMessageRotation = () => {
               ) : (
                 <>
                   <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65, marginBottom: 16 }}>
-                    The <strong style={{ color: C.white }}>free plan</strong> tracks <strong style={{ color: C.cyan }}>1 platform</strong> — import as much history as you want from it, no limits. A <strong style={{ color: C.white }}>subscription</strong> unlocks tracking <strong style={{ color: C.pink }}>multiple platforms at once</strong> and lets you compare which cam site pays you best by hour, day, and fan type.
+                    The <strong style={{ color: C.white }}>free plan</strong> tracks up to <strong style={{ color: C.cyan }}>{FREE_PLATFORM_LIMIT} platforms</strong> with a rolling <strong style={{ color: C.cyan }}>31-day analysis window</strong> per platform. A <strong style={{ color: C.white }}>subscription</strong> unlocks full historical analysis and deeper insights into churn, re-engagement, and cross-platform trends.
                   </p>
                   <Button onClick={() => router.push('/pricing')} style={{ padding: "12px 26px", fontSize: 13 }}>
                     View Plans & Subscribe →
@@ -6638,12 +6574,12 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={tips} isPro={true} />
+            : <StreamPlanner tips={analysisTips} isPro={isPro} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={tips} isPro={true} />
+            : <MoneyMap tips={analysisTips} isPro={isPro} />
         )}
       </div>
 
@@ -7078,76 +7014,6 @@ const stopImportMessageRotation = () => {
                   </button>
                 </>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* BETA PROMPT MODAL */}
-      {showBetaPrompt && !earlyAccessSubmitted && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1002, padding: 20 }}>
-          <div style={{ width: 460, background: "rgba(15,20,32,0.97)", backdropFilter: "blur(24px)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 80px rgba(59,130,246,0.2), 0 0 160px rgba(236,72,153,0.1)", overflow: "hidden" }}>
-            <div style={{ height: 4, background: "linear-gradient(90deg, #22D3EE, #7C5CFF, #EC4899)" }} />
-            <div style={{ padding: 32 }}>
-              <div style={{ textAlign: "center", marginBottom: 22 }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>💰</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 10 }}>Your data found missed earnings</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7 }}>You're using features that will become premium. We built this to help you:</div>
-                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6, textAlign: "left" }}>
-                  {[["🐳","Identify your highest paying viewers"], ["⏰","Stream at your most profitable times"], ["📈","Increase tips without more hours"]].map(([icon, text]) => (
-                    <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.white }}>
-                      <span style={{ fontSize: 14 }}>{icon}</span> {text}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding: 16, background: "rgba(124,92,255,0.1)", border: "1px solid rgba(124,92,255,0.25)", borderRadius: 12, marginBottom: 18 }}>
-                <div style={{ fontSize: 14, color: C.indigo, fontWeight: 700, marginBottom: 8 }}>🚀 Early Access Offer</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 10 }}>Early access users can lock in founding pricing:</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {["Lock in lifetime pricing before it increases", "Get every future premium feature included", "Keep full access as we expand the product"].map(t => (
-                    <div key={t} style={{ fontSize: 12, color: C.white }}>• {t}</div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ textAlign: "center", padding: "12px 14px", background: "rgba(236,72,153,0.1)", border: "1px solid rgba(236,72,153,0.25)", borderRadius: 10, marginBottom: 16 }}>
-                <div style={{ fontSize: 18, color: C.pink, fontWeight: 800 }}>🔥 Lock in $9.99/mo for life</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Launch price will be $29/mo — this offer won't last</div>
-              </div>
-              <input
-                type="email"
-                value={earlyAccessEmail}
-                onChange={e => setEarlyAccessEmail(e.target.value)}
-                placeholder="your@email.com"
-                style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: C.white, fontSize: 13, outline: "none", marginBottom: 8, boxSizing: "border-box" }}
-                onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.5)"}
-                onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.15)"}
-              />
-              <Button
-                disabled={!earlyAccessEmail.trim() || earlyAccessSubmitting}
-                onClick={async () => {
-                  if (!earlyAccessEmail.trim()) return
-                  setEarlyAccessSubmitting(true)
-                  track('beta_checkout_clicked', { email: earlyAccessEmail, uploadCount })
-                  try {
-                    await supabase.from('early_access').insert({ email: earlyAccessEmail.trim(), user_id: user?.id || null, signed_up_at: new Date().toISOString() })
-                    await supabase.from('beta_users').upsert({ user_id: user?.id, email: earlyAccessEmail.trim(), submitted_early_access: true, saw_beta_prompt: true }, { onConflict: 'user_id' })
-                    await supabase.from('analytics_events').insert({ user_id: user?.id, event_name: 'beta_checkout_clicked', properties: { email: earlyAccessEmail.trim() } })
-                  } catch(e) {}
-                  setEarlyAccessSubmitting(false)
-                  setEarlyAccessSubmitted(true)
-                  setShowBetaPrompt(false)
-                  showToast("🎉 Redirecting to checkout...")
-                  setTimeout(() => window.open("https://buy.stripe.com/8x228r3Qu8dj7zQ1F5f7i01", "_blank"), 500)
-                }}
-                style={{ width: "100%", padding: "14px", fontSize: 14, marginBottom: 8 }}>
-                {earlyAccessSubmitting ? "Saving..." : "🔒 Lock In My Early Access"}
-              </Button>
-              <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 10 }}>Secure Stripe checkout — cancel anytime</div>
-              <button onClick={() => { setShowBetaPrompt(false); track('beta_prompt_dismissed', { uploadCount }) }}
-                style={{ width: "100%", padding: "10px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: C.muted, fontSize: 13, cursor: "pointer" }}>
-                Keep using free beta
-              </button>
             </div>
           </div>
         </div>

@@ -9,15 +9,68 @@ export default function ProductDetailClient({ product }) {
   const allImages = [product.coverImage, ...product.galleryImages];
   const [activeImage, setActiveImage] = useState(0);
 
+  // Breadcrumb schema for SEO
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      {
+        '@type': 'ListItem',
+        'position': 1,
+        'name': 'Home',
+        'item': 'https://www.camcashgrl.com'
+      },
+      {
+        '@type': 'ListItem',
+        'position': 2,
+        'name': 'Shop',
+        'item': 'https://www.camcashgrl.com/shop'
+      },
+      {
+        '@type': 'ListItem',
+        'position': 3,
+        'name': product.shortTitle,
+        'item': `https://www.camcashgrl.com/shop/${product.slug}`
+      }
+    ]
+  }
+
+  // Product schema with full details
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    'name': product.shortTitle,
+    'description': product.description,
+    'price': product.price.replace('$', ''),
+    'priceCurrency': 'USD',
+    'url': `https://www.camcashgrl.com/shop/${product.slug}`,
+    'image': `https://www.camcashgrl.com${product.coverImage}`,
+    'offers': {
+      '@type': 'Offer',
+      'price': product.price.replace('$', ''),
+      'priceCurrency': 'USD',
+      'url': product.etsyUrl,
+      'availability': 'https://schema.org/InStock'
+    },
+    'isPartOf': {
+      '@type': 'WebSite',
+      'name': 'CamCash',
+      'url': 'https://www.camcashgrl.com'
+    }
+  }
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at 18% 30%, rgba(0, 229, 255, 0.20), transparent 34%), radial-gradient(circle at 82% 45%, rgba(255, 43, 174, 0.22), transparent 36%), linear-gradient(135deg, #050713 0%, #080B1A 45%, #120719 100%)",
-        padding: "48px 24px 96px",
-      }}
-    >
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }} />
+      <div
+        style={{
+          minHeight: "100vh",
+          background:
+            "radial-gradient(circle at 18% 30%, rgba(0, 229, 255, 0.20), transparent 34%), radial-gradient(circle at 82% 45%, rgba(255, 43, 174, 0.22), transparent 36%), linear-gradient(135deg, #050713 0%, #080B1A 45%, #120719 100%)",
+          padding: "48px 24px 96px",
+        }}
+      >
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
         <Link
           href="/shop"
@@ -179,6 +232,7 @@ export default function ProductDetailClient({ product }) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

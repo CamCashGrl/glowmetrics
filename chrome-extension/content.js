@@ -54,6 +54,53 @@
   let observer  = null;
   let seenMsgs  = new Set();
   let retryTimer = null;
+  let broadcasterUsername = null;
+
+  // ─── Broadcaster room detection (SECURITY FIX #285) ─────────────────────────
+  // Detect the AUTHENTICATED CREATOR's username from the page to prevent
+  // capturing tips from other creators' rooms while browsing as a viewer
+  function detectBroadcasterUsername() {
+    // Chaturbate: look for username in page header/profile area
+    if (platform === 'chaturbate') {
+      const chaturbateSelectors = [
+        '[data-username]',
+        '.m-header-username',
+        '.m-room-header__info-block h2',
+        'a[href*="/"][href$="/"]',
+      ];
+      for (const sel of chaturbateSelectors) {
+        const el = document.querySelector(sel);
+        if (el?.textContent?.trim()) {
+          const text = el.textContent.trim();
+          if (text && text.length > 0 && text.length < 50) {
+            broadcasterUsername = text.toLowerCase();
+            return broadcasterUsername;
+          }
+        }
+      }
+    }
+    // BongaCams: parse from URL or look for profile header
+    if (platform === 'bongacams') {
+      const urlMatch = location.pathname.match(/\/([a-z0-9_-]+)\/?$/i);
+      if (urlMatch) {
+        broadcasterUsername = urlMatch[1].toLowerCase();
+        return broadcasterUsername;
+      }
+    }
+    // MyFreeCams: parse from URL
+    if (platform === 'myfreecams') {
+      const urlMatch = location.pathname.match(/\/([a-z0-9_-]+)\/?$/i);
+      if (urlMatch) {
+        broadcasterUsername = urlMatch[1].toLowerCase();
+        return broadcasterUsername;
+      }
+    }
+    return null;
+  }
+
+  // Run on page load and periodically
+  detectBroadcasterUsername();
+  setInterval(detectBroadcasterUsername, 5000);
 
   function processText(text) {
     if (!text || text.length < 5) return;
@@ -72,7 +119,14 @@
       if (m) {
         const tokens = parseInt(m[2], 10);
         if (isNaN(tokens) || tokens <= 0) continue;
-        chrome.runtime.sendMessage({ action: 'tip', username: m[1].trim(), tokens, platform });
+        // SECURITY FIX #285: Include broadcaster_username so server can verify this is the user's own room
+        chrome.runtime.sendMessage({
+          action: 'tip',
+          username: m[1].trim(),
+          tokens,
+          platform,
+          broadcaster_username: broadcasterUsername,
+        });
         return;
       }
     }
