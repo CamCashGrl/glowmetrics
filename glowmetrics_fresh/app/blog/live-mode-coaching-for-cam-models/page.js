@@ -1,9 +1,9 @@
-// app/blog/live-ai-coaching-cam-models/page.js
+// app/blog/live-mode-coaching-for-cam-models/page.js
 import BlogLayout from '@/components/BlogLayout';
 
-const SLUG = 'live-ai-coaching-cam-models';
+const SLUG = 'live-mode-coaching-for-cam-models';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Live AI Coaching for Cam Models — Real-Time Stream Advice';
+const TITLE = 'Live Mode Coaching for Cam Models — Real-Time Stream Advice';
 const DESC =
   'How AI coaching during a live stream tells you when to push a goal, stay live longer, or switch strategy based on your real earnings data.';
 
