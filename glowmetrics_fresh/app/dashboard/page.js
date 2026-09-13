@@ -3349,7 +3349,7 @@ const stopImportMessageRotation = () => {
                     ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
                     : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
                   }
-                  <button onClick={() => handleTabChange('stream-planner')} title="Build your streaming schedule based on your peak window" style={{ padding: '6px 14px', borderRadius: 12, background: 'linear-gradient(135deg,#22D3EE,#7C5CFF)', border: 'none', color: C.white, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>Build my stream plan →</button>
+                  <button onClick={() => handleTabChange('stream-planner')} title="Build your streaming schedule based on your peak window" style={{ padding: '6px 13px', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: C.white, fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>Build my stream plan →</button>
                 </div>
               </div>
 
