@@ -2597,12 +2597,42 @@ const stopImportMessageRotation = () => {
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
-    // BEST PLATFORM: Use the platform with highest lifetime revenue (ALL tips)
-    // This is the true platform comparison metric
+    // PLATFORM CONTEXT: Smart cascade based on actual performance patterns
+    // 1. Best platform for today's day-of-week
+    // 2. Best platform at peak hour (all-time)
+    // 3. Best platform right now (current hour)
+    // 4. Fallback: highest lifetime earnings
+    const platHourUSD = {}; const platHourSessions = {}
+    tips.forEach(t => {
+      const p = t.platform || 'Chaturbate'
+      const d = new Date(t.date_time || t.dateRaw)
+      const h = d.getHours()
+      const bucket = Math.floor(d.getTime() / 3600000)
+      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
+      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
+      platHourUSD[p][h] += t.usd || 0
+      platHourSessions[p][h].add(bucket)
+    })
+    let bestPlatNow = null; let bestPlatNowAvg = 0
+    Object.keys(platHourUSD).forEach(plat => {
+      const sessions = platHourSessions[plat][utcHour]?.size || 0
+      if (sessions === 0) return
+      const avg = platHourUSD[plat][utcHour] / sessions
+      if (avg > bestPlatNowAvg) { bestPlatNowAvg = avg; bestPlatNow = plat }
+    })
+    let bestPlatPeak = null; let bestPlatPeakAvg = 0
+    if (bh !== null) {
+      Object.keys(platHourUSD).forEach(plat => {
+        const sessions = platHourSessions[plat][bh]?.size || 0
+        if (sessions === 0) return
+        const avg = platHourUSD[plat][bh] / sessions
+        if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
+      })
+    }
     const platTotalUSD = {}
     tips.forEach(t => { const p = t.platform || 'Chaturbate'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
     const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chaturbate'
-    const displayPlat = topEarningPlat
+    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
 
     // Peak hour average for this platform (for context/forecast only)
     // Do NOT use hour-bucket calculations for session averages — these aren't actual sessions
@@ -3320,11 +3350,10 @@ const stopImportMessageRotation = () => {
             + CamCash Noticed Platform Intelligence below
         ═══════════════════════════════════════════════════════ */}
         {dailyBrief && (() => {
-          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat: _displayPlat, displayAvg,
+          const { todayName, bhLabel: _bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
-          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
           const moveList = nextMoves || []
           const move = moveList[nextMoveCarouselIdx] || null
 
