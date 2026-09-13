@@ -33,12 +33,11 @@ import { join, relative } from 'node:path'
 const ROOT = new URL('..', import.meta.url).pathname
 const PATTERN = /\.getUTC(Day|Hours)\s*\(\s*\)/g
 
-// Known, accepted sites as of this guard's introduction.
-const BASELINE = {
-  'app/dashboard/page.js': 18,
-  'lib/analytics.js': 9,
-  'app/dashboard/DashboardGrowthCharts.js': 2,
-}
+// Empty, and it should stay that way. Every creator-facing day and hour in the
+// app is now read on the creator's clock, so any new entry here is a regression
+// rather than inherited debt. Add one only for genuine duration arithmetic, with
+// a comment saying why.
+const BASELINE = {}
 
 // Genuinely correct uses: the tz helpers' own fallback when Intl is missing,
 // and fixtures/demos that are not creator data.
