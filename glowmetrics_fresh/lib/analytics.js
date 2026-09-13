@@ -1028,11 +1028,11 @@ export function aggregateRows(tips, tz = null) {
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
-      monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
+      monthlyData: [], bestMonth: null, tipTypeBreakdown: [], platformTipTypes: {},
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
-      platformVelocity: {}, missedRevenueByPlatform: {},
+      platformVelocity: {}, missedRevenueByPlatform: {}, platformMomentum: {},
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
       platformRiskContext: {}
@@ -1060,6 +1060,23 @@ export function aggregateRows(tips, tz = null) {
 
   const meaningfulSessions = sessions.filter(s => s.sessionQuality === 'meaningful')
   const allValidSessions   = sessions.filter(s => s.sessionQuality !== 'invalid')
+
+  // ── HOURLY-RATE ELIGIBILITY ────────────────────────────────────────────
+  // Defined here, above the platform rollup, so that every hourly rate in the
+  // engine — overall and per platform — divides the same sessions' revenue by
+  // the same sessions' time. A session can be a meaningful *earning* event
+  // (e.g. one $75 tip, durationUnknown) while being unusable as a rate, since
+  // an unknown duration has no denominator. Counting such a session's revenue
+  // against only the timed sessions' hours inflates the rate, which is exactly
+  // what this rule exists to prevent.
+  const isHourlyRateEligible = (s) =>
+    s.tipCount >= 2 &&
+    !s.durationUnknown &&
+    Number.isFinite(s.durationMinutes) &&
+    s.durationMinutes >= 15 &&
+    s.totalUSD > 0
+
+  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
 
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
   const dayDateAmts = {}, hourBucketAmts = {}
@@ -1114,12 +1131,31 @@ export function aggregateRows(tips, tz = null) {
     platformMap[s.platform].tips        += s.tipCount
   })
 
-  const platforms = Object.values(platformMap).map(p => ({
-    ...p,
-    usdPerHour:    p.hours > 0 ? parseFloat((p.totalUSD    / p.hours).toFixed(2)) : 0,
-    tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)             : 0,
-    avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2))  : 0
-  }))
+  // Per-platform rate basis — revenue and time from the same eligible sessions,
+  // so summing these across platforms reproduces estimatedHourlyRate exactly.
+  const platformRate = {}
+  hourlyRateSessions.forEach(s => {
+    if (!platformRate[s.platform]) platformRate[s.platform] = { usd: 0, minutes: 0, sessions: 0 }
+    platformRate[s.platform].usd     += s.totalUSD
+    platformRate[s.platform].minutes += s.durationMinutes
+    platformRate[s.platform].sessions += 1
+  })
+
+  const platforms = Object.values(platformMap).map(p => {
+    const rate = platformRate[p.platform] || { usd: 0, minutes: 0, sessions: 0 }
+    const rateHours = rate.minutes / 60
+    return {
+      ...p,
+      // Hours and revenue used for the rate, kept alongside it so a caller can
+      // show the rate with the sample it was actually built from.
+      rateHours:        parseFloat(rateHours.toFixed(2)),
+      rateUSD:          parseFloat(rate.usd.toFixed(2)),
+      rateSessionCount: rate.sessions,
+      usdPerHour:    rateHours > 0 ? parseFloat((rate.usd / rateHours).toFixed(2)) : 0,
+      tokensPerHour: p.hours > 0 ? Math.round( p.totalTokens / p.hours)            : 0,
+      avgTipSize:    p.tips  > 0 ? parseFloat((p.totalUSD    / p.tips).toFixed(2)) : 0
+    }
+  })
 
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
@@ -1203,19 +1239,9 @@ export function aggregateRows(tips, tz = null) {
   // ── ESTIMATED $/HOUR ───────────────────────────────────────────────────
   // Imported CSV files carry tip timestamps only — never a creator's actual
   // stream start/end time — so this can only ever be an estimate inferred
-  // from the gap between a session's first and last recorded tip. A session
-  // can be a meaningful *earning* event (e.g. one $75 tip, durationUnknown)
-  // without being usable for a rate calculation, since a zero/unknown
-  // duration has no denominator. This eligibility rule is intentionally
-  // stricter than — and separate from — sessionQuality/meaningfulSessions.
-  const isHourlyRateEligible = (s) =>
-    s.tipCount >= 2 &&
-    !s.durationUnknown &&
-    Number.isFinite(s.durationMinutes) &&
-    s.durationMinutes >= 15 &&
-    s.totalUSD > 0
-
-  const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
+  // from the gap between a session's first and last recorded tip. The
+  // eligibility rule this uses is defined above, next to meaningfulSessions,
+  // because the per-platform rates are built from the same sessions.
   const hourlyRateTotalUsd = parseFloat(hourlyRateSessions.reduce((s, x) => s + x.totalUSD, 0).toFixed(2))
   const hourlyRateTotalMinutes = hourlyRateSessions.reduce((s, x) => s + x.durationMinutes, 0)
   // Weighted overall average — numerator and denominator always come from the
@@ -1227,11 +1253,13 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // Same rate basis as platforms[].usdPerHour — these two must never disagree.
   const platformVelocity = {}
   Object.keys(platformMap).forEach(p => {
-    const pHours = platformMap[p].hours
-    const pUSD = platformMap[p].totalUSD
-    platformVelocity[p] = pHours > 0 ? parseFloat((pUSD / pHours).toFixed(2)) : null
+    const rate = platformRate[p]
+    platformVelocity[p] = rate && rate.minutes > 0
+      ? parseFloat((rate.usd / (rate.minutes / 60)).toFixed(2))
+      : null
   })
 
   // ── MISSED REVENUE BY PLATFORM ────────────────────────────────────────
@@ -1318,6 +1346,33 @@ export function aggregateRows(tips, tz = null) {
     avgUsd: d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0
   })).sort((a, b) => b.usd - a.usd)
 
+  // Same breakdown split by platform. Built from the meaningful sessions'
+  // own tips rather than every tip, so each platform's mix sums to the same
+  // revenue that platform reports in `platforms` — a mix built from all tips
+  // would total more than the earnings shown beside it.
+  // Percentages are shares of that platform's own revenue, so a row never
+  // reads as a share of the whole business on a single-platform view.
+  const platformTipTypeMap = {}
+  meaningfulSessions.forEach(s => (s.tips || []).forEach(t => {
+    const plat = s.platform || t.platform || 'Unknown'
+    const type = t.tip_type || 'Tip'
+    if (!platformTipTypeMap[plat]) platformTipTypeMap[plat] = { total: 0, types: {} }
+    if (!platformTipTypeMap[plat].types[type]) platformTipTypeMap[plat].types[type] = { usd: 0, count: 0, fans: new Set() }
+    platformTipTypeMap[plat].total += t.usd || 0
+    platformTipTypeMap[plat].types[type].usd += t.usd || 0
+    platformTipTypeMap[plat].types[type].count += 1
+    platformTipTypeMap[plat].types[type].fans.add((t.username || '').toLowerCase())
+  }))
+
+  const platformTipTypes = {}
+  Object.entries(platformTipTypeMap).forEach(([plat, d]) => {
+    platformTipTypes[plat] = Object.entries(d.types).map(([type, x]) => ({
+      type, usd: parseFloat(x.usd.toFixed(2)), count: x.count, fans: x.fans.size,
+      pct: d.total > 0 ? Math.round((x.usd / d.total) * 100) : 0,
+      avgUsd: x.count > 0 ? parseFloat((x.usd / x.count).toFixed(2)) : 0
+    })).sort((a, b) => b.usd - a.usd)
+  })
+
   // ── PRIVATE & SPY SHOW FANS ───────────────────────────────────────────
   const privateFanMap = {}, spyFanSet = new Set()
   tips.forEach(t => {
@@ -1370,6 +1425,49 @@ export function aggregateRows(tips, tz = null) {
 
   const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
 
+  // ── PLATFORM MOMENTUM ─────────────────────────────────────────────────
+  // Per-platform version of the same last-30 vs prior-30 comparison, built
+  // from the meaningful sessions' own tips so a platform's trend rests on the
+  // same revenue its earnings row reports.
+  //
+  // A trend is only claimed when the prior period actually contains data. The
+  // free tier feeds this engine a 31-day window (applyFreeAnalysisWindow), so
+  // the prior period is empty by construction for those accounts — treating
+  // that emptiness as growth would label every free user's platforms as
+  // surging off the back of data that was never supplied. No prior period
+  // means no trend, not a flattering one.
+  const platformMomentum = {}
+  Object.keys(platformMap).forEach(p => {
+    let last = 0, prior = 0, priorTips = 0
+    meaningfulSessions.forEach(s => {
+      if ((s.platform || 'Unknown') !== p) return
+      ;(s.tips || []).forEach(t => {
+        const d = new Date(t.dateRaw || t.date_time)
+        if (isNaN(d.getTime())) return
+        if (d >= thirtyDaysAgo) last += t.usd || 0
+        else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
+      })
+    })
+
+    if (priorTips === 0) {
+      platformMomentum[p] = { pct: null, label: 'Not enough history', emoji: '—', last30USD: parseFloat(last.toFixed(2)), prior30USD: 0 }
+      return
+    }
+
+    const pct = ((last - prior) / prior) * 100
+    let label = 'Steady', emoji = '→'
+    if (last === 0)      { label = 'Inactive';  emoji = '💤' }
+    else if (pct > 50)   { label = 'Surging';   emoji = '🚀' }
+    else if (pct > 10)   { label = 'Growing';   emoji = '📈' }
+    else if (pct > -10)  { label = 'Steady';    emoji = '→'  }
+    else                 { label = 'Declining'; emoji = '📉' }
+
+    platformMomentum[p] = {
+      pct: parseFloat(pct.toFixed(1)), label, emoji,
+      last30USD: parseFloat(last.toFixed(2)), prior30USD: parseFloat(prior.toFixed(2)),
+    }
+  })
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1380,13 +1478,13 @@ export function aggregateRows(tips, tz = null) {
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
-    tipTypeBreakdown, privateShowFans, spyShowFans,
+    tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
-    platformRiskContext,
+    platformRiskContext, platformMomentum,
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,

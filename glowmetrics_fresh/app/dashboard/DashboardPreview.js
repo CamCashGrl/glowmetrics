@@ -925,12 +925,28 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
   const usd = parseFloat(recentRevenue.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2))
   const tipCount = recentRevenue.length
 
-  const platSessions = (sessions || []).filter(s => resolvePlatformName(s.platform) === platformName && new Date(s.startTime) >= recentStart)
+  // Hours must exclude durationUnknown sessions, matching the platform hours
+  // in lib/analytics.js (`if (!s.durationUnknown) platformMap[...].hours += ...`)
+  // which is what $/hr below is derived from. Counting untimed sessions here
+  // produced a card reading "3.8h" beside "$/hr —": the hours came from
+  // sessions whose duration was never actually known, so the ROI engine
+  // correctly refused to divide by them. Same rule, one definition of "hours".
+  const platSessions = (sessions || []).filter(s =>
+    resolvePlatformName(s.platform) === platformName &&
+    !s.durationUnknown &&
+    new Date(s.startTime) >= recentStart
+  )
   const hours = parseFloat(platSessions.reduce((s, x) => s + (Number(x.durationHours) || 0), 0).toFixed(1))
   // $/hr is never derived locally — it must always equal the "Platform ROI"
   // card's number for this platform (single source of truth). No independent
   // session-eligibility or time-window rule for this figure.
   const usdPerHour = Object.prototype.hasOwnProperty.call(platformRoi, platformName) ? platformRoi[platformName] : null
+
+  // Lifetime data import progress for conversion
+  // Shows what they've imported vs estimated available data
+  const lifetimeUSD = allRevenue.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2)
+  const estimatedAvailable = estimateAvailableData(lifetimeUSD, fullHistoryDays, tipCount)
+  const importProgress = estimatedAvailable > 0 ? Math.min(100, Math.round((lifetimeUSD / estimatedAvailable) * 100)) : 0
 
   return {
     platform: platformName,
@@ -943,7 +959,42 @@ export function computePlatformCardStats(tips, sessions, platformName, windowDay
     fullHistoryDays,
     latestDate: to,
     earliestDate: from,
+    // Lifetime data import progress (conversion-focused)
+    lifetimeUSD: parseFloat(lifetimeUSD),
+    estimatedAvailable: parseFloat(estimatedAvailable),
+    importProgress,
+    importMissing: Math.max(0, estimatedAvailable - lifetimeUSD),
   }
+}
+
+// Estimate total available lifetime data based on what's imported
+// Purpose: Show conversion opportunity (how much MORE data could unlock)
+function estimateAvailableData(lifetimeUSD, daysOfHistory, tipCount) {
+  if (!lifetimeUSD || !daysOfHistory) return 0
+
+  // Aggressive but realistic estimate to motivate data upload
+  // Show users the upside they're missing
+  let multiplier = 2 // Base: they have 50% of available data
+
+  if (daysOfHistory < 30) {
+    // Very new user: estimate they could have 5-10x more
+    multiplier = Math.min(10, Math.max(5, 30 / daysOfHistory))
+  } else if (daysOfHistory < 90) {
+    // Growing user: estimate they could have 3-5x more
+    multiplier = Math.max(3, 5 - (daysOfHistory / 90))
+  } else if (daysOfHistory < 180) {
+    // Maturing user: estimate they could have 2-3x more
+    multiplier = Math.max(2, 3 - (daysOfHistory / 180))
+  } else if (daysOfHistory < 365) {
+    // Near year: estimate they could have 1.5-2x more
+    multiplier = Math.max(1.5, 2 - (daysOfHistory / 365))
+  } else {
+    // Full year or more: assume they have most of it
+    multiplier = 1.3
+  }
+
+  const estimate = lifetimeUSD * multiplier
+  return parseFloat(estimate)
 }
 
 // Account-level "how much history do we actually have on file" — across all
@@ -967,6 +1018,275 @@ export function computeMilestones({ primaryStats, secondaryConnectedCount, strea
     { label: 'Second platform connected', done: secondaryConnectedCount >= 1 },
     { label: 'Multi-platform profile created', done: (streamingPlatforms || []).length >= 2 },
   ]
+}
+
+// Data import milestones: Show progress toward full 31-day window
+function calculateDataMilestones(maxHistoryDays) {
+  return [
+    { days: 1, label: 'Started tracking', done: maxHistoryDays >= 1 },
+    { days: 7, label: 'Weekly patterns visible', done: maxHistoryDays >= 7 },
+    { days: 14, label: 'Two-week trend established', done: maxHistoryDays >= 14 },
+    { days: 21, label: 'Monthly cycle emerging', done: maxHistoryDays >= 21 },
+    { days: 31, label: 'Full month of data', done: maxHistoryDays >= 31 },
+  ]
+}
+
+function DataMilestoneCard({ maxHistoryDays }) {
+  const milestones = calculateDataMilestones(maxHistoryDays)
+  const done = milestones.filter(m => m.done).length
+
+  // Only show when < 31 days
+  if (maxHistoryDays >= 31) return null
+
+  return (
+    <div className="pi-milestone-card" style={piCard({ padding: '14px 16px', marginTop: 14 })}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 900, color: PI.text, textTransform: 'uppercase', letterSpacing: '.08em' }}>Import progress</div>
+          <div style={{ fontSize: 11, color: PI.muted, marginTop: 3 }}>Unlock insights as you import more of your data.</div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 900, color: PI.cyan }}>{done} / {milestones.length}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 8 }}>
+        {milestones.map(m => (
+          <div key={m.days} style={{ padding: '9px 10px', borderRadius: 12, background: m.done ? 'rgba(89,217,142,.055)' : 'rgba(255,255,255,.022)', border: `1px solid ${m.done ? 'rgba(89,217,142,.15)' : 'rgba(255,255,255,.06)'}` }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: m.done ? PI.green : PI.muted }}>{m.done ? '✓' : '○'}</div>
+            <div style={{ fontSize: 9, color: m.done ? PI.body : PI.muted, lineHeight: 1.35, marginTop: 3 }}>{m.label}</div>
+            <div style={{ fontSize: 8, color: PI.muted, marginTop: 2, fontWeight: 700 }}>{m.days}d</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Phase 3: Platform breakdown calculations
+function calculateSessionTypeBreakdown(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, _source: 'tip', session_type: t.tip_type || 'Tip' })),
+    ...platPaid.map(p => ({ ...p, _source: 'paid', session_type: p.session_type || 'Private' }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => new Date(r.date_time || r.dateRaw) >= windowStart)
+
+  const breakdown = {}
+  let totalUSD = 0
+
+  windowRevenue.forEach(r => {
+    const type = r.session_type || 'Other'
+    if (!breakdown[type]) breakdown[type] = { usd: 0, count: 0 }
+    breakdown[type].usd += parseFloat(r.usd) || 0
+    breakdown[type].count += 1
+    totalUSD += parseFloat(r.usd) || 0
+  })
+
+  return Object.entries(breakdown).map(([type, data]) => ({
+    type,
+    usd: parseFloat(data.usd.toFixed(2)),
+    count: data.count,
+    pct: totalUSD > 0 ? Math.round((data.usd / totalUSD) * 100) : 0
+  })).sort((a, b) => b.usd - a.usd)
+}
+
+function calculateDayOfWeekBreakdown(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, date: new Date(t.date_time) })),
+    ...platPaid.map(p => ({ ...p, date: new Date(p.date_time) }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => r.date >= windowStart)
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const breakdown = {}
+
+  dayNames.forEach((day, idx) => {
+    breakdown[day] = { usd: 0, count: 0, dayNum: idx }
+  })
+
+  windowRevenue.forEach(r => {
+    if (isNaN(r.date.getTime())) return
+    const dayName = dayNames[r.date.getDay()]
+    breakdown[dayName].usd += parseFloat(r.usd) || 0
+    breakdown[dayName].count += 1
+  })
+
+  return dayNames.map(day => ({
+    day,
+    usd: parseFloat(breakdown[day].usd.toFixed(2)),
+    count: breakdown[day].count
+  }))
+}
+
+function calculatePeakHours(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ ...t, date: new Date(t.date_time) })),
+    ...platPaid.map(p => ({ ...p, date: new Date(p.date_time) }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => r.date >= windowStart)
+
+  const breakdown = {}
+  for (let h = 0; h < 24; h++) {
+    breakdown[h] = { usd: 0, count: 0 }
+  }
+
+  windowRevenue.forEach(r => {
+    if (isNaN(r.date.getTime())) return
+    const hour = r.date.getHours()
+    breakdown[hour].usd += parseFloat(r.usd) || 0
+    breakdown[hour].count += 1
+  })
+
+  return Object.entries(breakdown)
+    .map(([hour, data]) => ({
+      hour: parseInt(hour),
+      hourLabel: `${String(hour).padStart(2, '0')}:00`,
+      usd: parseFloat(data.usd.toFixed(2)),
+      count: data.count
+    }))
+    .filter(h => h.count > 0)
+    .sort((a, b) => b.usd - a.usd)
+    .slice(0, 7)
+}
+
+function calculateTopFans(tips = [], paidSessions = [], platformName = '', windowDays = 31) {
+  const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
+  const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
+  const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
+
+  const allRevenue = [
+    ...platTips.map(t => ({ username: t.username || 'Guest', usd: t.usd, date: new Date(t.date_time) })),
+    ...platPaid.map(p => ({ username: 'Private', usd: p.usd, date: new Date(p.date_time) }))
+  ]
+
+  const now = new Date()
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
+  const windowRevenue = allRevenue.filter(r => r.date >= windowStart)
+
+  const breakdown = {}
+  let totalUSD = 0
+
+  windowRevenue.forEach(r => {
+    const name = r.username
+    if (!breakdown[name]) breakdown[name] = 0
+    breakdown[name] += parseFloat(r.usd) || 0
+    totalUSD += parseFloat(r.usd) || 0
+  })
+
+  return Object.entries(breakdown)
+    .map(([name, usd]) => ({
+      name,
+      usd: parseFloat(usd.toFixed(2)),
+      pct: totalUSD > 0 ? Math.round((usd / totalUSD) * 100) : 0
+    }))
+    .sort((a, b) => b.usd - a.usd)
+    .slice(0, 5)
+}
+
+function PlatformBreakdown({ tips, paidSessions, platform, windowDays = 31 }) {
+  const [open, setOpen] = useState(false)
+
+  const sessionTypes = calculateSessionTypeBreakdown(tips, paidSessions, platform, windowDays)
+  const daysOfWeek = calculateDayOfWeekBreakdown(tips, paidSessions, platform, windowDays)
+  const peakHours = calculatePeakHours(tips, paidSessions, platform, windowDays)
+  const topFans = calculateTopFans(tips, paidSessions, platform, windowDays)
+
+  if (!sessionTypes.length) return null
+
+  const fmt$ = (n) => `$${(n || 0).toFixed(2)}`
+
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid ${PI.border}`, paddingTop: 10 }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{ background: 'none', border: 'none', color: PI.cyan, fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+      >
+        {open ? '▼ Hide breakdown' : '▶ View breakdown →'}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Session Type Breakdown */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Earnings by type</div>
+            {sessionTypes.map(st => (
+              <div key={st.type} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 4, color: PI.body }}>
+                <div>{st.type}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ width: 40, textAlign: 'right' }}>{st.pct}%</div>
+                  <div style={{ width: 50, textAlign: 'right' }}>{fmt$(st.usd)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Day of Week Breakdown */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Earnings by day</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 4 }}>
+              {daysOfWeek.map(d => (
+                <div key={d.day} style={{ textAlign: 'center', fontSize: 9 }}>
+                  <div style={{ color: d.count > 0 ? PI.cyan : PI.muted, fontWeight: 700 }}>{d.day.slice(0, 3)}</div>
+                  <div style={{ color: PI.body, marginTop: 2, fontSize: 10, fontWeight: 700 }}>{fmt$(d.usd)}</div>
+                  <div style={{ color: PI.muted, fontSize: 8, marginTop: 1 }}>{d.count} {d.count === 1 ? 'tip' : 'tips'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Peak Hours */}
+          {peakHours.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Peak hours (top 7)</div>
+              {peakHours.map(h => (
+                <div key={h.hour} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 4, color: PI.body }}>
+                  <div>{h.hourLabel}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ width: 50, textAlign: 'right' }}>{fmt$(h.usd)}</div>
+                    <div style={{ fontSize: 9, color: PI.muted }}>({h.count})</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top Fans */}
+          {topFans.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>Top supporters</div>
+              {topFans.map((f, i) => (
+                <div key={f.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, marginBottom: 4, color: PI.body }}>
+                  <div>{i + 1}. {f.name}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ width: 40, textAlign: 'right' }}>{f.pct}%</div>
+                    <div style={{ width: 50, textAlign: 'right', fontWeight: 700 }}>{fmt$(f.usd)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function PlatformBadge({ name, size = 40, active = false }) {
@@ -1002,48 +1322,94 @@ function PiLabel({ children }) {
 
 function PiMetric({ label, value, accent = PI.text }) {
   return (
-    <div>
+    <div style={{ flex: '1 1 auto', minWidth: 0 }}>
       <div style={{ fontSize: 10, color: PI.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 21, lineHeight: 1.05, fontWeight: 900, color: accent, letterSpacing: '-0.03em' }}>{value}</div>
+      <div style={{ fontSize: 21, lineHeight: 1.05, fontWeight: 900, color: accent, letterSpacing: '-0.03em', whiteSpace: 'nowrap' }}>{value}</div>
     </div>
   )
 }
 
-function PlatformCard({ platform, stats, primary, onConnect, onUnlock }) {
+function PlatformCard({ platform, stats, primary, onConnect, onUnlock, tips = [], paidSessions = [] }) {
   const connected = !!stats?.hasData
   const meta = PLATFORM_META[platform] || { color: PI.muted, short: '?' }
   return (
-    <div className={primary ? 'pi-platform-card pi-platform-card-primary' : 'pi-platform-card'} style={piCard({ padding: 20, minWidth: 0, height: '100%', background: primary ? `linear-gradient(145deg, ${meta.color}12, rgba(10,16,36,.88))` : PI.panelStrong })}>
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: `radial-gradient(circle at 85% 10%, ${meta.color}12, transparent 36%)` }} />
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <PlatformBadge name={platform} size={44} active={connected} />
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 900, color: PI.text }}>{platform}</div>
-              <div style={{ display: 'inline-flex', marginTop: 5, padding: '3px 8px', borderRadius: 999, background: primary ? 'linear-gradient(90deg,#16F4FF,#7C5CFF)' : 'rgba(124,92,255,.14)', color: primary ? '#06101A' : '#B9AEFF', fontSize: 9, fontWeight: 900, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+    <div className={primary ? 'pi-platform-card pi-platform-card-primary' : 'pi-platform-card'} style={piCard({ padding: 0, minWidth: 0, height: '100%', background: PI.panelStrong })}>
+      {/* Platform colour appears only as a hairline accent rule. The card body
+          stays the neutral dashboard panel — no platform-tinted gradient fill
+          and no radial glow, which read as promotional rather than as data. */}
+      <div style={{ height: 2, background: meta.color, opacity: connected ? 0.85 : 0.25 }} />
+      <div style={{ position: 'relative', zIndex: 1, padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+            <PlatformBadge name={platform} size={38} active={connected} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: PI.text, letterSpacing: '-0.01em' }}>{platform}</div>
+              {/* Primary/Secondary is metadata, not a promotional pill. */}
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: PI.muted, marginTop: 3 }}>
                 {primary ? 'Primary' : 'Secondary'}
               </div>
             </div>
           </div>
-          {connected ? <span style={{ fontSize: 10, fontWeight: 800, color: PI.green }}>● Connected</span> : <span style={{ fontSize: 10, fontWeight: 800, color: PI.muted }}>○ Not connected</span>}
+          {connected
+            ? <span style={{ fontSize: 10, fontWeight: 700, color: PI.green, whiteSpace: 'nowrap' }}>● Connected</span>
+            : <span style={{ fontSize: 10, fontWeight: 700, color: PI.muted, whiteSpace: 'nowrap' }}>○ Not connected</span>}
         </div>
 
         {connected ? (
           <>
-            <div style={{ marginTop: 18, marginBottom: 14 }}>
-              <PiLabel>{stats.windowDays < SNAPSHOT_WINDOW_DAYS ? `${stats.windowDays} days available` : `Most recent ${SNAPSHOT_WINDOW_DAYS} days`}</PiLabel>
+            {/* PERFORMANCE — scoped strictly to the rolling window. */}
+            <div style={{ marginTop: 16, marginBottom: 12 }}>
+              <PiLabel>{stats.windowDays < SNAPSHOT_WINDOW_DAYS
+                ? `Most recent ${stats.windowDays} ${stats.windowDays === 1 ? 'day' : 'days'} available`
+                : `Most recent ${SNAPSHOT_WINDOW_DAYS} days`}</PiLabel>
             </div>
-            <div className="pi-primary-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14 }}>
+            {/* flex-wrap, not a fixed 4-col grid: grid columns size to the
+                container, so a long earnings value (e.g. $219.70) overflowed
+                its track and collided with the tip count beside it. */}
+            <div className="pi-primary-metrics" style={{ display: 'flex', flexWrap: 'wrap', columnGap: 16, rowGap: 14 }}>
               <PiMetric label="Earnings" value={fmt$(stats.usd)} accent={PI.gold} />
               <PiMetric label="Tips" value={fmtN(stats.tipCount)} />
               <PiMetric label="Hours" value={stats.hours > 0 ? `${stats.hours}h` : '—'} />
               <PiMetric label="$ / hr" value={stats.usdPerHour != null ? fmt$(stats.usdPerHour) : '—'} accent={PI.cyan} />
             </div>
-            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 11, color: PI.muted }}>
-              <span>{stats.earliestDate ? `History starts ${fmtDate(stats.earliestDate)}` : ''}</span>
-              {primary && stats.fullHistoryDays > SNAPSHOT_WINDOW_DAYS && <span style={{ color: PI.pink, fontWeight: 800 }}>{stats.fullHistoryDays} days on file</span>}
+
+            {/* LIFETIME DATA IMPORT PROGRESS — conversion signal */}
+            {stats.importProgress !== undefined && (
+              <div style={{ marginTop: 14, marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: PI.muted, textTransform: 'uppercase', letterSpacing: '.08em' }}>Data imported</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: stats.importProgress >= 100 ? PI.green : PI.cyan }}>{stats.importProgress}%</div>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,.06)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, stats.importProgress)}%`, background: stats.importProgress >= 100 ? PI.green : PI.gradient, borderRadius: 999, transition: 'width .45s ease' }} />
+                </div>
+                <div style={{ marginTop: 6, fontSize: 9, color: PI.muted, lineHeight: 1.4 }}>
+                  {stats.lifetimeUSD > 0 ? (
+                    <>
+                      {fmt$(stats.lifetimeUSD)} of ~{fmt$(stats.estimatedAvailable)} lifetime earnings
+                      {stats.importMissing > 0 && <div style={{ marginTop: 3, color: PI.body }}>Upload {fmt$(stats.importMissing)} more to complete</div>}
+                    </>
+                  ) : (
+                    'No lifetime data yet'
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* HISTORY / DATA AVAILABILITY — all-time, deliberately separated
+                from the windowed performance figures above by a divider so the
+                two date scopes are never read as one. */}
+            <div style={{ marginTop: 16, paddingTop: 13, borderTop: `1px solid ${PI.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', fontSize: 11, color: PI.muted }}>
+                <span>{stats.earliestDate ? `History starts ${fmtDate(stats.earliestDate)}` : 'No history recorded'}</span>
+                {stats.fullHistoryDays > SNAPSHOT_WINDOW_DAYS && (
+                  <span style={{ color: PI.body, fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtN(stats.fullHistoryDays)} days on file</span>
+                )}
+              </div>
             </div>
+
+            {/* Phase 3: Platform breakdown */}
+            <PlatformBreakdown tips={tips} paidSessions={paidSessions} platform={platform} windowDays={SNAPSHOT_WINDOW_DAYS} />
           </>
         ) : (
           <div style={{ marginTop: 20 }}>
@@ -1255,6 +1621,11 @@ export function PlatformIntelligenceHero({
   const secondaryConnectedCount = secondaryStats.filter(s => s.hasData).length
   const vault = computeDataVaultStats(tips)
   const milestones = computeMilestones({ primaryStats, secondaryConnectedCount, streamingPlatforms: profile?.streaming_platforms })
+
+  // Phase 2: Data milestones - max history across all connected platforms
+  const allStats = primaryStats ? [primaryStats, ...secondaryStats] : secondaryStats
+  const maxHistoryDays = allStats.length > 0 ? Math.max(...allStats.map(s => s?.fullHistoryDays || 0)) : 0
+
   const platformCount = [primary, ...secondary].filter(Boolean).length
   const comparisonCount = connectedSet.size
   const availableCount = Math.max(0, FREE_TIER_MAX_PLATFORMS - platformCount)
@@ -1275,8 +1646,8 @@ export function PlatformIntelligenceHero({
       </div>
 
       <div className={`pi-platform-grid pi-platform-grid-${Math.min(platformCount || 1, 3)}`}>
-        {primary && <PlatformCard platform={primary} stats={primaryStats} primary onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(primary)} />}
-        {secondary.map((p, i) => <PlatformCard key={p} platform={p} stats={secondaryStats[i]} onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(p)} />)}
+        {primary && <PlatformCard platform={primary} stats={primaryStats} primary onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(primary)} tips={tips} paidSessions={paidSessions} />}
+        {secondary.map((p, i) => <PlatformCard key={p} platform={p} stats={secondaryStats[i]} onUnlock={onUnlockPro} onConnect={() => onConnectPlatform?.(p)} tips={tips} paidSessions={paidSessions} />)}
         {!primary && (
           <div style={piCard({ padding: 22, minHeight: 160, display: 'flex', flexDirection: 'column', justifyContent: 'center' })}>
             <PiLabel>Platform setup</PiLabel>
@@ -1287,18 +1658,10 @@ export function PlatformIntelligenceHero({
         )}
       </div>
 
-      <PlatformCoverage primary={primary} secondary={secondary} connectedSet={connectedSet} onConnectMore={handleConnectMore} />
-
-      {comparisonCount > 0 && (
-        <NoticeStrip>
-          <strong style={{ color: PI.text }}>{comparisonCount} platform{comparisonCount === 1 ? '' : 's'} connected.</strong>{' '}
-          {comparisonCount === 1 ? 'Connect another platform to unlock the full side-by-side comparison experience.' : `You have ${availableCount} platform slot${availableCount === 1 ? '' : 's'} available in the current Free setup.`}
-        </NoticeStrip>
-      )}
+      {/* Phase 2: Data import milestones card — shown when < 31 days of data */}
+      <DataMilestoneCard maxHistoryDays={maxHistoryDays} />
 
       <CamCashNoticed primary={primary} primaryStats={primaryStats} secondary={secondary} secondaryStats={secondaryStats} />
-
-      {vault.hasMoreThanWindow && <DataVaultCard vault={vault} onUnlock={onUnlockPro} isPro={isPro} />}
 
       <MilestoneStrip milestones={milestones} />
 
