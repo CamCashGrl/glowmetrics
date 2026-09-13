@@ -58,8 +58,8 @@ export default function Page() {
 
   const relatedBlogs = [
     { title: 'How to Upload a CSV to CamCash', description: 'Step-by-step SOP with video for importing your tip history', href: '/blog/how-to-upload-csv-to-camcash' },
-    { title: 'Live AI Coaching for Cam Models', description: 'Turn live data into more tips while you stream', href: '/blog/live-ai-coaching-cam-models' },
-    { title: 'Whale Watch', description: 'Track and profile your high rollers automatically', href: '/blog/cam-model-fan-crm' },
+    { title: 'Chaturbate Earnings Tracker', description: 'Workbook with worksheets for session tracking, pattern analysis, and goal-setting', href: '/blog/chaturbate-earnings-tracker' },
+    { title: 'Chaturbate Earnings Growth Bundle', description: 'Complete system combining tracking, planning, testing, and follow-ups', href: '/blog/chaturbate-earnings-growth-bundle' },
   ];
 
   const relatedGuides = [

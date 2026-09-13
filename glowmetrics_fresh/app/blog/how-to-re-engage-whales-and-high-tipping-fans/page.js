@@ -180,7 +180,7 @@ export default function ReEngageWhalesHighTippers() {
       <h2 style={s.h2}>How to Re-Engage Whales (Step-by-Step)</h2>
       <p style={s.p}>
         <a href="/landing" style={s.iLink}>CamCash</a> shows your top tippers by lifetime spend and flags who's gone quiet — so you always know who to focus on.
-        Use <a href="/blog/cam-model-fan-crm" style={s.iLink}>Whale Watch</a> to track high-tipper behavior across sessions.
+        Use <a href="/blog/cam-model-fan-crm" style={s.iLink}>Whale Watch</a> to track high-tipper behavior across sessions. For a dedicated workbook system, the <a href="/blog/vip-client-tracker" style={s.iLink}>VIP Client Tracker</a> provides templates for whale profiles, spending history, gap notifications, and re-engagement messaging all in one organized resource.
       </p>
 
       {steps.map(({ num, title, body, quotes }) => (

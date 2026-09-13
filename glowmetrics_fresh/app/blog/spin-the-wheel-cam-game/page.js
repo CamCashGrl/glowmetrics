@@ -168,6 +168,8 @@ export default function BlogPost() {
         <a href="/landing" style={s.ctaBtn}>Compare My Sessions Free →</a>
       </div>
 
+      <p style={s.p}>Looking for more game-based revenue ideas? The <a href="/blog/roll-the-dice-game-pack" style={s.link}>Roll the Dice Game Pack</a> provides pricing guides, results templates, and performance tracking for dice games and other tip-game formats alongside your wheel strategies.</p>
+
       <div style={s.faq}>
         <h2 style={{...s.h2, marginTop: 0}}>Spin-the-Wheel FAQ</h2>
         <div style={s.faqItem}><div style={s.faqQ}>How much should one spin cost?</div><p style={s.faqA}>Price it from the most demanding possible outcome, your normal hourly rate, and the average time required to complete a result.</p></div>
