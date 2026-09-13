@@ -3328,16 +3328,18 @@ const stopImportMessageRotation = () => {
           const moveList = nextMoves || []
           const move = moveList[nextMoveCarouselIdx] || null
 
+          // Safety fallback
+          const safeHoursUntilPeak = hoursUntilPeak ?? Infinity
+
           return (
             <>
               {/* ═══ YOUR NEXT BEST MOVE CAROUSEL CARD ═══ */}
-              {move && bhLabel && (() => {
+              {move && bhLabel ? (() => {
                 const safeHoursUntilPeak = hoursUntilPeak ?? Infinity
                 const safeDisplayAvg = (!isNaN(displayAvg) && isFinite(displayAvg) && displayAvg > 0) ? displayAvg : 0
                 const bgColor = atPeak ? '#10B981' : bhLabel && safeHoursUntilPeak <= 3 ? '#FB923C' : '#22D3EE'
                 const displayRange = safeDisplayAvg > 0 ? `$${Math.round(safeDisplayAvg * 0.7)}–$${Math.round(safeDisplayAvg * 1.3)}` : '$0–$0'
                 const comparison = safeDisplayAvg > 0 ? `$${safeDisplayAvg.toFixed(0)}/hr` : '$0/hr'
-                const typicalHour = safeDisplayAvg > 0 ? `$${(safeDisplayAvg / 3).toFixed(0)}/hr` : '$0/hr'
 
                 return (
                   <div style={{
@@ -3426,6 +3428,50 @@ const stopImportMessageRotation = () => {
                       onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 12px ${bgColor}30` }}>
                       Build my stream plan →
                     </button>
+                  </div>
+                )
+              })() : (() => {
+                const safeDisplayAvg = (!isNaN(displayAvg) && isFinite(displayAvg) && displayAvg > 0) ? displayAvg : 0
+                const bgColor = atPeak ? '#10B981' : safeHoursUntilPeak <= 3 ? '#FB923C' : '#22D3EE'
+                const statusText = atPeak ? '🟢 PEAK WINDOW IS LIVE' : safeHoursUntilPeak === 1 ? '⏰ Starting in ~1 hour' : `⏰ In ${safeHoursUntilPeak} hours`
+                const emoji = atPeak ? '🔥' : safeHoursUntilPeak <= 3 ? '⚡' : '🕐'
+
+                return (
+                  <div style={{
+                    marginBottom: 16,
+                    padding: '14px 16px',
+                    borderRadius: 14,
+                    background: `linear-gradient(135deg,${bgColor}18,${bgColor}08)`,
+                    border: `1.5px solid ${bgColor}45`,
+                    boxShadow: `0 0 20px ${bgColor}15`,
+                    animation: 'fadeUp 0.4s ease both'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 24 }}>{emoji}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.white }}>Peak Window LIVE — Go Live Now</div>
+                        <div style={{ fontSize: 11, color: bgColor, fontWeight: 600, marginTop: 2 }}>{statusText}</div>
+                      </div>
+                      <button
+                        onClick={() => handleTabChange('stream-planner')}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          background: `linear-gradient(135deg,${bgColor},${bgColor}dd)`,
+                          border: 'none',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          boxShadow: `0 2px 8px ${bgColor}30`,
+                          whiteSpace: 'nowrap'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = `0 4px 12px ${bgColor}45` }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 2px 8px ${bgColor}30` }}>
+                        Plan →
+                      </button>
+                    </div>
                   </div>
                 )
               })()}
