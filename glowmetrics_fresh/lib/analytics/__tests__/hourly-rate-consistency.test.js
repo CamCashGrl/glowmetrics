@@ -106,6 +106,25 @@ describe('Hourly rate consistency', () => {
     })
   })
 
+  test('platform trend is withheld when there is no prior period to compare against', () => {
+    // Only recent activity — exactly the shape a free-tier 31-day window
+    // produces. An empty prior period must not read as growth.
+    const recent = (dayOffset) => {
+      const base = Date.now() - dayOffset * 86400000
+      return Array.from({ length: 5 }, (_, i) => {
+        const t = new Date(base + i * 10 * 60000).toISOString()
+        return { dateRaw: t, date_time: t, username: `fan${i}`, platform: 'Chaturbate', usd: 10, tokens: 200, tip_type: 'Tip' }
+      })
+    }
+    const a = aggregateRows([...recent(2), ...recent(5), ...recent(9)], 'UTC')
+    const m = a.platformMomentum.Chaturbate
+
+    expect(m).toBeTruthy()
+    expect(m.pct).toBeNull()
+    expect(m.label).toBe('Not enough history')
+    expect(m.label).not.toMatch(/Surging|Growing/)
+  })
+
   test('a platform with no rate-eligible session reports no rate, not zero hours divided', () => {
     const rows = [
       ...timedSession('Chaturbate', 0, 20, 10),

@@ -153,6 +153,20 @@ function ShareBar({ percent, color }) {
   )
 }
 
+// Shows a trend only when the engine measured one against a real prior period.
+function TrendCell({ trend }) {
+  if (!trend || trend.pct === null) {
+    return <span style={{ color: C.muted }} title="No earlier period to compare against">—</span>
+  }
+  const up = trend.pct > 10, down = trend.pct < -10
+  const color = up ? C.green : down ? C.red : C.text
+  return (
+    <span style={{ color, whiteSpace: 'nowrap' }} title={`${fmt$(trend.prior30USD)} → ${fmt$(trend.last30USD)} (last 30 days vs prior 30)`}>
+      {trend.emoji} {trend.pct > 0 ? '+' : ''}{Math.round(trend.pct)}%
+    </span>
+  )
+}
+
 function PlatformCell({ platform }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -311,11 +325,12 @@ function UnifiedView({ analytics, coverage, isPro, onOpenPlanner }) {
             <Empty>No platform has enough session data to compare yet.</Empty>
           ) : (
             <DataTable
-              columns={[{ label: 'Platform', align: 'left' }, { label: 'Earnings' }, { label: 'Share' }, { label: 'Tips' }, { label: 'Sessions' }]}
+              columns={[{ label: 'Platform', align: 'left' }, { label: 'Earnings' }, { label: 'Share' }, { label: 'Trend' }, { label: 'Tips' }, { label: 'Sessions' }]}
               rows={comparison.map(p => [
                 <PlatformCell key="p" platform={p.platform} />,
                 fmt$(p.earnings),
                 <ShareBar key="s" percent={p.earningsPercent} color={accentFor(p.platform)} />,
+                <TrendCell key="t" trend={p.trend} />,
                 fmtN(p.tips),
                 fmtN(p.sessions),
               ])}
