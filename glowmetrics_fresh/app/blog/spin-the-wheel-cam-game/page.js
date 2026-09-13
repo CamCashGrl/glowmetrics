@@ -126,7 +126,7 @@ export default function BlogPost() {
           <li style={s.li}>Reusable across different show themes</li>
         </ul>
         <p style={s.productText}>Use code <span style={s.code}>PRETTY70</span> for 70% off.</p>
-        <a href="https://prettyprofitz.etsy.com" target="_blank" rel="noopener noreferrer sponsored" style={s.productBtn}>Get the Spin-the-Wheel Templates →</a>
+        <a href="https://www.etsy.com/listing/4538921362/editable-spin-the-wheel-canva-template" target="_blank" rel="noopener noreferrer sponsored" style={s.productBtn}>Get the Spin-the-Wheel Templates →</a>
       </div>
 
       <h2 style={s.h2}>Eight Spin-the-Wheel Show Formats</h2>
@@ -167,6 +167,8 @@ export default function BlogPost() {
         <p style={s.ctaText}>CamCash helps you compare sessions, earning pace, tip timing, and fan activity so you can tell whether the wheel created real revenue or only made the room feel busy.</p>
         <a href="/landing" style={s.ctaBtn}>Compare My Sessions Free →</a>
       </div>
+
+      <p style={s.p}>Looking for more game-based revenue ideas? The <a href="/blog/roll-the-dice-game-pack" style={s.link}>Roll the Dice Game Pack</a> provides pricing guides, results templates, and performance tracking for dice games and other tip-game formats alongside your wheel strategies.</p>
 
       <div style={s.faq}>
         <h2 style={{...s.h2, marginTop: 0}}>Spin-the-Wheel FAQ</h2>
