@@ -1417,10 +1417,13 @@ export function aggregateRows(tips, tz = null) {
     .filter(t => new Date(t.date_time) >= thirtyDaysAgo)
     .reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
 
-  const prior30USD = tips
+  const priorWindowTips = tips
     .filter(t => new Date(t.date_time) >= sixtyDaysAgo &&
                  new Date(t.date_time) < thirtyDaysAgo)
-    .reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
+  const prior30USD = priorWindowTips.reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
+  // Distinguishes "the prior period was empty of data" from "the prior period
+  // genuinely earned nothing", which are very different claims.
+  const priorWindowTipCount = priorWindowTips.length
 
   let momentumPct = 0
   let momentumLabel = 'Steady'
@@ -1433,8 +1436,13 @@ export function aggregateRows(tips, tz = null) {
     // recent streaming, not a measured downward trend. Don't fabricate
     // a "Declining" claim from zero data.
     momentumPct = -100; momentumLabel = 'Inactive'; momentumEmoji = '💤'
-  } else if (prior30USD === 0) {
-    momentumPct = 100; momentumLabel = 'Surging'; momentumEmoji = '🚀'
+  } else if (priorWindowTipCount === 0 || prior30USD === 0) {
+    // Nothing in the prior 30 days to compare against. That is usually not a
+    // standing start: the free tier hands this engine a 31-day window, so the
+    // prior period is empty by construction for those accounts. Reading that
+    // emptiness as a 100% rise badged every free user "Surging" off data they
+    // were never asked for. An unmeasurable trend is reported as such.
+    momentumPct = null; momentumLabel = 'Not enough history'; momentumEmoji = '—'
   } else {
     momentumPct = ((last30USD - prior30USD) / prior30USD) * 100
     if (momentumPct > 50)       { momentumLabel = 'Surging';   momentumEmoji = '🚀' }
