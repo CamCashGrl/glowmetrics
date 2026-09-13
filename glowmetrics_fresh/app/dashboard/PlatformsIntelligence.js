@@ -1,5 +1,6 @@
 "use client"
-import React, { useState, useMemo } from 'react'
+
+import React, { useMemo, useState } from 'react'
 import {
   buildBusinessSnapshot,
   buildPlatformComparison,
@@ -14,273 +15,209 @@ import {
 import { computeDataVaultStats } from './DashboardPreview'
 
 const C = {
-  card: "#0d1322", card2: "#111829", border: "#1e2d45", border2: "#2a3f5f",
-  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
-  green: "#10B981", white: "#F1F5F9", muted: "#475569", text: "#94A3B8",
-  purple: "#a855f7", red: "#F87171",
+  bg: '#080B18',
+  panel: 'rgba(12,16,34,0.78)',
+  panelSoft: 'rgba(255,255,255,0.035)',
+  border: 'rgba(255,255,255,0.09)',
+  borderSoft: 'rgba(255,255,255,0.06)',
+  white: '#FFFFFF',
+  text: '#A5ABC0',
+  muted: '#6F7890',
+  cyan: '#16F4FF',
+  blue: '#55B8FF',
+  purple: '#7C5CFF',
+  pink: '#FF2BAE',
+  green: '#10B981',
+  amber: '#F59E0B',
+  coral: '#F87171',
 }
 
+const GRAD = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
 const PLATFORM_ACCENT = {
-  chaturbate: C.purple, bongacams: C.red, myfreecams: C.gold,
-  camsoda: C.green, stripchat: C.blue, flirt4free: C.pink,
+  chaturbate: C.cyan,
+  bongacams: C.purple,
+  myfreecams: C.blue,
+  camsoda: C.green,
+  stripchat: C.pink,
+  flirt4free: C.amber,
 }
-const accentFor = (p) => PLATFORM_ACCENT[(p || '').toLowerCase().trim()] || C.cyan
 
+const accentFor = (platform) => PLATFORM_ACCENT[(platform || '').toLowerCase().trim()] || C.cyan
 const fmt$ = (n) => n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmt$0 = (n) => n === null || n === undefined ? '—' : `$${Math.round(Number(n)).toLocaleString('en-US')}`
 const fmtN = (n) => n === null || n === undefined ? '—' : new Intl.NumberFormat('en-US').format(Math.round(n))
 const fmtH = (n) => n === null || n === undefined ? '—' : `${Number(n).toFixed(1)}h`
 
-// ============================================
-// COMPACT PRIMITIVES
-// Dense by construction: no fixed heights, no oversized type, 14–20px padding.
-// ============================================
-
-function Section({ title, note, children, style }) {
-  return (
-    <section style={{ marginBottom: 20, ...style }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.text }}>
-          {title}
-        </h2>
-        {note ? <span style={{ fontSize: 11, color: C.muted }}>{note}</span> : null}
-      </div>
-      {children}
-    </section>
-  )
+function TopAccent({ color = GRAD }) {
+  return <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: color }} />
 }
 
-function Panel({ children, style, accent }) {
+function Card({ children, style, accent = null }) {
   return (
     <div style={{
-      background: 'rgba(15,20,32,0.75)',
-      border: `1px solid ${accent ? `${accent}33` : 'rgba(255,255,255,0.08)'}`,
-      borderRadius: 10, padding: 14, ...style,
-    }}>{children}</div>
-  )
-}
-
-function MetricStrip({ items }) {
-  return (
-    <div className="pi-strip" style={{
-      display: 'grid', gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
-      gap: 1, background: C.border, border: `1px solid ${C.border}`,
-      borderRadius: 10, overflow: 'hidden',
+      position: 'relative',
+      minWidth: 0,
+      overflow: 'hidden',
+      borderRadius: 16,
+      border: `1px solid ${accent ? `${accent}35` : C.border}`,
+      background: C.panel,
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045), 0 12px 32px rgba(0,0,0,0.18)',
+      ...style,
     }}>
-      {items.map((it, i) => (
-        <div key={i} style={{ background: C.card, padding: '10px 12px', minWidth: 0 }}>
-          <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {it.label}
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: it.color || C.white, marginTop: 2, lineHeight: 1.2 }}>
-            {it.value}
-          </div>
-          {it.sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{it.sub}</div>}
-        </div>
-      ))}
+      {accent && <TopAccent color={accent} />}
+      {children}
     </div>
   )
 }
 
-// Dense table. Scrolls inside its own container on narrow screens.
-function DataTable({ columns, rows }) {
+function SectionHeader({ title, note }) {
   return (
-    <div style={{ overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 420 }}>
-        <thead>
-          <tr>
-            {columns.map((c, i) => (
-              <th key={i} style={{
-                textAlign: c.align || 'right', padding: '8px 12px', background: C.card2,
-                color: C.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                textTransform: 'uppercase', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`,
-              }}>{c.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, ri) => (
-            <tr key={ri} style={{ background: ri % 2 ? 'rgba(255,255,255,0.015)' : 'transparent' }}>
-              {r.map((cell, ci) => (
-                <td key={ci} style={{
-                  textAlign: columns[ci].align || 'right', padding: '7px 12px',
-                  color: C.white, whiteSpace: 'nowrap', borderTop: ri ? `1px solid ${C.border}` : 'none',
-                }}>{cell}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 9, flexWrap: 'wrap' }}>
+      <h2 style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.text }}>{title}</h2>
+      {note && <span style={{ fontSize: 10.5, color: C.muted }}>{note}</span>}
     </div>
   )
 }
 
-function FactRow({ label, facts, accent = C.cyan }) {
+function ProgressBar({ value, color = GRAD, height = 4 }) {
+  const pct = Math.min(100, Math.max(0, Number(value) || 0))
   return (
-    <div style={{ padding: '9px 12px', borderLeft: `2px solid ${accent}`, background: 'rgba(255,255,255,0.02)', borderRadius: '0 8px 8px 0' }}>
-      <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
-      <div style={{ fontSize: 13, color: C.white, fontWeight: 600, marginTop: 2 }}>{facts}</div>
+    <div style={{ height, borderRadius: 100, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 100, transition: 'width .45s ease' }} />
+    </div>
+  )
+}
+
+function Metric({ label, value, sub, color = C.white }) {
+  return (
+    <div style={{ minWidth: 0, padding: '10px 12px', background: C.panelSoft, border: `1px solid ${C.borderSoft}`, borderRadius: 11 }}>
+      <div style={{ fontSize: 9.5, color: C.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+      <div style={{ marginTop: 3, fontSize: 17, lineHeight: 1.15, fontWeight: 800, color }}>{value}</div>
+      {sub && <div style={{ marginTop: 2, fontSize: 9.5, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
     </div>
   )
 }
 
 function Empty({ children }) {
-  return <div style={{ padding: '12px 14px', fontSize: 12, color: C.muted, border: `1px dashed ${C.border2}`, borderRadius: 10 }}>{children}</div>
+  return <div style={{ padding: '12px 14px', borderRadius: 11, border: `1px dashed ${C.border}`, color: C.muted, fontSize: 11.5, lineHeight: 1.5 }}>{children}</div>
 }
 
-function ProTag() {
-  return <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: C.gold, border: `1px solid ${C.gold}55`, borderRadius: 4, padding: '1px 5px', marginLeft: 6 }}>PRO</span>
+function PlatformDot({ platform }) {
+  const color = accentFor(platform)
+  return <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: color, boxShadow: `0 0 9px ${color}55`, flexShrink: 0 }} />
 }
 
-function LockedRow({ text }) {
+function PlatformPill({ platform, active, onClick }) {
+  const accent = accentFor(platform)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', border: `1px dashed ${C.gold}44`, borderRadius: 8, background: `${C.gold}0a` }}>
-      <span style={{ fontSize: 11 }}>🔒</span>
-      <span style={{ fontSize: 11.5, color: C.text }}>{text}</span>
-      <ProTag />
-    </div>
+    <button onClick={onClick} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+      padding: '6px 11px', borderRadius: 100, cursor: 'pointer',
+      border: `1px solid ${active ? `${accent}70` : C.border}`,
+      background: active ? `${accent}14` : 'rgba(255,255,255,0.025)',
+      color: active ? C.white : C.text,
+      fontSize: 11.5, fontWeight: active ? 750 : 600,
+      whiteSpace: 'nowrap',
+    }}>
+      <PlatformDot platform={platform} />{platform}
+    </button>
   )
 }
 
-function ShareBar({ percent, color }) {
+function ConnectedPlatforms({ comparison, coverage, selectedPlatform, onSelect, isPro }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-      <div style={{ width: 46, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ width: `${Math.min(100, Math.max(0, percent || 0))}%`, height: '100%', background: color, borderRadius: 2 }} />
-      </div>
-      <span style={{ minWidth: 30, textAlign: 'right' }}>{percent === null || percent === undefined ? '—' : `${percent}%`}</span>
-    </div>
-  )
-}
-
-// Shows a trend only when the engine measured one against a real prior period.
-function TrendCell({ trend }) {
-  if (!trend || trend.pct === null) {
-    return <span style={{ color: C.muted }} title="No earlier period to compare against">—</span>
-  }
-  const up = trend.pct > 10, down = trend.pct < -10
-  const color = up ? C.green : down ? C.red : C.text
-  return (
-    <span style={{ color, whiteSpace: 'nowrap' }} title={`${fmt$(trend.prior30USD)} → ${fmt$(trend.last30USD)} (last 30 days vs prior 30)`}>
-      {trend.emoji} {trend.pct > 0 ? '+' : ''}{Math.round(trend.pct)}%
-    </span>
-  )
-}
-
-function PlatformCell({ platform }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 6, height: 6, borderRadius: 3, background: accentFor(platform), flexShrink: 0 }} />
-      {platform}
-    </span>
-  )
-}
-
-// Confidence is the engine's own band — never restated as a bare percentage.
-function ConfidenceTag({ confidence }) {
-  if (!confidence) return null
-  const tone = { High: C.green, Medium: C.cyan, Low: C.gold, 'Very Low': C.muted }[confidence.level] || C.muted
-  return (
-    <span style={{ fontSize: 10, color: tone, border: `1px solid ${tone}44`, borderRadius: 4, padding: '1px 6px' }}>
-      {confidence.label}
-    </span>
-  )
-}
-
-// Suggestions restate figures the engine produced; nothing is inferred beyond them.
-function NextBestMove({ comparison, efficiency, timeIntel, onOpenPlanner }) {
-  const moves = []
-
-  if (efficiency.length >= 2) {
-    const best = efficiency[0]
-    const worst = efficiency[efficiency.length - 1]
-    if (best.usdPerHour >= worst.usdPerHour * 1.25) {
-      moves.push(`Shift hours from ${worst.platform} (${fmt$(worst.usdPerHour)}/hr) toward ${best.platform} (${fmt$(best.usdPerHour)}/hr).`)
-    }
-  }
-  if (timeIntel?.hasPattern && timeIntel.confidence?.level !== 'Very Low') {
-    const parts = []
-    if (timeIntel.bestDay) parts.push(timeIntel.bestDay.day)
-    if (timeIntel.bestHour) parts.push(`around ${timeIntel.bestHour.label}`)
-    if (parts.length) moves.push(`Protect ${parts.join(' ')} — your strongest recorded window (${timeIntel.confidence.label.toLowerCase()}).`)
-  }
-  if (comparison.length === 1) {
-    moves.push('You have one platform with enough data to analyse. A second gives CamCash something to compare against.')
-  }
-
-  const planner = onOpenPlanner ? (
-    <button onClick={onOpenPlanner} style={{
-      justifySelf: 'start', padding: '7px 13px', fontSize: 12, fontWeight: 700,
-      borderRadius: 8, cursor: 'pointer', color: '#05070f',
-      border: 'none', background: C.cyan,
-    }}>Build your stream plan →</button>
-  ) : null
-
-  if (moves.length === 0) {
-    return (
-      <div style={{ display: 'grid', gap: 8 }}>
-        <Empty>Once there is enough data to compare platforms and times, suggested moves appear here.</Empty>
-        {planner}
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ display: 'grid', gap: 6 }}>
-      {moves.map((m, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '9px 13px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${C.border}`, borderRadius: 8 }}>
-          <span style={{ color: C.cyan, fontSize: 12 }}>→</span>
-          <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>{m}</span>
-        </div>
-      ))}
-      {planner && <div style={{ marginTop: 2 }}>{planner}</div>}
-    </div>
-  )
-}
-
-// Coverage of the analysis window, in days actually imported. No estimate of
-// what is "missing" — that number is not knowable from the data on file.
-function DataCoverage({ coverage }) {
-  if (!coverage || coverage.historyDays === 0) return null
-  const complete = coverage.historyDays >= coverage.windowDays
-
-  return (
-    <Section
-      title="Your data"
-      note={coverage.hasMoreThanWindow
-        ? `${fmtN(coverage.historyDays)} days on file · ${coverage.windowDays}-day window analysed`
-        : `${fmtN(coverage.historyDays)} of ${coverage.windowDays} days imported`}
-    >
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
-        {!complete && (
-          <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: 'hidden', marginBottom: 12 }}>
-            <div style={{ width: `${coverage.windowCoveragePct}%`, height: '100%', background: C.cyan, borderRadius: 2 }} />
-          </div>
-        )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {coverage.milestones.map((m, i) => (
-            <span key={i} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              fontSize: 11, padding: '3px 9px', borderRadius: 6,
-              color: m.done ? C.white : C.muted,
-              background: m.done ? `${C.green}14` : 'transparent',
-              border: `1px solid ${m.done ? `${C.green}44` : C.border}`,
+    <Card style={{ padding: 14 }}>
+      <SectionHeader title="Connected platforms" note={isPro ? 'Your imported platform data' : 'Your current platform data'} />
+      <div style={{ display: 'grid', gap: 7 }}>
+        {comparison.map((p) => {
+          const accent = accentFor(p.platform)
+          const selected = selectedPlatform === p.platform
+          return (
+            <button key={p.platform} onClick={() => onSelect(p.platform)} style={{
+              width: '100%', textAlign: 'left', display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) auto', gap: 12,
+              padding: '9px 10px', borderRadius: 11, cursor: 'pointer',
+              border: `1px solid ${selected ? `${accent}55` : C.borderSoft}`,
+              background: selected ? `${accent}0b` : 'rgba(255,255,255,0.02)', color: C.white,
             }}>
-              <span style={{ color: m.done ? C.green : C.muted }}>{m.done ? '✓' : `${m.days}d`}</span>
-              {m.label}
-            </span>
-          ))}
-        </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+                  <PlatformDot platform={p.platform} />
+                  <span style={{ fontSize: 12, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.platform}</span>
+                  <span style={{ fontSize: 9.5, color: C.green, marginLeft: 'auto' }}>Connected</span>
+                </div>
+                <ProgressBar value={p.earningsPercent} color={`linear-gradient(90deg,${accent},${accent}99)`} height={3} />
+              </div>
+              <div style={{ textAlign: 'right', minWidth: 82 }}>
+                <div style={{ fontSize: 14, fontWeight: 800 }}>{fmt$0(p.earnings)}</div>
+                <div style={{ fontSize: 9.5, color: C.muted }}>{p.earningsPercent}% of earnings</div>
+              </div>
+            </button>
+          )
+        })}
       </div>
-    </Section>
+      {coverage && coverage.historyDays > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 9, borderTop: `1px solid ${C.borderSoft}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 10, color: C.muted }}>Data coverage</span>
+            <span style={{ fontSize: 10, color: C.text, fontWeight: 700 }}>{coverage.windowCoveragePct}% of 31-day window</span>
+          </div>
+          <ProgressBar value={coverage.windowCoveragePct} />
+        </div>
+      )}
+    </Card>
   )
 }
 
-// ============================================
-// UNIFIED VIEW
-// ============================================
+function InsightTeaser({ title, description, preview, onUpgrade }) {
+  return (
+    <Card style={{ padding: 13, background: 'linear-gradient(135deg,rgba(22,244,255,0.055),rgba(124,92,255,0.05),rgba(255,43,174,0.035))' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <div style={{ fontSize: 12, color: C.white, fontWeight: 750 }}>{title}</div>
+        <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '.07em', color: C.pink, border: `1px solid ${C.pink}45`, borderRadius: 5, padding: '2px 5px' }}>PRO</span>
+      </div>
+      <div style={{ fontSize: 10.5, color: C.text, lineHeight: 1.45, marginBottom: 9 }}>{description}</div>
+      <div aria-hidden style={{ filter: 'blur(4px)', userSelect: 'none', opacity: .55, marginBottom: 9 }}>
+        <div style={{ height: 6, width: '72%', borderRadius: 99, background: GRAD, marginBottom: 6 }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+          {['10 PM','Wed','+$42/hr'].map(x => <div key={x} style={{ padding: '5px 6px', borderRadius: 7, background: 'rgba(255,255,255,.05)', fontSize: 9, color: C.white }}>{x}</div>)}
+        </div>
+      </div>
+      {preview && <div style={{ fontSize: 10, color: C.muted, marginBottom: 9 }}>{preview}</div>}
+      <button onClick={onUpgrade} style={{ border: `1px solid ${C.pink}45`, background: `${C.pink}10`, color: C.pink, borderRadius: 100, padding: '6px 11px', fontSize: 10.5, fontWeight: 750, cursor: 'pointer' }}>
+        Unlock with Pro →
+      </button>
+    </Card>
+  )
+}
 
-function UnifiedView({ analytics, coverage, isPro, onOpenPlanner }) {
+function DataProgress({ coverage }) {
+  if (!coverage || coverage.historyDays === 0) return null
+  const milestones = coverage.milestones || []
+  return (
+    <Card style={{ padding: 14, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 12.5, color: C.white, fontWeight: 800 }}>Your data is building</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{coverage.historyDays} days on file · {coverage.windowCoveragePct}% of the analysis window</div>
+        </div>
+        <span style={{ fontSize: 10, color: coverage.windowCoveragePct >= 100 ? C.green : C.cyan, fontWeight: 800 }}>{coverage.windowCoveragePct}%</span>
+      </div>
+      <ProgressBar value={coverage.windowCoveragePct} height={5} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 6, marginTop: 9 }}>
+        {milestones.map(m => (
+          <div key={m.days} style={{ padding: '6px 7px', borderRadius: 8, background: m.done ? `${C.green}10` : 'rgba(255,255,255,.025)', border: `1px solid ${m.done ? `${C.green}32` : C.borderSoft}` }}>
+            <div style={{ fontSize: 9, color: m.done ? C.green : C.muted, fontWeight: 800 }}>{m.done ? '✓' : `${m.days}d`}</div>
+            <div style={{ fontSize: 9.5, color: m.done ? C.text : C.muted, marginTop: 2, lineHeight: 1.25 }}>{m.label}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function UnifiedView({ analytics, coverage, isPro, onUpgrade, onOpenPlanner }) {
   const snapshot = useMemo(() => buildBusinessSnapshot(analytics), [analytics])
   const comparison = useMemo(() => buildPlatformComparison(analytics), [analytics])
   const efficiency = useMemo(() => buildEfficiencyComparison(analytics), [analytics])
@@ -288,427 +225,311 @@ function UnifiedView({ analytics, coverage, isPro, onOpenPlanner }) {
   const fans = useMemo(() => buildFanRevenue(analytics, isPro), [analytics, isPro])
   const noticed = useMemo(() => buildCamCashNoticed(analytics), [analytics])
 
-  const hasHours = snapshot.totalHours > 0
-  const topRevenue = comparison[0] || null
-  const topEfficiency = efficiency[0] || null
-  const momentum = snapshot.momentum
+  const topRevenue = comparison[0]
+  const topEfficiency = efficiency[0]
 
   return (
     <>
-      <Section
-        title="Your cam business"
-        note={momentum?.label ? `${momentum.emoji || ''} ${momentum.label}`.trim() : null}
-      >
-        <MetricStrip items={[
-          { label: 'Earnings', value: fmt$0(snapshot.totalEarnings), color: C.green },
-          { label: 'Tips', value: fmtN(snapshot.totalTips) },
-          { label: 'Hours', value: hasHours ? fmtH(snapshot.totalHours) : '—', sub: hasHours ? null : 'no timed sessions' },
-          { label: '$ / hour', value: snapshot.usdPerHour === null ? '—' : fmt$(snapshot.usdPerHour), sub: snapshot.usdPerHour === null ? null : `est · ${fmt$0(snapshot.rateUSD)} / ${snapshot.rateHours}h`, color: snapshot.usdPerHour === null ? C.muted : C.cyan },
-          { label: 'Sessions', value: fmtN(snapshot.sessions) },
-          { label: 'Platforms', value: fmtN(snapshot.platformCount) },
-        ]} />
-        <div style={{ marginTop: 8 }}>
-          <MetricStrip items={[
-            { label: 'Avg / session', value: snapshot.sessions > 0 ? fmt$(snapshot.avgEarningsPerSession) : '—' },
-            { label: 'Avg tip', value: snapshot.avgTipSize > 0 ? fmt$(snapshot.avgTipSize) : '—' },
-            { label: 'Tips / hour', value: snapshot.tipsPerHour > 0 ? snapshot.tipsPerHour.toFixed(1) : '—' },
-            { label: 'Supporters', value: fmtN(fans.uniqueTippers) },
-            { label: 'Top 3 share', value: fans.topThreeContribution === null ? '—' : `${fans.topThreeContribution}%` },
-            { label: 'Top supporter', value: fans.topSpender ? fmt$(fans.topSpender.earnings) : '—' },
-          ]} />
-        </div>
-      </Section>
+      <DataProgress coverage={coverage} />
 
-      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginBottom: 20 }}>
-        <Section title="Where your money comes from" style={{ marginBottom: 0 }}>
-          {comparison.length === 0 ? (
-            <Empty>No platform has enough session data to compare yet.</Empty>
-          ) : (
-            <DataTable
-              columns={[{ label: 'Platform', align: 'left' }, { label: 'Earnings' }, { label: 'Share' }, { label: 'Trend' }, { label: 'Tips' }, { label: 'Sessions' }]}
-              rows={comparison.map(p => [
-                <PlatformCell key="p" platform={p.platform} />,
-                fmt$(p.earnings),
-                <ShareBar key="s" percent={p.earningsPercent} color={accentFor(p.platform)} />,
-                <TrendCell key="t" trend={p.trend} />,
-                fmtN(p.tips),
-                fmtN(p.sessions),
-              ])}
+      <div className="pi-platform-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.25fr) minmax(280px,.75fr)', gap: 14, marginBottom: 14 }}>
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Unified breakdown" note={snapshot.momentum?.label || 'All connected platforms'} />
+          <div className="pi-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 6 }}>
+            <Metric label="Earnings" value={fmt$0(snapshot.totalEarnings)} color={C.green} />
+            <Metric label="Tips" value={fmtN(snapshot.totalTips)} />
+            <Metric label="Sessions" value={fmtN(snapshot.sessions)} />
+            <Metric label="Hours" value={snapshot.totalHours > 0 ? fmtH(snapshot.totalHours) : '—'} />
+            <Metric label="$ / hour" value={snapshot.usdPerHour === null ? '—' : fmt$(snapshot.usdPerHour)} color={C.cyan} />
+            <Metric label="Platforms" value={fmtN(snapshot.platformCount)} />
+          </div>
+          <div className="pi-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 6, marginTop: 6 }}>
+            <Metric label="Avg / session" value={snapshot.sessions ? fmt$(snapshot.avgEarningsPerSession) : '—'} />
+            <Metric label="Avg tip" value={snapshot.avgTipSize ? fmt$(snapshot.avgTipSize) : '—'} />
+            <Metric label="Tips / hour" value={snapshot.tipsPerHour ? snapshot.tipsPerHour.toFixed(1) : '—'} />
+            <Metric label="Supporters" value={fmtN(fans.uniqueTippers)} />
+            <Metric label="Top 3 share" value={fans.topThreeContribution === null ? '—' : `${fans.topThreeContribution}%`} color={fans.topThreeContribution >= 50 ? C.amber : C.white} />
+            <Metric label="Top supporter" value={fans.topSpender ? fmt$(fans.topSpender.earnings) : '—'} />
+          </div>
+        </Card>
+
+        <div style={{ display: 'grid', gap: 8 }}>
+          {!isPro && (
+            <InsightTeaser
+              title="Compare your platforms"
+              description="See which platform is actually paying you best, not just which one brings in the most total revenue."
+              preview="Platform-by-platform earning efficiency"
+              onUpgrade={onUpgrade}
             />
           )}
-        </Section>
-
-        <Section title="Where your time pays best" style={{ marginBottom: 0 }}>
-          {efficiency.length === 0 ? (
-            <Empty>Hourly rates need sessions with a known duration. None qualify yet.</Empty>
-          ) : (
-            <>
-              <DataTable
-                columns={[{ label: 'Platform', align: 'left' }, { label: '$/hr' }, { label: 'Rated hours' }, { label: 'vs avg' }]}
-                rows={efficiency.map(p => [
-                  <PlatformCell key="p" platform={p.platform} />,
-                  fmt$(p.usdPerHour),
-                  fmtH(p.rateHours),
-                  <span key="v" style={{ color: p.vsAverage > 0 ? C.green : p.vsAverage < 0 ? C.red : C.muted }}>
-                    {p.vsAverage > 0 ? '+' : ''}{p.vsAverage}%
-                  </span>,
-                ])}
-              />
-              {topRevenue && topEfficiency && topRevenue.platform !== topEfficiency.platform && (
-                <div style={{ marginTop: 8 }}>
-                  <FactRow label="Revenue vs efficiency" accent={C.gold}
-                    facts={`${topRevenue.platform} earns most · ${topEfficiency.platform} pays best per hour`} />
-                </div>
-              )}
-            </>
-          )}
-        </Section>
+          <Card style={{ padding: 13 }} accent={C.cyan}>
+            <div style={{ fontSize: 9.5, color: C.muted, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 5 }}>Next best move</div>
+            {topRevenue && topEfficiency ? (
+              <div style={{ fontSize: 11.5, color: C.white, lineHeight: 1.45 }}>
+                <strong>{topRevenue.platform}</strong> leads total earnings at <strong>{fmt$0(topRevenue.earnings)}</strong>{topEfficiency.platform !== topRevenue.platform ? `, while ${topEfficiency.platform} leads on hourly efficiency.` : '.'}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: C.muted }}>Keep building your connected-platform data and CamCash will surface the strongest comparison here.</div>
+            )}
+            {onOpenPlanner && <button onClick={onOpenPlanner} style={{ marginTop: 9, padding: '6px 11px', borderRadius: 100, border: 'none', background: GRAD, color: '#05070f', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}>Build my stream plan →</button>}
+          </Card>
+        </div>
       </div>
 
-      <Section title="Platform performance" note="Meaningful sessions only">
-        {comparison.length === 0 ? (
-          <Empty>Import platform data to compare performance.</Empty>
-        ) : (
-          <DataTable
-            columns={[
-              { label: 'Platform', align: 'left' }, { label: 'Earnings' }, { label: 'Hours' },
-              { label: 'Tips' }, { label: 'Avg tip' }, { label: '$/session' }, { label: 'Sessions' }, { label: 'Time share' },
-            ]}
-            rows={comparison.map(p => [
-              <PlatformCell key="p" platform={p.platform} />,
-              fmt$(p.earnings),
-              p.hours > 0 ? fmtH(p.hours) : '—',
-              fmtN(p.tips),
-              p.avgTipSize > 0 ? fmt$(p.avgTipSize) : '—',
-              p.sessions > 0 ? fmt$(p.earningsPerSession) : '—',
-              fmtN(p.sessions),
-              hasHours ? <ShareBar key="h" percent={p.hoursPercent} color={C.blue} /> : '—',
-            ])}
-          />
-        )}
-      </Section>
+      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,.8fr)', gap: 14, marginBottom: 14 }}>
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Where your money comes from" note="Share of unified earnings" />
+          {comparison.length === 0 ? <Empty>No platform data to compare yet.</Empty> : (
+            <div style={{ display: 'grid', gap: 7 }}>
+              {comparison.map(p => {
+                const accent = accentFor(p.platform)
+                return (
+                  <div key={p.platform} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,1fr) minmax(100px,1.5fr) auto', alignItems: 'center', gap: 10, padding: '7px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}><PlatformDot platform={p.platform} /><span style={{ fontSize: 11.5, color: C.white, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.platform}</span></div>
+                    <div><ProgressBar value={p.earningsPercent} color={`linear-gradient(90deg,${accent},${accent}99)`} height={4} /></div>
+                    <div style={{ textAlign: 'right' }}><div style={{ fontSize: 12, color: C.white, fontWeight: 800 }}>{fmt$0(p.earnings)}</div><div style={{ fontSize: 9, color: C.muted }}>{p.earningsPercent}%</div></div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
 
-      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <Section title="When you earn best" style={{ marginBottom: 0 }}>
-          {!timeIntel?.hasPattern ? (
-            <Empty>Not enough repeat activity yet to name a reliable time. CamCash waits for a pattern across at least three separate days before calling one.</Empty>
-          ) : (
-            <div style={{ display: 'grid', gap: 6 }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -2 }}>
-                <ConfidenceTag confidence={timeIntel.confidence} />
-              </div>
-              {timeIntel.bestHour && (
-                <FactRow label="Best hour" accent={C.cyan}
-                  facts={`${timeIntel.bestHour.label} · ${fmt$(timeIntel.bestHour.avg)} typical · ${fmtN(timeIntel.bestHour.count)} days`} />
-              )}
-              {timeIntel.bestDay && (
-                <FactRow label="Best day" accent={C.purple}
-                  facts={`${timeIntel.bestDay.day} · ${fmt$(timeIntel.bestDay.avg)} typical · ${fmtN(timeIntel.bestDay.count)} days`} />
-              )}
-              {topRevenue && (
-                <FactRow label="Strongest platform" accent={accentFor(topRevenue.platform)}
-                  facts={`${topRevenue.platform} · ${fmt$(topRevenue.earnings)} · ${topRevenue.earningsPercent}% of earnings`} />
-              )}
-              {isPro ? (
-                (() => {
-                  const rows = comparison
-                    .map(p => ({ platform: p.platform, t: timeIntel.platformBestTimes[p.platform] }))
-                    .filter(r => r.t && (r.t.hour || r.t.bestDay))
-                  if (rows.length === 0) return null
-                  return (
-                    <DataTable
-                      columns={[{ label: 'Per platform', align: 'left' }, { label: 'Best hour' }, { label: 'Best day' }]}
-                      rows={rows.map(r => [
-                        <PlatformCell key="p" platform={r.platform} />,
-                        r.t.hour ? formatHour(r.t.hour.hour) : '—',
-                        r.t.bestDay ? r.t.bestDay.day : '—',
-                      ])}
-                    />
-                  )
-                })()
-              ) : (
-                <LockedRow text="Best hour and day broken out per platform" />
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Where your time pays best" note="Existing hourly-rate data" />
+          {efficiency.length === 0 ? <Empty>Hourly rates need sessions with a known duration. None qualify yet.</Empty> : (
+            <div style={{ display: 'grid', gap: 7 }}>
+              {efficiency.map((p, i) => (
+                <div key={p.platform} style={{ display: 'grid', gridTemplateColumns: 'minmax(90px,1fr) auto auto', gap: 9, alignItems: 'center', padding: '7px 0', borderBottom: i < efficiency.length - 1 ? `1px solid ${C.borderSoft}` : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><PlatformDot platform={p.platform} /><span style={{ fontSize: 11.5, color: C.white, fontWeight: 700 }}>{p.platform}</span></div>
+                  <div style={{ textAlign: 'right' }}><div style={{ fontSize: 12, color: accentFor(p.platform), fontWeight: 800 }}>{fmt$(p.usdPerHour)}/h</div><div style={{ fontSize: 9, color: C.muted }}>{fmtH(p.rateHours)}</div></div>
+                  <div style={{ minWidth: 38, textAlign: 'right', fontSize: 10, color: p.vsAverage > 0 ? C.green : p.vsAverage < 0 ? C.coral : C.muted }}>{p.vsAverage > 0 ? '+' : ''}{p.vsAverage}%</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 14, marginBottom: 14 }}>
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="When your business pays best" note={timeIntel?.confidence?.label || null} />
+          {!timeIntel?.hasPattern ? <Empty>Not enough repeat activity yet to name a reliable time.</Empty> : (
+            <div style={{ display: 'grid', gap: 7 }}>
+              {timeIntel.bestHour && <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 10px', borderRadius: 9, background: `${C.cyan}08`, border: `1px solid ${C.cyan}20` }}><span style={{ fontSize: 10, color: C.muted }}>Best hour</span><strong style={{ fontSize: 12, color: C.cyan }}>{timeIntel.bestHour.label}</strong></div>}
+              {timeIntel.bestDay && <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 10px', borderRadius: 9, background: `${C.purple}08`, border: `1px solid ${C.purple}20` }}><span style={{ fontSize: 10, color: C.muted }}>Best day</span><strong style={{ fontSize: 12, color: C.white }}>{timeIntel.bestDay.day}</strong></div>}
+              {!isPro && <InsightTeaser title="Best times by platform" description="See the strongest earning windows separately for each connected platform." onUpgrade={onUpgrade} />}
+              {isPro && comparison.length > 0 && (
+                <div style={{ display: 'grid', gap: 5 }}>
+                  {comparison.map(p => {
+                    const t = timeIntel.platformBestTimes?.[p.platform]
+                    if (!t?.hour && !t?.bestDay) return null
+                    return <div key={p.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 8px', borderRadius: 8, background: 'rgba(255,255,255,.025)' }}><span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: C.white }}><PlatformDot platform={p.platform} />{p.platform}</span><span style={{ fontSize: 10, color: C.text }}>{t.hour ? formatHour(t.hour.hour) : '—'}{t.bestDay ? ` · ${t.bestDay.day}` : ''}</span></div>
+                  })}
+                </div>
               )}
             </div>
           )}
-        </Section>
+        </Card>
 
-        <Section title="Who is driving your revenue" note="Share of all tracked tips" style={{ marginBottom: 0 }}>
-          {fans.uniqueTippers === 0 ? (
-            <Empty>No supporters recorded yet.</Empty>
-          ) : (
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Who is driving revenue" note="Platform identity stays separate" />
+          {fans.uniqueTippers === 0 ? <Empty>No supporters recorded yet.</Empty> : (
             <>
-              <MetricStrip items={[
-                { label: 'Supporters', value: fmtN(fans.uniqueTippers) },
-                { label: 'Top supporter', value: fans.topSpender ? fmt$(fans.topSpender.earnings) : '—' },
-                { label: 'Top 3 share', value: fans.topThreeContribution === null ? '—' : `${fans.topThreeContribution}%`, color: (fans.topThreeContribution || 0) >= 50 ? C.gold : C.white },
-              ]} />
-              <div style={{ marginTop: 8 }}>
-                <DataTable
-                  columns={[{ label: 'Top supporters', align: 'left' }, { label: 'Platform', align: 'left' }, { label: 'Tips' }, { label: 'Total' }]}
-                  rows={fans.visibleSpenders.map(f => [
-                    f.username, <PlatformCell key="p" platform={f.platform} />, fmtN(f.tipCount), fmt$(f.earnings),
-                  ])}
-                />
+              <div className="pi-fan-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6, marginBottom: 7 }}>
+                <Metric label="Supporters" value={fmtN(fans.uniqueTippers)} />
+                <Metric label="Top supporter" value={fans.topSpender ? fmt$(fans.topSpender.earnings) : '—'} />
+                <Metric label="Top 3 share" value={fans.topThreeContribution === null ? '—' : `${fans.topThreeContribution}%`} color={fans.topThreeContribution >= 50 ? C.amber : C.white} />
               </div>
-              {!isPro && fans.uniqueTippers > 3 && (
-                <div style={{ marginTop: 6 }}>
-                  <LockedRow text={`Full ranking of all ${fmtN(fans.uniqueTippers)} supporters`} />
-                </div>
-              )}
+              <div style={{ display: 'grid', gap: 4 }}>
+                {fans.visibleSpenders.slice(0, 5).map((f, i) => (
+                  <div key={`${f.platform}-${f.username}-${i}`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', alignItems: 'center', gap: 7, padding: '6px 7px', borderRadius: 8, background: 'rgba(255,255,255,.02)' }}>
+                    <span style={{ fontSize: 9, color: C.muted, textAlign: 'center' }}>#{i + 1}</span>
+                    <div style={{ minWidth: 0 }}><div style={{ fontSize: 10.5, color: C.white, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>{isPro ? f.username : '••••••••'}</div><div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 1, fontSize: 8.5, color: C.muted }}><PlatformDot platform={f.platform} />{f.platform}</div></div>
+                    <div style={{ fontSize: 11, color: C.white, fontWeight: 800 }}>{fmt$(f.earnings)}</div>
+                  </div>
+                ))}
+              </div>
+              {!isPro && fans.uniqueTippers > 3 && <div style={{ marginTop: 7, fontSize: 10, color: C.pink }}>Full supporter breakdown is a Pro insight.</div>}
             </>
           )}
-        </Section>
+        </Card>
       </div>
 
-      <Section title="CamCash noticed" note="Observations from your own data">
-        {noticed.length === 0 ? (
-          <Empty>Nothing stands out yet. As more data comes in, findings appear here.</Empty>
-        ) : (
-          <div style={{ display: 'grid', gap: 1, background: `${C.cyan}22`, border: `1px solid ${C.cyan}33`, borderRadius: 10, overflow: 'hidden' }}>
-            {noticed.map((n, i) => (
-              <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: 'rgba(13,19,34,0.92)', padding: '10px 13px' }}>
-                <span style={{ fontSize: 13, lineHeight: 1.4 }}>{n.icon}</span>
-                <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>{n.text}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {!isPro && (
-        <Section title="Go deeper with Pro">
-          <div className="pi-pro-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            {[
-              { t: 'Full history', d: 'Analysis beyond the free 31-day window, with month-over-month movement.' },
-              { t: 'Per-platform timing', d: 'Best hour and day broken out for every platform you stream on.' },
-              { t: 'Complete fan ranking', d: 'All supporters, spend history, and who has gone quiet.' },
-            ].map((p, i) => (
-              <Panel key={i} accent={C.gold} style={{ padding: 13 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.white, display: 'flex', alignItems: 'center' }}>
-                  {p.t}<ProTag />
-                </div>
-                <div style={{ fontSize: 11, color: C.text, marginTop: 4, lineHeight: 1.45 }}>{p.d}</div>
-              </Panel>
-            ))}
-          </div>
-        </Section>
+      {noticed.length > 0 && (
+        <Card style={{ padding: 11, marginBottom: 14, borderColor: `${C.cyan}20`, background: 'rgba(22,244,255,.025)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}><span style={{ fontSize: 10, fontWeight: 800, color: C.cyan, letterSpacing: '.08em', textTransform: 'uppercase' }}>CamCash noticed</span><span style={{ height: 1, flex: 1, background: C.borderSoft }} /></div>
+          <div style={{ display: 'grid', gap: 4 }}>{noticed.slice(0, 3).map((n, i) => <div key={i} style={{ fontSize: 10.5, color: C.text, lineHeight: 1.4 }}>{n.icon} {n.text}</div>)}</div>
+        </Card>
       )}
 
-      <DataCoverage coverage={coverage} />
-
-      <Section title="Your next best move">
-        <NextBestMove comparison={comparison} efficiency={efficiency} timeIntel={timeIntel} onOpenPlanner={onOpenPlanner} />
-      </Section>
+      {!isPro && (
+        <div className="pi-pro-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+          <InsightTeaser title="Platform-specific intelligence" description="Break down each connected site by earnings, time, revenue mix, supporters, and best recorded windows." onUpgrade={onUpgrade} />
+          <InsightTeaser title="Deeper supporter intelligence" description="See the complete supporter picture instead of only the starter view." onUpgrade={onUpgrade} />
+        </div>
+      )}
     </>
   )
 }
 
-// ============================================
-// SPLIT VIEW — single platform
-// ============================================
-
-function SplitView({ analytics, platformName, isPro }) {
+function PlatformBreakdown({ analytics, platformName, isPro, onUpgrade }) {
   const snap = useMemo(() => buildPlatformSnapshot(analytics, platformName), [analytics, platformName])
   const accent = accentFor(platformName)
 
-  if (!snap) {
-    return <Empty>{platformName} has no meaningful session data yet, so there is nothing reliable to break down.</Empty>
-  }
+  if (!snap) return <Empty>{platformName} has no meaningful session data yet, so there is nothing reliable to break down.</Empty>
 
   return (
     <>
-      <Section title={`${platformName} snapshot`}>
-        <MetricStrip items={[
-          { label: 'Earnings', value: fmt$0(snap.earnings), color: C.green },
-          { label: 'Share', value: `${snap.earningsPercent}%` },
-          { label: 'Tips', value: fmtN(snap.tips) },
-          { label: 'Hours', value: snap.hours > 0 ? fmtH(snap.hours) : '—' },
-          // Sub-label names the hours the rate divides by, which is a subset of
-          // Hours beside it — without it the two read as failing to divide.
-          { label: '$ / hour', value: snap.usdPerHour > 0 ? fmt$(snap.usdPerHour) : '—', sub: snap.rateHours > 0 ? `est · ${fmt$0(snap.rateUSD)} / ${snap.rateHours}h` : null, color: snap.usdPerHour > 0 ? accent : C.muted },
-          { label: 'Sessions', value: fmtN(snap.sessions) },
-        ]} />
-      </Section>
+      <Card style={{ padding: 14, marginBottom: 14 }} accent={accent}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 9 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><PlatformDot platform={platformName} /><div><div style={{ fontSize: 9.5, color: C.muted, textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 800 }}>Single platform breakdown</div><div style={{ fontSize: 15, color: C.white, fontWeight: 850, marginTop: 2 }}>{platformName}</div></div></div>
+          <div style={{ fontSize: 10, color: C.muted }}>{snap.earningsPercent}% of unified earnings</div>
+        </div>
+        <div className="pi-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(0,1fr))', gap: 6 }}>
+          <Metric label="Earnings" value={fmt$0(snap.earnings)} color={C.green} />
+          <Metric label="Tips" value={fmtN(snap.tips)} />
+          <Metric label="Sessions" value={fmtN(snap.sessions)} />
+          <Metric label="Hours" value={snap.hours > 0 ? fmtH(snap.hours) : '—'} />
+          <Metric label="$ / hour" value={snap.usdPerHour > 0 ? fmt$(snap.usdPerHour) : '—'} color={accent} />
+          <Metric label="$ / session" value={snap.sessions > 0 ? fmt$(snap.earningsPerSession) : '—'} />
+        </div>
+      </Card>
 
-      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <Section title="Performance" style={{ marginBottom: 0 }}>
-          <MetricStrip items={[
-            { label: '$ / session', value: snap.sessions > 0 ? fmt$(snap.earningsPerSession) : '—' },
-            { label: 'Avg tip', value: snap.avgTipSize > 0 ? fmt$(snap.avgTipSize) : '—' },
-            { label: 'Time share', value: `${snap.hoursPercent}%` },
-          ]} />
-          {snap.missedRevenue && (
-            <div style={{ marginTop: 8 }}>
-              <FactRow label="Timing gap" accent={C.gold}
-                facts={`Sessions at ${formatHour(snap.missedRevenue.bestHour)} typically earn ${snap.missedRevenue.multiplier}× your average here.`} />
+      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.05fr) minmax(0,.95fr)', gap: 14, marginBottom: 14 }}>
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Platform performance" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6, marginBottom: 9 }}>
+            <Metric label="Avg tip" value={snap.avgTipSize > 0 ? fmt$(snap.avgTipSize) : '—'} />
+            <Metric label="Time share" value={`${snap.hoursPercent}%`} />
+            <Metric label="Rate hours" value={snap.rateHours > 0 ? fmtH(snap.rateHours) : '—'} />
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {snap.missedRevenue && <div style={{ padding: '9px 10px', borderRadius: 9, border: `1px solid ${C.amber}25`, background: `${C.amber}08`, fontSize: 10.5, color: C.text, lineHeight: 1.45 }}><span style={{ color: C.amber, fontWeight: 800 }}>Timing signal:</span> sessions at {formatHour(snap.missedRevenue.bestHour)} typically earn {snap.missedRevenue.multiplier}× your average here.</div>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '8px 10px', borderRadius: 9, background: 'rgba(255,255,255,.025)' }}><span style={{ fontSize: 10, color: C.muted }}>Share of streaming hours</span><strong style={{ fontSize: 11, color: C.white }}>{snap.hoursPercent}%</strong></div>
+            <ProgressBar value={snap.hoursPercent} color={`linear-gradient(90deg,${accent},${accent}88)`} />
+          </div>
+        </Card>
+
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Revenue mix" />
+          {snap.revenueMix.length === 0 ? <Empty>No revenue-type detail recorded for this platform.</Empty> : (
+            <div style={{ display: 'grid', gap: 5 }}>
+              {snap.revenueMix.slice(0, 6).map(t => (
+                <div key={t.type} style={{ display: 'grid', gridTemplateColumns: 'minmax(80px,1fr) 1.5fr auto', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 10.5, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.type}</span>
+                  <ProgressBar value={t.pct} color={`linear-gradient(90deg,${accent},${accent}88)`} height={4} />
+                  <span style={{ fontSize: 10.5, color: C.text, fontWeight: 700 }}>{fmt$0(t.usd)}</span>
+                </div>
+              ))}
             </div>
           )}
-        </Section>
-
-        <Section title="Revenue mix" style={{ marginBottom: 0 }}>
-          {snap.revenueMix.length === 0 ? (
-            <Empty>No revenue-type detail recorded for this platform.</Empty>
-          ) : (
-            <DataTable
-              columns={[{ label: 'Type', align: 'left' }, { label: 'Count' }, { label: 'Avg' }, { label: 'Earnings' }, { label: 'Share' }]}
-              rows={snap.revenueMix.slice(0, 6).map(t => [
-                t.type, fmtN(t.count), fmt$(t.avgUsd), fmt$(t.usd),
-                <ShareBar key="s" percent={t.pct} color={accent} />,
-              ])}
-            />
-          )}
-        </Section>
-
+        </Card>
       </div>
 
-      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <Section title={`When ${platformName} pays`} style={{ marginBottom: 0 }}>
-          {!snap.bestHour && !snap.bestDay ? (
-            <Empty>Not enough repeat activity on this platform to name a reliable time.</Empty>
-          ) : !isPro ? (
-            <LockedRow text={`Best hour and day for ${platformName}`} />
+      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title={`When ${platformName} pays`} note={isPro ? 'Platform-specific' : 'Pro insight'} />
+          {!snap.bestHour && !snap.bestDay ? <Empty>Not enough repeat activity on this platform to name a reliable time.</Empty> : !isPro ? (
+            <InsightTeaser title="Best time on this platform" description={`See the strongest recorded earning windows for ${platformName}.`} onUpgrade={onUpgrade} />
           ) : (
             <div style={{ display: 'grid', gap: 6 }}>
-              {snap.bestHour && (
-                <FactRow label="Best hour" accent={accent}
-                  facts={`${snap.bestHour.label} · ${fmt$(snap.bestHour.avg)} typical · ${fmtN(snap.bestHour.sessionCount)} sessions`} />
-              )}
-              {snap.bestDay && (
-                <FactRow label="Best day" accent={C.purple}
-                  facts={`${snap.bestDay.day} · ${fmt$(snap.bestDay.avg)} typical · ${fmtN(snap.bestDay.activeDays)} days`} />
-              )}
-              {snap.hourly.length > 1 && (
-                <DataTable
-                  columns={[{ label: 'Hour', align: 'left' }, { label: 'Typical' }, { label: 'Sessions' }]}
-                  rows={snap.hourly.slice(0, 6).map(h => [
-                    formatHour(h.hour), fmt$(h.avg), fmtN(h.sessionCount),
-                  ])}
-                />
-              )}
+              {snap.bestHour && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 9, background: `${accent}08`, border: `1px solid ${accent}20` }}><span style={{ fontSize: 10, color: C.muted }}>Best hour</span><strong style={{ fontSize: 12, color: accent }}>{snap.bestHour.label}</strong></div>}
+              {snap.bestDay && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', borderRadius: 9, background: `${C.purple}08`, border: `1px solid ${C.purple}20` }}><span style={{ fontSize: 10, color: C.muted }}>Best day</span><strong style={{ fontSize: 12, color: C.white }}>{snap.bestDay.day}</strong></div>}
+              {snap.hourly.length > 1 && <div style={{ display: 'grid', gap: 4, marginTop: 2 }}>{snap.hourly.slice(0, 6).map(h => <div key={h.hour} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 7px', background: 'rgba(255,255,255,.02)', borderRadius: 7, fontSize: 9.5 }}><span style={{ color: C.text }}>{formatHour(h.hour)}</span><span style={{ color: C.white, fontWeight: 700 }}>{fmt$(h.avg)} · {fmtN(h.sessionCount)} sessions</span></div>)}</div>}
             </div>
           )}
-        </Section>
-        <Section title="Day of week" style={{ marginBottom: 0 }}>
-          {snap.weekdays.length === 0 ? (
-            <Empty>No weekday has three separate active days yet, so there is no dependable pattern to show.</Empty>
-          ) : (
-            <DataTable
-              // No total column: these come from every tip, while the earnings
-              // above count meaningful sessions only, so a total here would
-              // invite a sum that does not match the snapshot.
-              columns={[{ label: 'Day', align: 'left' }, { label: 'Typical day' }, { label: 'Active days' }]}
-              rows={snap.weekdays.map(d => [
-                d.day, fmt$(d.avg), fmtN(d.activeDays),
-              ])}
-            />
+        </Card>
+
+        <Card style={{ padding: 14 }}>
+          <SectionHeader title="Day of week" />
+          {snap.weekdays.length === 0 ? <Empty>No weekday has enough repeated activity to show a dependable pattern.</Empty> : (
+            <div style={{ display: 'grid', gap: 4 }}>{snap.weekdays.map(d => <div key={d.day} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 7px', background: 'rgba(255,255,255,.02)', borderRadius: 7 }}><span style={{ fontSize: 10.5, color: C.white }}>{d.day}</span><span style={{ fontSize: 9.5, color: C.text }}>{fmt$(d.avg)} typical · {fmtN(d.activeDays)} days</span></div>)}</div>
           )}
-        </Section>
+        </Card>
       </div>
 
-      <Section title={`Supporters on ${platformName}`} note="Identities are never merged across platforms">
-        {snap.topFans.length === 0 ? (
-          <Empty>No supporters recorded on this platform yet.</Empty>
-        ) : (
-          <>
-            <DataTable
-              columns={[{ label: 'Supporter', align: 'left' }, { label: 'Tips' }, { label: 'Total' }, { label: 'Share' }]}
-              rows={snap.topFans.slice(0, isPro ? 10 : 3).map(f => [
-                f.username, fmtN(f.tipCount), fmt$(f.earnings),
-                <ShareBar key="s" percent={f.earningsPercent} color={C.pink} />,
-              ])}
-            />
-            {!isPro && snap.topFans.length > 3 && (
-              <div style={{ marginTop: 6 }}><LockedRow text="Full supporter list for this platform" /></div>
-            )}
-          </>
+      <Card style={{ padding: 14 }}>
+        <SectionHeader title={`Supporters on ${platformName}`} note="Platform identity stays separate" />
+        {snap.topFans.length === 0 ? <Empty>No supporters recorded on this platform yet.</Empty> : (
+          <div style={{ display: 'grid', gap: 4 }}>
+            {snap.topFans.slice(0, isPro ? 10 : 3).map((f, i) => (
+              <div key={`${f.username}-${i}`} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto auto', alignItems: 'center', gap: 8, padding: '7px 8px', background: 'rgba(255,255,255,.02)', borderRadius: 8 }}>
+                <span style={{ fontSize: 9, color: C.muted }}>#{i + 1}</span>
+                <span style={{ fontSize: 10.5, color: C.white, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>{isPro ? f.username : '••••••••'}</span>
+                <span style={{ fontSize: 9.5, color: C.muted }}>{fmtN(f.tipCount)} tips</span>
+                <span style={{ fontSize: 11, color: C.white, fontWeight: 800 }}>{fmt$(f.earnings)}</span>
+              </div>
+            ))}
+            {!isPro && snap.topFans.length > 3 && <div style={{ marginTop: 5 }}><InsightTeaser title="Full supporter breakdown" description={`See the complete supporter picture for ${platformName}.`} onUpgrade={onUpgrade} /></div>}
+          </div>
         )}
-      </Section>
+      </Card>
     </>
   )
 }
 
-// ============================================
-// PAGE
-// ============================================
-
-export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, onOpenPlanner = null }) {
+export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, onOpenPlanner = null, onUpgrade = null }) {
   const [view, setView] = useState('unified')
   const [selectedPlatform, setSelectedPlatform] = useState(null)
 
-  // Coverage reads the account's real import span via the canonical vault
-  // helper rather than deriving its own.
   const coverage = useMemo(() => buildDataCoverage(computeDataVaultStats(tips)), [tips])
-
-  const platformNames = useMemo(
-    () => buildPlatformComparison(analytics).map(p => p.platform),
-    [analytics]
-  )
+  const platformNames = useMemo(() => buildPlatformComparison(analytics).map(p => p.platform), [analytics])
   const activePlatform = platformNames.includes(selectedPlatform) ? selectedPlatform : (platformNames[0] || null)
+  const upgrade = onUpgrade || (() => { window.location.href = '/pricing' })
+
+  if (!analytics || platformNames.length === 0) {
+    return <div className="pi-root" style={{ maxWidth: 1280 }}><style>{CSS}</style><Empty>No connected platform has enough session data to analyse yet. Import platform data and CamCash will build this view from your existing analytics.</Empty></div>
+  }
 
   return (
     <div className="pi-root" style={{ maxWidth: 1280 }}>
-      <style>{`
-        .pi-root { max-width: 100%; }
-        .pi-root table { font-variant-numeric: tabular-nums; }
-        /* Grid and flex children default to min-width:auto, which lets a wide
-           table stretch its column and scroll the whole page sideways instead
-           of scrolling inside its own wrapper. */
-        .pi-root section, .pi-root .pi-two-col > * { min-width: 0; }
-        @media (max-width: 900px) {
-          .pi-root .pi-two-col { grid-template-columns: 1fr !important; gap: 14px !important; }
-          .pi-root .pi-pro-grid { grid-template-columns: 1fr !important; }
-          .pi-root .pi-strip { grid-template-columns: repeat(3, minmax(0,1fr)) !important; }
-        }
-        @media (max-width: 520px) {
-          .pi-root .pi-strip { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
-        }
-      `}</style>
+      <style>{CSS}</style>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted }}>Platforms</div>
-          <h1 style={{ margin: '2px 0 0', fontSize: 19, fontWeight: 800, color: C.white }}>Platform Intelligence</h1>
+          <div style={{ fontSize: 10, color: C.cyan, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase' }}>Platforms</div>
+          <h1 style={{ margin: '2px 0 2px', fontSize: 20, lineHeight: 1.15, fontWeight: 850, color: C.white }}>Your connected cam business</h1>
+          <div style={{ fontSize: 11, color: C.muted }}>See the whole picture, then zoom into one platform.</div>
         </div>
-        <div style={{ display: 'flex', gap: 2, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 2 }}>
-          {['unified', 'split'].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{
-              padding: '5px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
-              textTransform: 'uppercase', borderRadius: 6, cursor: 'pointer', border: 'none',
-              background: view === v ? C.cyan : 'transparent',
-              color: view === v ? '#05070f' : C.text,
-            }}>{v}</button>
+        <div className="pi-view-toggle" style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 100, background: 'rgba(255,255,255,.035)', border: `1px solid ${C.border}` }}>
+          {[['unified','Unified'],['single','Single platform']].map(([id, label]) => (
+            <button key={id} onClick={() => setView(id)} style={{ padding: '6px 13px', borderRadius: 100, border: 'none', background: view === id ? GRAD : 'transparent', color: view === id ? '#05070f' : C.text, fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}>{label}</button>
           ))}
         </div>
       </div>
 
-      {!analytics || platformNames.length === 0 ? (
-        <Empty>
-          No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
-        </Empty>
-      ) : view === 'unified' ? (
-        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
+      {view === 'unified' ? (
+        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onUpgrade={upgrade} onOpenPlanner={onOpenPlanner} />
       ) : (
         <>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-            {platformNames.map(p => (
-              <button key={p} onClick={() => setSelectedPlatform(p)} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '5px 11px', fontSize: 11.5, fontWeight: 600, borderRadius: 7, cursor: 'pointer',
-                background: activePlatform === p ? `${accentFor(p)}1f` : 'transparent',
-                border: `1px solid ${activePlatform === p ? `${accentFor(p)}88` : C.border}`,
-                color: activePlatform === p ? C.white : C.text,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: accentFor(p) }} />
-                {p}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {platformNames.map(p => <PlatformPill key={p} platform={p} active={activePlatform === p} onClick={() => setSelectedPlatform(p)} />)}
           </div>
-          {activePlatform && (
-            <SplitView analytics={analytics} platformName={activePlatform} isPro={isPro} />
-          )}
+          {activePlatform && <PlatformBreakdown analytics={analytics} platformName={activePlatform} isPro={isPro} onUpgrade={upgrade} />}
         </>
       )}
     </div>
   )
 }
+
+const CSS = `
+.pi-root { width:100%; color:${C.white}; }
+.pi-root * { box-sizing:border-box; }
+.pi-root button { font-family:inherit; }
+@media (max-width: 1050px) {
+  .pi-root .pi-platform-layout { grid-template-columns:1fr !important; }
+  .pi-root .pi-metrics { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+}
+@media (max-width: 760px) {
+  .pi-root .pi-two-col { grid-template-columns:1fr !important; }
+  .pi-root .pi-pro-grid { grid-template-columns:1fr !important; }
+  .pi-root .pi-fan-summary { grid-template-columns:repeat(3,minmax(0,1fr)) !important; }
+  .pi-root .pi-view-toggle { width:100%; }
+  .pi-root .pi-view-toggle button { flex:1; }
+}
+@media (max-width: 520px) {
+  .pi-root .pi-metrics { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .pi-root .pi-fan-summary { grid-template-columns:1fr !important; }
+}
+`
