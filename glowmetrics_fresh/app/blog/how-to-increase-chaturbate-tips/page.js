@@ -131,10 +131,13 @@ export default function HowToIncreaseChaturbateTips() {
         No tip menu means fans who want to tip don’t know what to ask for. Structure matters as much as content:
       </p>
       <ul style={s.ul}>
-        <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Use price anchoring</strong> — a high-value item at the top makes everything below it look reasonable. A menu of 50/100/500 tokens feels different when you add a 2,000 token item: 500 suddenly feels accessible.</li>
-        <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Write clear descriptions</strong> — specific rewards convert faster than vague ones. “Private photo set” beats “special reward.”</li>
-        <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Limit to 8–10 items</strong> — more creates decision paralysis.</li>
+        <li style={s.li}><strong style={{ color: ‘#e2e8f0’ }}>Use price anchoring</strong> — a high-value item at the top makes everything below it look reasonable. A menu of 50/100/500 tokens feels different when you add a 2,000 token item: 500 suddenly feels accessible.</li>
+        <li style={s.li}><strong style={{ color: ‘#e2e8f0’ }}>Write clear descriptions</strong> — specific rewards convert faster than vague ones. “Private photo set” beats “special reward.”</li>
+        <li style={s.li}><strong style={{ color: ‘#e2e8f0’ }}>Limit to 8–10 items</strong> — more creates decision paralysis.</li>
       </ul>
+      <p style={s.p}>
+        Want pre-built tip menu templates? The <a href=”/blog/cam-model-tip-menu-templates” style={s.iLink}>Cam Model Tip Menu Templates</a> include 320 organized ideas and editable Canva templates so your menu is ready before your next stream.
+      </p>
 
       <div style={s.etsyBox}>
         <img
@@ -175,7 +178,7 @@ export default function HowToIncreaseChaturbateTips() {
         <li style={s.li}>Re-engage proactively rather than reactively</li>
       </ul>
       <p style={s.p}>
-        <a href="/landing" style={s.iLink}>CamCash</a> shows your top tippers ranked by lifetime spend so you always know who’s carrying your income.
+        <a href="/landing" style={s.iLink}>CamCash</a> shows your top tippers ranked by lifetime spend so you always know who’s carrying your income. For hands-on VIP management, the <a href="/blog/vip-client-tracker" style={s.iLink}>VIP Client Tracker</a> workbook helps you organize notes, spending history, and follow-ups for your most valuable fans.
       </p>
 
       <div style={s.midCta}>
@@ -231,7 +234,7 @@ export default function HowToIncreaseChaturbateTips() {
         <li style={s.li}>Which fans drive the most income</li>
       </ul>
       <p style={s.p}>
-        <a href="/landing" style={s.iLink}>CamCash</a> tracks Chaturbate tips automatically — sessions, peak hours, top fans, earnings trends — so adjustments are based on data instead of guesswork.
+        <a href="/landing" style={s.iLink}>CamCash</a> tracks Chaturbate tips automatically — sessions, peak hours, top fans, earnings trends — so adjustments are based on data instead of guesswork. For a hands-on tracking workbook with worksheets for performance analysis, tip pattern identification, and goal-setting, the <a href="/blog/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate Earnings Tracker</a> helps you organize your data in one structured system.
       </p>
 
       <h2 style={s.h2}>10. Don’t Ignore Small Tips</h2>

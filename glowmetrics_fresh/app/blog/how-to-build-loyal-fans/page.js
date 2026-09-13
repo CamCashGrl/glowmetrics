@@ -144,7 +144,7 @@ export default function BuildLoyalFans() {
 
       <h3 style={s.h3}>What to do in the warning window</h3>
       <p style={s.p}>A personal message during this window — specific, warm, not salesy — recovers a meaningful percentage of fans who would otherwise be permanently gone. Something like: <em style={{ color: '#cbd5e1' }}>"Hey [name], haven't seen you in a bit — I'm streaming [day] at [time] if you want to stop by"</em> works better than anything generic.</p>
-      <p style={s.p}>CamCash flags fans who are in the warning window automatically and generates personalized re-engagement messages tailored to each fan's tipping history.</p>
+      <p style={s.p}>CamCash flags fans who are in the warning window automatically and generates personalized re-engagement messages tailored to each fan's tipping history. For a hands-on approach, the <a href="/blog/vip-client-tracker" style={s.iLink}>VIP Client Tracker</a> workbook provides templates for organizing high-value fan profiles, tracking spending history, noting follow-up dates, and managing re-engagement strategies in one structured system.</p>
 
       <h2 style={s.h2}>Common Mistakes That Destroy Fan Loyalty</h2>
       {[

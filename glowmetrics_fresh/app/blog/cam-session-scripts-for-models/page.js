@@ -176,6 +176,8 @@ export default function BlogPost() {
         </a>
       </div>
 
+      <p style={s.p}>For specific roleplay themes, Pretty Profitz offers specialized script packs: the <a href="/blog/sph-script-pack" style={s.link}>SPH Script Pack</a> for humiliation roleplay, the <a href="/blog/daddys-girl-roleplay-script-pack" style={s.link}>Daddy's Girl Roleplay Script Pack</a> for age-roleplay dynamics, and the <a href="/blog/sissy-training-obedience-bundle" style={s.link}>Sissy Training & Obedience Bundle</a> for training-focused sessions with built-in agreements and progress tracking.</p>
+
       <h2 style={s.h2}>The Seven Parts of a Strong Cam Session Script</h2>
 
       <h3 style={s.h3}>1. A Clear Opening</h3>

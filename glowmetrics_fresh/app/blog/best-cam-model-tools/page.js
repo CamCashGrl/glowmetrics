@@ -228,7 +228,7 @@ export default function BestCamModelTools() {
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Work with your existing data.</strong> Most platforms let you export earnings as a CSV. Tools that require unofficial integrations are unreliable long-term.</li>
         <li style={s.li}><strong style={{ color: '#e2e8f0' }}>Respect your privacy.</strong> Your earnings data is sensitive. It should be stored securely and never shared with third parties.</li>
       </ul>
-      <p style={s.p}>For earnings, <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automatic tip tracking</a> beats any spreadsheet — it logs everything while you stream. For your top tippers, <a href="/blog/cam-model-fan-crm" style={s.iLink}>Whale Watch</a> (Pro feature — upgrade after signup) keeps a ranked profile on every whale so none slip away.</p>
+      <p style={s.p}>For earnings, <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automatic tip tracking</a> beats any spreadsheet — it logs everything while you stream. For hands-on tracking systems, the <a href="/blog/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate Earnings Tracker</a> workbook and <a href="/blog/chaturbate-earnings-growth-bundle" style={s.iLink}>Chaturbate Earnings Growth Bundle</a> provide worksheets for pattern analysis, performance testing, and goal-setting. For your top tippers, <a href="/blog/cam-model-fan-crm" style={s.iLink}>Whale Watch</a> (Pro feature — upgrade after signup) keeps a ranked profile on every whale so none slip away.</p>
 
       <h2 id="tools" style={s.h2}>The Tools</h2>
 
