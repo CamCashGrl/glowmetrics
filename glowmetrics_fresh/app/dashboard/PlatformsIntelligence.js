@@ -174,7 +174,7 @@ function ConfidenceTag({ confidence }) {
 }
 
 // Suggestions restate figures the engine produced; nothing is inferred beyond them.
-function NextBestMove({ comparison, efficiency, timeIntel }) {
+function NextBestMove({ comparison, efficiency, timeIntel, onOpenPlanner }) {
   const moves = []
 
   if (efficiency.length >= 2) {
@@ -194,8 +194,21 @@ function NextBestMove({ comparison, efficiency, timeIntel }) {
     moves.push('You have one platform with enough data to analyse. A second gives CamCash something to compare against.')
   }
 
+  const planner = onOpenPlanner ? (
+    <button onClick={onOpenPlanner} style={{
+      justifySelf: 'start', padding: '7px 13px', fontSize: 12, fontWeight: 700,
+      borderRadius: 8, cursor: 'pointer', color: '#05070f',
+      border: 'none', background: C.cyan,
+    }}>Build your stream plan →</button>
+  ) : null
+
   if (moves.length === 0) {
-    return <Empty>Once there is enough data to compare platforms and times, suggested moves appear here.</Empty>
+    return (
+      <div style={{ display: 'grid', gap: 8 }}>
+        <Empty>Once there is enough data to compare platforms and times, suggested moves appear here.</Empty>
+        {planner}
+      </div>
+    )
   }
 
   return (
@@ -206,6 +219,7 @@ function NextBestMove({ comparison, efficiency, timeIntel }) {
           <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>{m}</span>
         </div>
       ))}
+      {planner && <div style={{ marginTop: 2 }}>{planner}</div>}
     </div>
   )
 }
@@ -252,7 +266,7 @@ function DataCoverage({ coverage }) {
 // UNIFIED VIEW
 // ============================================
 
-function UnifiedView({ analytics, coverage, isPro }) {
+function UnifiedView({ analytics, coverage, isPro, onOpenPlanner }) {
   const snapshot = useMemo(() => buildBusinessSnapshot(analytics), [analytics])
   const comparison = useMemo(() => buildPlatformComparison(analytics), [analytics])
   const efficiency = useMemo(() => buildEfficiencyComparison(analytics), [analytics])
@@ -469,7 +483,7 @@ function UnifiedView({ analytics, coverage, isPro }) {
       <DataCoverage coverage={coverage} />
 
       <Section title="Your next best move">
-        <NextBestMove comparison={comparison} efficiency={efficiency} timeIntel={timeIntel} />
+        <NextBestMove comparison={comparison} efficiency={efficiency} timeIntel={timeIntel} onOpenPlanner={onOpenPlanner} />
       </Section>
     </>
   )
@@ -603,7 +617,7 @@ function SplitView({ analytics, platformName, isPro }) {
 // PAGE
 // ============================================
 
-export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false }) {
+export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, onOpenPlanner = null }) {
   const [view, setView] = useState('unified')
   const [selectedPlatform, setSelectedPlatform] = useState(null)
 
@@ -658,7 +672,7 @@ export default function PlatformsIntelligence({ analytics = null, tips = [], isP
           No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
         </Empty>
       ) : view === 'unified' ? (
-        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} />
+        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
       ) : (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>

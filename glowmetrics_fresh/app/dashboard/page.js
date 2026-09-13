@@ -4198,6 +4198,7 @@ const stopImportMessageRotation = () => {
             analytics={analytics}
             tips={tips}
             isPro={isPro}
+            onOpenPlanner={() => handleTabChange('planner')}
           />
         )}
 
