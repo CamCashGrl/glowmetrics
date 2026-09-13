@@ -9,7 +9,8 @@
  */
 
 // Mock computePlatformCardStats for testing revenue consistency rules
-function computePlatformCardStats(tips = [], sessions = [], platformName, windowDays = 31, platformRoi = {}, paidSessions = []) {
+function computePlatformCardStats(tips = [], sessions = [], platformName, windowDays = 31, platformRoi = {}, paidSessions = [], nowDate = null) {
+  const now = nowDate || new Date()
   const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
   const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
   const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
@@ -33,7 +34,8 @@ function computePlatformCardStats(tips = [], sessions = [], platformName, window
   const to = dated[dated.length - 1]._d
   const from = dated[0]._d
   const fullHistoryDays = Math.max(1, Math.floor((to - from) / 86400000) + 1)
-  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  // Window is calculated from NOW, not from the most recent data point
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
   const recentStart = windowStart < from ? from : windowStart
   const recentRevenue = dated.filter(t => t._d >= recentStart)
 
@@ -174,7 +176,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: latest.toISOString(), usd: 200, tokens: 4000, username: 'u2' }, // Inside window
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], latest)
 
       // Only recent tip (200) should be counted, old tip (100) excluded
       expect(stats.usd).toBe(200)
@@ -192,7 +194,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: latest.toISOString(), usd: 50, tokens: 1000, username: 'u2' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], latest)
 
       // The full span is reported even though the window covers only part of it
       expect(stats.fullHistoryDays).toBeGreaterThanOrEqual(90)
