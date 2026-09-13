@@ -4196,6 +4196,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "platforms" && (
           <PlatformsIntelligence
             analytics={analytics}
+            tips={tips}
             isPro={isPro}
           />
         )}

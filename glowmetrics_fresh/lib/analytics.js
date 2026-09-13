@@ -1028,7 +1028,7 @@ export function aggregateRows(tips, tz = null) {
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
-      monthlyData: [], bestMonth: null, tipTypeBreakdown: [],
+      monthlyData: [], bestMonth: null, tipTypeBreakdown: [], platformTipTypes: {},
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
@@ -1346,6 +1346,33 @@ export function aggregateRows(tips, tz = null) {
     avgUsd: d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0
   })).sort((a, b) => b.usd - a.usd)
 
+  // Same breakdown split by platform. Built from the meaningful sessions'
+  // own tips rather than every tip, so each platform's mix sums to the same
+  // revenue that platform reports in `platforms` — a mix built from all tips
+  // would total more than the earnings shown beside it.
+  // Percentages are shares of that platform's own revenue, so a row never
+  // reads as a share of the whole business on a single-platform view.
+  const platformTipTypeMap = {}
+  meaningfulSessions.forEach(s => (s.tips || []).forEach(t => {
+    const plat = s.platform || t.platform || 'Unknown'
+    const type = t.tip_type || 'Tip'
+    if (!platformTipTypeMap[plat]) platformTipTypeMap[plat] = { total: 0, types: {} }
+    if (!platformTipTypeMap[plat].types[type]) platformTipTypeMap[plat].types[type] = { usd: 0, count: 0, fans: new Set() }
+    platformTipTypeMap[plat].total += t.usd || 0
+    platformTipTypeMap[plat].types[type].usd += t.usd || 0
+    platformTipTypeMap[plat].types[type].count += 1
+    platformTipTypeMap[plat].types[type].fans.add((t.username || '').toLowerCase())
+  }))
+
+  const platformTipTypes = {}
+  Object.entries(platformTipTypeMap).forEach(([plat, d]) => {
+    platformTipTypes[plat] = Object.entries(d.types).map(([type, x]) => ({
+      type, usd: parseFloat(x.usd.toFixed(2)), count: x.count, fans: x.fans.size,
+      pct: d.total > 0 ? Math.round((x.usd / d.total) * 100) : 0,
+      avgUsd: x.count > 0 ? parseFloat((x.usd / x.count).toFixed(2)) : 0
+    })).sort((a, b) => b.usd - a.usd)
+  })
+
   // ── PRIVATE & SPY SHOW FANS ───────────────────────────────────────────
   const privateFanMap = {}, spyFanSet = new Set()
   tips.forEach(t => {
@@ -1408,7 +1435,7 @@ export function aggregateRows(tips, tz = null) {
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
     monthlyData, bestMonth,
-    tipTypeBreakdown, privateShowFans, spyShowFans,
+    tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
     estimatedHourlyRate, hourlyRateSessionCount, hourlyRateTotalMinutes,
     hourlyRateTotalUsd, excludedUntimedSessionCount,
