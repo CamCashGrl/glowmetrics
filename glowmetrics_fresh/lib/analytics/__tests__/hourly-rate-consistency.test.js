@@ -125,6 +125,20 @@ describe('Hourly rate consistency', () => {
     expect(m.label).not.toMatch(/Surging|Growing/)
   })
 
+  test('overall momentum is withheld when the prior 30 days hold no data', () => {
+    const recent = (dayOffset) => {
+      const base = Date.now() - dayOffset * 86400000
+      return Array.from({ length: 5 }, (_, i) => {
+        const t = new Date(base + i * 10 * 60000).toISOString()
+        return { dateRaw: t, date_time: t, username: `fan${i}`, platform: 'Chaturbate', usd: 10, tokens: 200, tip_type: 'Tip' }
+      })
+    }
+    const a = aggregateRows([...recent(1), ...recent(4), ...recent(8)], 'UTC')
+
+    expect(a.momentum.pct).toBeNull()
+    expect(a.momentum.label).toBe('Not enough history')
+  })
+
   test('a platform with no rate-eligible session reports no rate, not zero hours divided', () => {
     const rows = [
       ...timedSession('Chaturbate', 0, 20, 10),
