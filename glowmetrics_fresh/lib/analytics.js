@@ -1121,14 +1121,34 @@ export function aggregateRows(tips, tz = null) {
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
 
+  // FINANCIAL TRUTH: Platform revenue breakdown from ALL tips (not filtered)
+  // This ensures platform rows reconcile to totalUSD
   const platformMap = {}
+  const platformSessionMap = {}
+  const platformHoursMap = {}
+
+  // Sum all tips by platform
+  tips.forEach(t => {
+    const p = t.platform || 'Chaturbate'
+    if (!platformMap[p]) { platformMap[p] = { platform: p, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
+    platformMap[p].totalUSD += t.usd || 0
+    platformMap[p].totalTokens += t.tokens || 0
+    platformMap[p].tips += 1
+  })
+
+  // Add session and hours data from meaningful sessions (for context, but revenue is from all tips)
   meaningfulSessions.forEach(s => {
-    if (!platformMap[s.platform]) { platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
-    platformMap[s.platform].totalUSD    += s.totalUSD
-    platformMap[s.platform].totalTokens += s.totalTokens
-    platformMap[s.platform].sessions    += 1
-    if (!s.durationUnknown) platformMap[s.platform].hours += s.durationHours
-    platformMap[s.platform].tips        += s.tipCount
+    if (!platformSessionMap[s.platform]) platformSessionMap[s.platform] = { sessions: 0, hours: 0 }
+    platformSessionMap[s.platform].sessions += 1
+    if (!s.durationUnknown) platformSessionMap[s.platform].hours += s.durationHours
+  })
+
+  // Merge session/hours data into platform map
+  Object.keys(platformMap).forEach(p => {
+    if (platformSessionMap[p]) {
+      platformMap[p].sessions = platformSessionMap[p].sessions
+      platformMap[p].hours = platformSessionMap[p].hours
+    }
   })
 
   // Per-platform rate basis — revenue and time from the same eligible sessions,
@@ -1473,7 +1493,7 @@ export function aggregateRows(tips, tz = null) {
     totalTokens,
     totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
-    topTippers, platforms, sessions: allValidSessions,
+    topTippers, platforms, sessions: meaningfulSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
