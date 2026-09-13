@@ -161,13 +161,17 @@ describe('Data Consistency Validation', () => {
 
   describe('Time Window Consistency', () => {
     test('all metrics use same SNAPSHOT_WINDOW_DAYS (31)', () => {
-      const now = new Date('2026-09-05')
-      const thirtyTwoDaysAgo = new Date(now.getTime() - 32 * 86400000)
-      const twentyEightDaysAgo = new Date(now.getTime() - 28 * 86400000)
+      // The window is anchored to the platform's latest activity, not to today
+      // — see applyFreeAnalysisWindow, "per-platform, activity-anchored". So a
+      // tip is inside or outside the window by its distance from the newest
+      // tip, and these two must be more than the window apart from each other
+      // for one of them to fall outside it.
+      const latest = new Date('2026-09-05')
+      const fortyDaysEarlier = new Date(latest.getTime() - 40 * 86400000)
 
       const tips = [
-        { platform: 'BongaCams', date_time: thirtyTwoDaysAgo.toISOString(), usd: 100, tokens: 2000, username: 'u1' }, // Outside window
-        { platform: 'BongaCams', date_time: twentyEightDaysAgo.toISOString(), usd: 200, tokens: 4000, username: 'u2' }, // Inside window
+        { platform: 'BongaCams', date_time: fortyDaysEarlier.toISOString(), usd: 100, tokens: 2000, username: 'u1' }, // Outside window
+        { platform: 'BongaCams', date_time: latest.toISOString(), usd: 200, tokens: 4000, username: 'u2' }, // Inside window
       ]
 
       const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
@@ -177,17 +181,23 @@ describe('Data Consistency Validation', () => {
     })
 
     test('full history includes all data regardless of window', () => {
-      const now = new Date('2026-09-05')
-      const ninetyDaysAgo = new Date(now.getTime() - 90 * 86400000)
+      // fullHistoryDays is the span from the earliest tip to the latest, not
+      // the age of a single tip, so covering 90 days takes a tip at each end.
+      // One lone tip spans nothing and correctly reports a single day.
+      const latest = new Date('2026-09-05')
+      const ninetyDaysEarlier = new Date(latest.getTime() - 90 * 86400000)
 
       const tips = [
-        { platform: 'BongaCams', date_time: ninetyDaysAgo.toISOString(), usd: 100, tokens: 2000, username: 'u1' },
+        { platform: 'BongaCams', date_time: ninetyDaysEarlier.toISOString(), usd: 100, tokens: 2000, username: 'u1' },
+        { platform: 'BongaCams', date_time: latest.toISOString(), usd: 50, tokens: 1000, username: 'u2' },
       ]
 
       const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
 
-      // fullHistoryDays should count all 90 days
+      // The full span is reported even though the window covers only part of it
       expect(stats.fullHistoryDays).toBeGreaterThanOrEqual(90)
+      // ...and the window still excludes the far end of that span
+      expect(stats.usd).toBe(50)
     })
   })
 
