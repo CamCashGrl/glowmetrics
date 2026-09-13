@@ -68,6 +68,10 @@ export default function FansIntelligence({
   onSearch,
   onUpgrade,
 }) {
+  // Ensure tips and whales are always arrays
+  const safeTips = Array.isArray(tips) ? tips : []
+  const safeWhales = Array.isArray(whales) ? whales : []
+
   const [period, setPeriod] = useState("lifetime")
   const [platform, setPlatform] = useState("ALL")
   const [tier, setTier] = useState("ALL")
@@ -82,20 +86,20 @@ export default function FansIntelligence({
   }, [])
 
   const allPlatforms = useMemo(() => {
-    const fromTips = tips.map(t => t.platform).filter(Boolean)
-    const fromWhales = whales.map(w => w.platform).filter(Boolean)
+    const fromTips = safeTips.map(t => t.platform).filter(Boolean)
+    const fromWhales = safeWhales.map(w => w.platform).filter(Boolean)
     return [...new Set([...fromTips, ...fromWhales])]
-  }, [tips, whales])
+  }, [safeTips, safeWhales])
 
   const whaleByKey = useMemo(() => {
     const map = new Map()
-    whales.forEach(w => map.set(fanKey(w.platform, w.username), w))
+    safeWhales.forEach(w => map.set(fanKey(w.platform, w.username), w))
     return map
-  }, [whales])
+  }, [safeWhales])
 
   const leaderboard = useMemo(() => {
     if (period === "lifetime") {
-      return whales
+      return safeWhales
         .filter(w => platform === "ALL" || w.platform === platform)
         .filter(w => tier === "ALL" || w.tier === tier)
         .map(w => ({ ...w, _value: Number(w.totalUSD || 0), _tips: Number(w.tipCount || 0), _period: "lifetime" }))
@@ -104,7 +108,7 @@ export default function FansIntelligence({
 
     const start = periodStart(period)
     const map = new Map()
-    tips.forEach(t => {
+    safeTips.forEach(t => {
       const dt = dateOf(t)
       if (!start || dt < start) return
       if (platform !== "ALL" && t.platform !== platform) return
@@ -130,10 +134,10 @@ export default function FansIntelligence({
       }))
       .filter(f => tier === "ALL" || f.tier === tier)
       .sort((a, b) => b._value - a._value)
-  }, [period, platform, tier, tips, whales, whaleByKey])
+  }, [period, platform, tier, safeTips, safeWhales, whaleByKey])
 
   const feed = useMemo(() => {
-    const sorted = [...tips]
+    const sorted = [...safeTips]
       .filter(t => t.username && (platform === "ALL" || t.platform === platform))
       .sort((a, b) => dateOf(b) - dateOf(a))
       .slice(0, 16)
@@ -148,16 +152,16 @@ export default function FansIntelligence({
       }
     }).filter(t => {
       if (feedFilter === "NEW") return t._new
-      if (feedFilter === "TOP") return Number(t.usd || 0) >= Math.max(1, ...tips.slice(0, 50).map(x => Number(x.usd || 0))) * 0.5
+      if (feedFilter === "TOP") return Number(t.usd || 0) >= Math.max(1, ...safeTips.slice(0, 50).map(x => Number(x.usd || 0))) * 0.5
       return true
     })
-  }, [tips, platform, feedFilter, whaleByKey, liveTick])
+  }, [safeTips, platform, feedFilter, whaleByKey, liveTick])
 
   const total = leaderboard.reduce((sum, f) => sum + Number(f._value || 0), 0)
   const top = leaderboard.slice(0, 3)
   const topFanKeys = new Set(top.map(f => fanKey(f.platform, f.username)))
   const rest = leaderboard.slice(3, 10)
-  const activeFanCount = new Set(tips.filter(t => platform === "ALL" || t.platform === platform).map(t => fanKey(t.platform, t.username))).size
+  const activeFanCount = new Set(safeTips.filter(t => platform === "ALL" || t.platform === platform).map(t => fanKey(t.platform, t.username))).size
   const latestTip = feed[0]
 
   const renderFanRow = (fan, index) => {
