@@ -3339,7 +3339,7 @@ const stopImportMessageRotation = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Go Live Now — Peak Window LIVE' : 'What\'s Next — Your Best Window Today'}
+                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
                   </div>
