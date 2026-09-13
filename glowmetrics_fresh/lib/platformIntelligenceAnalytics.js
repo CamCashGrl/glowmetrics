@@ -86,6 +86,9 @@ export function buildPlatformComparison(analytics) {
       sessions: p.sessions || 0,
       avgTipSize: p.avgTipSize ?? 0,
       earningsPerSession: p.sessions > 0 ? round2(p.totalUSD / p.sessions) : 0,
+      // null pct means the prior period holds no data to compare against, so
+      // the table shows no trend rather than implying one.
+      trend: analytics?.platformMomentum?.[p.platform] || null,
     }))
     .sort((a, b) => b.earnings - a.earnings)
 }

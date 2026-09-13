@@ -1032,7 +1032,7 @@ export function aggregateRows(tips, tz = null) {
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
       hourlyRateTotalUsd: 0, excludedUntimedSessionCount: 0,
-      platformVelocity: {}, missedRevenueByPlatform: {},
+      platformVelocity: {}, missedRevenueByPlatform: {}, platformMomentum: {},
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
       platformRiskContext: {}
@@ -1425,6 +1425,49 @@ export function aggregateRows(tips, tz = null) {
 
   const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
 
+  // ── PLATFORM MOMENTUM ─────────────────────────────────────────────────
+  // Per-platform version of the same last-30 vs prior-30 comparison, built
+  // from the meaningful sessions' own tips so a platform's trend rests on the
+  // same revenue its earnings row reports.
+  //
+  // A trend is only claimed when the prior period actually contains data. The
+  // free tier feeds this engine a 31-day window (applyFreeAnalysisWindow), so
+  // the prior period is empty by construction for those accounts — treating
+  // that emptiness as growth would label every free user's platforms as
+  // surging off the back of data that was never supplied. No prior period
+  // means no trend, not a flattering one.
+  const platformMomentum = {}
+  Object.keys(platformMap).forEach(p => {
+    let last = 0, prior = 0, priorTips = 0
+    meaningfulSessions.forEach(s => {
+      if ((s.platform || 'Unknown') !== p) return
+      ;(s.tips || []).forEach(t => {
+        const d = new Date(t.dateRaw || t.date_time)
+        if (isNaN(d.getTime())) return
+        if (d >= thirtyDaysAgo) last += t.usd || 0
+        else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
+      })
+    })
+
+    if (priorTips === 0) {
+      platformMomentum[p] = { pct: null, label: 'Not enough history', emoji: '—', last30USD: parseFloat(last.toFixed(2)), prior30USD: 0 }
+      return
+    }
+
+    const pct = ((last - prior) / prior) * 100
+    let label = 'Steady', emoji = '→'
+    if (last === 0)      { label = 'Inactive';  emoji = '💤' }
+    else if (pct > 50)   { label = 'Surging';   emoji = '🚀' }
+    else if (pct > 10)   { label = 'Growing';   emoji = '📈' }
+    else if (pct > -10)  { label = 'Steady';    emoji = '→'  }
+    else                 { label = 'Declining'; emoji = '📉' }
+
+    platformMomentum[p] = {
+      pct: parseFloat(pct.toFixed(1)), label, emoji,
+      last30USD: parseFloat(last.toFixed(2)), prior30USD: parseFloat(prior.toFixed(2)),
+    }
+  })
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1441,7 +1484,7 @@ export function aggregateRows(tips, tz = null) {
     hourlyRateTotalUsd, excludedUntimedSessionCount,
     missedRevenueByPlatform, returningVsNew, topFanDependency,
     dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
-    platformRiskContext,
+    platformRiskContext, platformMomentum,
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
