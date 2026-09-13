@@ -3332,10 +3332,12 @@ const stopImportMessageRotation = () => {
             <>
               {/* ═══ YOUR NEXT BEST MOVE CAROUSEL CARD ═══ */}
               {move && bhLabel && (() => {
-                const bgColor = atPeak ? '#10B981' : bhLabel && hoursUntilPeak <= 3 ? '#FB923C' : '#22D3EE'
-                const displayRange = `$${Math.round(displayAvg * 0.7)}–$${Math.round(displayAvg * 1.3)}`
-                const comparison = `$${displayAvg.toFixed(0)}/hr`
-                const typicalHour = `$${(displayAvg / 3 || 10).toFixed(0)}/hr`
+                const safeHoursUntilPeak = hoursUntilPeak ?? Infinity
+                const safeDisplayAvg = (!isNaN(displayAvg) && isFinite(displayAvg) && displayAvg > 0) ? displayAvg : 0
+                const bgColor = atPeak ? '#10B981' : bhLabel && safeHoursUntilPeak <= 3 ? '#FB923C' : '#22D3EE'
+                const displayRange = safeDisplayAvg > 0 ? `$${Math.round(safeDisplayAvg * 0.7)}–$${Math.round(safeDisplayAvg * 1.3)}` : '$0–$0'
+                const comparison = safeDisplayAvg > 0 ? `$${safeDisplayAvg.toFixed(0)}/hr` : '$0/hr'
+                const typicalHour = safeDisplayAvg > 0 ? `$${(safeDisplayAvg / 3).toFixed(0)}/hr` : '$0/hr'
 
                 return (
                   <div style={{
@@ -3368,7 +3370,7 @@ const stopImportMessageRotation = () => {
                     {/* Main recommendation */}
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                        <span style={{ fontSize: 28 }}>{atPeak ? '🔥' : hoursUntilPeak <= 3 ? '⚡' : '🕐'}</span>
+                        <span style={{ fontSize: 28 }}>{atPeak ? '🔥' : safeHoursUntilPeak <= 3 ? '⚡' : '🕐'}</span>
                         <div>
                           <div style={{ fontSize: 15, fontWeight: 800, color: C.white, lineHeight: 1.3 }}>
                             {atPeak
@@ -3377,7 +3379,7 @@ const stopImportMessageRotation = () => {
                             }
                           </div>
                           <div style={{ fontSize: 11, color: bgColor, fontWeight: 600, marginTop: 3 }}>
-                            {atPeak ? '🟢 PEAK WINDOW IS LIVE' : hoursUntilPeak === 1 ? '⏰ Starting in ~1 hour' : `⏰ In ${hoursUntilPeak} hours`}
+                            {atPeak ? '🟢 PEAK WINDOW IS LIVE' : safeHoursUntilPeak === 1 ? '⏰ Starting in ~1 hour' : `⏰ In ${safeHoursUntilPeak} hours`}
                           </div>
                         </div>
                       </div>
