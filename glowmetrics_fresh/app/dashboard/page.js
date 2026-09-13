@@ -3237,8 +3237,10 @@ const stopImportMessageRotation = () => {
               const now = new Date()
               const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
               const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              // Use analysisTips (windowed for free users) for consistency with analytics.totalUSD
+              const tipsForMonthCalc = isPro ? tips : analysisTips
+              const thisMonthRev = tipsForMonthCalc.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = tipsForMonthCalc.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
@@ -3261,8 +3263,9 @@ const stopImportMessageRotation = () => {
               const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
                 ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
 
-              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
-              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              // Use analysisTips (windowed for free users) for consistency
+              const thisMonthFans = new Set(tipsForMonthCalc.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
+              const prevMonthFans = new Set(tipsForMonthCalc.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
               const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
 
               // trend badge renderer
@@ -3339,7 +3342,12 @@ const stopImportMessageRotation = () => {
             isBestDay, bestDay, sessionAvg, peakAvg, predictionLow, predictionHigh,
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
-          const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
+          // Use local analytics-based platform as canonical source (consistent windowing for free users)
+          // Fallback to engineInsights only if local data unavailable
+          const topAnalyticsPlatform = (analytics?.platforms || []).length > 0
+            ? [...(analytics?.platforms || [])].sort((a, b) => (b.usdPerHour || 0) - (a.usdPerHour || 0))[0]?.platform
+            : null
+          const displayPlat = topAnalyticsPlatform || _displayPlat || engineInsights?.summary?.best_platform
           // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
           // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
           // bestHour/platformBestTimes use internally (lib/analytics.js).
