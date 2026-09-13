@@ -20,7 +20,7 @@ const fmtUsd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFracti
 
 function isoWeekStart(date) {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-  const day = d.getUTCDay() || 7 // Mon=1 .. Sun=7
+  const day = d.getDay() || 7 // Mon=1 .. Sun=7, on the creator's clock
   d.setUTCDate(d.getUTCDate() - day + 1)
   return d
 }
@@ -37,7 +37,7 @@ const MODE_CONFIG = {
   daily:   { keyFn: dayKey,   fmt: DAY_FMT,   label: "Daily",   unit: "days",   take: 14 },
   weekly:  { keyFn: weekKey,  fmt: WEEK_FMT,  label: "Weekly",  unit: "weeks",  take: 12 },
   monthly: { keyFn: monthKey, fmt: MONTH_FMT, label: "Monthly", unit: "months", take: 12 },
-  time:    { keyFn: (d) => String(d.getUTCHours()), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
+  time:    { keyFn: (d) => String(d.getHours()), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
 }
 
 function tokensVsHoursSeries(tips, sessions, mode) {
