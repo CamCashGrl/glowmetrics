@@ -1459,14 +1459,14 @@ export function aggregateRows(tips, tz = null) {
   const platformMomentum = {}
   Object.keys(platformMap).forEach(p => {
     let last = 0, prior = 0, priorTips = 0
-    meaningfulSessions.forEach(s => {
-      if ((s.platform || 'Unknown') !== p) return
-      ;(s.tips || []).forEach(t => {
-        const d = new Date(t.dateRaw || t.date_time)
-        if (isNaN(d.getTime())) return
-        if (d >= thirtyDaysAgo) last += t.usd || 0
-        else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
-      })
+    // FINANCIAL TRUTH: Use ALL tips by platform (matching overall momentum calculation)
+    tips.forEach(t => {
+      const tipPlatform = t.platform || 'Chaturbate'
+      if (tipPlatform !== p) return
+      const d = new Date(t.dateRaw || t.date_time)
+      if (isNaN(d.getTime())) return
+      if (d >= thirtyDaysAgo) last += t.usd || 0
+      else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
     })
 
     if (priorTips === 0) {
