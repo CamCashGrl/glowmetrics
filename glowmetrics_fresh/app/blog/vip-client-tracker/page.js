@@ -236,7 +236,7 @@ export default function VIPClientTracker() {
           30-page system for organizing high-value client relationships and follow-ups
         </div>
         <a
-          href="REPLACE_WITH_EXACT_ETSY_LISTING_URL"
+          href="https://www.etsy.com/listing/4541972932/cam-model-vip-client-tracker-fillable"
           target="_blank"
           rel="noopener noreferrer"
           style={s.ctaBtn}
