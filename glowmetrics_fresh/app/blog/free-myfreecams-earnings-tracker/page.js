@@ -144,12 +144,92 @@ const s = {
     color: "#fff",
   },
 
+  primaryCTA: {
+    margin: "28px 0",
+    padding: "32px",
+    borderRadius: "18px",
+    textAlign: "center",
+    background: "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(236,72,153,0.15))",
+    border: "1.5px solid rgba(99,102,241,0.4)",
+  },
+
+  primaryCTATitle: {
+    fontSize: "26px",
+    fontWeight: 900,
+    marginBottom: "12px",
+  },
+
+  primaryCTAText: {
+    maxWidth: "680px",
+    margin: "0 auto 20px",
+    fontSize: "17px",
+    lineHeight: 1.7,
+    opacity: 0.9,
+  },
+
   callout: {
     padding: "22px",
     borderRadius: "16px",
     margin: "28px 0",
     background: "rgba(255,255,255,.035)",
     border: "1px solid rgba(255,255,255,.09)",
+  },
+
+  definition: {
+    margin: "28px 0",
+    padding: "24px",
+    borderRadius: "16px",
+    background: "rgba(99,102,241,0.08)",
+    border: "1px solid rgba(99,102,241,0.2)",
+  },
+
+  definitionTitle: {
+    fontSize: "18px",
+    fontWeight: 800,
+    marginBottom: "10px",
+  },
+
+  productShowcase: {
+    margin: "42px 0",
+  },
+
+  productShowcaseTitle: {
+    fontSize: "26px",
+    fontWeight: 850,
+    marginBottom: "24px",
+    textAlign: "center",
+  },
+
+  productGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "20px",
+    marginBottom: "24px",
+  },
+
+  productCard: {
+    padding: "18px",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,.04)",
+    border: "1px solid rgba(255,255,255,.08)",
+    textAlign: "center",
+    textDecoration: "none",
+    transition: "all 0.3s ease",
+    cursor: "pointer",
+  },
+
+  productCardTitle: {
+    fontSize: "15px",
+    fontWeight: 700,
+    marginBottom: "10px",
+    color: "#e2e8f0",
+  },
+
+  productCardLink: {
+    fontSize: "13px",
+    color: "#6366f1",
+    fontWeight: 600,
+    textDecoration: "none",
   },
 
   small: {
@@ -215,43 +295,79 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
           </p>
         </header>
 
-        <div style={{ margin: '28px auto 8px', maxWidth: '620px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <img
-            src="/blog-images/mfc-mini-tracker-cover.png"
-            alt="Free MyFreeCams Mini Tracker PDF cover for cam models by Pretty Profitz"
-            width={1055}
-            height={1491}
-            style={{ width: '100%', height: 'auto', display: 'block' }}
-          />
-        </div>
+        <section style={s.definition}>
+          <div style={s.definitionTitle}>What is CamCashGrl?</div>
+          <p style={s.p}>
+            CamCashGrl is a model-run website designed to help cam creators optimize their streams and build a stronger, more sustainable business. We provide tracking tools, guides, analytics, and creator resources to help you understand your data, boost your earnings potential, and make informed decisions about your streaming business.
+          </p>
+        </section>
+
+        <section style={s.primaryCTA}>
+          <div style={s.primaryCTATitle}>Get the Free MyFreeCams Tracker</div>
+          <p style={s.primaryCTAText}>
+            Your free download is ready. Track sessions, tokens, earnings, and performance instantly. Print it or use it digitally with any PDF app.
+          </p>
+
+          <div style={{ margin: '28px auto 8px', maxWidth: '620px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <img
+              src="/blog-images/mfc-mini-tracker-cover.png"
+              alt="Free MyFreeCams Mini Tracker PDF cover for cam models by Pretty Profitz"
+              width={1055}
+              height={1491}
+              style={{ width: '100%', height: 'auto', display: 'block' }}
+            />
+          </div>
+
+          <div style={{ marginTop: '20px' }}>
+            <a
+              href={FREE_TRACKER_URL}
+              download
+              style={{ ...s.button, ...s.freeButton }}
+            >
+              ⬇ Download Free Tracker (PDF) →
+            </a>
+          </div>
+        </section>
 
         <section style={s.cta}>
           <div style={s.ctaTitle}>
-            Download the Free MyFreeCams Tracker
+            Why Track Your MyFreeCams Earnings?
           </div>
 
           <p style={s.ctaText}>
-            Start tracking your sessions and performance with the free
-            MyFreeCams Mini Tracker. Print it or use it digitally with a
-            compatible PDF annotation app.
+            The difference between guessing and knowing is data. When you track your sessions, you can see patterns you would never notice from memory alone.
           </p>
 
-          <a
-            href={FREE_TRACKER_URL}
-            download
-            style={{ ...s.button, ...s.freeButton }}
-          >
-            Download Free Tracker →
-          </a>
+          <ul style={s.list}>
+            <li style={s.li}>Identify which hours generate the most tokens</li>
+            <li style={s.li}>Compare session types and find what works best</li>
+            <li style={s.li}>Track hourly earnings to optimize your schedule</li>
+            <li style={s.li}>Make decisions based on your actual performance data</li>
+            <li style={s.li}>Build monthly patterns and long-term strategies</li>
+          </ul>
+        </section>
 
-          <a
-            href={ETSY_URL}
-            target="_blank"
-            rel="noopener noreferrer sponsored"
-            style={{ ...s.button, ...s.etsyButton }}
-          >
-            Get the Full 64-Page Tracker on Etsy →
-          </a>
+        <section>
+          <h2>Ready for the Complete System?</h2>
+          <p style={s.p}>
+            The free Mini Tracker is perfect for getting started. When you're ready to expand, the full MyFreeCams Creator Tip Tracker is a comprehensive 64-page workbook with advanced tracking pages, monthly reviews, goal setting, and business planning sections.
+          </p>
+
+          <section style={s.cta}}>
+            <div style={s.ctaTitle}>Get the Full MyFreeCams Tracker</div>
+            <p style={s.ctaText}>
+              64-page workbook with session logs, earnings analysis, monthly reviews, goal tracking, and performance optimization pages.
+            </p>
+
+            <a
+              href={ETSY_URL}
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              style={{ ...s.button, ...s.etsyButton }}
+            >
+              View on Etsy →
+            </a>
+          </section>
         </section>
 
         <section>
@@ -439,48 +555,81 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
           top-performing games or events, and which ones you want to retire.
         </p>
 
-        <section style={s.cta}>
-          <div style={s.ctaTitle}>
-            Ready for the Complete Tracker?
+
+        <section style={s.productShowcase}>
+          <div style={s.productShowcaseTitle}>Other Creator Tools from Pretty Profitz</div>
+
+          <div style={s.productGrid}>
+            <a
+              href="/blog/vip-client-tracker"
+              style={s.productCard}
+            >
+              <div style={s.productCardTitle}>VIP Client Tracker</div>
+              <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Organize fans, spending, and follow-ups</p>
+              <div style={s.productCardLink}>View →</div>
+            </a>
+
+            <a
+              href="/blog/sph-script-pack"
+              style={s.productCard}
+            >
+              <div style={s.productCardTitle}>SPH Script Pack</div>
+              <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Session prompts and transitions</p>
+              <div style={s.productCardLink}>View →</div>
+            </a>
+
+            <a
+              href="/blog/daddys-girl-roleplay-script-pack"
+              style={s.productCard}
+            >
+              <div style={s.productCardTitle}>Daddy's Girl Script Pack</div>
+              <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Roleplay prompts and transitions</p>
+              <div style={s.productCardLink}>View →</div>
+            </a>
+
+            <a
+              href="/blog/roll-the-dice-game-pack"
+              style={s.productCard}
+            >
+              <div style={s.productCardTitle}>Roll the Dice Game Pack</div>
+              <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Engagement game for your room</p>
+              <div style={s.productCardLink}>View →</div>
+            </a>
+
+            <a
+              href="/blog/spin-the-wheel-cam-game"
+              style={s.productCard}
+            >
+              <div style={s.productCardTitle}>Spin the Wheel Game</div>
+              <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Interactive Canva template</p>
+              <div style={s.productCardLink}>View →</div>
+            </a>
+
+            <a
+              href="/blog/sissy-training-obedience-bundle"
+              style={s.productCard}
+            >
+              <div style={s.productCardTitle}>Sissy Training Bundle</div>
+              <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Content guides and templates</p>
+              <div style={s.productCardLink}>View →</div>
+            </a>
           </div>
-
-          <p style={s.ctaText}>
-            The free Mini Tracker is a starting point. The full MyFreeCams
-            Creator Tip Tracker expands the system with a much larger
-            collection of session, earnings, performance, monthly,
-            day-of-week, goal, and game/event tracking pages.
-          </p>
-
-          <a
-            href={FREE_TRACKER_URL}
-            download
-            style={{ ...s.button, ...s.freeButton }}
-          >
-            Download Free Mini Tracker →
-          </a>
-
-          <a
-            href={ETSY_URL}
-            target="_blank"
-            rel="noopener noreferrer sponsored"
-            style={{ ...s.button, ...s.etsyButton }}
-          >
-            Shop the Full MyFreeCams Tracker →
-          </a>
         </section>
 
-        <h2>Free MyFreeCams Tracker vs. Full Tracker</h2>
-
-        <p style={s.p}>
-          The free Mini Tracker is designed to let you start using the system
-          without paying for anything first.
-        </p>
-
-        <p style={s.p}>
-          The full paid tracker is the expanded version for creators who want
-          a much more complete workbook for ongoing tracking, reviews,
-          planning, and business organization.
-        </p>
+        <section style={s.primaryCTA}>
+          <div style={s.primaryCTATitle}>Skip the Trackers — Automate Your Analytics</div>
+          <p style={s.primaryCTAText}>
+            Want real-time earnings tracking without manual entry? CamCash provides automated fan intelligence, token tracking, and performance analytics so you can focus on streaming.
+          </p>
+          <a
+            href="https://www.camcashgrl.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ ...s.button, ...s.freeButton }}
+          >
+            Sign Up for CamCash →
+          </a>
+        </section>
 
         <h2>Frequently Asked Questions</h2>
 
