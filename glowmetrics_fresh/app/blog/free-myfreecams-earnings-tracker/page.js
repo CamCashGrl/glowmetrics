@@ -225,6 +225,32 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
           />
         </div>
 
+        <div style={{ margin: '34px auto 0', maxWidth: '780px' }}>
+          <h3 style={{ ...s.h3, marginTop: '0', marginBottom: '18px', textAlign: 'center', fontSize: '20px' }}>
+            A Look Inside the Tracker
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', maxWidth: '780px' }}>
+            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <img
+                src="/blog-images/hourly-earnings-5.png"
+                alt="Hourly Earnings Log - Track your earnings per hour"
+                width={1055}
+                height={1491}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <img
+                src="/blog-images/session-review-3.png"
+                alt="Detailed Session Review - Review your session performance"
+                width={1055}
+                height={1491}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+          </div>
+        </div>
+
         <section style={s.cta}>
           <div style={s.ctaTitle}>
             Download the Free MyFreeCams Tracker
