@@ -410,3 +410,12 @@ For personal creator use only; may not be resold, shared, copied, or redistribut
 export function getProductBySlug(slug) {
   return PRODUCTS.find((p) => p.slug === slug);
 }
+
+// coverImage is either a full Etsy CDN URL or a local "/shop-images/..." path.
+// Schema.org markup requires an absolute URL either way, so only prepend the
+// site origin when the value isn't already absolute — otherwise we produce
+// "https://www.camcashgrl.comhttps://i.etsystatic.com/..." (invalid).
+export function getAbsoluteImageUrl(path) {
+  if (!path) return path;
+  return /^https?:\/\//i.test(path) ? path : `https://www.camcashgrl.com${path}`;
+}

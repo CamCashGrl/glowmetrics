@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 import { DM_Sans } from "next/font/google"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
-import { PRODUCTS } from "../../lib/shop-products"
+import { PRODUCTS, getAbsoluteImageUrl } from "../../lib/shop-products"
 // NEW (marketing visual only) — see components/landing/*.js. Safe to remove:
 // deleting this import + the <FloatingDashboardPreview>/<PlatformsTypewriter>
 // block below fully reverts this addition.
@@ -811,7 +811,7 @@ export default function LandingClient() {
     'price': product.price.replace('$', ''),
     'priceCurrency': 'USD',
     'url': `https://www.camcashgrl.com/shop/${product.slug}`,
-    'image': `https://www.camcashgrl.com${product.coverImage}`,
+    'image': getAbsoluteImageUrl(product.coverImage),
     'offers': {
       '@type': 'Offer',
       'price': product.price.replace('$', ''),
