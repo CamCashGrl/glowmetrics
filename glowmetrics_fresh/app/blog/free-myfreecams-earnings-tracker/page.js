@@ -73,7 +73,7 @@ const s = {
   h2: {
     fontSize: "30px",
     lineHeight: 1.15,
-    fontWeight: 850,
+    fontWeight: 800,
     marginTop: "52px",
     marginBottom: "18px",
   },
@@ -115,7 +115,7 @@ const s = {
 
   ctaTitle: {
     fontSize: "25px",
-    fontWeight: 850,
+    fontWeight: 800,
     marginBottom: "10px",
   },
 
