@@ -64,6 +64,7 @@ export default function sitemap() {
     'chaturbate-best-month-real-numbers',
     'chaturbate-first-30-days-real-earnings',
     'chaturbate-payout-explained',
+    'free-myfreecams-earnings-tracker',
     'freemium-vs-premium-cam-model',
     'girlfriend-experience-gfe-cam-modeling-strategy',
     'how-cam-models-stay-anonymous',
