@@ -505,6 +505,50 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
           </div>
         </div>
 
+        <div style={{ margin: '34px auto 8px', maxWidth: '900px' }}>
+          <h3 style={{ ...s.h3, marginTop: '0', marginBottom: '18px', textAlign: 'center', fontSize: '20px' }}>
+            A Look Inside the Full Tracker
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', maxWidth: '900px' }}>
+            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <img
+                src="/blog-images/MFC_Tips_Goal_Tracker_FULL.png"
+                alt="Full Tracker - Tips and Goal Tracking System"
+                width={1055}
+                height={1491}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <img
+                src="/blog-images/MFC_prvtexslusive_tracker_fulltracker.png"
+                alt="Full Tracker - Private and Exclusive Show Tracking"
+                width={1055}
+                height={1491}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <img
+                src="/blog-images/MFC_tipmenugamepreformance_fulltracker.png"
+                alt="Full Tracker - Tip Menu and Game Performance Analysis"
+                width={1055}
+                height={1491}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <img
+                src="/blog-images/MfcFullTrack_Tipgoal.png"
+                alt="Full Tracker - Tip Goal and Achievement Tracking"
+                width={1055}
+                height={1491}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+              />
+            </div>
+          </div>
+        </div>
+
         <section style={s.cta}>
           <div style={s.ctaTitle}>
             💎 Get the Full Tracker
