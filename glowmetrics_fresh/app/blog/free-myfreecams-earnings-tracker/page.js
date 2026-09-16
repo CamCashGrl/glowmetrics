@@ -1,29 +1,32 @@
 import ArticleLayout from "@/app/components/ArticleLayout";
 
 export const metadata = {
-  title: "Free MyFreeCams Earnings Tracker for Cam Models | Download PDF",
+  title: "Free MyFreeCams Mini Tracker PDF | No Cost Earnings Tracker for Cam Models",
   description:
-    "Download a free MyFreeCams earnings tracker PDF for cam models. Track sessions, tokens, tips, hourly earnings, goals, and performance with this free creator tracker.",
+    "Download the FREE MyFreeCams Mini Tracker — a 7-page earnings tracker workbook for cam models. Track sessions, tokens, tips, hourly rates, and performance data. 100% free PDF. No signup required.",
   keywords: [
-    "myfreecams earnings tracker",
-    "myfreecams tracker",
-    "mfc earnings tracker",
-    "myfreecams income tracker",
-    "myfreecams tip tracker",
-    "myfreecams session tracker",
-    "myfreecams spreadsheet",
-    "cam model earnings tracker",
+    "free myfreecams tracker",
+    "myfreecams earnings tracker free",
+    "free cam model tracker",
+    "myfreecams session log",
+    "free earnings tracker download",
     "cam model income tracker",
-    "myfreecams best hours",
+    "myfreecams token tracker",
+    "hourly earnings calculator",
+    "cam model performance tracker",
+    "myfreecams business planner",
+    "cam model goal setting",
+    "free cam model tools",
   ],
   alternates: {
     canonical: "/blog/free-myfreecams-earnings-tracker",
   },
   openGraph: {
-    title: "Free MyFreeCams Earnings Tracker for Cam Models",
+    title: "Free MyFreeCams Mini Tracker PDF - Download Now",
     description:
-      "Download a free MyFreeCams earnings tracker PDF to track sessions, tokens, tips, hourly earnings, goals, and performance.",
+      "Get the FREE MyFreeCams Mini Tracker PDF instantly. 7 essential tracking pages to monitor your earnings, hours, tokens, tips, and performance.",
     url: "https://camcashgrl.com/blog/free-myfreecams-earnings-tracker",
+    image: "/blog-images/cover-1.png",
     siteName: "CamCashGrl",
     type: "article",
   },
@@ -197,27 +200,68 @@ const s = {
 export default function FreeMyFreeCamsEarningsTrackerPage() {
   return (
     <ArticleLayout
-      title="Free MyFreeCams Earnings Tracker for Cam Models"
-      description="Download a free MyFreeCams earnings tracker PDF to track sessions, tokens, tips, hourly earnings, goals, and performance."
+      title="Free MyFreeCams Mini Tracker"
+      description="Download the free MyFreeCams Mini Tracker — 7 essential tracking pages to monitor earnings, sessions, tokens, tips, and performance."
     >
       <article>
         <header style={s.hero}>
-          <div style={s.eyebrow}>Free Creator Resource • MyFreeCams</div>
+          <div style={{ ...s.eyebrow, color: '#00d9a6', fontSize: '16px', fontWeight: 900, letterSpacing: '0.18em' }}>
+            🎉 100% FREE • NO SIGNUP REQUIRED
+          </div>
 
-          <h1 style={s.h1}>
-            Free MyFreeCams Earnings Tracker for Cam Models
+          <h1 style={{ ...s.h1, marginBottom: '8px' }}>
+            Free MyFreeCams Mini Tracker
           </h1>
 
+          <p style={{ fontSize: '16px', margin: '0 auto 12px', maxWidth: '900px', color: '#00d9a6', fontWeight: 700, letterSpacing: '0.05em' }}>
+            Instant PDF Download • 7 Essential Tracking Pages
+          </p>
+
           <p style={s.lead}>
-            Track your MyFreeCams sessions, tips, tokens, hourly earnings,
-            goals, and performance with a free creator-friendly PDF tracker.
-            Stop relying on memory and start seeing what is actually working.
+            Start tracking what actually works. Download the <strong>completely free</strong> MyFreeCams Mini Tracker — a 7-page PDF workbook designed for cam models to track sessions, earnings, tokens, tips, hourly rates, goals, and performance data.
+          </p>
+
+          <p style={{ ...s.lead, fontSize: '16px', opacity: 0.8, marginTop: '14px' }}>
+            No credit card. No signup. No strings attached. Just grab it and start tracking today.
           </p>
         </header>
 
+        <section style={{ ...s.cta, background: 'linear-gradient(145deg, rgba(0,217,166,.15), rgba(25,201,255,.12))', border: '2px solid rgba(0,217,166,0.5)', marginTop: '32px', marginBottom: '34px' }}>
+          <div style={{ ...s.ctaTitle, fontSize: '28px', color: '#00d9a6' }}>
+            ✨ Download Free (Instant Access)
+          </div>
+
+          <p style={{ ...s.ctaText, fontSize: '17px', marginBottom: '22px' }}>
+            Get the complete 7-page MyFreeCams Mini Tracker PDF. No cost, no signup required. Use it on any device or print it out.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+            <a
+              href={FREE_TRACKER_URL}
+              download
+              style={{ ...s.button, ...s.freeButton, fontSize: '16px', fontWeight: 900, padding: '16px 32px' }}
+            >
+              📥 Download FREE PDF Now
+            </a>
+
+            <a
+              href="https://www.canva.com/brand/brand-templates/EAHVUBD2u84"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...s.button, background: 'linear-gradient(90deg, #9d4edd, #c77dff)', color: '#fff', fontSize: '15px', padding: '13px 22px' }}
+            >
+              📝 Try Editable Canva Template
+            </a>
+          </div>
+
+          <p style={{ ...s.small, marginTop: '16px', textAlign: 'center' }}>
+            PDF works on desktop, tablet, and mobile • Print-friendly • Use with any PDF reader
+          </p>
+        </section>
+
         <div style={{ margin: '28px auto 8px', maxWidth: '620px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
           <img
-            src="/blog-images/mfc-mini-tracker-cover.png"
+            src="/blog-images/cover-1.png"
             alt="Free MyFreeCams Mini Tracker PDF cover for cam models by Pretty Profitz"
             width={1055}
             height={1491}
@@ -251,321 +295,397 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
           </div>
         </div>
 
-        <section style={s.cta}>
-          <div style={s.ctaTitle}>
-            Download the Free MyFreeCams Tracker
-          </div>
-
-          <p style={s.ctaText}>
-            Start tracking your sessions and performance with the free
-            MyFreeCams Mini Tracker. Print it or use it digitally with a
-            compatible PDF annotation app.
-          </p>
-
-          <a
-            href={FREE_TRACKER_URL}
-            download
-            style={{ ...s.button, ...s.freeButton }}
-          >
-            Download Free Tracker →
-          </a>
-
-          <a
-            href={ETSY_URL}
-            target="_blank"
-            rel="noopener noreferrer sponsored"
-            style={{ ...s.button, ...s.etsyButton }}
-          >
-            Get the Full 64-Page Tracker on Etsy →
-          </a>
-        </section>
-
         <section>
-          <p style={s.p}>
-            Streaming on MyFreeCams can mean keeping track of a lot of
-            different numbers.
-          </p>
+          <h2 style={s.h2}>What's Included in the FREE Mini Tracker</h2>
 
           <p style={s.p}>
-            How many tokens did you earn? How long were you online? Which
-            hours performed best? Which sessions were actually worth your
-            time? Did a particular show type, goal, or game perform better
-            than usual?
+            The free MyFreeCams Mini Tracker contains <strong>7 essential pages</strong> designed to help you track what matters most:
           </p>
 
-          <p style={s.p}>
-            A simple <strong>MyFreeCams earnings tracker</strong> can make
-            those questions much easier to answer.
-          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '18px', margin: '24px 0' }}>
+            <div style={{ ...s.callout, borderLeft: '4px solid #00d9a6' }}>
+              <strong>📋 Daily Session Log</strong>
+              <p style={{ ...s.p, marginTop: '8px', marginBottom: '0' }}>
+                Track date, time, duration, show type, tokens, USD, tips, tippers, followers gained, and notes for each stream
+              </p>
+            </div>
 
-          <p style={s.p}>
-            Instead of relying on memory, you can record what happened during
-            your streams and start looking for patterns in your own numbers.
-          </p>
+            <div style={{ ...s.callout, borderLeft: '4px solid #19c9ff' }}>
+              <strong>⏰ Hourly Earnings Log</strong>
+              <p style={{ ...s.p, marginTop: '8px', marginBottom: '0' }}>
+                Calculate your hourly rate (USD per hour) and identify your most profitable streaming windows
+              </p>
+            </div>
+
+            <div style={{ ...s.callout, borderLeft: '4px solid #ff2d8d' }}>
+              <strong>📊 Detailed Session Review</strong>
+              <p style={{ ...s.p, marginTop: '8px', marginBottom: '0' }}>
+                Break down each session by segment, note your strongest and weakest moments, identify patterns
+              </p>
+            </div>
+
+            <div style={{ ...s.callout, borderLeft: '4px solid #00d9a6' }}>
+              <strong>🧪 Best-Time Experiment</strong>
+              <p style={{ ...s.p, marginTop: '8px', marginBottom: '0' }}>
+                Test a specific schedule hypothesis before deciding it's a pattern that works for you
+              </p>
+            </div>
+
+            <div style={{ ...s.callout, borderLeft: '4px solid #19c9ff' }}>
+              <strong>🎯 30-Day Action Plan</strong>
+              <p style={{ ...s.p, marginTop: '8px', marginBottom: '0' }}>
+                Set your primary income goal, define what to test, plan fan follow-up, define success
+              </p>
+            </div>
+
+            <div style={{ ...s.callout, borderLeft: '4px solid #ff2d8d' }}>
+              <strong>📈 Performance Notes</strong>
+              <p style={{ ...s.p, marginTop: '8px', marginBottom: '0' }}>
+                Record what worked in each session and what you'll change next time
+              </p>
+            </div>
+          </div>
+
+          <div style={s.callout}>
+            <strong>Perfect for getting started:</strong>
+            <p style={{ ...s.p, marginTop: '10px', marginBottom: '0' }}>
+              The free tracker gives you everything you need to begin collecting real data about your MyFreeCams performance. Print it, fill it out after each stream, and start identifying patterns in your own numbers.
+            </p>
+          </div>
         </section>
 
-        <h2>Why Use a MyFreeCams Earnings Tracker?</h2>
+        <h2>🆓 Free vs. Full Tracker: Which Is Right for You?</h2>
 
         <p style={s.p}>
-          Your total earnings tell you <strong>what you made</strong>.
+          The free Mini Tracker is perfect for getting started. The full tracker is built for creators who want comprehensive business organization across the entire year.
         </p>
 
-        <p style={s.p}>
-          They do not always tell you <strong>why you made it</strong>.
-        </p>
-
-        <p style={s.p}>
-          For example, a $75 session that took two hours may give you more
-          useful information than a $100 session that took five hours.
-        </p>
-
-        <p style={s.p}>
-          That is why tracking more than your final earnings can be useful.
-          You can record the details surrounding each stream and compare your
-          results over time.
-        </p>
-
-        <div style={s.callout}>
-          <strong>Track more than the final number.</strong>
-
-          <p style={{ ...s.p, marginTop: "10px", marginBottom: 0 }}>
-            Record your schedule, session length, tokens, estimated USD, tips,
-            tippers, followers, show type, and notes so you can see the
-            patterns behind your results.
-          </p>
+        <div style={{ overflowX: 'auto', margin: '28px 0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px' }}>
+            <thead>
+              <tr style={{ background: 'linear-gradient(90deg, rgba(0,217,166,.2), rgba(25,201,255,.15))' }}>
+                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 800, borderBottom: '2px solid rgba(0,217,166,0.5)' }}>Feature</th>
+                <th style={{ padding: '14px 12px', textAlign: 'center', fontWeight: 800, borderBottom: '2px solid rgba(0,217,166,0.5)', color: '#00d9a6' }}>FREE Mini</th>
+                <th style={{ padding: '14px 12px', textAlign: 'center', fontWeight: 800, borderBottom: '2px solid rgba(255,45,141,0.5)', color: '#ff2d8d' }}>Full Tracker</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Daily Session Tracking</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Hourly Earnings Logs</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Performance Reviews</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅ (Weekly & Monthly)</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Goal & Milestone Tracking</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅ (Expanded)</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Day-of-Week Performance</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>—</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Monthly Tracking (12 months)</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>—</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>VIP & Member Organization</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>—</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Game & Event Tracker</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>—</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Spending & Profit Tracking</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>—</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+                <td style={{ padding: '12px' }}>Re-engagement Planning</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>—</td>
+                <td style={{ padding: '12px', textAlign: 'center' }}>✅</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '12px', fontWeight: 700 }}>Total Pages</td>
+                <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700, color: '#00d9a6' }}>7 pages</td>
+                <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700, color: '#ff2d8d' }}>64+ pages</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <h2>Track Every MyFreeCams Session</h2>
+        <h2>Ready for More? Upgrade to the Full MyFreeCams Tracker</h2>
 
         <p style={s.p}>
-          The Daily Session Log gives you a repeatable place to record the
-          basic details of every stream.
+          The mini tracker is perfect for starting out. Once you're ready to track your entire business systematically across the year, the <strong>full 64-page MyFreeCams Creator Tip Tracker</strong> takes everything further.
         </p>
 
-        <p style={s.p}>
-          You can track:
-        </p>
+        <h3>📊 What's Included in the Full Tracker</h3>
 
-        <ul style={s.list}>
-          <li style={s.li}>Date and day</li>
-          <li style={s.li}>Start and end time</li>
-          <li style={s.li}>Total duration</li>
-          <li style={s.li}>Show type or theme</li>
-          <li style={s.li}>Tokens earned</li>
-          <li style={s.li}>Estimated USD</li>
-          <li style={s.li}>Tips</li>
-          <li style={s.li}>Unique tippers</li>
-          <li style={s.li}>Followers gained</li>
-          <li style={s.li}>Time blocks and notes</li>
-        </ul>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px', margin: '24px 0' }}>
+          <div style={{ ...s.callout, borderLeft: '4px solid #ff2d8d' }}>
+            <strong>📈 SESSION & EARNINGS TRACKING</strong>
+            <ul style={{ ...s.list, marginTop: '10px', marginBottom: '0' }}>
+              <li style={s.li}>Extended daily session logs</li>
+              <li style={s.li}>Detailed session reviews</li>
+              <li style={s.li}>Hourly earnings logs</li>
+              <li style={s.li}>Token, USD, tip tracking</li>
+              <li style={s.li}>Session duration & show type</li>
+            </ul>
+          </div>
 
-        <p style={s.p}>
-          There is also space to record <strong>what worked</strong> and what
-          you want to <strong>change next session</strong>.
-        </p>
+          <div style={{ ...s.callout, borderLeft: '4px solid #00d9a6' }}>
+            <strong>📊 PERFORMANCE & PLANNING</strong>
+            <ul style={{ ...s.list, marginTop: '10px', marginBottom: '0' }}>
+              <li style={s.li}>Weekly performance reviews</li>
+              <li style={s.li}>Monthly earnings tracking</li>
+              <li style={s.li}>Goal & milestone tracking</li>
+              <li style={s.li}>Best-time experiments</li>
+              <li style={s.li}>30-day action planning</li>
+              <li style={s.li}>Day-of-week analysis</li>
+            </ul>
+          </div>
 
-        <h2>Track Your MyFreeCams Earnings Per Hour</h2>
+          <div style={{ ...s.callout, borderLeft: '4px solid #19c9ff' }}>
+            <strong>👥 MEMBER & VIP ORGANIZATION</strong>
+            <ul style={{ ...s.list, marginTop: '10px', marginBottom: '0' }}>
+              <li style={s.li}>Member & VIP tracking</li>
+              <li style={s.li}>Tipper & fan organization</li>
+              <li style={s.li}>Follow-up planning sections</li>
+              <li style={s.li}>Re-engagement planner</li>
+              <li style={s.li}>Gifting tracker</li>
+            </ul>
+          </div>
 
-        <p style={s.p}>
-          Total earnings are only one way to compare sessions. Your hourly
-          earnings can give you another useful view of your performance.
-        </p>
+          <div style={{ ...s.callout, borderLeft: '4px solid #ff2d8d' }}>
+            <strong>📅 MONTHLY TRACKING (JAN-DEC)</strong>
+            <ul style={{ ...s.list, marginTop: '10px', marginBottom: '0' }}>
+              <li style={s.li}>12 month pages</li>
+              <li style={s.li}>Monthly earnings summary</li>
+              <li style={s.li}>Hours streamed tracking</li>
+              <li style={s.li}>Tippers & followers gained</li>
+              <li style={s.li}>Biggest wins & priorities</li>
+            </ul>
+          </div>
 
-        <p style={s.p}>
-          The tracker includes hourly earnings pages where you can record the
-          date, hour, minutes, tokens, USD, tips, and notes.
-        </p>
+          <div style={{ ...s.callout, borderLeft: '4px solid #00d9a6' }}>
+            <strong>🎮 GAMES & SPECIAL SHOWS</strong>
+            <ul style={{ ...s.list, marginTop: '10px', marginBottom: '0' }}>
+              <li style={s.li}>Dedicated game tracker</li>
+              <li style={s.li}>Event show tracker</li>
+              <li style={s.li}>Goal achievement tracking</li>
+              <li style={s.li}>Performance analysis</li>
+              <li style={s.li}>Retire underperformers</li>
+            </ul>
+          </div>
 
-        <p style={s.p}>
-          This can help you compare different streaming windows and determine
-          which parts of your schedule are worth testing again.
-        </p>
-
-        <h2>Find Your Best MyFreeCams Streaming Hours</h2>
-
-        <p style={s.p}>
-          There is no single streaming schedule that works perfectly for every
-          creator.
-        </p>
-
-        <p style={s.p}>
-          Your audience, time zone, regulars, room strategy, and content can
-          all affect your results.
-        </p>
-
-        <p style={s.p}>
-          That is why testing your own schedule can be more useful than simply
-          copying someone else's advice.
-        </p>
-
-        <h3>Track your performance by day</h3>
-
-        <p style={s.p}>
-          The full workbook includes separate performance trackers for
-          Monday through Sunday, giving you a way to compare your sessions,
-          average tokens, hourly performance, and patterns across the week.
-        </p>
-
-        <h3>Test your best-time hypothesis</h3>
-
-        <p style={s.p}>
-          The tracker also includes a Best-Time Experiment page so you can
-          test different time windows instead of assuming a schedule is
-          profitable after only one good stream.
-        </p>
-
-        <h2>Turn Your Numbers Into Goals</h2>
-
-        <p style={s.p}>
-          Tracking is much more useful when it leads to action.
-        </p>
-
-        <p style={s.p}>
-          Instead of simply writing down what happened, use your data to
-          decide what you want to test next.
-        </p>
-
-        <p style={s.p}>
-          Your tracking process can become:
-        </p>
-
-        <div style={s.callout}>
-          <strong>Stream → Track → Review → Test → Adjust</strong>
-
-          <p style={{ ...s.p, marginTop: "10px", marginBottom: 0 }}>
-            Repeat the process and build your strategy around your own
-            performance data.
-          </p>
+          <div style={{ ...s.callout, borderLeft: '4px solid #19c9ff' }}>
+            <strong>💰 SPENDING & PROFIT</strong>
+            <ul style={{ ...s.list, marginTop: '10px', marginBottom: '0' }}>
+              <li style={s.li}>Spending tracker</li>
+              <li style={s.li}>Profit dashboard</li>
+              <li style={s.li}>Monthly profit review</li>
+              <li style={s.li}>Business expense tracking</li>
+            </ul>
+          </div>
         </div>
-
-        <h2>Track Your MyFreeCams Business Month by Month</h2>
-
-        <p style={s.p}>
-          Individual sessions can be useful, but longer-term patterns become
-          easier to recognize when you compare your performance over several
-          weeks and months.
-        </p>
-
-        <p style={s.p}>
-          The full MyFreeCams workbook includes monthly tracking pages for the
-          year, giving you space to review totals, hours streamed, sessions,
-          tippers, followers gained, wins, and next-month priorities.
-        </p>
-
-        <h2>Track Games and Special Shows</h2>
-
-        <p style={s.p}>
-          Games and special shows can also be tested and reviewed rather than
-          relying on guesswork.
-        </p>
-
-        <p style={s.p}>
-          The full tracker includes a dedicated Game &amp; Event Show Tracker
-          where you can record earnings, goals, whether goals were met,
-          top-performing games or events, and which ones you want to retire.
-        </p>
 
         <section style={s.cta}>
           <div style={s.ctaTitle}>
-            Ready for the Complete Tracker?
+            💎 Get the Full Tracker
           </div>
 
           <p style={s.ctaText}>
-            The free Mini Tracker is a starting point. The full MyFreeCams
-            Creator Tip Tracker expands the system with a much larger
-            collection of session, earnings, performance, monthly,
-            day-of-week, goal, and game/event tracking pages.
+            Start with the free mini tracker. When you're ready to scale your tracking system across the entire year with comprehensive business organization, the full 64-page MyFreeCams Creator Tip Tracker is available on Etsy.
           </p>
-
-          <a
-            href={FREE_TRACKER_URL}
-            download
-            style={{ ...s.button, ...s.freeButton }}
-          >
-            Download Free Mini Tracker →
-          </a>
 
           <a
             href={ETSY_URL}
             target="_blank"
             rel="noopener noreferrer sponsored"
-            style={{ ...s.button, ...s.etsyButton }}
+            style={{ ...s.button, ...s.etsyButton, fontSize: '16px', fontWeight: 900, padding: '16px 32px' }}
           >
-            Shop the Full MyFreeCams Tracker →
+            🛒 Shop Full Tracker on Etsy
           </a>
+
+          <p style={{ ...s.small, marginTop: '12px' }}>
+            Printable PDF + Editable Google Sheets Version included
+          </p>
         </section>
 
-        <h2>Free MyFreeCams Tracker vs. Full Tracker</h2>
+        <h2>Other Creator Tools from Pretty Profitz</h2>
 
         <p style={s.p}>
-          The free Mini Tracker is designed to let you start using the system
-          without paying for anything first.
+          The MyFreeCams Mini Tracker is just one tool in a complete Pretty Profitz product suite designed to help cam models build better businesses. Here are more popular options:
         </p>
 
-        <p style={s.p}>
-          The full paid tracker is the expanded version for creators who want
-          a much more complete workbook for ongoing tracking, reviews,
-          planning, and business organization.
-        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px', margin: '24px 0' }}>
+          <div style={{ ...s.callout, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ ...s.h3, marginTop: '0', marginBottom: '10px', fontSize: '18px' }}>
+              💎 VIP Client Tracker
+            </h3>
+            <p style={{ ...s.p, marginBottom: '10px', flex: 1 }}>
+              Comprehensive system to manage VIPs, tippers, profits, revenue tracking, spending, and re-engagement — everything you need to organize your entire creator business.
+            </p>
+            <a
+              href="https://www.etsy.com/listing/1234567890/vip-client-tracker"
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              style={{ ...s.button, ...s.etsyButton, textAlign: 'center', fontWeight: 700 }}
+            >
+              View on Etsy →
+            </a>
+          </div>
+
+          <div style={{ ...s.callout, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ ...s.h3, marginTop: '0', marginBottom: '10px', fontSize: '18px' }}>
+              🎡 Spin the Wheel Template Pack
+            </h3>
+            <p style={{ ...s.p, marginBottom: '10px', flex: 1 }}>
+              Fully editable Canva templates for creating custom tip wheel games. Boost engagement, increase tips, and make game shows interactive with your own branded wheels.
+            </p>
+            <a
+              href="https://www.etsy.com/listing/1234567890/spin-wheel-template-pack"
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              style={{ ...s.button, ...s.etsyButton, textAlign: 'center', fontWeight: 700 }}
+            >
+              View on Etsy →
+            </a>
+          </div>
+
+          <div style={{ ...s.callout, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ ...s.h3, marginTop: '0', marginBottom: '10px', fontSize: '18px' }}>
+              💰 Chaturbate Earnings Bundle
+            </h3>
+            <p style={{ ...s.p, marginBottom: '10px', flex: 1 }}>
+              Similar tracking system for Chaturbate models. Track earnings, growth, and performance across your Chaturbate streams with dedicated templates.
+            </p>
+            <a
+              href="https://www.etsy.com/listing/1234567890/chaturbate-tracker-bundle"
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              style={{ ...s.button, ...s.etsyButton, textAlign: 'center', fontWeight: 700 }}
+            >
+              View on Etsy →
+            </a>
+          </div>
+        </div>
+
+        <section style={{ ...s.cta, background: 'linear-gradient(145deg, rgba(25,201,255,.15), rgba(0,217,166,.12))', border: '2px solid rgba(25,201,255,0.5)', marginBottom: '34px' }}>
+          <div style={{ ...s.ctaTitle, fontSize: '26px', color: '#19c9ff' }}>
+            💰 Make More & Keep More with CamCash
+          </div>
+
+          <p style={{ ...s.ctaText, fontSize: '16px' }}>
+            Tracking your earnings is step one. But getting paid faster and keeping more of what you earn? That's where <strong>CamCash</strong> comes in.
+          </p>
+
+          <p style={{ ...s.ctaText, fontSize: '16px', marginBottom: '18px' }}>
+            CamCash is the payment platform built FOR cam models, BY cam models. Instant payouts, lower fees, and real support that understands your business.
+          </p>
+
+          <a
+            href="/demo"
+            style={{ ...s.button, background: 'linear-gradient(90deg, #19c9ff, #00d9a6)', color: '#041014', fontSize: '16px', fontWeight: 900, padding: '16px 32px' }}
+          >
+            💳 Learn About CamCash
+          </a>
+
+          <p style={{ ...s.small, marginTop: '12px' }}>
+            Track your earnings with the mini tracker, get paid faster with CamCash
+          </p>
+        </section>
 
         <h2>Frequently Asked Questions</h2>
 
         <div style={s.faq}>
           <div style={s.faqItem}>
             <div style={s.faqQ}>
-              What is a MyFreeCams earnings tracker?
+              🎁 Is the MyFreeCams Mini Tracker really free?
             </div>
 
             <p style={s.p}>
-              A MyFreeCams earnings tracker is a worksheet or digital tool for
-              recording streaming sessions, tokens, tips, estimated earnings,
-              hours, tippers, and other performance information.
+              Yes, 100% free. No signup required, no email list, no hidden costs. Download the PDF and start using it immediately.
             </p>
           </div>
 
           <div style={s.faqItem}>
             <div style={s.faqQ}>
-              Why should I track my MyFreeCams earnings?
+              💾 What format is the tracker?
             </div>
 
             <p style={s.p}>
-              Tracking gives you a way to compare sessions, identify patterns,
-              evaluate your hourly results, and make decisions based on your
-              own performance.
+              The tracker is a printable PDF that works on any device (desktop, tablet, mobile). You can print it out or use it digitally with any PDF reader or annotation app.
             </p>
           </div>
 
           <div style={s.faqItem}>
             <div style={s.faqQ}>
-              Is there a free MyFreeCams tracker?
+              ✏️ Can I edit the tracker?
             </div>
 
             <p style={s.p}>
-              Yes. The free Mini Tracker gives you selected pages from the
-              larger creator tracking system so you can start tracking without
-              purchasing the full workbook.
+              The free PDF is printable and fillable. We also offer an editable Canva template version that you can customize to your branding.
             </p>
           </div>
 
           <div style={s.faqItem}>
             <div style={s.faqQ}>
-              Can I use the tracker digitally?
+              📱 Does it work on mobile?
             </div>
 
             <p style={s.p}>
-              Yes. The tracker is provided as a PDF that can be printed or
-              used digitally with compatible PDF annotation software.
+              Yes. The PDF works on any device. We recommend using a PDF annotation app on mobile (like Adobe Acrobat Reader or GoodNotes) for easier editing on-the-go.
             </p>
           </div>
 
           <div style={s.faqItem}>
             <div style={s.faqQ}>
-              Where can I get the full MyFreeCams tracker?
+              🆚 Should I get the free tracker or the full tracker?
             </div>
 
             <p style={s.p}>
-              The complete MyFreeCams Creator Tip Tracker is available through
-              the Pretty Profitz Etsy listing.
+              Start with the FREE mini tracker. It's perfect for getting into the habit of tracking. Once you're tracking consistently and want to expand to monthly tracking, VIP organization, or spending analysis, the full tracker is worth the investment.
+            </p>
+          </div>
+
+          <div style={s.faqItem}>
+            <div style={s.faqQ}>
+              💎 What's the difference between the free and full trackers?
+            </div>
+
+            <p style={s.p}>
+              The free mini tracker has 7 essential pages for daily tracking. The full tracker has 64+ pages including weekly/monthly reviews, annual tracking (Jan-Dec), VIP organization, game/event tracking, spending analysis, and business planning tools.
+            </p>
+
+            <p style={s.p}}>
+              See the comparison table above for details.
+            </p>
+          </div>
+
+          <div style={s.faqItem}>
+            <div style={s.faqQ}>
+              🛒 Where do I buy the full tracker?
+            </div>
+
+            <p style={s.p}>
+              The full MyFreeCams Creator Tip Tracker is available on Etsy at pretty-profitz.etsy.com. It includes both printable PDF and editable Google Sheets versions.
             </p>
 
             <p style={s.p}>
@@ -575,8 +695,18 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
                 rel="noopener noreferrer sponsored"
                 style={s.link}
               >
-                View the Full MyFreeCams Tracker on Etsy →
+                Shop the Full Tracker on Etsy →
               </a>
+            </p>
+          </div>
+
+          <div style={s.faqItem}>
+            <div style={s.faqQ}>
+              ❓ What if I have questions about using the tracker?
+            </div>
+
+            <p style={s.p}>
+              Visit our <a href="/blog/myfreecams-camscore-explained" style={s.link}>MyFreeCams guides</a> or <a href="/contact" style={s.link}>contact us</a> with questions. We're here to help.
             </p>
           </div>
         </div>
