@@ -674,7 +674,7 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
               The free mini tracker has 7 essential pages for daily tracking. The full tracker has 64+ pages including weekly/monthly reviews, annual tracking (Jan-Dec), VIP organization, game/event tracking, spending analysis, and business planning tools.
             </p>
 
-            <p style={s.p}}>
+            <p style={s.p}>
               See the comparison table above for details.
             </p>
           </div>
