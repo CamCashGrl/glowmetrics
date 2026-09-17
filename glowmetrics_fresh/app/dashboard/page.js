@@ -1394,6 +1394,7 @@ export default function Dashboard() {
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
+  const [noticedIndex, setNoticedIndex] = useState(0)
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
@@ -3328,69 +3329,156 @@ const stopImportMessageRotation = () => {
           // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
           // bestHour/platformBestTimes use internally (lib/analytics.js).
           const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
+          // ── "CamCash Noticed" insight row — every value below reuses data
+          // already computed elsewhere in this component; nothing is invented,
+          // and each insight falls back to "Not enough data yet" if the
+          // underlying number isn't real.
+          const dayInsight = (() => {
+            if (!isBestDay || !bestDay?.avg || !sessionAvg || sessionAvg <= 0) return null
+            const pct = Math.round(((bestDay.avg - sessionAvg) / sessionAvg) * 100)
+            if (!isFinite(pct) || pct <= 0) return null
+            return { day: bestDay.day, pct, avg: bestDay.avg, otherAvg: sessionAvg }
+          })()
+          // Platform share + fan lifetime spend are already surfaced below as
+          // "Best Platform" / "Likely Online" / "Re-engage", so the noticed
+          // row deliberately leaves those out to avoid repeating the same
+          // number twice in one card — only genuinely new signals go here.
+          const fanInsight = (() => {
+            const topWhale = [...(whales || [])].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+            if (!topWhale || !topWhale.totalUSD) return null
+            const alreadyShown = [...likelyOnline, ...reengageFans.map(w => w)].some(w => w.username?.toLowerCase() === topWhale.username?.toLowerCase())
+            if (alreadyShown) return null
+            return { username: topWhale.username, totalUSD: topWhale.totalUSD, tipCount: topWhale.tipCount }
+          })()
+          const sessionLengthInsight = (() => {
+            const meaningful = analytics?.meaningfulSessions || []
+            if (meaningful.length < 3) return null
+            const short = meaningful.filter(s => (s.durationMinutes || 0) < 60)
+            const long = meaningful.filter(s => (s.durationMinutes || 0) >= 60)
+            if (!short.length || !long.length) return null
+            const shortAvg = short.reduce((s, x) => s + (x.totalUSD || 0), 0) / short.length
+            const longAvg = long.reduce((s, x) => s + (x.totalUSD || 0), 0) / long.length
+            if (shortAvg <= 0 || longAvg <= shortAvg) return null
+            const pct = Math.round(((longAvg - shortAvg) / shortAvg) * 100)
+            return { pct, shortAvg, longAvg }
+          })()
+          const noticedCards = [
+            dayInsight && { key: 'day', icon: '📅', label: 'Day Insight', color: C.cyan,
+              title: `You earn ${dayInsight.pct}% more on ${dayInsight.day}s`,
+              body: `Your earnings are highest on ${dayInsight.day}s, with an average of $${dayInsight.avg.toFixed(2)} compared to $${dayInsight.otherAvg.toFixed(2)} other days.` },
+            sessionLengthInsight && { key: 'session', icon: '⏱️', label: 'Session Insight', color: C.indigo,
+              title: `Sessions 60+ min earn ${sessionLengthInsight.pct}% more`,
+              body: `Sessions under an hour average $${sessionLengthInsight.shortAvg.toFixed(0)}, while sessions of 60+ minutes average $${sessionLengthInsight.longAvg.toFixed(0)}.` },
+            fanInsight && { key: 'fan', icon: '👤', label: 'Fan Insight', color: C.pink,
+              title: `Your top fan reached $${fanInsight.totalUSD.toFixed(0)}`,
+              body: `${fanInsight.username} has spent $${fanInsight.totalUSD.toFixed(0)} with you${fanInsight.tipCount ? ` across ${fanInsight.tipCount} tips` : ''}.` }
+          ].filter(Boolean)
+          const noticedSafeIndex = noticedCards.length ? ((noticedIndex % noticedCards.length) + noticedCards.length) % noticedCards.length : 0
+
           return (
             <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
 
-              {/* Header bar */}
-              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
-                    {atPeak ? '🟢' : '📋'}
+              {/* ═══ GO LIVE NOW hero ═══ */}
+              <div style={{ padding: '22px 24px', position: 'relative', overflow: 'hidden', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.22),rgba(34,211,238,0.10))' : 'linear-gradient(135deg,rgba(124,92,255,0.20),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+                <div style={{ flex: '1 1 260px', minWidth: 220 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: atPeak ? C.green : C.indigo, marginBottom: 10 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: atPeak ? C.green : C.indigo, boxShadow: `0 0 6px ${atPeak ? C.green : C.indigo}`, animation: 'pulse-msg 2s infinite' }} />
+                    {atPeak ? 'Peak Window LIVE' : 'Go Live Now'}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+                  <div style={{ fontSize: 22, fontWeight: 900, color: C.white, lineHeight: 1.25, marginBottom: 6 }}>
+                    {atPeak
+                      ? 'Your peak window is right now'
+                      : bhLabel
+                        ? `Your next peak window is ${hoursUntilPeak === 1 ? 'in 1 hour' : hoursUntilPeak != null ? `in ${hoursUntilPeak} hours` : 'coming up'}`
+                        : 'Not enough data yet to predict a peak window'}
+                  </div>
+                  {bhLabel ? (
+                    <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>
+                      {`Based on your past performance, you're most likely to earn between `}
+                      <span style={{ color: C.white, fontWeight: 700 }}>{bhLabel}</span>
+                      {` on `}
+                      <span style={{ color: C.white, fontWeight: 700 }}>{displayPlat}</span>
+                      {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <span style={{ color: C.gold, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span> if you stream 60+ min.</>}
                     </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>Upload more tip history so CamCash can find your real peak earning window.</div>
+                  )}
+                  {bhLabel && (
+                    <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <span style={{ fontSize: 15 }}>⏰</span>
+                      <div>
+                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Peak window</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>{bhLabel}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ marginTop: 16 }}>
+                    <button onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}
+                      style={{ padding: '11px 20px', borderRadius: 12, border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', background: 'linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 18px rgba(124,92,255,0.28)' }}>
+                      Build my stream plan →
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {atPeak
-                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
-                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
-                  }
+                <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 92, height: 92, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `conic-gradient(${atPeak ? '#10B981' : '#7C5CFF'}, #22D3EE, ${atPeak ? '#10B981' : '#7C5CFF'})`, boxShadow: `0 0 24px ${atPeak ? 'rgba(16,185,129,0.35)' : 'rgba(124,92,255,0.3)'}` }}>
+                    <div style={{ width: 76, height: 76, borderRadius: '50%', background: '#0a0c18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{atPeak ? '🟢' : '⏱️'}</div>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted, textAlign: 'center' }}>More time live = more tips</div>
                 </div>
               </div>
 
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
-                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
-                        {atPeak
-                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
-                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
-                        }
+              {/* ═══ CAMCASH NOTICED — insight carousel ═══ */}
+              {noticedCards.length > 0 && (
+                <div style={{ padding: '16px 20px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14 }}>✨</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>CamCash Noticed</div>
+                        <div style={{ fontSize: 10.5, color: C.muted }}>Real insights. Real opportunities. Just for you.</div>
                       </div>
-                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-                        {`Since it's ${todayName}`}
-                        {isBestDay ? ` (your highest-earning day)` : ``}
-                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
-                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
-                        {`. Stream `}
-                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
-                        {` to earn `}
-                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
-                        {` — longer sessions earn `}
-                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
-                        {` on average.`}
-                      </div>
-                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
-                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
-                        </div>
-                      )}
-                      {atPeak && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
-                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
-                        </div>
-                      )}
                     </div>
+                    {noticedCards.length > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 10.5, color: C.muted }}>{noticedSafeIndex + 1}/{noticedCards.length}</span>
+                        <button aria-label="Previous insight" onClick={() => setNoticedIndex(i => i - 1)}
+                          style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: C.white, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+                        <button aria-label="Next insight" onClick={() => setNoticedIndex(i => i + 1)}
+                          style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: C.white, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+                      </div>
+                    )}
                   </div>
-                )}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                    {(() => {
+                      // desktop shows up to 3 cards starting at the carousel position; mobile/narrow
+                      // layouts wrap naturally via the grid above
+                      const visible = []
+                      const count = Math.min(3, noticedCards.length)
+                      for (let i = 0; i < count; i++) visible.push(noticedCards[(noticedSafeIndex + i) % noticedCards.length])
+                      return visible.map((card, i) => (
+                        <div key={card.key + i} style={{ padding: '13px 14px', borderRadius: 12, background: `${card.color}0d`, border: `1px solid ${card.color}28`, backdropFilter: 'blur(6px)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <span style={{ fontSize: 13 }}>{card.icon}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: card.color, textTransform: 'uppercase', letterSpacing: 0.6 }}>{card.label}</span>
+                          </div>
+                          <div style={{ fontSize: 12.5, fontWeight: 800, color: C.white, marginBottom: 5, lineHeight: 1.4 }}>{card.title}</div>
+                          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{card.body}</div>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                  {noticedCards.length > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+                      {noticedCards.map((c, i) => (
+                        <button key={c.key} aria-label={`Show insight ${i + 1}`} onClick={() => setNoticedIndex(i)}
+                          style={{ width: i === noticedSafeIndex ? 16 : 6, height: 6, borderRadius: 4, border: 'none', cursor: 'pointer', background: i === noticedSafeIndex ? 'linear-gradient(90deg,#16F4FF,#7C5CFF)' : 'rgba(255,255,255,0.15)', transition: 'width 0.2s' }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
                 {/* ROW 1 — Today / Peak Window / Best Platform */}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
