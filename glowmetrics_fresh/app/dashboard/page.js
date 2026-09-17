@@ -1394,6 +1394,7 @@ export default function Dashboard() {
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedWhale, setSelectedWhale] = useState(null)
+  const [noticedIndex, setNoticedIndex] = useState(0)
   const [messageTarget, setMessageTarget] = useState(null)
   const [messageIndex, setMessageIndex] = useState(0)
   const [messageCopied, setMessageCopied] = useState(false)
@@ -3324,191 +3325,142 @@ const stopImportMessageRotation = () => {
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
-          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
-          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
-          // bestHour/platformBestTimes use internally (lib/analytics.js).
-          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
-          return (
-            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
+          // ── "CamCash Noticed" insight row — every value below reuses data
+          // already computed elsewhere in this component; nothing is invented,
+          // and each insight falls back to "Not enough data yet" if the
+          // underlying number isn't real.
+          const dayInsight = (() => {
+            if (!isBestDay || !bestDay?.avg || !sessionAvg || sessionAvg <= 0) return null
+            const pct = Math.round(((bestDay.avg - sessionAvg) / sessionAvg) * 100)
+            if (!isFinite(pct) || pct <= 0) return null
+            return { day: bestDay.day, pct, avg: bestDay.avg, otherAvg: sessionAvg }
+          })()
+          // Platform share + fan lifetime spend are already surfaced below as
+          // "Best Platform" / "Likely Online" / "Re-engage", so the noticed
+          // row deliberately leaves those out to avoid repeating the same
+          // number twice in one card — only genuinely new signals go here.
+          const fanInsight = (() => {
+            const topWhale = [...(whales || [])].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+            if (!topWhale || !topWhale.totalUSD) return null
+            const alreadyShown = [...likelyOnline, ...reengageFans.map(w => w)].some(w => w.username?.toLowerCase() === topWhale.username?.toLowerCase())
+            if (alreadyShown) return null
+            return { username: topWhale.username, totalUSD: topWhale.totalUSD, tipCount: topWhale.tipCount }
+          })()
+          const sessionLengthInsight = (() => {
+            const meaningful = analytics?.meaningfulSessions || []
+            if (meaningful.length < 3) return null
+            const short = meaningful.filter(s => (s.durationMinutes || 0) < 60)
+            const long = meaningful.filter(s => (s.durationMinutes || 0) >= 60)
+            if (!short.length || !long.length) return null
+            const shortAvg = short.reduce((s, x) => s + (x.totalUSD || 0), 0) / short.length
+            const longAvg = long.reduce((s, x) => s + (x.totalUSD || 0), 0) / long.length
+            if (shortAvg <= 0 || longAvg <= shortAvg) return null
+            const pct = Math.round(((longAvg - shortAvg) / shortAvg) * 100)
+            return { pct, shortAvg, longAvg }
+          })()
+          const noticedCards = [
+            dayInsight && { key: 'day', icon: '📅', label: 'Day Insight', color: C.cyan,
+              title: `You earn ${dayInsight.pct}% more on ${dayInsight.day}s`,
+              body: `Your earnings are highest on ${dayInsight.day}s, with an average of $${dayInsight.avg.toFixed(2)} compared to $${dayInsight.otherAvg.toFixed(2)} other days.` },
+            sessionLengthInsight && { key: 'session', icon: '⏱️', label: 'Session Insight', color: C.indigo,
+              title: `Sessions 60+ min earn ${sessionLengthInsight.pct}% more`,
+              body: `Sessions under an hour average $${sessionLengthInsight.shortAvg.toFixed(0)}, while sessions of 60+ minutes average $${sessionLengthInsight.longAvg.toFixed(0)}.` },
+            fanInsight && { key: 'fan', icon: '👤', label: 'Fan Insight', color: C.pink,
+              title: `Your top fan reached $${fanInsight.totalUSD.toFixed(0)}`,
+              body: `${fanInsight.username} has spent $${fanInsight.totalUSD.toFixed(0)} with you${fanInsight.tipCount ? ` across ${fanInsight.tipCount} tips` : ''}.` }
+          ].filter(Boolean)
+          const noticedSafeIndex = noticedCards.length ? ((noticedIndex % noticedCards.length) + noticedCards.length) % noticedCards.length : 0
 
-              {/* Header bar */}
-              <div style={{ padding: '13px 20px', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.2),rgba(34,211,238,0.1))' : 'linear-gradient(135deg,rgba(124,92,255,0.18),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: atPeak ? 'linear-gradient(135deg,#10B981,#22D3EE)' : 'linear-gradient(135deg,#7C5CFF,#22D3EE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
-                    {atPeak ? '🟢' : '📋'}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>
-                      {atPeak ? 'Peak Window LIVE — Go Live Now' : 'Daily Brief'}
+          const visibleNoticed = []
+          {
+            const count = Math.min(3, noticedCards.length)
+            for (let i = 0; i < count; i++) visibleNoticed.push(noticedCards[(noticedSafeIndex + i) % noticedCards.length])
+          }
+
+          return (
+            <section className="cc-go-live-section" style={{ marginBottom: 20, animation: 'fadeUp 0.3s ease both' }}>
+
+              {/* ═══ GO LIVE NOW hero ═══ */}
+              <div className="cc-go-live-card">
+                <div className="cc-go-live-content">
+                  <div className="cc-go-live-eyebrow">{atPeak ? 'Peak Window LIVE' : 'Go Live Now'}</div>
+                  <h2 className="cc-go-live-title">
+                    {atPeak
+                      ? 'Your peak window is right now'
+                      : bhLabel
+                        ? <>Your next peak window is <span className="cc-go-live-title-accent">{hoursUntilPeak === 1 ? 'in 1 hour' : hoursUntilPeak != null ? `in ${hoursUntilPeak} hours` : 'coming up'}</span></>
+                        : 'Not enough data yet to predict a peak window'}
+                  </h2>
+                  {bhLabel ? (
+                    <p className="cc-go-live-description">
+                      {`Based on your past performance, you're most likely to earn between `}
+                      <strong>{bhLabel}</strong>
+                      {` on `}
+                      <strong>{displayPlat}</strong>
+                      {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <strong>${predictionLow}–${predictionHigh}</strong> if you stream 60+ min.</>}
+                    </p>
+                  ) : (
+                    <p className="cc-go-live-description">Upload more tip history so CamCash can find your real peak earning window.</p>
+                  )}
+                  {bhLabel && (
+                    <div className="cc-peak-window">
+                      <div>
+                        <span className="cc-peak-window-label">Peak window</span>
+                        <span className="cc-peak-window-value">{bhLabel}</span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{todayName} · based on your real session history</div>
-                  </div>
+                  )}
+                  <button className="cc-go-live-cta" onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}>
+                    Build my stream plan →
+                  </button>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {atPeak
-                    ? <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.5)', fontSize: 12, fontWeight: 700, color: C.green }}>🟢 Peak Now</div>
-                    : bhLabel && <div style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(124,92,255,0.12)', border: '1px solid rgba(124,92,255,0.3)', fontSize: 12, fontWeight: 600, color: C.indigo }}>⏰ Peak in {hoursUntilPeak}h</div>
-                  }
+
+                <div className="cc-go-live-visual">
+                  <div className="cc-go-live-ring">
+                    <span className="cc-go-live-camera">📹</span>
+                    <span className="cc-go-live-dollar">$</span>
+                  </div>
+                  <span className="cc-go-live-visual-caption">More time live = more tips</span>
                 </div>
               </div>
 
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ═══ BEST TIME TO STREAM ALERT ═══ */}
-                {bhLabel && (
-                  <div style={{ padding: '14px 16px', borderRadius: 13, background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(34,211,238,0.08))' : 'linear-gradient(135deg,rgba(124,92,255,0.12),rgba(34,211,238,0.06))', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(124,92,255,0.35)'}`, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{atPeak ? '🟢' : '⏰'}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: atPeak ? C.green : C.white, marginBottom: 5 }}>
-                        {atPeak
-                          ? `Your peak window is RIGHT NOW — go live on ${displayPlat} immediately`
-                          : `Your best time to stream today is ${bhLabel} on ${displayPlat}`
-                        }
-                      </div>
-                      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-                        {`Since it's ${todayName}`}
-                        {isBestDay ? ` (your highest-earning day)` : ``}
-                        {`, you peak at ${bhLabel} on ${displayPlat} with `}
-                        <span style={{ color: C.gold, fontWeight: 700 }}>${displayAvg.toFixed(0)} avg/session</span>
-                        {`. Stream `}
-                        <span style={{ color: C.cyan, fontWeight: 700 }}>60+ min</span>
-                        {` to earn `}
-                        <span style={{ color: C.green, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span>
-                        {` — longer sessions earn `}
-                        <span style={{ color: C.indigo, fontWeight: 700 }}>+101% more</span>
-                        {` on average.`}
-                      </div>
-                      {!atPeak && hoursUntilPeak !== null && hoursUntilPeak > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.indigo, fontWeight: 600 }}>
-                          ⏳ {hoursUntilPeak === 1 ? 'Starting in ~1 hour — prep your room now' : `${hoursUntilPeak} hours away — set a reminder`}
-                        </div>
-                      )}
-                      {atPeak && (
-                        <div style={{ marginTop: 8, fontSize: 11, color: C.green, fontWeight: 700 }}>
-                          🔥 This window closes in ~{(60 - new Date().getUTCMinutes())} minutes — don't wait
-                        </div>
-                      )}
+              {/* ═══ CAMCASH NOTICED — separate section, real carousel ═══ */}
+              {noticedCards.length > 0 && (
+                <section className="cc-noticed-section">
+                  <div className="cc-noticed-header">
+                    <div className="cc-noticed-icon">✨</div>
+                    <div>
+                      <h3 className="cc-noticed-title">CamCash Noticed</h3>
+                      <p className="cc-noticed-subtitle">Real insights. Real opportunities. Just for you.</p>
                     </div>
                   </div>
-                )}
-
-                {/* ROW 1 — Today / Peak Window / Best Platform */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
-                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
-                      {(() => {
-                        const _bdA = bestDay?.avg || sessionAvg
-                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
-                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
-                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
-                      })()}
+                  <div className="cc-noticed-carousel">
+                    {noticedCards.length > 1 && (
+                      <button className="cc-noticed-arrow prev" aria-label="Previous insight" onClick={() => setNoticedIndex(i => i - 1)}>←</button>
+                    )}
+                    <div className="cc-noticed-track">
+                      {visibleNoticed.map((card, i) => (
+                        <article className="cc-noticed-card" key={card.key + i}>
+                          <div className="cc-insight-type"><span>{card.icon}</span>{card.label}</div>
+                          <h4 className="cc-insight-title">{card.title}</h4>
+                          <p className="cc-insight-description">{card.body}</p>
+                        </article>
+                      ))}
                     </div>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
-                    {bestTimeLock.locked ? (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
-                        <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
-                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
-                        </div>
-                      </>
+                    {noticedCards.length > 1 && (
+                      <button className="cc-noticed-arrow next" aria-label="Next insight" onClick={() => setNoticedIndex(i => i + 1)}>→</button>
                     )}
                   </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
-                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>{(!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}</div>
-                  </div>
-
-                  {bhLabel && (
-                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
-                    </div>
-                  )}
-                </div>
-
-                {/* ROW 2 — Likely Online + Re-engage */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-
-                  {/* Likely Online */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
-                        Likely Online Right Now
-                      </div>
-                      {likelyOnline.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${w.username}`}
-                            title="Message fan"
-                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
-                        </div>
+                  {noticedCards.length > 1 && (
+                    <div className="cc-noticed-controls">
+                      {noticedCards.map((c, i) => (
+                        <button key={c.key} aria-label={`Show insight ${i + 1}`} onClick={() => setNoticedIndex(i)} className={`cc-noticed-dot${i === noticedSafeIndex ? ' active' : ''}`} />
                       ))}
                     </div>
                   )}
-
-                  {/* Re-engage */}
-                  {!atPeak && reengageFans.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        ⚠️ Re-engage Today
-                      </div>
-                      {reengageFans.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${w.username}`}
-                            title="Message fan"
-                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* If neither list has data */}
-                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
-                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
-                      No fan alerts right now — check back after more sessions.
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
+                </section>
+              )}
+            </section>
           )
         })()}
 
