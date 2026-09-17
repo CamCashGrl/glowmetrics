@@ -3371,109 +3371,90 @@ const stopImportMessageRotation = () => {
           ].filter(Boolean)
           const noticedSafeIndex = noticedCards.length ? ((noticedIndex % noticedCards.length) + noticedCards.length) % noticedCards.length : 0
 
+          const visibleNoticed = []
+          {
+            const count = Math.min(3, noticedCards.length)
+            for (let i = 0; i < count; i++) visibleNoticed.push(noticedCards[(noticedSafeIndex + i) % noticedCards.length])
+          }
+
           return (
-            <div style={{ marginBottom: 20 }}>
+            <div className="cc-go-live-section" style={{ marginBottom: 20, animation: 'fadeUp 0.3s ease both' }}>
 
-              {/* ═══ GO LIVE NOW — its own compact hero card ═══ */}
-              <div style={{ borderRadius: 20, overflow: 'hidden', position: 'relative', border: '1px solid transparent', backgroundImage: `linear-gradient(#0D1127,#0D1127), linear-gradient(135deg, rgba(22,244,255,0.55), rgba(85,184,255,0.35), rgba(124,92,255,0.5))`, backgroundOrigin: 'border-box', backgroundClip: 'padding-box, border-box', animation: 'fadeUp 0.3s ease both', boxShadow: `0 0 30px ${atPeak ? 'rgba(16,185,129,0.14)' : 'rgba(85,184,255,0.12)'}` }}>
-                {/* atmospheric corner glow */}
-                <div style={{ position: 'absolute', top: -60, right: -50, width: 200, height: 200, background: 'radial-gradient(circle, rgba(124,92,255,0.24), transparent 70%)', filter: 'blur(8px)', pointerEvents: 'none' }} />
-
-                <div style={{ position: 'relative', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-                  <div style={{ flex: '1 1 280px', minWidth: 220 }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: atPeak ? C.green : '#55B8FF', marginBottom: 6 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: atPeak ? C.green : '#55B8FF', boxShadow: `0 0 6px ${atPeak ? C.green : '#55B8FF'}`, animation: 'pulse-msg 2s infinite' }} />
-                      {atPeak ? 'Peak Window LIVE' : 'Go Live Now'}
-                    </div>
-                    <div style={{ fontSize: 19, fontWeight: 900, color: C.white, lineHeight: 1.2, marginBottom: 5 }}>
-                      {atPeak
-                        ? 'Your peak window is right now'
-                        : bhLabel
-                          ? `Your next peak window is ${hoursUntilPeak === 1 ? 'in 1 hour' : hoursUntilPeak != null ? `in ${hoursUntilPeak} hours` : 'coming up'}`
-                          : 'Not enough data yet to predict a peak window'}
-                    </div>
-                    {bhLabel ? (
-                      <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, maxWidth: 400 }}>
-                        {`You're most likely to earn between `}
-                        <span style={{ color: C.white, fontWeight: 700 }}>{bhLabel}</span>
-                        {` on `}
-                        <span style={{ color: C.white, fontWeight: 700 }}>{displayPlat}</span>
-                        {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <span style={{ color: C.gold, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span> for 60+ min.</>}
+              {/* ═══ GO LIVE NOW hero ═══ */}
+              <div className="cc-go-live-card">
+                <div className="cc-go-live-content">
+                  <div className="cc-go-live-eyebrow">{atPeak ? 'Peak Window LIVE' : 'Go Live Now'}</div>
+                  <h2 className="cc-go-live-title">
+                    {atPeak
+                      ? 'Your peak window is right now'
+                      : bhLabel
+                        ? <>Your next peak window is <span className="cc-go-live-title-accent">{hoursUntilPeak === 1 ? 'in 1 hour' : hoursUntilPeak != null ? `in ${hoursUntilPeak} hours` : 'coming up'}</span></>
+                        : 'Not enough data yet to predict a peak window'}
+                  </h2>
+                  {bhLabel ? (
+                    <p className="cc-go-live-description">
+                      {`Based on your past performance, you're most likely to earn between `}
+                      <strong>{bhLabel}</strong>
+                      {` on `}
+                      <strong>{displayPlat}</strong>
+                      {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <strong>${predictionLow}–${predictionHigh}</strong> if you stream 60+ min.</>}
+                    </p>
+                  ) : (
+                    <p className="cc-go-live-description">Upload more tip history so CamCash can find your real peak earning window.</p>
+                  )}
+                  {bhLabel && (
+                    <div className="cc-peak-window">
+                      <div>
+                        <span className="cc-peak-window-label">Peak window</span>
+                        <span className="cc-peak-window-value">{bhLabel}</span>
                       </div>
-                    ) : (
-                      <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, maxWidth: 400 }}>Upload more tip history so CamCash can find your real peak earning window.</div>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-                      {bhLabel && (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                          <span style={{ fontSize: 13 }}>⏰</span>
-                          <span style={{ fontSize: 12, fontWeight: 800, color: C.white }}>{bhLabel}</span>
-                        </div>
-                      )}
-                      <button onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}
-                        style={{ padding: '9px 18px', borderRadius: 11, border: 'none', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', background: 'linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 16px rgba(124,92,255,0.3)' }}>
-                        Build my stream plan →
-                      </button>
                     </div>
-                  </div>
+                  )}
+                  <button className="cc-go-live-cta" onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}>
+                    Build my stream plan →
+                  </button>
+                </div>
 
-                  {/* right-side camera/$ visual — compact, balances the copy rather than floating in empty space */}
-                  <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, position: 'relative' }}>
-                    <div style={{ position: 'absolute', inset: -14, background: `radial-gradient(circle, ${atPeak ? 'rgba(16,185,129,0.2)' : 'rgba(124,92,255,0.2)'}, transparent 72%)`, filter: 'blur(5px)', pointerEvents: 'none' }} />
-                    <div style={{ width: 92, height: 92, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `conic-gradient(from 0deg, #16F4FF, #55B8FF, #7C5CFF, ${atPeak ? '#10B981' : '#FF2BAE'}, #16F4FF)`, boxShadow: `0 0 20px ${atPeak ? 'rgba(16,185,129,0.28)' : 'rgba(124,92,255,0.28)'}`, animation: atPeak ? 'cmd-pulse 2s infinite' : 'none' }}>
-                      <div style={{ width: 78, height: 78, borderRadius: '50%', background: 'rgba(13,17,39,0.9)' }} />
-                      <div style={{ position: 'absolute', fontSize: 22 }}>📹</div>
-                      <div style={{ position: 'absolute', bottom: 6, right: 10, width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,#16F4FF,#7C5CFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, color: '#0D1127', boxShadow: '0 0 10px rgba(124,92,255,0.6)' }}>$</div>
-                    </div>
-                    <div style={{ fontSize: 9.5, color: C.muted, textAlign: 'center', position: 'relative' }}>More time live<br/>= more tips</div>
+                <div className="cc-go-live-visual">
+                  <div className="cc-go-live-ring">
+                    <span className="cc-go-live-camera">📹</span>
+                    <span className="cc-go-live-dollar">$</span>
                   </div>
+                  <span className="cc-go-live-visual-caption">More time live = more tips</span>
                 </div>
               </div>
 
-              {/* ═══ CAMCASH NOTICED — its own section, separate from the hero card ═══ */}
+              {/* ═══ CAMCASH NOTICED — separate section, real carousel ═══ */}
               {noticedCards.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 14 }}>✨</span>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>CamCash Noticed</div>
-                        <div style={{ fontSize: 10.5, color: C.muted }}>Real insights. Real opportunities. Just for you.</div>
-                      </div>
+                <div className="cc-noticed-section">
+                  <div className="cc-noticed-header">
+                    <span className="cc-noticed-icon">✨</span>
+                    <div>
+                      <h3 className="cc-noticed-title">CamCash Noticed</h3>
+                      <p className="cc-noticed-subtitle">Real insights. Real opportunities. Just for you.</p>
+                    </div>
+                  </div>
+                  <div className="cc-noticed-carousel">
+                    {noticedCards.length > 1 && (
+                      <button className="cc-noticed-arrow prev" aria-label="Previous insight" onClick={() => setNoticedIndex(i => i - 1)}>‹</button>
+                    )}
+                    <div className="cc-noticed-track">
+                      {visibleNoticed.map((card, i) => (
+                        <div className="cc-noticed-card" key={card.key + i}>
+                          <div className="cc-insight-type"><span>{card.icon}</span>{card.label}</div>
+                          <h4 className="cc-insight-title">{card.title}</h4>
+                          <p className="cc-insight-description">{card.body}</p>
+                        </div>
+                      ))}
                     </div>
                     {noticedCards.length > 1 && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10.5, color: C.muted }}>{noticedSafeIndex + 1}/{noticedCards.length}</span>
-                        <button aria-label="Previous insight" onClick={() => setNoticedIndex(i => i - 1)}
-                          style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: C.white, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
-                        <button aria-label="Next insight" onClick={() => setNoticedIndex(i => i + 1)}
-                          style={{ width: 24, height: 24, borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: C.white, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
-                      </div>
+                      <button className="cc-noticed-arrow next" aria-label="Next insight" onClick={() => setNoticedIndex(i => i + 1)}>›</button>
                     )}
                   </div>
-                  {/* fixed-width compact cards — never stretch to fill the row, even with 1-2 real insights */}
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {(() => {
-                      const visible = []
-                      const count = Math.min(3, noticedCards.length)
-                      for (let i = 0; i < count; i++) visible.push(noticedCards[(noticedSafeIndex + i) % noticedCards.length])
-                      return visible.map((card, i) => (
-                        <div key={card.key + i} style={{ width: 220, maxWidth: '100%', flex: '0 1 220px', padding: '13px 14px', borderRadius: 12, background: `${card.color}0d`, border: `1px solid ${card.color}28`, backdropFilter: 'blur(6px)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                            <span style={{ fontSize: 13 }}>{card.icon}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: card.color, textTransform: 'uppercase', letterSpacing: 0.6 }}>{card.label}</span>
-                          </div>
-                          <div style={{ fontSize: 12.5, fontWeight: 800, color: C.white, marginBottom: 5, lineHeight: 1.4 }}>{card.title}</div>
-                          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{card.body}</div>
-                        </div>
-                      ))
-                    })()}
-                  </div>
                   {noticedCards.length > 1 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+                    <div className="cc-noticed-controls">
                       {noticedCards.map((c, i) => (
-                        <button key={c.key} aria-label={`Show insight ${i + 1}`} onClick={() => setNoticedIndex(i)}
-                          style={{ width: i === noticedSafeIndex ? 16 : 6, height: 6, borderRadius: 4, border: 'none', cursor: 'pointer', background: i === noticedSafeIndex ? 'linear-gradient(90deg,#16F4FF,#7C5CFF)' : 'rgba(255,255,255,0.15)', transition: 'width 0.2s' }} />
+                        <button key={c.key} aria-label={`Show insight ${i + 1}`} onClick={() => setNoticedIndex(i)} className={`cc-noticed-dot${i === noticedSafeIndex ? ' active' : ''}`} />
                       ))}
                     </div>
                   )}
