@@ -3378,7 +3378,7 @@ const stopImportMessageRotation = () => {
           }
 
           return (
-            <div className="cc-go-live-section" style={{ marginBottom: 20, animation: 'fadeUp 0.3s ease both' }}>
+            <section className="cc-go-live-section" style={{ marginBottom: 20, animation: 'fadeUp 0.3s ease both' }}>
 
               {/* ═══ GO LIVE NOW hero ═══ */}
               <div className="cc-go-live-card">
@@ -3426,9 +3426,9 @@ const stopImportMessageRotation = () => {
 
               {/* ═══ CAMCASH NOTICED — separate section, real carousel ═══ */}
               {noticedCards.length > 0 && (
-                <div className="cc-noticed-section">
+                <section className="cc-noticed-section">
                   <div className="cc-noticed-header">
-                    <span className="cc-noticed-icon">✨</span>
+                    <div className="cc-noticed-icon">✨</div>
                     <div>
                       <h3 className="cc-noticed-title">CamCash Noticed</h3>
                       <p className="cc-noticed-subtitle">Real insights. Real opportunities. Just for you.</p>
@@ -3436,19 +3436,19 @@ const stopImportMessageRotation = () => {
                   </div>
                   <div className="cc-noticed-carousel">
                     {noticedCards.length > 1 && (
-                      <button className="cc-noticed-arrow prev" aria-label="Previous insight" onClick={() => setNoticedIndex(i => i - 1)}>‹</button>
+                      <button className="cc-noticed-arrow prev" aria-label="Previous insight" onClick={() => setNoticedIndex(i => i - 1)}>←</button>
                     )}
                     <div className="cc-noticed-track">
                       {visibleNoticed.map((card, i) => (
-                        <div className="cc-noticed-card" key={card.key + i}>
+                        <article className="cc-noticed-card" key={card.key + i}>
                           <div className="cc-insight-type"><span>{card.icon}</span>{card.label}</div>
                           <h4 className="cc-insight-title">{card.title}</h4>
                           <p className="cc-insight-description">{card.body}</p>
-                        </div>
+                        </article>
                       ))}
                     </div>
                     {noticedCards.length > 1 && (
-                      <button className="cc-noticed-arrow next" aria-label="Next insight" onClick={() => setNoticedIndex(i => i + 1)}>›</button>
+                      <button className="cc-noticed-arrow next" aria-label="Next insight" onClick={() => setNoticedIndex(i => i + 1)}>→</button>
                     )}
                   </div>
                   {noticedCards.length > 1 && (
@@ -3458,9 +3458,9 @@ const stopImportMessageRotation = () => {
                       ))}
                     </div>
                   )}
-                </div>
+                </section>
               )}
-            </div>
+            </section>
           )
         })()}
 
