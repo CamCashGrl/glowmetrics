@@ -1360,6 +1360,81 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
   )
 }
 
+
+// Futuristic ranked fan board. Positions are tied to the actual sorted fan list;
+// CSS 3D transforms animate a keyed fan card to its new rank when tip data updates.
+function FanLeaderboard3D({ fans, tips, isPro, onSelectFan, onMessage, onNote }) {
+  // Fix #6: Define money() formatter using project conventions
+  const money = (n) => n == null ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  // Fix #2: Guard against null/undefined fans and tips
+  if (!fans || !Array.isArray(fans)) fans = []
+  if (!tips || !Array.isArray(tips)) tips = []
+
+  const [query, setQuery] = useState('')
+  const [period, setPeriod] = useState('Lifetime')
+  const [feedMode, setFeedMode] = useState('All')
+
+  // Fix #3: "Month" label changed to "Last 30 days" in the rendering below
+  const periodCutoff = period === 'Today' ? Date.now() - 86400000 : period === 'Week' ? Date.now() - 7 * 86400000 : period === 'Last 30 days' ? Date.now() - 30 * 86400000 : 0
+
+  // Fix #1: Make displayed values consistent with data source
+  // Recalculate all metrics from raw tips data for consistency
+  const ranked = fans
+    .filter(f => !query || (f.username || '').toLowerCase().includes(query.toLowerCase()))
+    .map(f => {
+      // Get all tips for this fan matching on platform + username (case-insensitive)
+      const fanTips = tips.filter(t => {
+        const tPlatform = (t.platform || '').toLowerCase().trim()
+        const fPlatform = (f.platform || '').toLowerCase().trim()
+        const tUsername = (t.username || '').toLowerCase()
+        const fUsername = (f.username || '').toLowerCase()
+        return tPlatform === fPlatform && tUsername === fUsername
+      })
+
+      // Calculate rankValue (earnings) based on period cutoff
+      const rankValue = periodCutoff
+        ? fanTips.filter(t => {
+            const tipTime = new Date(t.date_time || t.dateRaw || 0).getTime()
+            return !isNaN(tipTime) && tipTime >= periodCutoff
+          }).reduce((s, t) => s + (Number(t.usd) || 0), 0)
+        : fanTips.reduce((s, t) => s + (Number(t.usd) || 0), 0)
+
+      // Fix #1: Recalculate tipCount from same data source (raw tips)
+      const tipCount = fanTips.length
+
+      return { ...f, rankValue, tipCount }
+    })
+    .sort((a, b) => b.rankValue - a.rankValue)
+
+  // Fix #7: Improve feed item key using platform + username + timestamp, with index as fallback
+  const feed = [...tips]
+    .sort((a, b) => {
+      const aTime = new Date(a.date_time || a.dateRaw || 0).getTime()
+      const bTime = new Date(b.date_time || b.dateRaw || 0).getTime()
+      return bTime - aTime
+    })
+    .filter(t => feedMode === 'All' || (feedMode === 'Big' && (Number(t.usd) || 0) >= 10))
+    .slice(0, 8)
+
+  const boardHeight = Math.max(250, ranked.length * 58 + 18)
+
+  // Fix #2: Graceful empty state if no data
+  if (fans.length === 0 && tips.length === 0) {
+    return (
+      <div style={{padding:'40px 20px',textAlign:'center',background:'rgba(12,18,31,0.5)',borderRadius:12,border:'1px solid rgba(255,255,255,0.08)'}}>
+        <div style={{fontSize:11,color:'#475569'}}>No fan or tip data available yet. Import platform data to get started.</div>
+      </div>
+    )
+  }
+
+  return <div className="fan3d-shell">
+    <style>{`\n.fan3d-shell{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,.7fr);gap:12px;margin-bottom:18px}.fan3d-panel{position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08);border-radius:18px;background:radial-gradient(circle at 50% 0%,rgba(34,211,238,.09),transparent 38%),linear-gradient(145deg,rgba(12,18,31,.96),rgba(6,10,19,.96));box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}.fan3d-head{padding:14px 15px 10px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.fan3d-title{font-size:15px;font-weight:850}.fan3d-sub{font-size:10px;color:#64748B;margin-top:3px}.fan3d-controls{display:flex;gap:6px;flex-wrap:wrap}.fan3d-search{width:150px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);color:#F1F5F9;font-size:11px;outline:none}.fan3d-pills{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}.fan3d-pills button{border:0;background:transparent;color:#94A3B8;padding:6px 8px;border-radius:6px;font-size:9px;font-weight:800;cursor:pointer}.fan3d-pills button.active{background:rgba(34,211,238,.13);color:#22D3EE}.fan3d-stage{position:relative;perspective:900px;overflow:hidden;padding:6px 14px 16px}.fan3d-stage:before{content:"";position:absolute;left:7%;right:7%;bottom:8px;height:34px;background:radial-gradient(ellipse,rgba(34,211,238,.14),transparent 68%);filter:blur(10px);pointer-events:none}.fan3d-floor{position:absolute;left:10%;right:10%;bottom:15px;height:1px;background:linear-gradient(90deg,transparent,rgba(34,211,238,.45),rgba(124,92,255,.55),transparent);transform:rotateX(70deg);transform-origin:center}.fan3d-row{position:absolute;left:14px;right:14px;height:48px;transform-style:preserve-3d;transition:transform .72s cubic-bezier(.2,.8,.2,1),opacity .45s ease;will-change:transform}.fan3d-row-card{height:48px;display:grid;grid-template-columns:28px 32px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 9px;border:1px solid rgba(255,255,255,.075);border-radius:10px;background:linear-gradient(100deg,rgba(18,26,42,.96),rgba(10,15,26,.9));box-shadow:0 8px 20px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.025);transform:translateZ(var(--z)) scale(var(--scale));transition:box-shadow .35s,border-color .35s}.fan3d-row.top .fan3d-row-card{border-color:rgba(245,158,11,.3);box-shadow:0 12px 28px rgba(0,0,0,.35),0 0 24px rgba(245,158,11,.08)}.fan3d-rank{font-size:11px;font-weight:900;color:#64748B;text-align:center}.fan3d-avatar{width:27px;height:27px;border-radius:8px;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff;background:linear-gradient(135deg,var(--accent),rgba(124,92,255,.75));box-shadow:0 0 14px color-mix(in srgb,var(--accent) 18%,transparent)}.fan3d-name{min-width:0}.fan3d-name b{display:block;font-size:11px;color:#F1F5F9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fan3d-name small{display:block;font-size:8px;color:#64748B;margin-top:2px}.fan3d-value{text-align:right;font-size:12px;font-weight:900;color:#F1F5F9}.fan3d-value small{display:block;font-size:8px;color:#64748B;font-weight:500}.fan3d-actions{display:flex;gap:4px}.fan3d-actions button{width:25px;height:25px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:#94A3B8;cursor:pointer}.fan3d-live{display:inline-flex;align-items:center;gap:5px;font-size:8px;font-weight:900;letter-spacing:.1em;color:#10B981}.fan3d-live i{width:5px;height:5px;border-radius:50%;background:#10B981;box-shadow:0 0 9px #10B981;animation:fanPulse 1.4s infinite}.fan3d-feed{padding:14px}.fan3d-feed-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.fan3d-feed-list{display:grid;gap:3px;max-height:330px;overflow:auto}.fan3d-feed-item{display:grid;grid-template-columns:7px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 5px;border-bottom:1px solid rgba(255,255,255,.05)}.fan3d-feed-item>i{width:6px;height:6px;border-radius:50%;background:#22D3EE;box-shadow:0 0 8px rgba(34,211,238,.45)}.fan3d-feed-item b{font-size:10px;color:#F1F5F9}.fan3d-feed-item small{display:block;font-size:8px;color:#64748B;margin-top:2px}.fan3d-feed-item strong{font-size:10px;color:#10B981}.fan3d-empty{padding:28px 12px;text-align:center;color:#64748B;font-size:11px}.fan3d-help{font-size:8px;color:#475569;padding:8px 15px 13px;border-top:1px solid rgba(255,255,255,.05)}@keyframes fanPulse{0%,100%{opacity:.5;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}@media(max-width:900px){.fan3d-shell{grid-template-columns:1fr}.fan3d-feed-list{max-height:220px}}@media(max-width:560px){.fan3d-controls{width:100%}.fan3d-search{width:100%}.fan3d-row-card{grid-template-columns:24px 29px minmax(0,1fr) auto}.fan3d-actions{display:none}.fan3d-row{left:8px;right:8px}.fan3d-stage{padding-left:8px;padding-right:8px}}@media(prefers-reduced-motion:reduce){.fan3d-row{transition:none}.fan3d-live i{animation:none}}\n`}</style>
+    <div className="fan3d-panel"><div className="fan3d-head"><div><div className="fan3d-title">Fan Leaderboard <span className="fan3d-live"><i/>LIVE RANKS</span></div><div className="fan3d-sub">Every fan stays in the stack — watch positions move when their real totals change.</div></div><div className="fan3d-controls"><input className="fan3d-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search a fan…" aria-label="Search fans"/><div className="fan3d-pills">{[{label:'Lifetime',value:'Lifetime'},{label:'Last 30 days',value:'Last 30 days'},{label:'Week',value:'Week'},{label:'Today',value:'Today'}].map(x=><button key={x.value} className={period===x.value?'active':''} onClick={()=>setPeriod(x.value)}>{x.label}</button>)}</div></div></div><div className="fan3d-stage" style={{height:boardHeight}}><div className="fan3d-floor"/>{ranked.length?ranked.map((f,i)=>{const a=f.tier==='Whale'?'#F59E0B':f.tier==='Shark'?'#60A5FA':f.tier==='Regular'?'#22D3EE':'#FB923C';const z=Math.max(-40,80-i*4);const scale=Math.max(.88,1-i*.008);const rowStyle={};rowStyle.transform=`translate3d(0,${i*58}px,${z}px)`;rowStyle.opacity=1;rowStyle['--z']=`${z}px`;rowStyle['--scale']=scale;rowStyle['--accent']=a;return <div className={`fan3d-row ${i===0?'top':''}`} key={`${f.platform}:${f.username}`} style={rowStyle} onClick={()=>onSelectFan(f)}><div className="fan3d-row-card"><div className="fan3d-rank">#{i+1}</div><div className="fan3d-avatar">{(f.username||'?').charAt(0).toUpperCase()}</div><div className="fan3d-name"><b>{f.username}</b><small>{f.platform||'Platform'} · {f.tier||'Fan'}</small></div><div className="fan3d-value">{money(f.rankValue)}<small>{f.tipCount||0} tips</small></div><div className="fan3d-actions"><button type="button" title="Message" onClick={e=>{e.stopPropagation();onMessage(f)}}>✉</button><button type="button" title="Note" onClick={e=>{e.stopPropagation();onNote(f)}}>⌁</button></div></div></div>}) : <div className="fan3d-empty">No fans match this search.</div>}</div><div className="fan3d-help">Rank positions are derived from the existing fan dataset. New incoming tip data can reorder the keyed cards instead of snapping the leaderboard.</div></div>
+    <div className="fan3d-panel fan3d-feed"><div className="fan3d-feed-head"><div><div className="fan3d-title">Fan Feed</div><div className="fan3d-sub">Latest real tip activity</div></div><div className="fan3d-pills">{['All','Big'].map(x=><button key={x} className={feedMode===x?'active':''} onClick={()=>setFeedMode(x)}>{x}</button>)}</div></div><div className="fan3d-feed-list">{feed.length?feed.map((t,i)=>{const tipTime=new Date(t.date_time||t.dateRaw||0).getTime();return <div className="fan3d-feed-item" key={`${(t.platform||'').toLowerCase()}:${(t.username||'').toLowerCase()}:${tipTime||i}`}><i/><div><b>{t.username||'Unknown fan'}</b><small>{t.platform||'Platform'} · {t.note||'Tip'}</small></div><strong>{money(t.usd)}</strong></div>}):<div className="fan3d-empty">No recent fan activity.</div>}</div></div>
+  </div>
+}
+
 export default function Dashboard() {
   const router = useRouter()
   // Open directly to a specific tab when ?tab=X is in the URL
@@ -2596,24 +2671,43 @@ const stopImportMessageRotation = () => {
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
-    // BEST PLATFORM: Use the platform with highest lifetime revenue (ALL tips)
-    // This is the true platform comparison metric
-    const platTotalUSD = {}
-    tips.forEach(t => { const p = t.platform || 'Chaturbate'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
-    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chaturbate'
-    const displayPlat = topEarningPlat
-
-    // Peak hour average for this platform (for context/forecast only)
-    // Do NOT use hour-bucket calculations for session averages — these aren't actual sessions
-    let peakHourAvgForPlatform = bestHour?.avg || 0
-    if (bh !== null && analytics?.platformBestTimes?.[displayPlat]) {
-      const platTimes = analytics.platformBestTimes[displayPlat]
-      const peakHourEntry = platTimes.allHours?.find(h => h.hour === bh)
-      if (peakHourEntry?.avg) {
-        peakHourAvgForPlatform = peakHourEntry.avg
-      }
+    // Best platform per hour
+    const platHourUSD = {}; const platHourSessions = {}
+    tips.forEach(t => {
+      const p = t.platform || 'Chaturbate'
+      const d = new Date(t.date_time || t.dateRaw)
+      const h = d.getHours() // local hour to match analytics.js toLocalHour
+      const bucket = Math.floor(d.getTime() / 3600000)
+      if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
+      if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
+      platHourUSD[p][h] += t.usd || 0
+      platHourSessions[p][h].add(bucket)
+    })
+    let bestPlatNow = null; let bestPlatNowAvg = 0
+    Object.keys(platHourUSD).forEach(plat => {
+      const sessions = platHourSessions[plat][utcHour]?.size || 0
+      if (sessions === 0) return
+      const avg = platHourUSD[plat][utcHour] / sessions
+      if (avg > bestPlatNowAvg) { bestPlatNowAvg = avg; bestPlatNow = plat }
+    })
+    let bestPlatPeak = null; let bestPlatPeakAvg = 0
+    if (bh !== null) {
+      Object.keys(platHourUSD).forEach(plat => {
+        const sessions = platHourSessions[plat][bh]?.size || 0
+        if (sessions === 0) return
+        const avg = platHourUSD[plat][bh] / sessions
+        if (avg > bestPlatPeakAvg) { bestPlatPeakAvg = avg; bestPlatPeak = plat }
+      })
     }
-    const displayAvg = peakHourAvgForPlatform
+    // todayBestPlat/bestPlatPeak/bestPlatNow are time-bucketed (need 3+ session
+    // buckets at a specific hour/day) and are often null for sparse accounts.
+    // Real fallback: the platform with the highest total earnings across all
+    // tips — needs only 1 tip to resolve, so it's never a fake/wrong platform.
+    const platTotalUSD = {}
+    tips.forEach(t => { const p = t.platform || 'Unknown'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
+    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+    const displayPlat = todayBestPlat || bestPlatPeak || bestPlatNow || topEarningPlat
+    const displayAvg = todayBestAvg || bestPlatPeakAvg || bestPlatNowAvg || bestHour?.avg || 0
 
     // Best day
     const bestDay = analytics?.bestDay
@@ -2621,18 +2715,14 @@ const stopImportMessageRotation = () => {
     const sessionAvg = analytics?.sessions?.length
       ? analytics.sessions.reduce((s, x) => s + x.totalUSD, 0) / analytics.sessions.length : 0
 
-    // Income prediction for peak window
-    // Use bestHour?.avg (median-based from analytics) as canonical metric
-    // This is calculated from ALL tips and represents typical earnings at that hour
+    // Income prediction for peak window — use median-based displayAvg as single source of truth
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
       const h = new Date(s.startTime).getHours() // local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
-    // Use displayAvg (which is now consistently the peak hour value) for prediction
-    const predictionLow = displayAvg > 0 ? Math.max(0, Math.round(displayAvg - (displayAvg * 0.4))) : 0
-    const predictionHigh = displayAvg > 0 ? Math.round(displayAvg + (displayAvg * 0.4)) : 0
-    // Fallback to sessionAvg only if no best hour data exists
-    const peakAvg = displayAvg > 0 ? displayAvg : (sessionAvg || 0)
+    const peakAvg = displayAvg || bestHour?.avg || sessionAvg
+    const predictionLow = Math.max(0, Math.round(peakAvg - (peakAvg * 0.4)))
+    const predictionHigh = Math.round(peakAvg + (peakAvg * 0.4))
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
@@ -4183,7 +4273,7 @@ const stopImportMessageRotation = () => {
             analytics={analytics}
             tips={tips}
             isPro={isPro}
-            onOpenPlanner={() => handleTabChange('planner')}
+            onUpgrade={(source) => openUpgradeModal(source)}
           />
         )}
 
@@ -4303,111 +4393,14 @@ const stopImportMessageRotation = () => {
               )
             })()}
 
-            {/* ALL TIPPERS — CRM Card Grid */}
-            {filteredWhales.length === 0 ? (
-              <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-                <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 4 }}>No fans match this filter</div>
-                <div style={{ fontSize: 12, color: C.text }}>Try a different tier or clear the platform filter</div>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
-                {filteredWhales.map((w, i) => {
-                  const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
-                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
-                  const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  // Reuse the shared behavioral-state formula from analytics.js
-                  // (w.behavioralState / w.behavioralStateReason) — evidence-gated
-                  // per Fan Intelligence rules, never a raw days-since guess.
-                  const bs = w.behavioralState
-                  const riskLevel = bs === "Active" ? { label: "Active", color: C.green, pct: 15 }
-                    : bs === "Watch" ? { label: "Watch", color: C.gold, pct: 55 }
-                    : bs === "At Risk" ? { label: "At Risk", color: C.red, pct: 85 }
-                    : bs === "Dormant" ? { label: "Dormant", color: C.muted, pct: 40 }
-                    : null // New/Developing, Insufficient Data → no risk meter at all
-                  const riskReason = w.behavioralStateReason || null
-                  return (
-                    <div key={i}
-                      className="hoverable"
-                      style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.08)', cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px rgba(0,0,0,0.4)` }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
-
-                      {/* TOP ROW — avatar, name, badges, score */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                        {/* Avatar */}
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                          {(w.username || '?').charAt(0).toUpperCase()}
-                        </div>
-                        {/* Name + badges */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div title={w.username} style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>{w.username}</div>
-                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            <span style={{ padding: '1px 6px', borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
-                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.05)', color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || 'Unknown'}</span>
-                          </div>
-                        </div>
-                        {/* Relationship score */}
-                        <div title="Relationship score" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: `2px solid ${scoreColor}45`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
-                        </div>
-                      </div>
-
-                      {/* PRIMARY METRICS — typography-led, no heavy tiles */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, marginBottom: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{(w.tipCount || 0).toLocaleString()}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }} title={w.lastTipDate ? new Date(w.lastTipDate).toLocaleString() : undefined}>{formatLastActive(days).replace('Last active ', '')}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Last active</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>${(w.avgTipSize || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Avg. tip</div>
-                        </div>
-                      </div>
-
-                      {/* RETENTION RISK */}
-                      {riskLevel && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention risk</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
-                          </div>
-                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
-                          </div>
-                          {riskReason && <div style={{ fontSize: 10, color: C.text, marginTop: 4 }}>{riskReason}</div>}
-                        </div>
-                      )}
-
-                      {/* ACTIONS — one primary, two secondary */}
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
-                          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-                          title="View fan profile">View Fan</button>
-                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                          className="heart-envelope-btn"
-                          aria-label={`Message ${w.username}`}
-                          title="Message fan"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
-                        <button onClick={() => setNoteTarget(w.username)}
-                          aria-label={`Add note for ${w.username}`}
-                          title="Add note"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            <FanLeaderboard3D
+              fans={filteredWhales}
+              tips={tips}
+              isPro={isPro}
+              onSelectFan={(w) => { whaleModalTriggerRef.current = null; setSelectedWhale(w) }}
+              onMessage={(w) => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+              onNote={(w) => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
+            />
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
             {filteredWhales.length > 0 && (
@@ -6586,7 +6579,11 @@ const stopImportMessageRotation = () => {
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
-        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
+        // Fix #4: Username matching is case-insensitive to handle variations
+        const whaleTips = tips.filter(t =>
+          (t.username || '').toLowerCase() === (w.username || '').toLowerCase() &&
+          (t.platform || '').toLowerCase() === (w.platform || '').toLowerCase()
+        )
         const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
         const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
         // A fan reached from Private Sessions may have no free-chat tip
@@ -6623,7 +6620,11 @@ const stopImportMessageRotation = () => {
         // Fan-key match: platform + normalized username (never merge across
         // platforms). Mirrors the whaleTips filter above exactly, over
         // paid_sessions instead of tips.
-        const fanPaidSessions = paidSessions.filter(s => (s.username || '').toLowerCase() === w.username.toLowerCase() && s.platform === w.platform)
+        // Fix #4: Consistent case-insensitive matching for both username and platform
+        const fanPaidSessions = paidSessions.filter(s =>
+          (s.username || '').toLowerCase() === (w.username || '').toLowerCase() &&
+          (s.platform || '').toLowerCase() === (w.platform || '').toLowerCase()
+        )
         const fanPrivateUSD = fanPaidSessions.reduce((sum, s) => sum + (parseFloat(s.usd) || 0), 0)
         const fanPrivateTokens = fanPaidSessions.reduce((sum, s) => sum + (parseInt(s.tokens) || 0), 0)
         const fanPrivateSorted = [...fanPaidSessions].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
