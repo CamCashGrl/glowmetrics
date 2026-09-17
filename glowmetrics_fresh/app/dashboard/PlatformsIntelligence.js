@@ -277,6 +277,161 @@ function DataCoverage({ coverage }) {
 }
 
 // ============================================
+// COMPARE VIEW — compact, side-by-side platform comparison.
+// Every value here is read straight from buildPlatformComparison /
+// buildEfficiencyComparison / buildPlatformSnapshot — no metric is computed
+// in this component. Reuses the same glow-stat-card and dashed-coverage-strip
+// language as the main dashboard (Earnings This Month / Total Fans cards,
+// Data Coverage milestones) so the page matches the rest of the product.
+// ============================================
+
+const GLOW_CARD = { pink: '#f472b6', cyan: '#22d3ee', violet: '#a78bfa', gold: '#fbbf24' }
+
+function GlowStatCard({ label, value, sub, icon, accent }) {
+  return (
+    <div style={{
+      position: 'relative', overflow: 'hidden', background: 'rgba(15,20,32,0.75)',
+      border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '13px 16px',
+    }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${accent}80,${accent}20)` }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 11, color: C.text, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700 }}>{label}</span>
+        <span style={{ fontSize: 18, opacity: 0.75 }}>{icon}</span>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 900, color: accent, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: 11, color: C.text, marginTop: 4, lineHeight: 1.35 }}>{sub}</div>
+    </div>
+  )
+}
+
+function CompareView({ analytics, isPro }) {
+  const comparison = useMemo(() => buildPlatformComparison(analytics), [analytics])
+  const efficiency = useMemo(() => buildEfficiencyComparison(analytics), [analytics])
+  const snapshots = useMemo(
+    () => comparison.map(p => buildPlatformSnapshot(analytics, p.platform)),
+    [analytics, comparison]
+  )
+
+  if (comparison.length === 0) {
+    return <Empty>No platform has enough session data to compare yet.</Empty>
+  }
+
+  const totalEarnings = comparison.reduce((s, p) => s + p.earnings, 0)
+  const topRevenue = comparison[0]
+  const topEfficiency = efficiency[0] || null
+  const ratedCount = comparison.filter(p => p.rateHours > 0).length
+  // "Undersampled" here restates a fact already on the row (rateHours === 0
+  // while earnings/tips exist) — nothing new is computed or inferred.
+  const undersampled = comparison.filter(p => p.rateHours === 0 && p.earnings > 0)
+
+  return (
+    <>
+      <div className="pi-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 14, marginBottom: 18 }}>
+        <GlowStatCard label="Combined Earnings" icon="💰" accent={GLOW_CARD.pink}
+          value={fmt$0(totalEarnings)} sub={`Across ${comparison.length} platform${comparison.length === 1 ? '' : 's'}`} />
+        <GlowStatCard label="Best $/hr" icon="🎯" accent={GLOW_CARD.cyan}
+          value={topEfficiency ? fmt$(topEfficiency.usdPerHour) : '—'}
+          sub={topEfficiency ? `${topEfficiency.platform} · ${fmtH(topEfficiency.rateHours)} rated` : 'No platform has a rated hourly rate yet'} />
+        <GlowStatCard label="Top Platform Share" icon="🏆" accent={GLOW_CARD.violet}
+          value={`${topRevenue.earningsPercent}%`} sub={`${topRevenue.platform} carries most of this period`} />
+        <GlowStatCard label="Platforms Tracked" icon="🎥" accent={GLOW_CARD.gold}
+          value={fmtN(comparison.length)} sub={`${ratedCount} with a rated hourly rate`} />
+      </div>
+
+      <Section title="Side-by-side comparison" note="Meaningful sessions used for time-based rows" style={{ marginBottom: 14 }}>
+        <div style={{ overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 480 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '10px 14px', background: C.card2, borderBottom: `1px solid ${C.border}` }} />
+                {comparison.map(p => (
+                  <th key={p.platform} style={{ textAlign: 'left', padding: '10px 14px', background: C.card2, borderBottom: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 4, background: accentFor(p.platform) }} />
+                      <span style={{ fontSize: 13, fontWeight: 800, color: C.white, textTransform: 'none', letterSpacing: 0 }}>{p.platform}</span>
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: p.rateHours > 0 ? C.green : C.muted, marginTop: 3, textTransform: 'none', letterSpacing: 0 }}>
+                      {p.rateHours > 0 ? '✓ rated' : 'low signal'}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: 'Earnings', cell: p => <span style={{ fontWeight: 800, color: C.green }}>{fmt$(p.earnings)}</span> },
+                { label: 'Share of earnings', cell: p => <ShareBar percent={p.earningsPercent} color={accentFor(p.platform)} /> },
+                { label: '$ / hour', cell: p => p.usdPerHour > 0
+                    ? <span style={{ fontWeight: 800, color: C.cyan }}>{fmt$(p.usdPerHour)}</span>
+                    : <span style={{ color: C.muted }} title="Needs a session with a known duration to rate">Not enough timed data</span> },
+                { label: 'Hours · Sessions', cell: p => <span>{p.hours > 0 ? fmtH(p.hours) : '—'} · {fmtN(p.sessions)}</span> },
+                { label: 'Avg tip', cell: p => p.avgTipSize > 0 ? fmt$(p.avgTipSize) : '—' },
+                { label: 'Trend (30d vs prior)', cell: p => <TrendCell trend={p.trend} /> },
+                { label: 'Top supporter', cell: (p, snap) => snap?.topFans?.[0]
+                    ? <span>{isPro ? snap.topFans[0].username : '•••••'} · {fmt$(snap.topFans[0].earnings)}</span>
+                    : <span style={{ color: C.muted }}>None recorded</span> },
+              ].map((row, ri) => (
+                <tr key={ri} style={{ background: ri % 2 ? 'rgba(255,255,255,0.015)' : 'transparent' }}>
+                  <td style={{ padding: '9px 14px', fontSize: 10.5, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', borderTop: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{row.label}</td>
+                  {comparison.map((p, ci) => (
+                    <td key={p.platform} style={{ padding: '9px 14px', color: C.white, borderTop: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}` }}>
+                      {row.cell(p, snapshots[ci])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      {undersampled.length > 0 && (
+        <div style={{ border: `1px dashed ${C.border2}`, borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, background: 'rgba(255,255,255,0.02)', marginBottom: 14 }}>
+          <span style={{ fontSize: 16 }}>ℹ️</span>
+          <div>
+            <div style={{ fontSize: 12, color: C.white, fontWeight: 600 }}>
+              {undersampled.map(p => p.platform).join(' and ')} {undersampled.length === 1 ? 'has' : 'have'} earnings but not enough timed sessions yet
+            </div>
+            <div style={{ fontSize: 11, color: C.text, marginTop: 2 }}>
+              A session needs a known duration to count toward hours or an hourly rate. Their earnings above are complete — only the time-based rows are waiting on qualifying sessions.
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Section title="What this comparison tells you">
+        <div style={{ display: 'grid', gap: 1, background: `${C.cyan}22`, border: `1px solid ${C.cyan}33`, borderRadius: 10, overflow: 'hidden' }}>
+          {topRevenue && topEfficiency && (
+            <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: 'rgba(13,19,34,0.92)', padding: '10px 13px' }}>
+              <span style={{ fontSize: 13 }}>🏆</span>
+              <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>
+                {topRevenue.platform === topEfficiency.platform
+                  ? `${topRevenue.platform} earns ${topRevenue.earningsPercent}% of your revenue and pays the best hourly rate — it's your clear priority platform right now.`
+                  : `${topRevenue.platform} earns the most (${topRevenue.earningsPercent}% of revenue), but ${topEfficiency.platform} pays best per hour at ${fmt$(topEfficiency.usdPerHour)}.`}
+              </span>
+            </div>
+          )}
+          {undersampled.length > 0 && (
+            <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: 'rgba(13,19,34,0.92)', padding: '10px 13px' }}>
+              <span style={{ fontSize: 13 }}>⚠️</span>
+              <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>
+                {undersampled.map(p => p.platform).join(' and ')} {undersampled.length === 1 ? 'is' : 'are'} undersampled — treat those numbers as early signal, not a verdict, until more sessions land.
+              </span>
+            </div>
+          )}
+          {topRevenue && topEfficiency && undersampled.length === 0 && comparison.length === 1 && (
+            <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: 'rgba(13,19,34,0.92)', padding: '10px 13px' }}>
+              <span style={{ fontSize: 13 }}>ℹ️</span>
+              <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>You have one platform with enough data to compare. A second gives CamCash something to compare it against.</span>
+            </div>
+          )}
+        </div>
+      </Section>
+    </>
+  )
+}
+
+// ============================================
 // UNIFIED VIEW
 // ============================================
 
@@ -633,7 +788,7 @@ function SplitView({ analytics, platformName, isPro }) {
 // ============================================
 
 export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, onOpenPlanner = null }) {
-  const [view, setView] = useState('unified')
+  const [view, setView] = useState('compare')
   const [selectedPlatform, setSelectedPlatform] = useState(null)
 
   // Coverage reads the account's real import span via the canonical vault
@@ -671,7 +826,7 @@ export default function PlatformsIntelligence({ analytics = null, tips = [], isP
           <h1 style={{ margin: '2px 0 0', fontSize: 19, fontWeight: 800, color: C.white }}>Platform Intelligence</h1>
         </div>
         <div style={{ display: 'flex', gap: 2, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8, padding: 2 }}>
-          {['unified', 'split'].map(v => (
+          {['compare', 'unified', 'split'].map(v => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: '5px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
               textTransform: 'uppercase', borderRadius: 6, cursor: 'pointer', border: 'none',
@@ -686,6 +841,8 @@ export default function PlatformsIntelligence({ analytics = null, tips = [], isP
         <Empty>
           No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
         </Empty>
+      ) : view === 'compare' ? (
+        <CompareView analytics={analytics} isPro={isPro} />
       ) : view === 'unified' ? (
         <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
       ) : (
