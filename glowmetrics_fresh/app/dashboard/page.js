@@ -3325,10 +3325,6 @@ const stopImportMessageRotation = () => {
             reengageFans, likelyOnline, sessionsAtPeakCount } = dailyBrief
           const bhLabel = canonicalPeakLabel || _bhLabel
           const displayPlat = engineInsights?.summary?.best_platform || _displayPlat
-          // Real threshold from getModuleLockState('bestStreamingTimes'): 25+ tips
-          // and 3+ meaningful sessions — matches the >=3 session-bucket requirement
-          // bestHour/platformBestTimes use internally (lib/analytics.js).
-          const bestTimeLock = !bhLabel ? getModuleLockState({ module: 'bestStreamingTimes', totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0 }) : { locked: false }
           // ── "CamCash Noticed" insight row — every value below reuses data
           // already computed elsewhere in this component; nothing is invented,
           // and each insight falls back to "Not enough data yet" if the
@@ -3376,16 +3372,19 @@ const stopImportMessageRotation = () => {
           const noticedSafeIndex = noticedCards.length ? ((noticedIndex % noticedCards.length) + noticedCards.length) % noticedCards.length : 0
 
           return (
-            <div style={{ marginBottom: 20, borderRadius: 18, overflow: 'hidden', border: `1px solid ${atPeak ? 'rgba(16,185,129,0.45)' : 'rgba(124,92,255,0.3)'}`, background: 'rgba(10,12,24,0.7)', backdropFilter: 'blur(16px)', animation: 'fadeUp 0.3s ease both' }}>
+            <div style={{ marginBottom: 20, borderRadius: 22, overflow: 'hidden', position: 'relative', border: '1px solid transparent', backgroundImage: `linear-gradient(#0D1127,#0D1127), linear-gradient(135deg, rgba(22,244,255,0.55), rgba(85,184,255,0.35), rgba(124,92,255,0.5))`, backgroundOrigin: 'border-box', backgroundClip: 'padding-box, border-box', backdropFilter: 'blur(18px)', animation: 'fadeUp 0.3s ease both', boxShadow: `0 0 40px ${atPeak ? 'rgba(16,185,129,0.16)' : 'rgba(85,184,255,0.14)'}` }}>
+              {/* atmospheric corner glow */}
+              <div style={{ position: 'absolute', top: -80, right: -60, width: 260, height: 260, background: 'radial-gradient(circle, rgba(124,92,255,0.28), transparent 70%)', filter: 'blur(10px)', pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', bottom: -80, left: -40, width: 220, height: 220, background: 'radial-gradient(circle, rgba(22,244,255,0.18), transparent 70%)', filter: 'blur(10px)', pointerEvents: 'none' }} />
 
               {/* ═══ GO LIVE NOW hero ═══ */}
-              <div style={{ padding: '22px 24px', position: 'relative', overflow: 'hidden', background: atPeak ? 'linear-gradient(135deg,rgba(16,185,129,0.22),rgba(34,211,238,0.10))' : 'linear-gradient(135deg,rgba(124,92,255,0.20),rgba(34,211,238,0.08))', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-                <div style={{ flex: '1 1 260px', minWidth: 220 }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: atPeak ? C.green : C.indigo, marginBottom: 10 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: atPeak ? C.green : C.indigo, boxShadow: `0 0 6px ${atPeak ? C.green : C.indigo}`, animation: 'pulse-msg 2s infinite' }} />
+              <div style={{ position: 'relative', padding: '26px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+                <div style={{ flex: '1 1 300px', minWidth: 240 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: atPeak ? C.green : '#55B8FF', marginBottom: 12 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: atPeak ? C.green : '#55B8FF', boxShadow: `0 0 6px ${atPeak ? C.green : '#55B8FF'}`, animation: 'pulse-msg 2s infinite' }} />
                     {atPeak ? 'Peak Window LIVE' : 'Go Live Now'}
                   </div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: C.white, lineHeight: 1.25, marginBottom: 6 }}>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: C.white, lineHeight: 1.25, marginBottom: 8 }}>
                     {atPeak
                       ? 'Your peak window is right now'
                       : bhLabel
@@ -3393,7 +3392,7 @@ const stopImportMessageRotation = () => {
                         : 'Not enough data yet to predict a peak window'}
                   </div>
                   {bhLabel ? (
-                    <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>
+                    <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>
                       {`Based on your past performance, you're most likely to earn between `}
                       <span style={{ color: C.white, fontWeight: 700 }}>{bhLabel}</span>
                       {` on `}
@@ -3401,7 +3400,7 @@ const stopImportMessageRotation = () => {
                       {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <span style={{ color: C.gold, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span> if you stream 60+ min.</>}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>Upload more tip history so CamCash can find your real peak earning window.</div>
+                    <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>Upload more tip history so CamCash can find your real peak earning window.</div>
                   )}
                   {bhLabel && (
                     <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -3412,18 +3411,24 @@ const stopImportMessageRotation = () => {
                       </div>
                     </div>
                   )}
-                  <div style={{ marginTop: 16 }}>
+                  <div style={{ marginTop: 18 }}>
                     <button onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}
-                      style={{ padding: '11px 20px', borderRadius: 12, border: 'none', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', background: 'linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 18px rgba(124,92,255,0.28)' }}>
+                      style={{ padding: '12px 22px', borderRadius: 13, border: 'none', color: '#fff', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', background: 'linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 20px rgba(124,92,255,0.32)' }}>
                       Build my stream plan →
                     </button>
                   </div>
                 </div>
-                <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 92, height: 92, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `conic-gradient(${atPeak ? '#10B981' : '#7C5CFF'}, #22D3EE, ${atPeak ? '#10B981' : '#7C5CFF'})`, boxShadow: `0 0 24px ${atPeak ? 'rgba(16,185,129,0.35)' : 'rgba(124,92,255,0.3)'}` }}>
-                    <div style={{ width: 76, height: 76, borderRadius: '50%', background: '#0a0c18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{atPeak ? '🟢' : '⏱️'}</div>
+
+                {/* right-side camera/$ visual — integrated, not a floating afterthought */}
+                <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, position: 'relative', minWidth: 150 }}>
+                  <div style={{ position: 'absolute', inset: -20, background: `radial-gradient(circle, ${atPeak ? 'rgba(16,185,129,0.22)' : 'rgba(124,92,255,0.22)'}, transparent 72%)`, filter: 'blur(6px)', pointerEvents: 'none' }} />
+                  <div style={{ width: 148, height: 148, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `conic-gradient(from 0deg, #16F4FF, #55B8FF, #7C5CFF, ${atPeak ? '#10B981' : '#FF2BAE'}, #16F4FF)`, boxShadow: `0 0 30px ${atPeak ? 'rgba(16,185,129,0.3)' : 'rgba(124,92,255,0.3)'}`, animation: atPeak ? 'cmd-pulse 2s infinite' : 'none' }}>
+                    <div style={{ width: 130, height: 130, borderRadius: '50%', background: 'rgba(13,17,39,0.9)' }} />
+                    <div style={{ position: 'absolute', width: 112, height: 112, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.08)' }} />
+                    <div style={{ position: 'absolute', fontSize: 34 }}>📹</div>
+                    <div style={{ position: 'absolute', bottom: 14, right: 18, width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#16F4FF,#7C5CFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#0D1127', boxShadow: '0 0 12px rgba(124,92,255,0.6)' }}>$</div>
                   </div>
-                  <div style={{ fontSize: 10, color: C.muted, textAlign: 'center' }}>More time live = more tips</div>
+                  <div style={{ fontSize: 10.5, color: C.muted, textAlign: 'center', position: 'relative' }}>More time live = more tips</div>
                 </div>
               </div>
 
@@ -3477,125 +3482,6 @@ const stopImportMessageRotation = () => {
                   )}
                 </div>
               )}
-
-              <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-                {/* ROW 1 — Today / Peak Window / Best Platform */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Today</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{todayName}</div>
-                    <div style={{ fontSize: 11, color: C.indigo, marginTop: 2 }}>
-                      {(() => {
-                        const _bdA = bestDay?.avg || sessionAvg
-                        const _safeA = (!isNaN(_bdA) && isFinite(_bdA) && _bdA > 0) ? _bdA : null
-                        if (isBestDay) return _safeA ? `🏆 Your best day — avg $${_safeA.toFixed(0)}/session` : '🏆 Your best day'
-                        return _safeA ? `avg ~$${_safeA.toFixed(0)}/session` : 'Not enough data yet'
-                      })()}
-                    </div>
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: bestTimeLock.locked ? 'rgba(255,255,255,0.03)' : atPeak ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.07)', border: `1px solid ${bestTimeLock.locked ? 'rgba(255,255,255,0.08)' : atPeak ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.18)'}` }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Time</div>
-                    {bestTimeLock.locked ? (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>🔒 Locked</div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{bestTimeLock.message}</div>
-                        <button onClick={() => handleTabChange('upload')} style={{ marginTop: 6, padding: '4px 10px', borderRadius: 100, border: '1px solid rgba(34,211,238,0.3)', background: 'rgba(34,211,238,0.08)', color: C.cyan, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Upload More Data</button>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: atPeak ? C.green : C.white }}>{bhLabel}</div>
-                        <div style={{ fontSize: 11, color: atPeak ? C.green : C.cyan, marginTop: 2 }}>
-                          {atPeak ? 'ON RIGHT NOW — stream!' : hoursUntilPeak !== null ? `in ${hoursUntilPeak}h${(!isNaN(displayAvg) && displayAvg > 0) ? ` · $${displayAvg.toFixed(0)} avg` : ''}` : ''}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.18)' }}>
-                    <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Best Platform</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{displayPlat}</div>
-                    <div style={{ fontSize: 11, color: C.gold, marginTop: 2 }}>{(!isNaN(displayAvg) && displayAvg > 0) ? `$${displayAvg.toFixed(0)} avg at ${bhLabel || 'peak'}` : bhLabel ? `at ${bhLabel}` : 'Not enough data yet'}</div>
-                  </div>
-
-                  {bhLabel && (
-                    <div style={{ flex: 1, minWidth: 130, padding: '11px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: 'uppercase', letterSpacing: 1 }}>Income Forecast</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green }}>${predictionLow}–${predictionHigh}</div>
-                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>if you stream at {bhLabel}</div>
-                      {sessionsAtPeakCount < 2 && <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontStyle: 'italic' }}>based on limited data</div>}
-                    </div>
-                  )}
-                </div>
-
-                {/* ROW 2 — Likely Online + Re-engage */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-
-                  {/* Likely Online */}
-                  {likelyOnline.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block', boxShadow: `0 0 5px ${C.green}`, animation: 'pulse-msg 2s infinite' }}/>
-                        Likely Online Right Now
-                      </div>
-                      {likelyOnline.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < likelyOnline.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#10B981,#22D3EE)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.platform}</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${w.username}`}
-                            title="Message fan"
-                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.green, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Re-engage */}
-                  {!atPeak && reengageFans.length > 0 && (
-                    <div style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 11, background: 'rgba(236,72,153,0.06)', border: '1px solid rgba(236,72,153,0.18)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.pink, marginBottom: 9, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        ⚠️ Re-engage Today
-                      </div>
-                      {reengageFans.map((w, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: i < reengageFans.length - 1 ? 7 : 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: `linear-gradient(135deg,#EC4899,#7C5CFF)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                              {w.username[0].toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{w.username}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>${w.totalUSD.toFixed(0)} · {w.avgTipSize >= 50*0.05 ? Math.round(w.avgTipSize/0.05) + ' tok avg' : w.totalTokens + ' tok'} · {w.daysSinceLastTip}d gone</div>
-                            </div>
-                          </div>
-                          <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                            className="heart-envelope-btn"
-                            aria-label={`Message ${w.username}`}
-                            title="Message fan"
-                            style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', color: C.pink, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><EnvelopeHeartIcon size={17} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* If neither list has data */}
-                  {likelyOnline.length === 0 && reengageFans.length === 0 && (
-                    <div style={{ flex: 1, padding: '12px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', fontSize: 12, color: C.muted }}>
-                      No fan alerts right now — check back after more sessions.
-                    </div>
-                  )}
-                </div>
-
-              </div>
             </div>
           )
         })()}
