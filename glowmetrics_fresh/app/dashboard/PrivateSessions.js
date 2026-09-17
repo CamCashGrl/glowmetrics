@@ -228,58 +228,50 @@ export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null
         </div>
       </div>
 
-      {/* ── LEADERBOARD ─────────────────────────────────────── */}
+      {/* ── PER-PLATFORM PRIVATE STATS ─────────────────────────── */}
       <div style={{ ...cardStyle, marginBottom: 20 }}>
-        <div style={chartTitleStyle}>Private Session Leaderboard</div>
+        <div style={chartTitleStyle}>Private Stats by Platform</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+          {stats.platformBreakdown.map(p => (
+            <div key={p.platform} style={{ background: "rgba(255,255,255,0.02)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: TEXT, marginBottom: 8 }}>{p.platform}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: MUTED, marginBottom: 4 }}>
+                <span>Total earnings</span><span style={{ color: PURPLE, fontWeight: 700 }}>{fmtUsd(p.usd)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: MUTED, marginBottom: 4 }}>
+                <span>Sessions</span><span style={{ color: TEXT }}>{p.count}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: MUTED, marginBottom: 4 }}>
+                <span>Unique clients</span><span style={{ color: TEXT }}>{p.clients}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: MUTED }}>
+                <span>Avg $/session</span><span style={{ color: TEXT }}>{fmtUsd(p.avgUsd)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 10 }}>
+          Hours spent in private isn't shown because the imported data has no session-duration field — only date/time, tokens, and USD are captured, so a per-platform hours figure would be fabricated. Let us know if you want duration tracking added to the import.
+        </div>
+      </div>
+
+      {/* ── TOP SPENDERS ─────────────────────────────────────── */}
+      <div style={{ ...cardStyle, marginBottom: 20 }}>
+        <div style={chartTitleStyle}>Top Spenders (Private Purchases)</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {stats.topClients.map((c, i) => (
-            <div key={c.username} onClick={() => onViewFan?.(c.username, stats.platformBreakdown[0]?.platform)}
+            <div key={c.username} onClick={() => onViewFan?.(c.username, c.platforms[0])}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 10, background: i < 3 ? "rgba(168,85,247,0.08)" : "transparent", cursor: onViewFan ? "pointer" : "default" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 12, color: MUTED, width: 20 }}>#{i + 1}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{c.username}</span>
+                <span style={{ fontSize: 10, color: CYAN, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "1px 6px" }}>{c.platforms.join(", ")}</span>
                 <span style={{ fontSize: 11, color: MUTED }}>{c.sessionCount} session{c.sessionCount !== 1 ? "s" : ""}</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 800, color: PURPLE }}>{fmtUsd(c.totalUSD)}</span>
             </div>
           ))}
         </div>
-      </div>
-
-      {/* ── TABLE ───────────────────────────────────────────── */}
-      <div style={{ ...cardStyle, overflowX: "auto" }}>
-        <div style={chartTitleStyle}>All Private Sessions ({filtered.length})</div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${BORDER}`, textAlign: "left", color: MUTED }}>
-              {["Fan", "Platform", "Date", "Type", "Tokens", "USD", "Rate/token", "Time since last"].map(h => (
-                <th key={h} style={{ padding: "8px 10px", fontWeight: 700 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...filtered].sort((a, b) => new Date(b.date_time) - new Date(a.date_time)).slice(0, 200).map(s => {
-              const rate = s.tokens > 0 ? (parseFloat(s.usd) || 0) / s.tokens : 0
-              const client = stats.topClients.find(c => c.username === s.username)
-              const d = daysAgo(client?.lastSession)
-              return (
-                <tr key={s.id} onClick={() => onViewFan?.(s.username, s.platform)}
-                  style={{ borderBottom: `1px solid ${BORDER}`, cursor: onViewFan ? "pointer" : "default" }}>
-                  <td style={{ padding: "8px 10px", fontWeight: 700, color: TEXT }}>{s.username}</td>
-                  <td style={{ padding: "8px 10px", color: MUTED }}>{s.platform}</td>
-                  <td style={{ padding: "8px 10px", color: MUTED }}>{fmtDateTime(s.date_time)}</td>
-                  <td style={{ padding: "8px 10px" }}>
-                    <span style={{ color: TYPE_COLORS[s.session_type] || SLATE, fontWeight: 700 }}>{s.session_type}</span>
-                  </td>
-                  <td style={{ padding: "8px 10px", color: MUTED }}>{s.tokens}</td>
-                  <td style={{ padding: "8px 10px", fontWeight: 700, color: GREEN }}>{fmtUsd(s.usd)}</td>
-                  <td style={{ padding: "8px 10px", color: MUTED }}>${rate.toFixed(4)}</td>
-                  <td style={{ padding: "8px 10px", color: MUTED }}>{d !== null ? `${d}d ago` : "—"}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
       </div>
     </div>
   )

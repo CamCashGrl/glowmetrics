@@ -1588,12 +1588,14 @@ export function computePaidSessionAnalytics(sessions) {
       username: s.username || 'unknown',
       usd: 0, tokens: 0, count: 0,
       sessionTypes: new Set(),
+      platforms: new Set(),
       dates: [],
     }
     clientMap[k].usd    += parseFloat(s.usd) || 0
     clientMap[k].tokens += parseInt(s.tokens) || 0
     clientMap[k].count  += 1
     clientMap[k].sessionTypes.add(s.session_type || 'Unknown')
+    clientMap[k].platforms.add(s.platform || 'Unknown')
     clientMap[k].dates.push(new Date(s.date_time))
   })
 
@@ -1607,6 +1609,7 @@ export function computePaidSessionAnalytics(sessions) {
         sessionCount: c.count,
         avgSessionUSD: parseFloat((c.usd / c.count).toFixed(2)),
         sessionTypes: [...c.sessionTypes],
+        platforms:    [...c.platforms],
         lastSession:  sorted[sorted.length - 1]?.toISOString() || null,
         firstSession: sorted[0]?.toISOString() || null,
         daysSinceLast: sorted.length
