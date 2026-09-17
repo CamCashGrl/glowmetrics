@@ -3372,70 +3372,68 @@ const stopImportMessageRotation = () => {
           const noticedSafeIndex = noticedCards.length ? ((noticedIndex % noticedCards.length) + noticedCards.length) % noticedCards.length : 0
 
           return (
-            <div style={{ marginBottom: 20, borderRadius: 22, overflow: 'hidden', position: 'relative', border: '1px solid transparent', backgroundImage: `linear-gradient(#0D1127,#0D1127), linear-gradient(135deg, rgba(22,244,255,0.55), rgba(85,184,255,0.35), rgba(124,92,255,0.5))`, backgroundOrigin: 'border-box', backgroundClip: 'padding-box, border-box', backdropFilter: 'blur(18px)', animation: 'fadeUp 0.3s ease both', boxShadow: `0 0 40px ${atPeak ? 'rgba(16,185,129,0.16)' : 'rgba(85,184,255,0.14)'}` }}>
-              {/* atmospheric corner glow */}
-              <div style={{ position: 'absolute', top: -80, right: -60, width: 260, height: 260, background: 'radial-gradient(circle, rgba(124,92,255,0.28), transparent 70%)', filter: 'blur(10px)', pointerEvents: 'none' }} />
-              <div style={{ position: 'absolute', bottom: -80, left: -40, width: 220, height: 220, background: 'radial-gradient(circle, rgba(22,244,255,0.18), transparent 70%)', filter: 'blur(10px)', pointerEvents: 'none' }} />
+            <div style={{ marginBottom: 20 }}>
 
-              {/* ═══ GO LIVE NOW hero ═══ */}
-              <div style={{ position: 'relative', padding: '26px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
-                <div style={{ flex: '1 1 300px', minWidth: 240 }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: atPeak ? C.green : '#55B8FF', marginBottom: 12 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: atPeak ? C.green : '#55B8FF', boxShadow: `0 0 6px ${atPeak ? C.green : '#55B8FF'}`, animation: 'pulse-msg 2s infinite' }} />
-                    {atPeak ? 'Peak Window LIVE' : 'Go Live Now'}
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: C.white, lineHeight: 1.25, marginBottom: 8 }}>
-                    {atPeak
-                      ? 'Your peak window is right now'
-                      : bhLabel
-                        ? `Your next peak window is ${hoursUntilPeak === 1 ? 'in 1 hour' : hoursUntilPeak != null ? `in ${hoursUntilPeak} hours` : 'coming up'}`
-                        : 'Not enough data yet to predict a peak window'}
-                  </div>
-                  {bhLabel ? (
-                    <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>
-                      {`Based on your past performance, you're most likely to earn between `}
-                      <span style={{ color: C.white, fontWeight: 700 }}>{bhLabel}</span>
-                      {` on `}
-                      <span style={{ color: C.white, fontWeight: 700 }}>{displayPlat}</span>
-                      {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <span style={{ color: C.gold, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span> if you stream 60+ min.</>}
+              {/* ═══ GO LIVE NOW — its own compact hero card ═══ */}
+              <div style={{ borderRadius: 20, overflow: 'hidden', position: 'relative', border: '1px solid transparent', backgroundImage: `linear-gradient(#0D1127,#0D1127), linear-gradient(135deg, rgba(22,244,255,0.55), rgba(85,184,255,0.35), rgba(124,92,255,0.5))`, backgroundOrigin: 'border-box', backgroundClip: 'padding-box, border-box', animation: 'fadeUp 0.3s ease both', boxShadow: `0 0 30px ${atPeak ? 'rgba(16,185,129,0.14)' : 'rgba(85,184,255,0.12)'}` }}>
+                {/* atmospheric corner glow */}
+                <div style={{ position: 'absolute', top: -60, right: -50, width: 200, height: 200, background: 'radial-gradient(circle, rgba(124,92,255,0.24), transparent 70%)', filter: 'blur(8px)', pointerEvents: 'none' }} />
+
+                <div style={{ position: 'relative', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+                  <div style={{ flex: '1 1 280px', minWidth: 220 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: atPeak ? C.green : '#55B8FF', marginBottom: 6 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: atPeak ? C.green : '#55B8FF', boxShadow: `0 0 6px ${atPeak ? C.green : '#55B8FF'}`, animation: 'pulse-msg 2s infinite' }} />
+                      {atPeak ? 'Peak Window LIVE' : 'Go Live Now'}
                     </div>
-                  ) : (
-                    <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, maxWidth: 420 }}>Upload more tip history so CamCash can find your real peak earning window.</div>
-                  )}
-                  {bhLabel && (
-                    <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 11, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <span style={{ fontSize: 15 }}>⏰</span>
-                      <div>
-                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Peak window</div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>{bhLabel}</div>
+                    <div style={{ fontSize: 19, fontWeight: 900, color: C.white, lineHeight: 1.2, marginBottom: 5 }}>
+                      {atPeak
+                        ? 'Your peak window is right now'
+                        : bhLabel
+                          ? `Your next peak window is ${hoursUntilPeak === 1 ? 'in 1 hour' : hoursUntilPeak != null ? `in ${hoursUntilPeak} hours` : 'coming up'}`
+                          : 'Not enough data yet to predict a peak window'}
+                    </div>
+                    {bhLabel ? (
+                      <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, maxWidth: 400 }}>
+                        {`You're most likely to earn between `}
+                        <span style={{ color: C.white, fontWeight: 700 }}>{bhLabel}</span>
+                        {` on `}
+                        <span style={{ color: C.white, fontWeight: 700 }}>{displayPlat}</span>
+                        {(!isNaN(displayAvg) && displayAvg > 0) && <> — around <span style={{ color: C.gold, fontWeight: 700 }}>${predictionLow}–${predictionHigh}</span> for 60+ min.</>}
                       </div>
+                    ) : (
+                      <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, maxWidth: 400 }}>Upload more tip history so CamCash can find your real peak earning window.</div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                      {bhLabel && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <span style={{ fontSize: 13 }}>⏰</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: C.white }}>{bhLabel}</span>
+                        </div>
+                      )}
+                      <button onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}
+                        style={{ padding: '9px 18px', borderRadius: 11, border: 'none', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', background: 'linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 16px rgba(124,92,255,0.3)' }}>
+                        Build my stream plan →
+                      </button>
                     </div>
-                  )}
-                  <div style={{ marginTop: 18 }}>
-                    <button onClick={() => { setActiveTab('planner'); if (typeof window !== 'undefined') { localStorage.setItem('camcash_tab', 'planner'); window.scrollTo({ top: 0, behavior: 'instant' }) } }}
-                      style={{ padding: '12px 22px', borderRadius: 13, border: 'none', color: '#fff', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', background: 'linear-gradient(90deg,#16F4FF,#55B8FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 20px rgba(124,92,255,0.32)' }}>
-                      Build my stream plan →
-                    </button>
                   </div>
-                </div>
 
-                {/* right-side camera/$ visual — integrated, not a floating afterthought */}
-                <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, position: 'relative', minWidth: 150 }}>
-                  <div style={{ position: 'absolute', inset: -20, background: `radial-gradient(circle, ${atPeak ? 'rgba(16,185,129,0.22)' : 'rgba(124,92,255,0.22)'}, transparent 72%)`, filter: 'blur(6px)', pointerEvents: 'none' }} />
-                  <div style={{ width: 148, height: 148, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `conic-gradient(from 0deg, #16F4FF, #55B8FF, #7C5CFF, ${atPeak ? '#10B981' : '#FF2BAE'}, #16F4FF)`, boxShadow: `0 0 30px ${atPeak ? 'rgba(16,185,129,0.3)' : 'rgba(124,92,255,0.3)'}`, animation: atPeak ? 'cmd-pulse 2s infinite' : 'none' }}>
-                    <div style={{ width: 130, height: 130, borderRadius: '50%', background: 'rgba(13,17,39,0.9)' }} />
-                    <div style={{ position: 'absolute', width: 112, height: 112, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.08)' }} />
-                    <div style={{ position: 'absolute', fontSize: 34 }}>📹</div>
-                    <div style={{ position: 'absolute', bottom: 14, right: 18, width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#16F4FF,#7C5CFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 900, color: '#0D1127', boxShadow: '0 0 12px rgba(124,92,255,0.6)' }}>$</div>
+                  {/* right-side camera/$ visual — compact, balances the copy rather than floating in empty space */}
+                  <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: -14, background: `radial-gradient(circle, ${atPeak ? 'rgba(16,185,129,0.2)' : 'rgba(124,92,255,0.2)'}, transparent 72%)`, filter: 'blur(5px)', pointerEvents: 'none' }} />
+                    <div style={{ width: 92, height: 92, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: `conic-gradient(from 0deg, #16F4FF, #55B8FF, #7C5CFF, ${atPeak ? '#10B981' : '#FF2BAE'}, #16F4FF)`, boxShadow: `0 0 20px ${atPeak ? 'rgba(16,185,129,0.28)' : 'rgba(124,92,255,0.28)'}`, animation: atPeak ? 'cmd-pulse 2s infinite' : 'none' }}>
+                      <div style={{ width: 78, height: 78, borderRadius: '50%', background: 'rgba(13,17,39,0.9)' }} />
+                      <div style={{ position: 'absolute', fontSize: 22 }}>📹</div>
+                      <div style={{ position: 'absolute', bottom: 6, right: 10, width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,#16F4FF,#7C5CFF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, color: '#0D1127', boxShadow: '0 0 10px rgba(124,92,255,0.6)' }}>$</div>
+                    </div>
+                    <div style={{ fontSize: 9.5, color: C.muted, textAlign: 'center', position: 'relative' }}>More time live<br/>= more tips</div>
                   </div>
-                  <div style={{ fontSize: 10.5, color: C.muted, textAlign: 'center', position: 'relative' }}>More time live = more tips</div>
                 </div>
               </div>
 
-              {/* ═══ CAMCASH NOTICED — insight carousel ═══ */}
+              {/* ═══ CAMCASH NOTICED — its own section, separate from the hero card ═══ */}
               {noticedCards.length > 0 && (
-                <div style={{ padding: '16px 20px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 14 }}>✨</span>
                       <div>
@@ -3453,15 +3451,14 @@ const stopImportMessageRotation = () => {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                  {/* fixed-width compact cards — never stretch to fill the row, even with 1-2 real insights */}
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     {(() => {
-                      // desktop shows up to 3 cards starting at the carousel position; mobile/narrow
-                      // layouts wrap naturally via the grid above
                       const visible = []
                       const count = Math.min(3, noticedCards.length)
                       for (let i = 0; i < count; i++) visible.push(noticedCards[(noticedSafeIndex + i) % noticedCards.length])
                       return visible.map((card, i) => (
-                        <div key={card.key + i} style={{ padding: '13px 14px', borderRadius: 12, background: `${card.color}0d`, border: `1px solid ${card.color}28`, backdropFilter: 'blur(6px)' }}>
+                        <div key={card.key + i} style={{ width: 220, maxWidth: '100%', flex: '0 1 220px', padding: '13px 14px', borderRadius: 12, background: `${card.color}0d`, border: `1px solid ${card.color}28`, backdropFilter: 'blur(6px)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                             <span style={{ fontSize: 13 }}>{card.icon}</span>
                             <span style={{ fontSize: 10, fontWeight: 700, color: card.color, textTransform: 'uppercase', letterSpacing: 0.6 }}>{card.label}</span>
