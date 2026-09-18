@@ -195,6 +195,55 @@ const s = {
     textDecoration: "none",
     fontWeight: 700,
   },
+  definition: {
+    margin: '28px 0',
+    padding: '24px',
+    borderRadius: '16px',
+    background: 'rgba(99,102,241,0.08)',
+    border: '1px solid rgba(99,102,241,0.2)',
+  },
+  definitionTitle: {
+    fontSize: '18px',
+    fontWeight: 800,
+    marginBottom: '10px',
+  },
+  productShowcase: {
+    margin: '42px 0',
+  },
+  productShowcaseTitle: {
+    fontSize: '26px',
+    fontWeight: 850,
+    marginBottom: '24px',
+    textAlign: 'center',
+  },
+  productGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: '20px',
+    marginBottom: '24px',
+  },
+  productCard: {
+    padding: '18px',
+    borderRadius: '14px',
+    background: 'rgba(255,255,255,.04)',
+    border: '1px solid rgba(255,255,255,.08)',
+    textAlign: 'center',
+    textDecoration: 'none',
+    transition: 'all 0.3s ease',
+    cursor: 'pointer',
+  },
+  productCardTitle: {
+    fontSize: '15px',
+    fontWeight: 700,
+    marginBottom: '10px',
+    color: '#e2e8f0',
+  },
+  productCardLink: {
+    fontSize: '13px',
+    color: '#6366f1',
+    fontWeight: 600,
+    textDecoration: 'none',
+  },
 };
 
 export default function FreeMyFreeCamsEarningsTrackerPage() {
@@ -225,6 +274,13 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
             No credit card. No signup. No strings attached. Just grab it and start tracking today.
           </p>
         </header>
+
+        <section style={s.definition}>
+          <div style={s.definitionTitle}>What is CamCashGrl?</div>
+          <p style={s.p}>
+            CamCashGrl is a model-run website designed to help cam creators optimize their streams and build a stronger, more sustainable business. We provide tracking tools, guides, analytics, and creator resources to help you understand your data, boost your earnings potential, and make informed decisions about your streaming business.
+          </p>
+        </section>
 
         <section style={{ ...s.cta, background: 'linear-gradient(145deg, rgba(0,217,166,.15), rgba(25,201,255,.12))', border: '2px solid rgba(0,217,166,0.5)', marginTop: '32px', marginBottom: '34px' }}>
           <div style={{ ...s.ctaTitle, fontSize: '28px', color: '#00d9a6' }}>
