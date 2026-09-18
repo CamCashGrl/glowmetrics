@@ -1,4 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'SPH Script Pack for Cam Creators — Organized Session Prompts & Transitions',
@@ -235,6 +237,8 @@ export default function SPHScriptPack() {
           View on Etsy →
         </a>
       </div>
+
+      <ProductCarousel products={PRODUCTS} currentProductId="sph-script-pack" />
 
       <h2 id="explore-tools" style={s.h2}>
         Explore Related Creator Tools
