@@ -1589,19 +1589,28 @@ export function computePaidSessionAnalytics(sessions) {
       usd: 0, tokens: 0, count: 0,
       sessionTypes: new Set(),
       dates: [],
+      platforms: new Map(),
     }
     clientMap[k].usd    += parseFloat(s.usd) || 0
     clientMap[k].tokens += parseInt(s.tokens) || 0
     clientMap[k].count  += 1
     clientMap[k].sessionTypes.add(s.session_type || 'Unknown')
     clientMap[k].dates.push(new Date(s.date_time))
+    if (s.platform) {
+      clientMap[k].platforms.set(s.platform, (clientMap[k].platforms.get(s.platform) || 0) + 1)
+    }
   })
 
   const topClients = Object.values(clientMap)
     .map(c => {
       const sorted = [...c.dates].sort((a, b) => a - b)
+      // Most-used platform for this client — used to open the correct
+      // fan profile (platform + username is the match key there).
+      let platform = null, platformMax = 0
+      c.platforms.forEach((count, p) => { if (count > platformMax) { platformMax = count; platform = p } })
       return {
         username:     c.username,
+        platform,
         totalUSD:     parseFloat(c.usd.toFixed(2)),
         totalTokens:  c.tokens,
         sessionCount: c.count,
