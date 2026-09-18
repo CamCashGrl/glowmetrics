@@ -87,6 +87,36 @@ async function updateProfile(supabase, userId, update) {
   return true
 }
 
+// subscriptions.plan_type has a CHECK constraint limited to these values —
+// map Stripe's billing interval onto the closest one instead of writing
+// something like "pro" that the constraint would reject outright.
+function planTypeFor(sub) {
+  const interval = sub.items?.data?.[0]?.price?.recurring?.interval
+  return interval === 'year' ? 'standard_annual' : 'standard_monthly'
+}
+
+function billingCycleFor(sub) {
+  const interval = sub.items?.data?.[0]?.price?.recurring?.interval
+  return interval === 'year' ? 'annual' : 'monthly'
+}
+
+// Keeps public.subscriptions (read by /api/admin/stats and /api/admin-stats
+// for subscriber/revenue counts) in sync with what the webhook already
+// writes to profiles. Previously this table was only ever touched by
+// handle_new_user() at signup (always plan_type='free') and by one-off
+// manual SQL patches (see 20260912_emergency_fix_emmyfox2_subscription_sync.sql)
+// — every real subscribe/renew/cancel silently left it stale.
+async function upsertSubscriptionRecord(supabase, userId, fields) {
+  const { error } = await supabase
+    .from('subscriptions')
+    .upsert({ user_id: userId, updated_at: new Date().toISOString(), ...fields }, { onConflict: 'user_id' })
+  if (error) {
+    console.error(`Webhook: failed to upsert subscriptions row for ${userId}:`, error.message)
+    return false
+  }
+  return true
+}
+
 // Log subscription events for audit trail and debugging
 async function logSubscriptionEvent(supabase, userId, eventType, details) {
   try {
@@ -187,6 +217,17 @@ export async function POST(request) {
           console.error(`Webhook subscription.created: failed to save subscription data for ${email}`)
         }
 
+        await upsertSubscriptionRecord(supabase, user.id, {
+          stripe_customer_id: sub.customer,
+          stripe_subscription_id: sub.id,
+          stripe_price_id: sub.items?.data?.[0]?.price?.id || null,
+          plan_type: planTypeFor(sub),
+          billing_cycle: billingCycleFor(sub),
+          status: sub.status,
+          current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
+          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+        })
+
         await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
           stripeEventId: event.id,
           customerId: sub.customer,
@@ -221,6 +262,12 @@ export async function POST(request) {
         if (!ok) {
           console.error(`Webhook subscription.deleted: failed to downgrade ${email}`)
         }
+
+        await upsertSubscriptionRecord(supabase, user.id, {
+          plan_type: 'free',
+          billing_cycle: null,
+          status: 'canceled',
+        })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_canceled', {
           stripeEventId: event.id,
@@ -260,6 +307,17 @@ export async function POST(request) {
         if (!ok) {
           console.error(`Webhook subscription.updated: failed to update ${email}`)
         }
+
+        await upsertSubscriptionRecord(supabase, user.id, {
+          stripe_customer_id: sub.customer,
+          stripe_subscription_id: sub.id,
+          stripe_price_id: sub.items?.data?.[0]?.price?.id || null,
+          plan_type: plan === 'pro' ? planTypeFor(sub) : 'free',
+          billing_cycle: plan === 'pro' ? billingCycleFor(sub) : null,
+          status: sub.status,
+          current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
+          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+        })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_updated', {
           stripeEventId: event.id,
