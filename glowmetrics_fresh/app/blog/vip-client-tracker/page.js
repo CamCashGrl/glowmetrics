@@ -21,6 +21,9 @@ export const metadata = {
   },
 }
 
+const FREE_TRACKER_URL = '/downloads/Pretty_Profitz_VIP_Mini_Tracker_Free.pdf'
+const ETSY_URL = 'https://www.etsy.com/listing/4541972932/cam-model-vip-client-tracker-fillable'
+
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
@@ -122,6 +125,38 @@ const s = {
     gap: '16px',
     flexWrap: 'wrap',
   },
+  definition: {
+    margin: '28px 0',
+    padding: '24px',
+    borderRadius: '16px',
+    background: 'rgba(99,102,241,0.08)',
+    border: '1px solid rgba(99,102,241,0.2)',
+  },
+  definitionTitle: {
+    fontSize: '18px',
+    fontWeight: 800,
+    marginBottom: '10px',
+  },
+  primaryCTA: {
+    margin: '28px 0',
+    padding: '32px',
+    borderRadius: '18px',
+    textAlign: 'center',
+    background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(236,72,153,0.15))',
+    border: '1.5px solid rgba(99,102,241,0.4)',
+  },
+  primaryCTATitle: {
+    fontSize: '26px',
+    fontWeight: 900,
+    marginBottom: '12px',
+  },
+  primaryCTAText: {
+    maxWidth: '680px',
+    margin: '0 auto 18px',
+    fontSize: '17px',
+    lineHeight: 1.7,
+    opacity: 0.9,
+  },
   cta: {
     background: 'rgba(99,102,241,0.07)',
     border: '1px solid rgba(99,102,241,0.18)',
@@ -140,6 +175,56 @@ const s = {
     color: 'white',
     fontWeight: 600,
     fontSize: '14px',
+    textDecoration: 'none',
+  },
+  freeButton: {
+    background: 'linear-gradient(90deg, #00d9a6, #19c9ff)',
+    color: '#041014',
+  },
+  button: {
+    display: 'inline-block',
+    padding: '13px 22px',
+    borderRadius: '999px',
+    fontWeight: 800,
+    textDecoration: 'none',
+    margin: '6px',
+    border: '1px solid rgba(255,255,255,.15)',
+  },
+  productShowcase: {
+    margin: '42px 0',
+  },
+  productShowcaseTitle: {
+    fontSize: '26px',
+    fontWeight: 850,
+    marginBottom: '24px',
+    textAlign: 'center',
+  },
+  productGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: '20px',
+    marginBottom: '24px',
+  },
+  productCard: {
+    padding: '18px',
+    borderRadius: '14px',
+    background: 'rgba(255,255,255,.04)',
+    border: '1px solid rgba(255,255,255,.08)',
+    textAlign: 'center',
+    textDecoration: 'none',
+    transition: 'all 0.3s ease',
+    cursor: 'pointer',
+  },
+  productCardTitle: {
+    fontSize: '15px',
+    fontWeight: 700,
+    marginBottom: '10px',
+    color: '#e2e8f0',
+  },
+  productCardLink: {
+    fontSize: '13px',
+    color: '#6366f1',
+    fontWeight: 600,
     textDecoration: 'none',
   },
   related: { marginTop: '36px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)' },
@@ -176,6 +261,78 @@ export default function VIPClientTracker() {
         memory. A VIP tracker helps you manage client relationships, spending history, and
         follow-ups in one place.
       </p>
+
+      <section style={s.definition}>
+        <div style={s.definitionTitle}>What is CamCashGrl?</div>
+        <p style={s.p}>
+          CamCashGrl is a model-run website designed to help cam creators optimize their streams and build a stronger, more sustainable business. We provide tracking tools, guides, analytics, and creator resources to help you understand your data, boost your earnings potential, and make informed decisions about your streaming business.
+        </p>
+      </section>
+
+      <section style={s.primaryCTA}>
+        <div style={s.primaryCTATitle}>Get the Free VIP Client Tracker</div>
+        <p style={s.primaryCTAText}>
+          Your free download is ready. Start organizing your high-value clients with a proven system. Print it or use it digitally with any PDF app.
+        </p>
+
+        <div style={{ margin: '28px auto 8px', maxWidth: '620px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <img
+            src="/blog-images/vip-mini-tracker-cover.png"
+            alt="Free VIP Client Tracker Mini PDF cover for cam models by Pretty Profitz"
+            width={1055}
+            height={1491}
+            style={{ width: '100%', height: 'auto', display: 'block' }}
+          />
+        </div>
+
+        <div style={{ marginTop: '20px' }}>
+          <a
+            href={FREE_TRACKER_URL}
+            download
+            style={{ ...s.button, ...s.freeButton }}
+          >
+            ⬇ Download Free Tracker (PDF) →
+          </a>
+        </div>
+      </section>
+
+      <section style={s.cta}>
+        <div style={s.ctaT}>Why Organize Your VIP Clients?</div>
+        <p style={s.ctaS}>
+          The difference between losing a regular and keeping them is remembering what matters to them. When you track your VIP clients, you can see patterns in preferences, spending, and follow-up needs.
+        </p>
+
+        <ul style={s.ul}>
+          <li style={s.li}>Track spending patterns and tipping preferences</li>
+          <li style={s.li}>Remember important details about each client</li>
+          <li style={s.li}>Plan follow-ups and re-engagement strategies</li>
+          <li style={s.li}>Organize boundaries and preferences</li>
+          <li style={s.li}>Build stronger, longer-lasting relationships</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Ready for the Complete System?</h2>
+        <p style={s.p}>
+          The free Mini Tracker is perfect for getting started. When you're ready to expand, the full VIP Client Tracker is a comprehensive 30-page workbook with advanced client profiles, spending analysis, relationship strategies, and monthly reviews.
+        </p>
+
+        <section style={s.cta}>
+          <div style={s.ctaT}>Get the Full VIP Client Tracker</div>
+          <p style={s.ctaS}>
+            30-page workbook with detailed client profiles, spending history, preference tracking, follow-up planning, and re-engagement strategies.
+          </p>
+
+          <a
+            href={ETSY_URL}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            style={{ ...s.button, background: '#6366f1', color: 'white', fontWeight: 600 }}
+          >
+            View on Etsy →
+          </a>
+        </section>
+      </section>
 
       <h2 id="whats-included" style={s.h2}>
         What Is Included
@@ -258,17 +415,77 @@ export default function VIPClientTracker() {
         plus this workbook for hands-on relationship management.
       </p>
 
+      <section style={s.productShowcase}>
+        <div style={s.productShowcaseTitle}>Other Creator Tools from Pretty Profitz</div>
+
+        <div style={s.productGrid}>
+          <a href="/blog/free-myfreecams-earnings-tracker" style={s.productCard}>
+            <div style={s.productCardTitle}>Free MyFreeCams Tracker</div>
+            <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Free earnings tracker download</p>
+            <div style={s.productCardLink}>View →</div>
+          </a>
+
+          <a href="/blog/chaturbate-earnings-tracker" style={s.productCard}>
+            <div style={s.productCardTitle}>Chaturbate Earnings Tracker</div>
+            <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Track Chaturbate sessions and earnings</p>
+            <div style={s.productCardLink}>View →</div>
+          </a>
+
+          <a href="/blog/sph-script-pack" style={s.productCard}>
+            <div style={s.productCardTitle}>SPH Script Pack</div>
+            <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Session prompts and transitions</p>
+            <div style={s.productCardLink}>View →</div>
+          </a>
+
+          <a href="/blog/daddys-girl-roleplay-script-pack" style={s.productCard}>
+            <div style={s.productCardTitle}>Daddy's Girl Script Pack</div>
+            <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Roleplay prompts and transitions</p>
+            <div style={s.productCardLink}>View →</div>
+          </a>
+
+          <a href="/blog/spin-the-wheel-cam-game" style={s.productCard}>
+            <div style={s.productCardTitle}>Spin the Wheel Game</div>
+            <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Interactive Canva template</p>
+            <div style={s.productCardLink}>View →</div>
+          </a>
+
+          <a href="/blog/roll-the-dice-game-pack" style={s.productCard}>
+            <div style={s.productCardTitle}>Roll the Dice Game Pack</div>
+            <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>Engagement game for your room</p>
+            <div style={s.productCardLink}>View →</div>
+          </a>
+        </div>
+      </section>
+
+      <section style={s.primaryCTA}>
+        <div style={s.primaryCTATitle}>Skip the Trackers — Automate Your Analytics</div>
+        <p style={s.primaryCTAText}>
+          Want real-time client tracking without manual entry? CamCash provides automated fan intelligence, spending analysis, and relationship tracking so you can focus on streaming.
+        </p>
+        <a
+          href="https://www.camcashgrl.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ ...s.button, ...s.freeButton }}
+        >
+          Sign Up for CamCash →
+        </a>
+      </section>
+
       <div style={s.related}>
         <div style={s.relT}>Related Articles</div>
         <div style={s.relLinks}>
-          <a href="/blog/chaturbate-earnings-tracker" style={s.relLink}>
-            → Chaturbate Earnings Tracker
+          <a href="/blog/free-myfreecams-earnings-tracker" style={s.relLink}>
+            → Free MyFreeCams Earnings Tracker
           </a>
           <a href="/blog/how-to-build-loyal-fans" style={s.relLink}>
             → How to Build Loyal Fans
           </a>
           <a href="/blog/how-to-re-engage-whales-and-high-tipping-fans" style={s.relLink}>
             → How to Re-Engage High-Tipping Fans
+          </a>
+          <a href="/blog/chaturbate-earnings-tracker" style={s.relLink}>
+            → Chaturbate Earnings Tracker
           </a>
           <a href="/shop" style={s.relLink}>
             → Explore All Creator Tools
