@@ -1,4 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'Cam Room Dice Game Ideas and Results Tracker — Game Pack for Cam Models',
@@ -253,6 +255,8 @@ export default function RollTheDiceGamePack() {
         for creating a room that feels organized and intentional. Use both to give viewers clear
         options and structured engagement.
       </p>
+
+      <ProductCarousel products={PRODUCTS} currentProductId="roll-dice" />
 
       <div style={s.related}>
         <div style={s.relT}>Related Articles</div>

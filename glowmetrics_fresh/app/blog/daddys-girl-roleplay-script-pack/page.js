@@ -1,4 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'Daddy\'s Girl Roleplay Script Pack for Adult Creators — Organized Session Prompts',
@@ -236,6 +238,8 @@ export default function DaddysGirlRoleplayScriptPack() {
           View on Etsy →
         </a>
       </div>
+
+      <ProductCarousel products={PRODUCTS} currentProductId="daddys-girl-script" />
 
       <h2 id="related-tools" style={s.h2}>
         Related Creator Resources

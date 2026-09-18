@@ -1,4 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'Chaturbate Earnings & Growth Bundle — Planning Tools for Cam Models',
@@ -272,6 +274,8 @@ export default function ChaturbateEarningsGrowthBundle() {
         </a>{' '}
         and the bundle for hands-on planning, testing, and follow-up workflows.
       </p>
+
+      <ProductCarousel products={PRODUCTS} currentProductId="chaturbate-bundle" />
 
       <div style={s.related}>
         <div style={s.relT}>Related Articles</div>
