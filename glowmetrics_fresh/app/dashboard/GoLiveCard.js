@@ -25,12 +25,48 @@ const fmtHour = (h) => {
 }
 
 export default function GoLiveCard({ dailyBrief, onPlanMyStream }) {
-  if (!dailyBrief || !dailyBrief.bhLabel) return null
+  // Render whenever there's a dailyBrief at all (i.e. the account has tips) —
+  // same gating the Daily Brief section below already uses. bhLabel (a
+  // specific best-hour) can still be missing on a low-data account; that's
+  // handled below with a "Not enough data yet" state instead of hiding the
+  // whole card, matching the formula-requirements rule against fabricating
+  // certainty vs. silently disappearing.
+  if (!dailyBrief) return null
 
   const {
     todayName, bhLabel, bh, atPeak, hoursUntilPeak, displayPlat, displayAvg,
     sessionAvg, sessionsAtPeakCount,
   } = dailyBrief
+
+  if (!bhLabel) {
+    return (
+      <div className="go-live-card is-far">
+        <style jsx>{`
+          .go-live-card {
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+            padding: 22px 26px;
+            background:
+              radial-gradient(circle at 8% 20%, rgba(22,244,255,0.06), transparent 34%),
+              radial-gradient(circle at 72% 10%, rgba(124,92,255,0.05), transparent 38%),
+              linear-gradient(160deg, #161B33, #0D1127 65%);
+            border: 1px solid rgba(125,180,255,0.14);
+            border-radius: 22px;
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+          }
+        `}</style>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(241,245,249,0.45)", marginBottom: 8 }}>
+          Go Live Recommendation
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#F8FAFC", marginBottom: 4 }}>Not enough data yet</div>
+        <div style={{ fontSize: 13, color: "rgba(241,245,249,0.6)", lineHeight: 1.6 }}>
+          Import a few more sessions and we&apos;ll recommend a go-live window based on your real earnings history.
+        </div>
+      </div>
+    )
+  }
 
   const state = peakStateFor(hoursUntilPeak, atPeak)
   const bhEndLabel = fmtHour(bh !== null && bh !== undefined ? bh + 2 : null)
