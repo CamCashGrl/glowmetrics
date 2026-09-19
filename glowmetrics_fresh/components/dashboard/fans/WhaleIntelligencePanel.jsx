@@ -98,14 +98,14 @@ export default function WhaleIntelligencePanel({
     <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 16 }}>
       <div className="fans-intelligence__header" style={{ marginBottom: 18 }}>
         <div className="fans-intelligence__eyebrow" style={{ color: C.gold }}>🧠 Fan Intelligence</div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Who matters most right now, and how to engage them</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Understand who's driving your earnings, what's changing, and who needs attention.</div>
       </div>
 
       {/* SIGNAL ROW — compact, real-data-only glance cards */}
       <div className="fans-intelligence__signals">
         {topFan && (
           <div className="fans-intelligence__signal" style={{ ...glassCard }}>
-            <div className="fans-intelligence__signal-label" style={{ color: C.muted }}>Top Contributor</div>
+            <div className="fans-intelligence__signal-label" style={{ color: C.muted }}>Top Fan</div>
             <div className="fans-intelligence__signal-value" style={{ color: C.white }}>{topFan.username}</div>
             <div style={{ fontSize: 11, color: TIER_COLORS[topFan.tier] || C.cyan, fontWeight: 700 }}>${topFan.totalUSD.toFixed(0)} · {topFan.tier}</div>
           </div>
@@ -148,7 +148,7 @@ export default function WhaleIntelligencePanel({
               ))}
             </div>
           )}
-          <div className="fans-intelligence__signal-label" style={{ color: C.muted, marginBottom: 8 }}>💡 Action Plan</div>
+          <div className="fans-intelligence__signal-label" style={{ color: C.gold, marginBottom: 8 }}>✦ CAMCASH NOTICED</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {getCoachingBullets(topFan, C).map((b, j) => (
               <div key={j} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
