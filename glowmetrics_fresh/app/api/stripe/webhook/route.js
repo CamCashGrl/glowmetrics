@@ -201,8 +201,10 @@ export async function POST(request) {
           break
         }
 
-        // Determine subscription status based on Stripe status
-        const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
+        // Carry Stripe's actual status through (trialing/active/past_due/unpaid/...)
+        // instead of collapsing every non-trialing status into 'active' — a
+        // past_due or unpaid subscription must not read as 'active' downstream.
+        const subscriptionStatus = sub.status
 
         const update = {
           plan: 'pro',
@@ -293,7 +295,11 @@ export async function POST(request) {
           break
         }
 
-        const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
+        // Carry Stripe's actual status through (see subscription.created above) —
+        // plan is the pro/free gate; subscription_status must reflect what
+        // Stripe actually reports (e.g. past_due) so it isn't mistaken for a
+        // healthy 'active' subscription downstream.
+        const subscriptionStatus = sub.status
         const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
 
         const update = {
