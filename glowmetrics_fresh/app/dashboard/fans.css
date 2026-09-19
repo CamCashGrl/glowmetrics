@@ -28,8 +28,9 @@
 .fans-summary-stat {
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(15, 20, 32, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
 }
 
 .fans-summary-value {
