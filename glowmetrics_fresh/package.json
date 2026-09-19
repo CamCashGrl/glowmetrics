@@ -16,7 +16,7 @@
     "@vercel/edge-config": "^1.4.3",
     "next": "14.2.0",
     "react": "^18",
-    "react-dom": "^18",
+    "react-dom": "^19",
     "recharts": "^2.10.0",
     "resend": "^6.12.3",
     "stripe": "^14.0.0",
