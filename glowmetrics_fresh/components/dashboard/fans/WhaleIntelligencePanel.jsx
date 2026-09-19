@@ -75,17 +75,93 @@ export default function WhaleIntelligencePanel({
   setMessageTarget, setMessageIndex, setMessageCopied,
 }) {
   if (filteredWhales.length === 0) return null
+
+  // ── COMPACT COMMAND LAYER ──────────────────────────────────────────────
+  // Signal row + one featured card, built entirely from fields identifyWhales
+  // already computes (lib/analytics.js) — no new thresholds, no new scoring.
+  // topFan: filteredWhales is already sorted by totalUSD desc (inherited
+  // from identifyWhales' own sort), so [0] is simply "the fan currently at
+  // the top of the in-view list" — not a new ranking.
+  const shown = filteredWhales.slice(0, isPro ? 5 : 3)
+  const topFan = shown[0] || null
+  const atRiskCount = filteredWhales.filter(w => w.behavioralState === "At Risk").length
+  const trendingUpCount = filteredWhales.filter(w => w.trend?.direction === "up").length
+  const topFanTags = topFan ? [
+    topFan.tipProbability?.level === "High" ? "🟢 Likely to tip soon" : null,
+    topFan.behavioralState === "At Risk" ? "🚨 At churn risk" : null,
+    topFan.trend?.direction === "up" ? "📈 Trending up" : null,
+    topFan.hasPrivates ? "📷 Cam2Cam spender" : null,
+  ].filter(Boolean) : []
+  const restShown = shown.slice(1)
+
   return (
     <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧠</div>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Fan Intelligence</div>
-          <div style={{ fontSize: 12, color: C.muted }}>Deep behavior patterns, projections & how to engage each fan</div>
+      <div className="fans-intelligence__header" style={{ marginBottom: 18 }}>
+        <div className="fans-intelligence__eyebrow" style={{ color: C.gold }}>🧠 Fan Intelligence</div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Who matters most right now, and how to engage them</div>
+      </div>
+
+      {/* SIGNAL ROW — compact, real-data-only glance cards */}
+      <div className="fans-intelligence__signals">
+        {topFan && (
+          <div className="fans-intelligence__signal" style={{ ...glassCard }}>
+            <div className="fans-intelligence__signal-label" style={{ color: C.muted }}>Top Contributor</div>
+            <div className="fans-intelligence__signal-value" style={{ color: C.white }}>{topFan.username}</div>
+            <div style={{ fontSize: 11, color: TIER_COLORS[topFan.tier] || C.cyan, fontWeight: 700 }}>${topFan.totalUSD.toFixed(0)} · {topFan.tier}</div>
+          </div>
+        )}
+        <div className="fans-intelligence__signal" style={{ ...glassCard }}>
+          <div className="fans-intelligence__signal-label" style={{ color: C.muted }}>At Risk</div>
+          <div className="fans-intelligence__signal-value" style={{ color: atRiskCount > 0 ? C.red : C.white }}>{atRiskCount}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>fan{atRiskCount === 1 ? "" : "s"} need attention</div>
+        </div>
+        <div className="fans-intelligence__signal" style={{ ...glassCard }}>
+          <div className="fans-intelligence__signal-label" style={{ color: C.muted }}>Trending Up</div>
+          <div className="fans-intelligence__signal-value" style={{ color: trendingUpCount > 0 ? C.green : C.white }}>{trendingUpCount}</div>
+          <div style={{ fontSize: 11, color: C.muted }}>spending more than usual</div>
         </div>
       </div>
+
+      {/* FEATURED CARD — the existing getCoachingBullets output for the top
+          fan, presented as one elevated card instead of buried in a list. */}
+      {topFan && (
+        <div className="fans-intelligence__featured card-glow-gold" style={{ ...glassCard, transition: "transform 0.2s ease, box-shadow 0.2s ease" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: `${TIER_COLORS[topFan.tier] || C.cyan}20`, border: `1px solid ${TIER_COLORS[topFan.tier] || C.cyan}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: TIER_COLORS[topFan.tier] || C.cyan }}>
+                {topFan.username.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.white }}>{topFan.username}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>${topFan.totalUSD.toFixed(0)} lifetime · {topFan.tipCount} tips · {topFan.platform}</div>
+              </div>
+            </div>
+            <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(topFan) }}
+              style={{ padding: "6px 12px", borderRadius: 7, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: "#06101A", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+              View Fan →
+            </button>
+          </div>
+          {topFanTags.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+              {topFanTags.map((label, j) => (
+                <span key={j} style={{ padding: "3px 10px", borderRadius: 20, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.28)", fontSize: 11, fontWeight: 600, color: C.gold }}>{label}</span>
+              ))}
+            </div>
+          )}
+          <div className="fans-intelligence__signal-label" style={{ color: C.muted, marginBottom: 8 }}>💡 Action Plan</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {getCoachingBullets(topFan, C).map((b, j) => (
+              <div key={j} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span style={{ color: b.color, fontSize: 12, flexShrink: 0, marginTop: 1 }}>•</span>
+                <span style={{ fontSize: 12, color: b.color, lineHeight: 1.4 }}>{b.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {filteredWhales.slice(0, isPro ? 5 : 3).map((w, i) => {
+        {restShown.map((w, i) => {
           const tags = []
           if (w.hasPrivates && w.privateCount >= 2) tags.push({ label: "📷 Cam2Cam spender", color: C.pink })
           if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })

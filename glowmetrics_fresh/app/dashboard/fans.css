@@ -79,3 +79,51 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ── FAN INTELLIGENCE — compact command layer above the fan card grid ── */
+
+.fans-intelligence__eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.fans-intelligence__signals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.fans-intelligence__signal {
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.fans-intelligence__signal-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.fans-intelligence__signal-value {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.fans-intelligence__featured {
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+@media (max-width: 640px) {
+  .fans-intelligence__signals {
+    grid-template-columns: 1fr;
+  }
+}
