@@ -15,6 +15,7 @@ import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
 import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
+import { trackTrialEvent } from '../../lib/analytics-client'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import PlatformsIntelligence from './PlatformsIntelligence'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
@@ -1748,6 +1749,29 @@ export default function Dashboard() {
         if (count === 0 && !beta?.onboarding_complete) router.replace('/onboarding')
       })
       setUser(user)
+      // Log the trial start for funnel analytics (free_trial_events). Stripe
+      // itself remains the source of truth for actual trial/subscription
+      // status (profiles.subscription_status / subscriptions table, kept in
+      // sync by the webhook) — this is a separate, best-effort marketing
+      // signal, so an approximate expiry computed from the redirect's trial
+      // day count is fine here. Params are stripped right after so a refresh
+      // of this URL doesn't log a duplicate trial_started event.
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('success') === 'true' && params.get('trial')) {
+          const trialDays = parseInt(params.get('trial'), 10) || 7
+          const startsAt = new Date()
+          const expiresAt = new Date(startsAt.getTime() + trialDays * 86400000)
+          trackTrialEvent('trial_started', {
+            trialDaysOffered: trialDays,
+            trialStartsAt: startsAt.toISOString(),
+            trialExpiresAt: expiresAt.toISOString(),
+          })
+          params.delete('success'); params.delete('trial'); params.delete('plan')
+          const rest = params.toString()
+          router.replace(`/dashboard${rest ? `?${rest}` : ''}`)
+        }
+      }
       supabase.from('profiles')
         .select('plan, primary_pro_platform, streaming_platforms')
         .eq('id', user.id)
