@@ -1,0 +1,80 @@
+/* Fans page — additive, scoped styles.
+   Only touches classes prefixed fans-/fan-card-/fan-risk-notice; does not
+   modify globals.css or any other dashboard page. */
+
+.fans-page-header {
+  margin-bottom: 10px;
+}
+
+.fans-page-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0 0 2px 0;
+  letter-spacing: 0.2px;
+}
+
+.fans-page-subtitle {
+  font-size: 12px;
+  margin: 0;
+}
+
+.fans-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 10px 0 14px 0;
+}
+
+.fans-summary-stat {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fans-summary-value {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.fans-summary-label {
+  font-size: 10px;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.fan-risk-notice,
+.fans-risk-notice-group .fan-risk-notice {
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.fan-risk-notice--paused {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.fan-risk-notice--stale {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.fan-risk-notice-body {
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .fans-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .fans-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -20,6 +20,9 @@ import PlatformsIntelligence from './PlatformsIntelligence'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import FanSummary from '../../components/dashboard/fans/FanSummary'
+import FanRiskNotice from '../../components/dashboard/fans/FanRiskNotice'
+import './fans.css'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -4189,12 +4192,12 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "whales" && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 2 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 20 }}>🐳</span> Top Fans
+            <div className="fans-page-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+              <div>
+                <h1 className="fans-page-title" style={{ color: C.white, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🐳</span> Fan Intelligence
                 </h1>
-                <span style={{ fontSize: 13, color: C.text }}>Your highest-value supporters ranked by total spend</span>
+                <p className="fans-page-subtitle" style={{ color: C.text }}>Your highest-value supporters, recent activity, and retention signals</p>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {chartDrillDay && (
@@ -4208,6 +4211,8 @@ const stopImportMessageRotation = () => {
                 </button>
               </div>
             </div>
+
+            <FanSummary whales={whales} C={C} />
 
             {/* FILTERS — each pill group scrolls horizontally within itself on
                 narrow screens instead of clipping options past the viewport edge */}
@@ -4240,22 +4245,11 @@ const stopImportMessageRotation = () => {
             {(() => {
               const ctx = analytics?.platformRiskContext || {}
               const platformsInView = platformFilter === "ALL" ? allPlatforms : [platformFilter]
-              const flagged = platformsInView
-                .map(p => ctx[p])
-                .filter(c => c && (c.riskSignalsPaused || c.dataNeedsUpdating))
-              if (!flagged.length) return null
+              const anyFlagged = platformsInView.some(p => ctx[p] && (ctx[p].riskSignalsPaused || ctx[p].dataNeedsUpdating))
+              if (!anyFlagged) return null
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                  {flagged.map(c => (
-                    <div key={c.platform} style={{ padding: '10px 14px', borderRadius: 10, background: c.riskSignalsPaused ? 'rgba(148,163,184,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${c.riskSignalsPaused ? 'rgba(148,163,184,0.25)' : 'rgba(245,158,11,0.3)'}`, fontSize: 12, color: C.text }}>
-                      <strong style={{ color: c.riskSignalsPaused ? C.muted : C.gold }}>{c.riskSignalsPaused ? `Risk Signals Paused — ${c.platform}` : `Data Needs Updating — ${c.platform}`}</strong>
-                      <div style={{ marginTop: 2, color: C.muted }}>
-                        {c.riskSignalsPaused
-                          ? "You haven't had a meaningful stream here recently, so CamCash isn't labeling inactive fans as at risk."
-                          : `Your ${c.platform} fan data is ${c.dataAgeDays ?? '?'} days old, so current fan behavior may not be complete.`}
-                      </div>
-                    </div>
-                  ))}
+                <div style={{ marginBottom: 16 }}>
+                  <FanRiskNotice ctx={ctx} platformsInView={platformsInView} C={C} />
                 </div>
               )
             })()}
