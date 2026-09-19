@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # App dependencies — flags known-vulnerable packages (e.g. the Next.js
+  # 14.2.0 security advisory surfaced during the Sept 19 audit) and opens a
+  # PR automatically instead of only turning up when someone runs npm install.
+  - package-ecosystem: "npm"
+    directory: "/glowmetrics_fresh"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Batch routine patch/minor bumps into one PR so they don't flood the
+      # PR list; security fixes always get their own PR regardless of group.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Keeps the build-check.yml workflow's own actions (checkout, setup-node)
+  # current — these need dependency updates too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

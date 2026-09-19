@@ -1,0 +1,26 @@
+name: Supabase Security Advisors
+
+on:
+  schedule:
+    # Every Monday 13:00 UTC — same off-the-hour convention as the app's
+    # own daily cron (vercel.json), avoids the exact-hour stampede.
+    - cron: '7 13 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  check-advisors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check Supabase security advisories
+        working-directory: glowmetrics_fresh
+        run: node scripts/check-supabase-security-advisors.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
