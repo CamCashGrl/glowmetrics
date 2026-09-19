@@ -21,6 +21,7 @@ import PlatformsIntelligence from './PlatformsIntelligence'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import GoLiveCard from './GoLiveCard'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -3334,6 +3335,14 @@ const stopImportMessageRotation = () => {
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
             {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+
+            {/* ═══════════════════════════════════════
+                GO LIVE — restored glass recommendation card, built from the
+                same dailyBrief data as the Daily Brief section below it
+            ═══════════════════════════════════════ */}
+            {dailyBrief && (
+              <GoLiveCard dailyBrief={dailyBrief} onPlanMyStream={() => handleTabChange('planner')} />
+            )}
 
             {/* ═══════════════════════════════════════
                 DAILY BRIEF — overview only, below earnings
