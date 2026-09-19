@@ -1669,7 +1669,7 @@ export default function Dashboard() {
               normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
               sourceUsed:       tip.source || 'extension',
               timestamp:        new Date(tip.received_at),
-              platform:         tip.platform || 'extension',
+              platform:         tip.platform || 'Unknown',
               source:           'history',
             }
           })
@@ -1702,7 +1702,7 @@ export default function Dashboard() {
           normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
           sourceUsed:       tip.source || 'extension',
           timestamp:        new Date(tip.received_at),
-          platform:         tip.platform || 'extension',
+          platform:         tip.platform || 'Unknown',
           source:           'extension',
         }
         setLiveEvents(prev => [...prev, normalized])
@@ -1879,7 +1879,7 @@ export default function Dashboard() {
             normalizedRevenue: usd,
             sourceUsed: 'extension',
             timestamp: new Date(tip.received_at || Date.now()),
-            platform: tip.platform || 'chaturbate',
+            platform: tip.platform || 'Unknown',
             _id: tip.id || Date.now(),
           }
           setLiveActive(true)
@@ -1979,7 +1979,7 @@ export default function Dashboard() {
         normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
         sourceUsed:        tip.source || 'extension',
         timestamp:         new Date(tip.received_at),
-        platform:          tip.platform || 'chaturbate',
+        platform:          tip.platform || 'Unknown',
       }))
 
       setLiveEvents(normalized)
