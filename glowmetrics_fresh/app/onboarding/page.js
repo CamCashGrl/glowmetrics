@@ -205,8 +205,16 @@ export function parseRows(rawText,platformId){
   const rows=[];let skipped=0
   const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
   const tipFromRe=/^Tip From:\s*(.+)/i
+  // Fan Club Membership purchases are real earnings from a named fan, same
+  // as a tip — counted into totals here, tagged via `note` so they stay
+  // distinguishable from ordinary tips downstream.
+  const fanClubRe=/^Fan Club Membership:\s*(.+)/i
+  // Not earnings from a fan at all — an account-level token debit/cashout.
+  // Recognized explicitly so they're counted as skipped instead of silently
+  // vanishing from the row/skip totals shown to the user.
+  const nonEarningActionRe=/^(Admin Adjustment|Transfer tokens to)\b/i
   const tokensLineRe=/^(\d+)\s+(\d+)$/
-  const isMultiLine=lines.some(l=>tipFromRe.test(l)||CB_PRIVATE_SHOW_PATTERN.test(l))
+  const isMultiLine=lines.some(l=>tipFromRe.test(l)||fanClubRe.test(l)||CB_PRIVATE_SHOW_PATTERN.test(l))
   if(isMultiLine){
     let i=0
     while(i<lines.length){
@@ -215,11 +223,20 @@ export function parseRows(rawText,platformId){
         const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||''
         // Skip private shows - they're handled by parseCBPrivateSessions
         if(CB_PRIVATE_SHOW_PATTERN.test(actionLine)){i++;continue}
+        if(nonEarningActionRe.test(actionLine)){skipped++;i++;continue}
         const tipMatch=actionLine.match(tipFromRe)
-        if(ts&&tipMatch){
-          const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note='';let tMatch=tokensLine.match(tokensLineRe)
+        const fanClubMatch=!tipMatch&&actionLine.match(fanClubRe)
+        if(ts&&(tipMatch||fanClubMatch)){
+          const username=(tipMatch?tipMatch[1]:fanClubMatch[1]).trim();let tokensLine=lines[i+2]||'';let note='';let tMatch=tokensLine.match(tokensLineRe)
           if(!tMatch&&lines[i+3]){note=tokensLine;tokensLine=lines[i+3]||'';tMatch=tokensLine.match(tokensLineRe)}
-          if(tMatch){const tokens=parseInt(tMatch[1],10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+          if(tMatch){
+            const tokens=parseInt(tMatch[1],10)
+            if(tokens>=1){
+              const usd=+(tokens*rate).toFixed(2)
+              if(fanClubMatch)note=note?`Fan Club Membership: ${note}`:'Fan Club Membership'
+              rows.push({ts,username,tokens,usd,note})
+            }else skipped++
+          }else skipped++
         }
         i++
       }else i++
