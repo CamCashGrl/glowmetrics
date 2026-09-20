@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How Much Do BongaCams Models Make? Real Earnings Guide',
@@ -222,6 +223,7 @@ export default function BongaCamsEarningsPost() {
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

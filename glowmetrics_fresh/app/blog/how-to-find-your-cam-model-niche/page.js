@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How to Find Your Cam Model Niche in 2026: Definitions, Warning Signs & Real Talk | CamCash',
@@ -307,6 +308,7 @@ export default function HowToFindYourCamModelNiche() {
           <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio & tip menu generator</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

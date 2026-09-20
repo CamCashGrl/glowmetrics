@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Chaturbate Earnings & Growth Bundle — Planning Tools for Cam Models',
@@ -290,6 +291,7 @@ export default function ChaturbateEarningsGrowthBundle() {
           </a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

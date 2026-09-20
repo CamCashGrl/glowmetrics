@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
 import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 const SLUG = 'how-to-get-started-on-myfreecams-as-a-model'
 const TITLE = 'How to Get Started on MyFreeCams as a Model: First Two Weeks'
@@ -166,6 +167,7 @@ export default function Page() {
         <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-get-more-tips-on-myfreecams" style={s.link}>&rarr; How to get more tips on MyFreeCams</a></p>
         <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/myfreecams-analytics" style={s.link}>&rarr; MyFreeCams analytics</a></p>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }
