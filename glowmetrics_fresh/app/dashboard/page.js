@@ -1363,10 +1363,6 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
 
 export default function Dashboard() {
   const router = useRouter()
-  // Open directly to a specific tab when ?tab=X is in the URL
-  const initialTab = typeof window !== 'undefined'
-    ? (new URLSearchParams(window.location.search).get('tab') || localStorage.getItem('camcash_tab') || 'overview')
-    : 'overview'
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
@@ -1386,7 +1382,7 @@ export default function Dashboard() {
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
   const [showImportSparkle, setShowImportSparkle] = useState(false)
-  const [activeTab, setActiveTab] = useState(initialTab)
+  const [activeTab, setActiveTab] = useState('overview')
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
@@ -1726,10 +1722,16 @@ export default function Dashboard() {
   }, [activeTab, user])
 
   useEffect(() => {
-    // Restore saved tab
+    // Restore the active tab post-mount only (never during render) so the
+    // client's first render matches the server's — reading window/localStorage
+    // during render here previously caused a hydration mismatch. Same
+    // precedence as before: ?tab= URL param, then localStorage, else the
+    // 'overview' default already set by useState above.
     if (typeof window !== 'undefined') {
+      const fromUrl = new URLSearchParams(window.location.search).get('tab')
       const saved = localStorage.getItem('camcash_tab')
-      if (saved) setActiveTab(saved)
+      const target = fromUrl || saved
+      if (target) setActiveTab(target)
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
