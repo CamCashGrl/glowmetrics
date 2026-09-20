@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { getAbsoluteImageUrl } from "../../../lib/shop-products";
 
 export default function ProductDetailClient({ product }) {
   // First gallery image is the cover; rest come straight from the live
@@ -44,7 +45,7 @@ export default function ProductDetailClient({ product }) {
     'price': product.price.replace('$', ''),
     'priceCurrency': 'USD',
     'url': `https://www.camcashgrl.com/shop/${product.slug}`,
-    'image': `https://www.camcashgrl.com${product.coverImage}`,
+    'image': getAbsoluteImageUrl(product.coverImage),
     'offers': {
       '@type': 'Offer',
       'price': product.price.replace('$', ''),
