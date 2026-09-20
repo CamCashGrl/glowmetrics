@@ -57,7 +57,7 @@ async function getEmailFromCustomer(customerId) {
   return customer?.email || null
 }
 
-async function sendResendNotification(subject, text) {
+async function sendResendNotification(subject, text, to = process.env.OWNER_EMAIL || 'support@glowmetrics.co') {
   try {
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -67,7 +67,7 @@ async function sendResendNotification(subject, text) {
       },
       body: JSON.stringify({
         from: 'GlowMetrics <notifications@glowmetrics.co>',
-        to: process.env.OWNER_EMAIL || 'support@glowmetrics.co',
+        to,
         subject,
         text,
       }),
@@ -77,11 +77,25 @@ async function sendResendNotification(subject, text) {
   }
 }
 
+// Failures here have caused real, silent data drift before (subscribers who
+// paid or lost payment showing as plain "free" users on the admin/dashboard
+// stats that read from profiles/subscriptions) — always alert on a failed
+// write instead of leaving it as a console.error only the deploy logs see,
+// which is what let it go unnoticed for days last time. Sent to a fixed
+// address rather than OWNER_EMAIL so a misconfigured env var can't silently
+// swallow the one alert that exists to catch misconfiguration.
+const SYNC_ALERT_EMAIL = 'daphneoncam@gmail.com'
+
 // Updates profiles and returns whether it actually succeeded
 async function updateProfile(supabase, userId, update) {
   const { error } = await supabase.from('profiles').update(update).eq('id', userId)
   if (error) {
     console.error(`Webhook: failed to update profile ${userId} with`, update, error.message)
+    await sendResendNotification(
+      `🚨 Subscription sync FAILED — profiles (user ${userId})`,
+      `Failed to write to profiles for user ${userId}.\n\nAttempted update: ${JSON.stringify(update)}\n\nError: ${error.message}\n\nThis user's plan/subscription_status may now be stale — check manually.`,
+      SYNC_ALERT_EMAIL
+    )
     return false
   }
   return true
@@ -112,6 +126,11 @@ async function upsertSubscriptionRecord(supabase, userId, fields) {
     .upsert({ user_id: userId, updated_at: new Date().toISOString(), ...fields }, { onConflict: 'user_id' })
   if (error) {
     console.error(`Webhook: failed to upsert subscriptions row for ${userId}:`, error.message)
+    await sendResendNotification(
+      `🚨 Subscription sync FAILED — subscriptions (user ${userId})`,
+      `Failed to write to subscriptions for user ${userId}.\n\nAttempted fields: ${JSON.stringify(fields)}\n\nError: ${error.message}\n\nAdmin/dashboard subscriber and revenue stats read from this table — this user may now be undercounted or shown with the wrong status until manually corrected.`,
+      SYNC_ALERT_EMAIL
+    )
     return false
   }
   return true
