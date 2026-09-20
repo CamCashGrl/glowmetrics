@@ -22,7 +22,7 @@ const PLATFORMS = {
   bongacams:{
     label:'BongaCams',short:'BC',
     iconStyle:{background:'#311222',color:'#FF3B6E',border:'1px solid rgba(255,59,110,0.25)'},
-    instructions:'Go to Reports → General. Select your date range. Highlight all rows, copy, and paste below. You can also paste your Paid Chat section separately.',
+    instructions:'Go to your General Stats page. Select your most recent period earnings. Highlight, copy, and paste below. You can also paste your Paid Chat section separately.',
     earningsUrl:()=>'https://bongamodels.com/reports/general',
     placeholder:'Paste your BongaCams tip history here...\n\nExample:\n18.06.2026 14:32\tusername123\t500\t25.00\n18.06.2026 15:14\twhaleking99\t1000\t50.00\n18.06.2026 15:45\tregularfan\t25\t1.25',
   },
