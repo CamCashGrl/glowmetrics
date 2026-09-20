@@ -111,6 +111,25 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
             {group.items.map(({ id, icon, label }) => renderItem(id, icon, label))}
           </div>
         ))}
+
+        {/* Studio is a separate route (app/studio/page.js), not a dashboard
+            tab, so it's a plain link rather than an onTabChange button. */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7488", letterSpacing: 1, textTransform: "uppercase", padding: "0 12px", marginBottom: 4 }}>
+            STUDIO
+          </div>
+          <a href="/studio"
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 12px", borderRadius: 10, textDecoration: "none",
+              marginBottom: 2,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <span style={{ fontSize: 16, flexShrink: 0, opacity: 0.7 }}>🏢</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: C.text, letterSpacing: -0.2 }}>Studio</span>
+          </a>
+        </div>
       </div>
 
       {/* Upgrade CTA — always visible, but the Pro state stays low-key since it's a status, not a call to action */}
