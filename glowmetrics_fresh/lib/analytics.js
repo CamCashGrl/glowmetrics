@@ -159,7 +159,7 @@ function parseChaturbateMultiLine(lines) {
 }
 
 export function parseCSV(text, platform = null) {
-  const allLines = text.trim().split('\n')
+  let allLines = text.trim().split('\n')
   if (allLines.length === 0) return []
 
   if (!platform) platform = detectPlatform(text)
@@ -171,6 +171,15 @@ export function parseCSV(text, platform = null) {
     console.warn('[parseCSV] Could not detect delimiter; defaulting to comma')
   }
   const detectedDelimiter = delimiter || ','
+
+  // Some BongaCams pastes (Reports → General earnings table) put every
+  // header cell on its own line — "Date and Time" / "Member" / "Type" /
+  // "Tokens Earned" / "Your Payout" — instead of one delimiter-joined
+  // header row. parseWithHeaders below only maps as many columns as the
+  // header row contains, so left alone this silently drops every value
+  // past column 0 and the whole paste parses to zero rows. Stitch a
+  // detected stacked-header block back into one row before anything else runs.
+  allLines = joinStackedHeaderLines(allLines, detectedDelimiter)
 
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
@@ -213,6 +222,28 @@ export function parseCSV(text, platform = null) {
     if (/^\d{10,13}$/.test(String(r.dateRaw || '').trim())) { r.platform = 'MyFreeCams'; return }
   })
   return raw.map(normalizeTip).filter(isValidTip)
+}
+
+// Detects a run of 2+ consecutive single-column lines at the top of the
+// paste followed by a data line whose column count matches that run
+// exactly, and joins the header block into one delimiter-separated row.
+// Deliberately conservative (exact column-count match required) so it
+// never fires on ordinary single-column data.
+function joinStackedHeaderLines(lines, delimiter) {
+  let i = 0
+  const headerCells = []
+  while (i < lines.length && i < 10) {
+    const line = lines[i].trim()
+    if (!line) break
+    if (parseCSVLine(line, delimiter).length !== 1) break
+    headerCells.push(line)
+    i++
+  }
+  if (headerCells.length < 2) return lines
+  const dataLine = (lines[i] || '').trim()
+  if (!dataLine) return lines
+  if (parseCSVLine(dataLine, delimiter).length !== headerCells.length) return lines
+  return [headerCells.join(delimiter), ...lines.slice(i)]
 }
 
 function normalizeTip(row) {
