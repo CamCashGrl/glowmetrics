@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Chaturbate Payout Explained: Dates, Token Rate, Methods & Minimums',
@@ -426,6 +427,7 @@ export default function ChaturbatePayoutExplained() {
           <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio and tip-menu generator</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

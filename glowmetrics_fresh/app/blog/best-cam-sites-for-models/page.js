@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
 import Button from '../../../components/ui/Button'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Best Cam Sites for Models in 2026 — Platform Comparison Guide',
@@ -455,6 +456,7 @@ export default function BestCamSitesForModels() {
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Protect your highest-value fans</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }
