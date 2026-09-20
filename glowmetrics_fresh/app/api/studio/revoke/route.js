@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getStudioCaller } from '../../../../../lib/studio/auth'
+import { getStudioCaller } from '../../../../lib/studio/auth'
 
 const RevokeSchema = z.object({
   studio_model_id: z.string().uuid(),
@@ -13,6 +13,9 @@ const RevokeSchema = z.object({
 // and "model accept or revoke own invite"). No ownership check is done here
 // beyond the update itself: if the caller is neither the owner nor the
 // model, RLS matches zero rows and this returns 404, exactly as intended.
+// The status filter below restricts this to an active relationship
+// (invited or accepted) — an already-revoked row is left untouched rather
+// than redundantly re-applying revoked_at.
 export async function POST(req) {
   const { supabase, user } = await getStudioCaller()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,6 +36,7 @@ export async function POST(req) {
     .from('studio_models')
     .update({ status: 'revoked', revoked_at: new Date().toISOString() })
     .eq('id', parsed.data.studio_model_id)
+    .neq('status', 'revoked')
     .select('*')
     .maybeSingle()
 

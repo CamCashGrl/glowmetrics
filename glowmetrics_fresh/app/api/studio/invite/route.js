@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getStudioCaller, findUserIdByEmail } from '../../../../../lib/studio/auth'
+import { getStudioCaller, findUserIdByEmail } from '../../../../lib/studio/auth'
 
 const InviteSchema = z.object({
   email: z.string().trim().email(),

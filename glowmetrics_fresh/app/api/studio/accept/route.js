@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getStudioCaller } from '../../../../../lib/studio/auth'
+import { getStudioCaller } from '../../../../lib/studio/auth'
 
 const AcceptSchema = z.object({
   studio_model_id: z.string().uuid(),
@@ -10,7 +10,11 @@ const AcceptSchema = z.object({
 
 // A model accepts her own pending invite. RLS ("model accept or revoke own
 // invite") already restricts this to rows where model_user_id = auth.uid(),
-// so the update below can only ever affect the caller's own invite.
+// so the update below can only ever affect the caller's own invite. The
+// status filter below additionally restricts this to the invited -> accepted
+// transition only, so an already-accepted or revoked row is left untouched
+// (returns the same "not found" response used for a row that doesn't exist
+// or isn't hers, rather than a new error case).
 export async function POST(req) {
   const { supabase, user } = await getStudioCaller()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,6 +36,7 @@ export async function POST(req) {
     .update({ status: 'accepted', accepted_at: new Date().toISOString() })
     .eq('id', parsed.data.studio_model_id)
     .eq('model_user_id', user.id)
+    .eq('status', 'invited')
     .select('*')
     .maybeSingle()
 
