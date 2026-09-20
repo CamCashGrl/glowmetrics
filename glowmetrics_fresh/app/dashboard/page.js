@@ -27,6 +27,8 @@ import FanCardGrid from '../../components/dashboard/fans/FanCardGrid'
 import FanSearchModal from '../../components/dashboard/fans/FanSearchModal'
 import WhaleIntelligencePanel from '../../components/dashboard/fans/WhaleIntelligencePanel'
 import './fans.css'
+import FeedbackButton from '../../components/FeedbackButton'
+import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1369,10 +1371,6 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
 
 export default function Dashboard() {
   const router = useRouter()
-  // Open directly to a specific tab when ?tab=X is in the URL
-  const initialTab = typeof window !== 'undefined'
-    ? (new URLSearchParams(window.location.search).get('tab') || localStorage.getItem('camcash_tab') || 'overview')
-    : 'overview'
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
@@ -1392,7 +1390,7 @@ export default function Dashboard() {
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
   const [showImportSparkle, setShowImportSparkle] = useState(false)
-  const [activeTab, setActiveTab] = useState(initialTab)
+  const [activeTab, setActiveTab] = useState('overview')
   const [toast, setToast] = useState("")
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
@@ -1443,6 +1441,22 @@ export default function Dashboard() {
     setLiveActive(status === 'active' || status === 'paused')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
   }, [liveEngine.engineMode, liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  // Timezone for the session start/duration readout — same localStorage key
+  // app/live/page.js uses, so a choice made on either surface carries over.
+  const [liveTimezone, setLiveTimezone] = useState(() => {
+    if (typeof window === 'undefined') return 'UTC'
+    return localStorage.getItem('cc_live_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  })
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone)
+  }, [liveTimezone])
+  const fmtDuration = (secs) => {
+    const s = Math.max(0, Math.floor(secs || 0))
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
+      : `${m}m ${String(r).padStart(2, '0')}s`
+  }
   const [liveEvents, setLiveEvents] = useState([])
   const [liveGoalTokens, setLiveGoalTokens] = useState(0)
   const [livePlatform, setLivePlatform] = useState('Chaturbate')
@@ -1454,10 +1468,6 @@ export default function Dashboard() {
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
   const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [feedbackType, setFeedbackType] = useState('feature')
-  const [feedbackText, setFeedbackText] = useState('')
-  const [feedbackSent, setFeedbackSent] = useState(false)
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -1640,7 +1650,15 @@ export default function Dashboard() {
   }, [])
 
   // ── LIVE TIPS: historical hydration + realtime subscription ─────────────
-  // Runs whenever the live tab is opened and a user is present.
+  // The single live-tip channel for the whole dashboard — mount-scoped (not
+  // tab-gated), so it stays connected and auto-switches the user to the Live
+  // tab on a new tip even while they're on another tab. Previously there were
+  // two separate channels here (one tab-gated, one mount-scoped) that both
+  // wrote to the same channel ref; the second one to subscribe silently won
+  // ownership of the ref, so tab switches could tear down the wrong
+  // connection and leave the live feed disconnected until a full reload, and
+  // the mount-scoped one had no de-dup so tips could appear twice. Consolidated
+  // into one channel with de-dup + history hydration, matching app/live/page.js.
   // SAFETY RULES:
   //   1. Singleton — only one channel ever; skips if already subscribed
   //   2. isHydratingHistory.current = true during the initial DB query so
@@ -1649,7 +1667,7 @@ export default function Dashboard() {
   //   4. Historical events get _isHistory:true so computeState() excludes
   //      them from timing/pace calculations (only uses them for totals)
   useEffect(() => {
-    if (activeTab !== 'live' || !user) return
+    if (!user) return
     if (liveTipsChannelRef.current) return // singleton guard
 
     isHydratingHistory.current = true
@@ -1675,7 +1693,7 @@ export default function Dashboard() {
               normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
               sourceUsed:       tip.source || 'extension',
               timestamp:        new Date(tip.received_at),
-              platform:         tip.platform || 'extension',
+              platform:         tip.platform || 'Unknown',
               source:           'history',
             }
           })
@@ -1708,7 +1726,7 @@ export default function Dashboard() {
           normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
           sourceUsed:       tip.source || 'extension',
           timestamp:        new Date(tip.received_at),
-          platform:         tip.platform || 'extension',
+          platform:         tip.platform || 'Unknown',
           source:           'extension',
         }
         setLiveEvents(prev => [...prev, normalized])
@@ -1716,6 +1734,11 @@ export default function Dashboard() {
           if (!prev) setLiveStartTime(st => st || new Date())
           return true
         })
+        // Flash animation: highlight the new tip row for 2.5s
+        setFlashTipId(normalized._id)
+        setTimeout(() => setFlashTipId(null), 2500)
+        // Switch to Live Mode tab automatically if user is on another tab
+        setActiveTab('live')
       })
       .subscribe()
 
@@ -1729,13 +1752,19 @@ export default function Dashboard() {
       isHydratingHistory.current = false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, user])
+  }, [user])
 
   useEffect(() => {
-    // Restore saved tab
+    // Restore the active tab post-mount only (never during render) so the
+    // client's first render matches the server's — reading window/localStorage
+    // during render here previously caused a hydration mismatch. Same
+    // precedence as before: ?tab= URL param, then localStorage, else the
+    // 'overview' default already set by useState above.
     if (typeof window !== 'undefined') {
+      const fromUrl = new URLSearchParams(window.location.search).get('tab')
       const saved = localStorage.getItem('camcash_tab')
-      if (saved) setActiveTab(saved)
+      const target = fromUrl || saved
+      if (target) setActiveTab(target)
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace("/login"); return }
@@ -1869,36 +1898,10 @@ export default function Dashboard() {
         .subscribe()
       realtimeChannelRef.current = channel
 
-      // ── EXTENSION LIVE TIPS — realtime feed from chrome extension sync ──
-      const liveTipsChannel = supabase
-        .channel(`live_tips_ext_${user.id}`)
-        .on('postgres_changes', {
-          event: 'INSERT', schema: 'public', table: 'live_tips',
-          filter: `user_id=eq.${user.id}`
-        }, (payload) => {
-          const tip = payload.new
-          const tokens = parseInt(tip.tokens) || 0
-          const usd = parseFloat(tip.usd) || parseFloat((tokens * tokenRate(tip.platform)).toFixed(2))
-          const normalized = {
-            username: tip.username || 'Unknown',
-            tokens, usd,
-            normalizedRevenue: usd,
-            sourceUsed: 'extension',
-            timestamp: new Date(tip.received_at || Date.now()),
-            platform: tip.platform || 'chaturbate',
-            _id: tip.id || Date.now(),
-          }
-          setLiveActive(true)
-          setLiveStartTime(prev => prev || new Date())
-          setLiveEvents(prev => [...prev, normalized])
-          // Flash animation: highlight the new tip row for 2.5s
-          setFlashTipId(normalized._id)
-          setTimeout(() => setFlashTipId(null), 2500)
-          // Switch to Live Mode tab automatically if user is on another tab
-          setActiveTab('live')
-        })
-        .subscribe()
-      liveTipsChannelRef.current = liveTipsChannel
+      // Extension live-tip realtime handling now lives entirely in the
+      // dedicated live_tips_dash_ effect above (single channel, de-duped,
+      // with history hydration) — this used to be a second, separate
+      // channel here that raced with that one over the same channel ref.
 
       // ── LIGHTWEIGHT 30s analytics re-run (NO DB calls — just re-runs engine on cached data)
       // Full reloads only happen on: initial load, CSV upload, focus after 5+ min away
@@ -1933,7 +1936,10 @@ export default function Dashboard() {
     })
     return () => {
       if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current)
-      if (liveTipsChannelRef.current) supabase.removeChannel(liveTipsChannelRef.current)
+      // liveTipsChannelRef is owned and cleaned up by the live_tips_dash_
+      // effect above — removing it here too would double-remove the same
+      // channel on unmount (and previously could tear down the wrong one
+      // while both effects were racing over the same ref).
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current)
       if (tipFlushTimerRef.current) clearTimeout(tipFlushTimerRef.current)
       // minuteTimer cleared inline
@@ -1985,7 +1991,7 @@ export default function Dashboard() {
         normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
         sourceUsed:        tip.source || 'extension',
         timestamp:         new Date(tip.received_at),
-        platform:          tip.platform || 'chaturbate',
+        platform:          tip.platform || 'Unknown',
       }))
 
       setLiveEvents(normalized)
@@ -4303,11 +4309,38 @@ const stopImportMessageRotation = () => {
             // ALL events — used for totals and the tip feed display
             let totalRevenue = 0, totalTokens = 0
             const tipperMap = {}
+            // Per-tipper breakdown, further split by which platform each tip
+            // came from (a fan can tip the same streamer on more than one
+            // platform, e.g. while multistreaming) — kept separate from
+            // tipperMap above so nothing that already reads tipperMap changes.
+            const tipperPlatformMap = {}
             liveEvents.forEach(ev => {
               totalRevenue += ev.normalizedRevenue || 0
               totalTokens  += ev.tokens || 0
               tipperMap[ev.username] = (tipperMap[ev.username] || 0) + (ev.normalizedRevenue || 0)
+
+              const platformKey = ev.platform || 'Unknown'
+              if (!tipperPlatformMap[ev.username]) {
+                tipperPlatformMap[ev.username] = { username: ev.username, totalRevenue: 0, totalTokens: 0, platforms: {} }
+              }
+              const t = tipperPlatformMap[ev.username]
+              t.totalRevenue += ev.normalizedRevenue || 0
+              t.totalTokens  += ev.tokens || 0
+              t.platforms[platformKey] = {
+                revenue: (t.platforms[platformKey]?.revenue || 0) + (ev.normalizedRevenue || 0),
+                tokens:  (t.platforms[platformKey]?.tokens  || 0) + (ev.tokens || 0),
+                tipCount: (t.platforms[platformKey]?.tipCount || 0) + 1,
+              }
             })
+            const tippers = Object.values(tipperPlatformMap)
+              .map(t => ({
+                ...t,
+                totalRevenue: parseFloat(t.totalRevenue.toFixed(2)),
+                platforms: Object.fromEntries(
+                  Object.entries(t.platforms).map(([p, v]) => [p, { ...v, revenue: parseFloat(v.revenue.toFixed(2)) }])
+                ),
+              }))
+              .sort((a, b) => b.totalRevenue - a.totalRevenue)
 
             // LIVE-ONLY events — used for time-sensitive coaching signals
             // Historical events must NEVER trigger pace/timing alerts
@@ -4358,6 +4391,7 @@ const stopImportMessageRotation = () => {
               firstHalfUPM:    parseFloat(fUPM.toFixed(3)),
               secondHalfUPM:   parseFloat(sUPM.toFixed(3)),
               currentUPM:      parseFloat((totalRevenue / elapsedMins).toFixed(3)),
+              tippers,
             }
           }
 
@@ -4674,11 +4708,20 @@ const stopImportMessageRotation = () => {
                       <span style={{ fontSize: 11, color: ok ? C.green : '#475569', fontWeight: 600 }}>{ok ? okText : offText}</span>
                     </div>
                   ))}
-                  {liveActive && state && (
+                  {liveActive && liveEngine.engineMode === 'v2' && liveEngine.serverSession ? (
+                    <>
+                      <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+                        Session: {fmtDuration(liveEngine.duration?.active_duration_seconds)}
+                      </span>
+                      <span style={{ fontSize: 11, color: C.dim }}>
+                        Started {new Date(liveEngine.serverSession.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: liveTimezone })} ({liveTimezone})
+                      </span>
+                    </>
+                  ) : liveActive && state ? (
                     <span style={{ fontSize: 11, color: C.muted }}>
                       Session: {Math.floor(state.elapsedMins)}m {Math.round((state.elapsedMins % 1) * 60)}s
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
@@ -4939,6 +4982,34 @@ const stopImportMessageRotation = () => {
                           {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
                         </div>
                       </div>
+
+                      {/* TIPPERS — running per-tipper totals, broken out by platform
+                          (a fan can tip on more than one platform, e.g. while
+                          multistreaming — this keeps that visible instead of
+                          merging it into one anonymous number) */}
+                      {state?.tippers?.length > 0 && (
+                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
+                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Tippers</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                            {state.tippers.slice(0, 10).map(t => (
+                              <div key={t.username} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                  <span style={{ fontSize: 12, color: C.white, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.username}</span>
+                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                    {Object.entries(t.platforms).map(([platform, v]) => (
+                                      <span key={platform} title={`${v.tipCount} tip${v.tipCount === 1 ? '' : 's'} on ${platform}`}
+                                        style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(168,85,247,0.12)', color: C.muted, whiteSpace: 'nowrap' }}>
+                                        {platform} ${v.revenue.toFixed(2)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 800, color: C.gold, flexShrink: 0 }}>${t.totalRevenue.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* TIP INPUT — collapsible */}
                       {liveActive && (
@@ -6693,77 +6764,6 @@ const stopImportMessageRotation = () => {
         </div>
       )}
 
-      {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
-          never sits over a fan card's actions or the bottom of the page content */}
-      <button
-        onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
-        aria-label="Share feedback"
-        title="Feedback"
-        style={{
-          position: "fixed", bottom: 18, right: 18, zIndex: 60,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 42, height: 42, borderRadius: "50%",
-          background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          color: C.text, fontSize: 17, cursor: "pointer",
-          boxShadow: "0 4px 18px rgba(0,0,0,0.5)", transition: "all 0.2s"
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.color = C.white }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = C.text }}
-      >
-        💬
-      </button>
-
-      {/* FEEDBACK MODAL */}
-      {showFeedback && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "flex-end", justifyContent: "flex-start", zIndex: 1003, padding: 24, paddingBottom: 80 }}>
-          <div style={{ width: 400, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 60px rgba(59,130,246,0.15)", overflow: "hidden" }}>
-            <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Share Feedback 💬</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Help us build what you actually need</div>
-              </div>
-              <button onClick={() => setShowFeedback(false)} style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-            </div>
-            <div style={{ padding: 20 }}>
-              {feedbackSent ? (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🙏</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>Thank you!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Your feedback helps us build better features for you.</div>
-                  <Button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", fontSize: 13 }}>Close</Button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                    {[{ id: 'feature', label: '✨ Feature Request', color: C.cyan }, { id: 'bug', label: '🐛 Bug Report', color: C.red }].map(({ id, label, color }) => (
-                      <button key={id} onClick={() => setFeedbackType(id)} style={{ flex: 1, padding: "9px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", background: feedbackType === id ? `${color}20` : "rgba(255,255,255,0.04)", border: feedbackType === id ? `1px solid ${color}50` : "1px solid rgba(255,255,255,0.08)", color: feedbackType === id ? color : C.muted }}>{label}</button>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>
-                    {feedbackType === 'feature' ? "What feature would make CamCash more useful for you?" : "What's broken or not working as expected?"}
-                  </div>
-                  <textarea
-                    value={feedbackText}
-                    onChange={e => setFeedbackText(e.target.value)}
-                    placeholder={feedbackType === 'feature' ? "e.g. I wish I could see my earnings by day of week..." : "e.g. When I upload a CSV from Chaturbate, it shows an error..."}
-                    rows={4}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none", fontFamily: "inherit", marginBottom: 14 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.4)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
-                  />
-                  <Button
-                    disabled={!feedbackText.trim()}
-                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
-                    style={{ width: "100%", padding: "12px", fontSize: 14 }}>
-                    {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* FAN SEARCH MODAL */}
       <FanSearchModal
@@ -6864,6 +6864,14 @@ const stopImportMessageRotation = () => {
         {toast}
         </div>
       )}
+
+      <FeedbackButton />
+      <ContextualFeedbackPopup
+        user={user}
+        readiness={dashboardReadiness}
+        suppress={liveActive || activeTab === 'live'}
+      />
+
       <SiteFooter variant="simple" />
     </div>
   )

@@ -1,12 +1,82 @@
 import { Resend } from 'resend'
+import { z } from 'zod'
+import { createSupabaseRouteClient } from '../../../lib/supabase-server'
+
+const SENTIMENT_OPTIONS = ['love_it', 'good', 'okay', 'frustrated', 'broken']
+const CATEGORY_OPTIONS = [
+  'bug',
+  'feature_request',
+  'confusing',
+  'performance',
+  'data_analytics',
+  'ui_design',
+  'other',
+]
+
+const FeedbackSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  sentiment: z.enum(SENTIMENT_OPTIONS).optional().nullable(),
+  category: z.enum(CATEGORY_OPTIONS).optional().nullable(),
+  page_url: z.string().max(500).optional().nullable(),
+  page_title: z.string().max(200).optional().nullable(),
+})
 
 export async function POST(req) {
+  const supabase = createSupabaseRouteClient()
+
+  // Derive the user from the authenticated session — never trust a
+  // client-supplied user_id or plan.
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return Response.json({ error: 'You need to sign in to continue.' }, { status: 401 })
+  }
+
+  let body
   try {
-    const body = await req.json()
-    const { message, page_url, page_title, user_id, created_at } = body
+    body = await req.json()
+  } catch {
+    return Response.json({ error: 'Invalid request.' }, { status: 400 })
+  }
 
-    if (!message) return Response.json({ error: 'No message' }, { status: 400 })
+  const parsed = FeedbackSchema.safeParse(body)
+  if (!parsed.success) {
+    return Response.json({ error: 'Invalid request.' }, { status: 400 })
+  }
 
+  const { message, sentiment, category, page_url, page_title } = parsed.data
+
+  // Plan is read from the user's own profile row server-side — the client
+  // cannot spoof it by sending its own `plan` field.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('plan')
+    .eq('id', user.id)
+    .single()
+
+  const { error: insertError } = await supabase.from('feedback').insert({
+    user_id: user.id, // from auth session, not client input
+    message,
+    sentiment: sentiment || null,
+    category: category || null,
+    plan: profile?.plan || null,
+    page_url: page_url || null,
+    page_title: page_title || null,
+  })
+
+  if (insertError) {
+    // Database persistence is the primary requirement — if it fails, report
+    // the failure rather than silently falling back to email-only.
+    console.error('Feedback insert error:', insertError.message)
+    return Response.json({ error: 'Something went wrong. Please try again.' }, { status: 500 })
+  }
+
+  // Email notification is secondary — it must never block or fail the
+  // already-successful database write.
+  try {
     const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({
       from: 'CamCash Feedback <welcome@camcashgrl.com>',
@@ -29,10 +99,11 @@ export async function POST(req) {
   </div>
 
   <div style="background:rgba(15,20,32,0.6);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:20px;">
+    ${sentiment ? `<p style="color:#64748B;font-size:13px;margin:0 0 8px;"><strong style="color:#94A3B8;">Sentiment:</strong> ${sentiment}</p>` : ''}
+    ${category ? `<p style="color:#64748B;font-size:13px;margin:0 0 8px;"><strong style="color:#94A3B8;">Category:</strong> ${category}</p>` : ''}
     ${page_url ? `<p style="color:#64748B;font-size:13px;margin:0 0 8px;"><strong style="color:#94A3B8;">Page:</strong> ${page_url}</p>` : ''}
     ${page_title ? `<p style="color:#64748B;font-size:13px;margin:0 0 8px;"><strong style="color:#94A3B8;">Title:</strong> ${page_title}</p>` : ''}
-    ${user_id ? `<p style="color:#64748B;font-size:13px;margin:0 0 8px;"><strong style="color:#94A3B8;">User ID:</strong> ${user_id}</p>` : ''}
-    ${created_at ? `<p style="color:#64748B;font-size:13px;margin:0;"><strong style="color:#94A3B8;">Time:</strong> ${created_at}</p>` : ''}
+    <p style="color:#64748B;font-size:13px;margin:0;"><strong style="color:#94A3B8;">User ID:</strong> ${user.id}</p>
   </div>
 
   <div style="text-align:center;padding-top:24px;">
@@ -42,10 +113,11 @@ export async function POST(req) {
 </body>
 </html>`,
     })
-
-    return Response.json({ success: true })
   } catch (err) {
-    console.error('Feedback email error:', err)
-    return Response.json({ error: err.message }, { status: 500 })
+    // Email is secondary — the feedback row is already saved, so a failed
+    // notification email must not surface as an error to the user.
+    console.error('Feedback email error:', err.message)
   }
+
+  return Response.json({ success: true })
 }
