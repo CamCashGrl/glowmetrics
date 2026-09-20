@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'What I Actually Made My First 30 Days on Chaturbate (Real Numbers)',
@@ -415,6 +416,7 @@ export default function First30DaysPost() {
           </div>
         ))}
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

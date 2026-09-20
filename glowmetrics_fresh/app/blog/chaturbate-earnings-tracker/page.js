@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Chaturbate Earnings Tracker for Cam Models — Track Tips & Income',
@@ -307,6 +308,7 @@ export default function ChaturbateEarningsTracker() {
           </a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

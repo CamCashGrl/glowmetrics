@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 const DESCRIPTION = 'A practical cam-site comparison for models covering audience size, model competition, viewer-to-model dynamics, payouts, discoverability, and platform differences.'
 const CANONICAL = 'https://www.camcashgrl.com/blog/cam-sites-compared-viewers-models-competition'
@@ -147,6 +148,7 @@ export default function Page() {
   <p style={{ ...s.p, marginBottom: 0 }}>Compare model competition, discoverability, payout economics, show format, platform rules, and your own repeated earnings per hour.</p>
 </div>
       </section>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }
