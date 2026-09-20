@@ -1,0 +1,482 @@
+# CamCash — Claude Code Standing Instructions
+
+> Read this file completely before touching any file, writing any code, or making any plan.
+> These rules are always active. No exceptions unless Daphne explicitly overrides in writing during the session.
+
+---
+
+## STACK & PROJECT LOCATIONS
+
+- **Framework:** Next.js 14 App Router
+- **Database:** Supabase (project ID: `hlsdlaibnayzbfflxclj`)
+- **Hosting:** Vercel (project: `prj_m0oO3kw3E1Aeu1M3NZA8Shm15HBN`, team: `team_eWxjbLmMXWyz670M4jiF4ABf`)
+- **Repo:** `daphneoncam/glowmetrics`
+- **Working directory:** `glowmetrics_fresh/`
+- **Staging:** `staging.camcashgrl.com`
+
+---
+
+## RULE 1 — FILE APPROVAL REQUIRED BEFORE ANYTHING
+
+Before making any changes, list every file you plan to **create**, **modify**, or **delete** and wait for Daphne's written approval before proceeding.
+
+Never delete any file without explicit written approval.
+
+Never modify a file that was not in the approved list.
+
+If the scope changes mid-task, stop and re-list.
+
+---
+
+## RULE 2 — NEVER TOUCH THIS FILE
+
+```
+glowmetrics_fresh/app/onboarding/page.js
+```
+
+This file is 300KB+. It must **never** be edited via GitHub web editor or any tool that could silently truncate it. PowerShell terminal only.
+
+**Include this warning in every Claude Code prompt you generate:**
+> "Do not touch `glowmetrics_fresh/app/onboarding/page.js`"
+
+---
+
+## RULE 3 — NEVER DELETE OR OVERWRITE TIP DATA
+
+- The `tips` table must never have data deleted or overwritten
+- These real CSV files must never be touched: `bongacams_merged.csv`, `mfc_merged.csv`, `chaturbate_merged.csv`
+- Protected accounts with real streaming data — never delete, never modify tip data:
+  - `polefreaktrial@gmail.com`
+  - `polefreaktrial2@gmail.com`
+- Test accounts — never count as real signups:
+  - `daphneoncam+test@gmail.com`
+  - `daphneoncam+test678@gmail.com`
+  - `daphneoncam+123@gmail.com`
+  - All `daphneoncam+test` variants
+
+---
+
+## RULE 4 — DEPLOYMENT VERIFICATION
+
+- Never claim a file is "live" or "deployed" without verifying contents in GitHub or Vercel
+- Never merge a PR without first verifying Vercel build status
+- Always check Vercel for the latest deployment/PR preview URLs
+- Large files (300KB+): terminal only, never GitHub web editor
+- Never merge a PR unless the Vercel build is confirmed green
+
+---
+
+## RULE 5 — NEVER ADD, REMOVE, OR SIMPLIFY FEATURES WITHOUT APPROVAL
+
+Only build and add. Never strip, remove, or simplify any existing CamCash feature or UI element unless Daphne explicitly requests a specific removal in writing.
+
+Build on existing designs. Do not redesign from scratch unless absolutely necessary and approved.
+
+---
+
+## TOKEN RATES — SINGLE SOURCE OF TRUTH
+
+Token rates live **only** in `lib/constants.js`. Never hardcode them anywhere else.
+
+| Platform    | Rate (USD/token) |
+|-------------|-----------------|
+| BongaCams   | 0.025           |
+| Chaturbate  | 0.05            |
+| MyFreeCams  | 0.05            |
+| Stripchat   | 0.05            |
+| CamSoda     | 0.05            |
+| Default     | 0.05            |
+
+```js
+// Always use this — never hardcode
+import { tokenRate } from './constants'
+const usd = tokens * tokenRate(platform)
+```
+
+---
+
+## PLATFORM DATE FORMATS
+
+| Platform    | Format               | Example             |
+|-------------|----------------------|---------------------|
+| BongaCams   | DD.MM.YYYY HH:MM     | 31.01.2024 14:30    |
+| MyFreeCams  | Ordinal month format | Jan 31st, 2024      |
+| Chaturbate  | Standard             | —                   |
+
+---
+
+## PARSER ARCHITECTURE
+
+- All platform detection is **server-side only** — never client-side
+- Raw paste text is sent directly to `/api/upload` as plain text
+- `lib/analytics.js` → `parseCSV` handles all platform detection
+- Never duplicate parsing logic outside `lib/analytics.js`
+
+---
+
+## FORMULA RULES
+
+Every formula has exactly one implementation. Never copy, always import.
+
+**USD Calculation Priority:**
+```
+1. If trusted USD exists → use USD
+2. Else if tokens exist → USD = tokens * tokenRate(platform)
+3. Else → mark as 0, flag as incomplete
+```
+
+**Valid Session Rule** (must be used everywhere — dashboards, best-time, hourly rate, fan insights):
+```
+durationMinutes >= 30 AND tipCount >= 2
+```
+
+**Hourly Rate:**
+```
+Hourly Rate = totalUSD / (durationMinutes / 60)
+```
+Label as `~$X/hr estimated` if stream time is estimated. Never show exact-sounding figures when stream time is incomplete.
+
+**Best Time to Stream:**
+```
+Best Time Score = totalUSD in time bucket / total streamed hours in that time bucket
+```
+Never rank by total earnings alone. Minimum data required before declaring "best."
+
+**Fan Key (cross-platform identity):**
+```
+fanKey = platform + ":" + normalizedUsername
+```
+Never merge fans across platforms by username alone.
+
+**Fan Tiers:**
+```
+Whale   = totalUSD >= 100 AND manualTipCount >= 10
+Shark   = totalUSD >= 30  AND manualTipCount >= 5
+Regular = totalUSD >= 5   AND manualTipCount >= 2
+Dormant = daysSinceLastRevenueEvent > 60
+```
+
+**Top Tipper** = highest total `manual_tip` USD (excludes private, group, spy, session revenue)
+**Top Spender** = highest total USD across all valid revenue types
+
+**Data Confidence:**
+```
+Very Low  (<3 sessions or <3hrs)  → "Not enough data yet"
+Low       (3–4 sessions)          → "Early signal"
+Medium    (5–9 sessions)          → "Likely pattern"
+High      (10+ sessions, 20+hrs)  → "Strong pattern"
+```
+
+**Platform order of operations:**
+1. Normalize rows → 2. Classify event types → 3. Group by platform → 4. Platform metrics → 5. Overall metrics
+
+---
+
+## NEVER INVENT ANALYTICS
+
+CamCash is an analytics platform. Never estimate, fabricate, average, infer, or invent statistics.
+
+If sufficient data does not exist, display:
+```
+"Not enough data yet"
+```
+
+Never show placeholder numbers. Never generate values to fill UI gaps. If a formula or metric is uncertain, flag it — never guess.
+
+Low-data insights may only appear if clearly labeled `"Early signal"`.
+
+---
+
+## DASHBOARD STAGE SYSTEM
+
+After onboarding, route users to the correct dashboard stage based on their data:
+
+```ts
+if (liveSessionActive || liveTipsLast12Hours > 0) return "live-active";
+if (totalTips === 0) return "no-data";
+if (totalTips >= 250 && validSessions >= 10 && totalEarningsUsd >= 100) return "full-dashboard";
+if (totalTips >= 100 && validSessions >= 5  && totalEarningsUsd >= 50)  return "growing-insights";
+if (totalTips >= 25  && validSessions >= 2  && totalEarningsUsd >= 10)  return "first-valid-data";
+return "tiny-import";
+```
+
+**Never show:** `$0`, `NaN`, `undefined`, `null`, `Invalid date`, empty charts, or blank tables as primary dashboard content.
+
+**Always show a polished state** even with zero data. Locked/preview cards must explain what is needed to unlock, not just say "no data."
+
+---
+
+## PAYMENT GATING
+
+**Free tier limits:**
+- 3 CSV uploads max
+- 500 tip cap
+- Pro-gated tabs: enforced, never bypass
+
+**Capability model** — use `getUserCapabilities()` from the shared capability helper. Never scatter plan checks in individual components.
+
+**UI gating is not security.** Every paid/protected feature must be enforced server-side. Frontend locked cards are UI only.
+
+**Payment locked vs Data locked** — these must be visually and verbally distinct:
+- Payment locked: user has data but needs Pro → `"Upgrade to unlock"`
+- Data locked: user needs more data regardless of plan → `"Add more history"`
+
+Never ask for payment for an insight that cannot be calculated yet.
+
+---
+
+## SECURITY RULES
+
+**Never trust the frontend.**
+
+- Never expose `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, or any secret to client code
+- Never trust `user_id` from the client — always derive from `supabase.auth.getUser()` server-side
+- Every private table must have RLS enabled with policies scoped to `auth.uid() = user_id`
+- Never disable RLS to "fix" a data issue
+- Never use `select *` on sensitive tables
+- Validate all input: platform allowlist, date ranges, raw paste size limits, tip amounts
+- Sanitize all error messages returned to users — never return raw database errors
+- Verify Stripe webhook signatures
+- Never unlock paid features until server-confirmed payment/subscription status
+- Admin routes must be server-side role-checked, never hidden-button-only
+
+**Safe pattern:**
+```ts
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+// Use user.id from auth — never from request body
+```
+
+---
+
+## BRAND PALETTE
+
+| Token        | Hex               | Usage                     |
+|--------------|-------------------|---------------------------|
+| Main bg      | `#050713`         | Page background           |
+| Panel bg     | `#080B1A`         | Panels                    |
+| Card bg      | `rgba(10,14,32,0.82)` | Cards               |
+| Cyan primary | `#16F4FF`         | CTAs, active states, glows |
+| Cyan soft    | `#48E9FF`         | Secondary accents         |
+| Pink         | `#FF2BAE`         | Right glow, accents       |
+| Purple       | `#7C5CFF`         | Mid gradient, fan accents |
+| Gold         | `#FFC857`         | Sessions, warnings        |
+| White        | `#FFFFFF`         | Headings                  |
+| Text soft    | `#D7D9EA`         | Body text                 |
+| Text muted   | `#8D93AA`         | Labels, descriptions      |
+
+**Primary gradient:**
+```css
+linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)
+```
+
+**Page background:**
+```css
+radial-gradient(circle at 18% 35%, rgba(22,244,255,0.20), transparent 34%),
+radial-gradient(circle at 82% 45%, rgba(255,43,174,0.22), transparent 36%),
+linear-gradient(135deg, #050713 0%, #080B1A 48%, #120719 100%)
+```
+
+**Card style:**
+```css
+background: rgba(12, 16, 34, 0.78);
+border: 1px solid rgba(255,255,255,0.09);
+border-radius: 22px;
+box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 42px rgba(0,0,0,0.28);
+```
+
+**Primary button:**
+```css
+background: linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%);
+border-radius: 18px;
+font-weight: 850;
+color: white;
+box-shadow: 0 0 26px rgba(22,244,255,0.28), 0 0 36px rgba(255,43,174,0.26);
+```
+
+**Never use:** bright pink, neon purple, loud gradients, white cards, flat gray, default Tailwind, confetti.
+
+---
+
+## UI RULES
+
+- Every CamCash page uses the same dark cosmic cyan/pink background
+- All cards use the dark glassy style above — never plain white or flat gray
+- All primary CTAs use the cyan-to-pink gradient button
+- Selected/active states use cyan glow
+- Dashboard must never look like a generic admin template
+- Completion animation: sparkle, neon pulse, camera flash — never confetti
+- Loading: rotating insight messages + gradient progress bar
+
+**Do not change analytics formulas, import logic, Supabase logic, auth, routing, or Stripe during UI-only tasks.**
+
+---
+
+## ONBOARDING FLOW (READ-ONLY REFERENCE)
+
+Flow order: **platform picker → Chaturbate username → paste tip history → preview → import → done**
+
+The file `glowmetrics_fresh/app/onboarding/page.js` is sacred. See Rule 2.
+
+BongaCams: dual paste areas wired in onboarding.
+All paste text sent as plain text to `/api/upload`. Platform detection is server-side only.
+
+---
+
+## FREE TIER ENFORCEMENT
+
+```
+3 CSV uploads max
+500 tip cap
+Pro-gated tabs: never bypass in any path, including API routes
+```
+
+---
+
+## CHROME EXTENSION (Pretty Profitz)
+
+- All public-facing copy: data analytics / content creator revenue framing only
+- No cam model-specific language in Chrome Web Store listings or public-facing store copy
+- Extension and website are independent — debug separately
+- Extension skips Chaturbate tip logging when Stats API token is active (prevents double-counting)
+
+---
+
+## TIMEZONE
+
+All timezone math must use user-local timezone via `Intl.DateTimeFormat`. Never assume UTC for display.
+
+---
+
+## PEAK HOURS CALCULATION
+
+Use **median over mean**. Minimum 3 active days required to qualify a peak hour.
+
+---
+
+## DEDUP LOGIC
+
+Use `insert_tips_dedup` RPC with unique index on `tip_ref`. Never insert tips without going through dedup.
+
+---
+
+## CONFLICT RESOLUTION PRIORITY
+
+If rules conflict, apply in this order:
+
+1. **Security** — user data protection always wins
+2. **Data integrity** — never invent analytics, never duplicate formulas
+3. **Source of truth** — `lib/constants.js` and `lib/analytics.js` win over any component-level logic
+4. **Protection** — file approval and deployment verification win over speed
+5. **UI / visual** — brand and consistency rules defer to all of the above
+
+---
+
+## BEFORE EVERY TASK — RUN THIS CHECKLIST
+
+```
+□ Listed every file to create/modify/delete?
+□ Waited for Daphne's written approval?
+□ onboarding/page.js excluded from all changes?
+□ No tip data or protected accounts being touched?
+□ Token rates read from lib/constants.js only?
+□ Platform detection server-side only?
+□ No duplicate formula logic being introduced?
+□ No analytics being fabricated or estimated?
+□ Dashboard stage logic uses shared getDashboardStage() function?
+□ Payment gating enforced server-side, not UI-only?
+□ RLS verified on any table being touched?
+□ No secrets in client code?
+□ Deployment not claimed unless Vercel build confirmed?
+□ UI matches CamCash dark neon palette?
+□ No feature or UI element removed without explicit approval?
+```
+
+---
+
+## AFTER EVERY SESSION
+
+At the end of every meaningful work session, produce a session recap covering:
+
+1. Where we left off (exact file/component/status)
+2. What was completed (checkmarks only for actual completions)
+3. Decisions made
+4. What came up but got paused
+5. Suggestions, risks, feature ideas
+6. Current task queue (High / Medium / Low priority)
+7. Completed task list
+8. User activity / signups / notifications (from Supabase/Vercel/GitHub if accessible — never invent)
+9. Recommended next session focus
+
+**Never invent signups, deployments, or completions.** If data was not checked, say so explicitly.
+
+---
+
+## DAILY STATUS REPORT FORMAT
+
+When asked for a status summary, progress update, or daily report, include:
+
+- Tasks in queue (ordered by priority)
+- PRs not yet merged
+- PRs that can be closed
+- Suggested next actions
+- Prioritized checklist
+
+---
+
+## TIME ZONES — NEVER READ A DAY OR HOUR IN UTC
+
+A stream time only means something to a creator as their own wall-clock time.
+This rule exists because the mistake has been made repeatedly, including
+deliberately: `app/dashboard/page.js` still carries comments reading
+*"FIX: use getUTCHours() — tips stored in UTC"*.
+
+**That reasoning is wrong.** Timestamps being *stored* in UTC is true and
+irrelevant. Storage format and display basis are different questions. A tip
+stored as `2026-09-15T05:00:00Z` was earned at 10 PM on Monday by a creator in
+Los Angeles. Reading it in UTC calls it 5 AM Tuesday — a different hour and a
+different day.
+
+What this broke in practice:
+
+- Stream Planner bucketed by `getUTCDay()`/`getUTCHours()`, then converted for
+  display using a sample date in January — so every hour displayed one hour
+  early in any daylight-saving timezone, and the weekday was wrong for anyone
+  west of UTC. The feature whose whole job is saying when to stream was wrong
+  for every creator.
+- `missedRevenueByPlatform` compared a UTC session hour against a local
+  `bestHour`, so the dollar figure it reported was computed from a mismatch.
+- Money Map bucketed hours locally but keyed dates in UTC, putting a
+  late-evening tip on the following day.
+
+### The rule
+
+Creator-facing days and hours are read on the creator's clock:
+
+```js
+import { toLocalHour, toLocalDow } from '@/lib/analytics'
+const hour = toLocalHour(tip.date_time, userTz)
+const dow  = toLocalDow(tip.date_time, userTz)
+```
+
+In a client component the browser clock is already the creator's, so plain
+`.getHours()` / `.getDay()` is correct there — but never mix the two bases in
+one feature.
+
+`getUTCFullYear/Month/Date` are acceptable for duration arithmetic. They are
+not acceptable as a **date key** sitting beside a locally-bucketed hour: that
+splits one feature across two clocks.
+
+### Enforcement
+
+`scripts/check-timezone.mjs` runs in CI and fails the build on any new
+`getUTCDay()`/`getUTCHours()`. It carries a baseline of pre-existing sites so
+old debt does not block every PR. **Lower a baseline number when you fix one;
+never raise one.** If a flagged use really is duration arithmetic, add it to
+the baseline with a comment explaining why.
+
+Regression coverage: `lib/analytics/__tests__/timezone-consistency.test.js`.
+
+---
+
+*Last updated: June 2026 — Port of all CamCash claude.ai skills into Claude Code format*

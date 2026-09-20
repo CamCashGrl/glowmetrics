@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset='UTF-8'>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 40px; color: #1e293b; line-height: 1.7; }
+  h1 { font-size: 28px; color: #0f172a; border-bottom: 3px solid #7c3aed; padding-bottom: 12px; }
+  h2 { font-size: 20px; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 36px; }
+  h3 { font-size: 16px; color: #4c1d95; margin-top: 24px; }
+  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #7c3aed; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px 20px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th { background: #7c3aed; color: white; padding: 10px 14px; text-align: left; }
+  td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  blockquote { border-left: 4px solid #7c3aed; margin: 16px 0; padding: 8px 16px; background: #faf5ff; color: #4c1d95; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 32px 0; }
+  .status-ok { color: #16a34a; font-weight: 700; }
+  .status-warn { color: #d97706; font-weight: 700; }
+  .status-bad { color: #dc2626; font-weight: 700; }
+  p strong { color: #0f172a; }
+  li { margin-bottom: 4px; }
+  @media print { body { margin: 20px; } }
+</style>
+</head><body><hr>
+title: CamCash — Changes Log (May 31, 2026)
+<hr></p><p><h1>CamCash — Changes Log  </h1>
+<strong>Date:</strong> May 31, 2026  
+<strong>Branch:</strong> <code>main</code> (all changes pushed)  
+<strong>Prepared for:</strong> Site owner review</p><p><hr></p><p><h2>Site Structure Overview</h2></p><p><pre><code>glowmetrics_fresh/app/
+├── page.js                          ← Root redirect
+├── layout.js / globals.css          ← Global styles
+├── landing/
+│   ├── page.js                      ← Public marketing page
+│   ├── LandingClient.js             ← Landing page component
+│   └── demo/
+│       └── page.js                  ← ✅ FULL interactive dashboard demo (KEEP THIS)
+├── live/
+│   ├── layout.js                    ← Live page sidebar + tool drawers
+│   └── page.js                      ← ⚠️ MODIFIED TODAY (see below)
+├── demo/
+│   └── page.js                      ← ⚠️ NOW A REDIRECT → /landing/demo
+├── tools/
+│   └── cam-model-name-generator/
+│       ├── page.js                  ← Schema + metadata (unchanged)
+│       └── NameGeneratorClient.js   ← ✅ FULLY REWRITTEN TODAY
+├── sitemap.js                       ← ✅ UPDATED TODAY
+└── ... (all other routes untouched)</code></pre></p><p><hr></p><p><h2>File-by-File Change Log</h2></p><p><hr></p><p><h3>1. <code>app/tools/cam-model-name-generator/NameGeneratorClient.js</code></h3></p><p><strong>Status:</strong> Fully rewritten  
+<strong>Previous state:</strong> 3 generation modes (Real Name, Hybrid, Stage Name), single brand score (0–100), name cards with basic score bar, domain checker, AI analysis via API call  
+<strong>What is there now:</strong> Complete redesign</p><p><strong>New features added:</strong>
+<ul><li><strong>11 generation modes</strong> — Real Name, Luxury, Elegant, Gamer, Goth, Cosplay, Dominant, Soft Girl, Milf, Alternative, Professional. Each mode has its own curated name pool.</li></ul>
+<ul><li><strong>5-score system</strong> per generated name:</li></ul>
+  - Brand Score (0–100)
+  - SEO Score (0–100)
+  - Memorability Score (0–100)
+  - Searchability Score (0–100)
+  - Social Handle Score (0–100)
+  - Overall Score (weighted average)
+<ul><li><strong>Client-side AI analysis</strong> — strengths, improvement tips, and "best for" text generated from name properties. No API call needed.</li></ul>
+<ul><li><strong>Name Roast</strong> — collapsible fun one-liner per name based on score profile</li></ul>
+<ul><li><strong>Name Comparison Tool</strong> — select any 2 names, a panel slides up showing side-by-side scores with winner highlighted</li></ul>
+<ul><li><strong>Saved Favorites</strong> — star icon on each card, filter results to favorites</li></ul>
+<ul><li><strong>Animated score bars</strong> — CSS keyframe animation on each bar</li></ul>
+<ul><li><strong>Glassmorphism card design</strong> — <code>backdrop-filter: blur(20px)</code> on all cards</li></ul>
+<ul><li><strong>Domain availability check</strong> — per card, expandable, uses domainsdb.info API (unchanged)</li></ul>
+<ul><li><strong>"Build Your Creator Brand" CTA</strong> — appears after generation showing top-scored name with all 5 scores</li></ul>
+<ul><li><strong>4 new SEO content sections:</strong></li></ul>
+  - Best Cam Girl Names for 2026
+  - Chaturbate Username Ideas (20 examples)
+  - OnlyFans Name Ideas (10 examples with descriptions)
+  - SEO-Friendly Creator Names (how name affects Google ranking)
+<ul><li><strong>Expanded internal linking</strong> — links to all major guides, blog posts, and CamCash pages</li></ul></p><p><strong>What did NOT change:</strong> <code>page.js</code> (schema markup, metadata, breadcrumb schema, FAQ schema, tool schema) — all unchanged.</p><p><hr></p><p><h3>2. <code>app/live/page.js</code></h3></p><p><strong>Status:</strong> Small addition only  
+<strong>Previous state:</strong> Authenticated live coaching page with demo simulation for unauthenticated users. Had "Preview Demo" button in authenticated nav.  
+<strong>Change made:</strong> Added <code>"🎬 See Full Live Demo →"</code> link (href <code>/live/demo</code>) to the unauthenticated CTA panel — this link now points nowhere useful since <code>/live/demo</code> was deleted.</p><p><strong>⚠️ Action needed:</strong> The <code>"See Full Live Demo →"</code> link added to the unauthenticated panel should be removed or updated. It currently points to <code>/live/demo</code> which no longer exists.</p><p><hr></p><p><h3>3. <code>app/live/demo/page.js</code></h3></p><p><strong>Status:</strong> Created then DELETED in same session  
+<strong>What happened:</strong> Created a standalone live simulation demo page. User confirmed this was wrong. Page was deleted.  
+<strong>Current state:</strong> This route does not exist. <code>/live/demo</code> returns 404.</p><p><hr></p><p><h3>4. <code>app/demo/page.js</code></h3></p><p><strong>Status:</strong> Redirects to <code>/landing/demo</code>  
+<strong>Previous state:</strong> Rendered <code>DemoClient.js</code> — a live simulation with tip feed, coaching messages, fan cards, session walkthrough. This was a simplified live-mode demo, NOT the full dashboard.</p><p>&gt; <strong>Root cause of the problem:</strong> In a session prior to today, <code>DemoClient.js</code> was overwritten. The original content (a full interactive dashboard) was replaced with a live simulation. This broke the <code>/demo</code> route as a destination for the full demo experience.</p><p><strong>Current state:</strong> <code>page.js</code> now calls <code>redirect('/landing/demo')</code> from Next.js. Any visitor hitting <code>/demo</code> is immediately sent to <code>/landing/demo</code>.  
+<strong><code>DemoClient.js</code>:</strong> Still exists on disk with the live simulation content. Not rendered anywhere currently.</p><p><hr></p><p><h3>5. <code>app/sitemap.js</code></h3></p><p><strong>Status:</strong> Updated  
+<strong>Previous state:</strong> Listed <code>https://www.camcashgrl.com/demo</code> at priority 1.0  
+<strong>Current state:</strong> Changed to <code>https://www.camcashgrl.com/landing/demo</code> at priority 1.0</p><p>Full priority 1.0 list now:
+<pre><code>https://www.camcashgrl.com
+https://www.camcashgrl.com/landing
+https://www.camcashgrl.com/landing/demo     ← changed from /demo
+https://www.camcashgrl.com/live
+https://www.camcashgrl.com/extension
+https://www.camcashgrl.com/blog
+https://www.camcashgrl.com/guides
+https://www.camcashgrl.com/tools
+https://www.camcashgrl.com/pricing</code></pre></p><p><hr></p><p><h2>What Is Working Correctly</h2></p><p><table><tr><td>Route</td><td>Status</td><td>Notes</td></tr>
+|---|---|---|
+<tr><td><code>/landing</code></td><td>✅ Working</td><td>Public marketing page, unchanged</td></tr>
+<tr><td><code>/landing/demo</code></td><td>✅ Working</td><td>Full interactive dashboard demo — this is the CORRECT demo</td></tr>
+<tr><td><code>/demo</code></td><td>✅ Redirects</td><td>Sends users to <code>/landing/demo</code></td></tr>
+<tr><td><code>/live</code></td><td>⚠️ Check needed</td><td>A "See Full Live Demo" link was added pointing to deleted route</td></tr>
+<tr><td><code>/tools/cam-model-name-generator</code></td><td>✅ Working</td><td>Fully redesigned</td></tr>
+<tr><td><code>/live/demo</code></td><td>❌ Deleted</td><td>Returns 404</td></tr>
+<tr><td>All blog posts</td><td>✅ Unchanged</td><td>Not touched today</td></tr>
+<tr><td>All guides</td><td>✅ Unchanged</td><td>Not touched today</td></tr>
+<tr><td>Dashboard</td><td>✅ Unchanged</td><td>Not touched today</td></tr></p><p><hr></p><p><h2>Outstanding Issues to Fix</h2></p><p><h3>Issue 1 — Broken link on <code>/live</code> page (unauthenticated view)</h3>
+<strong>File:</strong> <code>app/live/page.js</code>  
+<strong>Problem:</strong> The unauthenticated CTA panel has a button <code>"🎬 See Full Live Demo →"</code> with <code>href="/live/demo"</code> which no longer exists.  
+<strong>Fix needed:</strong> Remove that button or change the href to <code>/landing/demo</code>.</p><p><h3>Issue 2 — <code>DemoClient.js</code> is orphaned</h3>
+<strong>File:</strong> <code>app/demo/DemoClient.js</code>  
+<strong>Problem:</strong> File still exists on disk with the live simulation content. Not rendered anywhere.  
+<strong>Fix needed:</strong> Can be deleted, or repurposed if a live-page demo is ever wanted.</p><p><hr></p><p><h2>Commits Made Today</h2></p><p><tr><td>Commit</td><td>Description</td></tr>
+|---|---|
+<tr><td><code>6169178</code></td><td>feat: redesign name generator — 11 modes, 5-score system, compare tool, favorites, roast</td></tr>
+<tr><td><code>78ae602</code></td><td>feat: add /live/demo — standalone interactive live coaching demo page (later deleted)</td></tr>
+<tr><td><code>b5704cf</code></td><td>fix: redirect /demo to /landing/demo</td></tr>
+<tr><td><code>d41c7b1</code></td><td>cleanup: delete /live/demo, fix sitemap to /landing/demo</td></tr></table></p><p><hr></p><p><h2>Routes That Were NOT Touched Today</h2></p><p>The following routes are exactly as they were before this session:</p><p><ul><li><code>/dashboard</code> and all sub-routes</li></ul>
+<ul><li><code>/login</code></li></ul>
+<ul><li><code>/admin</code></li></ul>
+<ul><li><code>/onboarding</code></li></ul>
+<ul><li><code>/pricing</code></li></ul>
+<ul><li><code>/extension</code></li></ul>
+<ul><li><code>/guides/*</code> (all guides)</li></ul>
+<ul><li><code>/blog/*</code> (all blog posts)</li></ul>
+<ul><li><code>/api/*</code> (all API routes)</li></ul>
+<ul><li><code>/tools</code> (index page)</li></ul>
+<ul><li>All components not listed above</li></ul></p><p><hr></p><p>*Document generated May 31, 2026. Do not overwrite README.md.*
+</body></html>
