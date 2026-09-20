@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation'
 
 const FeedbackWidget = dynamic(() => import('./FeedbackWidget'), { ssr: false })
 
-const FEEDBACK_WIDGET_PATHS = ['/dashboard', '/onboarding', '/upload']
+// '/dashboard' removed — superseded there by the new FeedbackButton/FeedbackModal
+// system (components/FeedbackButton.jsx), which persists to public.feedback with
+// server-derived auth instead of this widget's client-side insert.
+const FEEDBACK_WIDGET_PATHS = ['/onboarding', '/upload']
 
 export default function FeedbackWidgetGate() {
   const pathname = usePathname()

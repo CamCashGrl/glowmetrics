@@ -21,6 +21,8 @@ import PlatformsIntelligence from './PlatformsIntelligence'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import FeedbackButton from '../../components/FeedbackButton'
+import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -1444,10 +1446,6 @@ export default function Dashboard() {
   const [earlyAccessEmail, setEarlyAccessEmail] = useState('')
   const [earlyAccessSubmitted, setEarlyAccessSubmitted] = useState(false)
   const [earlyAccessSubmitting, setEarlyAccessSubmitting] = useState(false)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [feedbackType, setFeedbackType] = useState('feature')
-  const [feedbackText, setFeedbackText] = useState('')
-  const [feedbackSent, setFeedbackSent] = useState(false)
   const [tipPage, setTipPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -7030,77 +7028,6 @@ const stopImportMessageRotation = () => {
         </div>
       )}
 
-      {/* FLOATING FEEDBACK BUTTON — collapsed to a small icon in a safe gutter so it
-          never sits over a fan card's actions or the bottom of the page content */}
-      <button
-        onClick={() => { setShowFeedback(true); setFeedbackSent(false); setFeedbackText('') }}
-        aria-label="Share feedback"
-        title="Feedback"
-        style={{
-          position: "fixed", bottom: 18, right: 18, zIndex: 60,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 42, height: 42, borderRadius: "50%",
-          background: "rgba(15,20,32,0.95)", backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          color: C.text, fontSize: 17, cursor: "pointer",
-          boxShadow: "0 4px 18px rgba(0,0,0,0.5)", transition: "all 0.2s"
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(34,211,238,0.4)"; e.currentTarget.style.color = C.white }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = C.text }}
-      >
-        💬
-      </button>
-
-      {/* FEEDBACK MODAL */}
-      {showFeedback && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "flex-end", justifyContent: "flex-start", zIndex: 1003, padding: 24, paddingBottom: 80 }}>
-          <div style={{ width: 400, background: "rgba(15,20,32,0.98)", backdropFilter: "blur(24px)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 0 60px rgba(59,130,246,0.15)", overflow: "hidden" }}>
-            <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Share Feedback 💬</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Help us build what you actually need</div>
-              </div>
-              <button onClick={() => setShowFeedback(false)} style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: C.muted, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-            </div>
-            <div style={{ padding: 20 }}>
-              {feedbackSent ? (
-                <div style={{ textAlign: "center", padding: "20px 0" }}>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>🙏</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginBottom: 6 }}>Thank you!</div>
-                  <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Your feedback helps us build better features for you.</div>
-                  <Button onClick={() => setShowFeedback(false)} style={{ padding: "9px 24px", fontSize: 13 }}>Close</Button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                    {[{ id: 'feature', label: '✨ Feature Request', color: C.cyan }, { id: 'bug', label: '🐛 Bug Report', color: C.red }].map(({ id, label, color }) => (
-                      <button key={id} onClick={() => setFeedbackType(id)} style={{ flex: 1, padding: "9px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", background: feedbackType === id ? `${color}20` : "rgba(255,255,255,0.04)", border: feedbackType === id ? `1px solid ${color}50` : "1px solid rgba(255,255,255,0.08)", color: feedbackType === id ? color : C.muted }}>{label}</button>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>
-                    {feedbackType === 'feature' ? "What feature would make CamCash more useful for you?" : "What's broken or not working as expected?"}
-                  </div>
-                  <textarea
-                    value={feedbackText}
-                    onChange={e => setFeedbackText(e.target.value)}
-                    placeholder={feedbackType === 'feature' ? "e.g. I wish I could see my earnings by day of week..." : "e.g. When I upload a CSV from Chaturbate, it shows an error..."}
-                    rows={4}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: C.white, fontSize: 13, lineHeight: 1.6, resize: "none", outline: "none", fontFamily: "inherit", marginBottom: 14 }}
-                    onFocus={e => e.target.style.borderColor = "rgba(34,211,238,0.4)"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
-                  />
-                  <Button
-                    disabled={!feedbackText.trim()}
-                    onClick={() => { track('feedback_submitted', { type: feedbackType, length: feedbackText.length }); setFeedbackSent(true) }}
-                    style={{ width: "100%", padding: "12px", fontSize: 14 }}>
-                    {feedbackType === 'feature' ? '✨ Submit Feature Request' : '🐛 Submit Bug Report'}
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* FAN SEARCH MODAL */}
       {fanSearchOpen && (() => {
@@ -7255,6 +7182,14 @@ const stopImportMessageRotation = () => {
         {toast}
         </div>
       )}
+
+      <FeedbackButton />
+      <ContextualFeedbackPopup
+        user={user}
+        readiness={dashboardReadiness}
+        suppress={liveActive || activeTab === 'live'}
+      />
+
       <SiteFooter variant="simple" />
     </div>
   )
