@@ -2,21 +2,19 @@
 
 const AFFILIATE_URL = 'https://chaturbate.com/in/?tour=5zjT&campaign=IEYPs&track=default'
 
-export default function ChaturbateAffiliateCTA({ variant = 'end' }) {
-  const isInline = variant === 'inline'
-
+export default function ChaturbateAffiliateCTA() {
   return (
     <div
       style={{
         background: 'rgba(168,85,247,0.07)',
         border: '1px solid rgba(168,85,247,0.25)',
         borderRadius: '12px',
-        padding: isInline ? '24px' : '32px',
-        margin: isInline ? '24px 0' : '40px 0',
+        padding: '32px',
+        margin: '40px 0',
         textAlign: 'center',
       }}
     >
-      <h3 style={{ fontSize: isInline ? '18px' : '22px', fontWeight: '700', color: '#f1f5f9', margin: '0 0 8px' }}>
+      <h3 style={{ fontSize: '22px', fontWeight: '700', color: '#f1f5f9', margin: '0 0 8px' }}>
         Ready to start streaming on Chaturbate?
       </h3>
       <p style={{ fontSize: '14px', color: '#94a3b8', margin: '0 0 20px', lineHeight: '1.6' }}>
