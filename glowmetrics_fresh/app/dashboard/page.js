@@ -4331,49 +4331,6 @@ const stopImportMessageRotation = () => {
               )
             })()}
 
-            {/* CONVERSION CARD — free plan only. Only ever built from a REAL
-                fan who is both a top tipper (Whale/Shark tier) and has
-                genuinely passed the evidence-gated At Risk bar in
-                lib/analytics.js (same behavioralState used everywhere else
-                — never a separate/fabricated risk claim). If no such fan
-                exists, nothing renders — we do not manufacture urgency. */}
-            {!isPro && (() => {
-              const atRiskTopFan = [...whales]
-                .filter(w => (w.tier === 'Whale' || w.tier === 'Shark') && w.behavioralState === 'At Risk')
-                .sort((a, b) => b.totalUSD - a.totalUSD)[0]
-              if (!atRiskTopFan) return null
-              return (
-                <a href="/pricing" style={{ textDecoration: 'none', display: 'block' }}>
-                  <div style={{
-                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
-                    border: '1.5px solid rgba(248,113,113,0.6)',
-                    background: 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.05))',
-                    boxShadow: '0 0 24px rgba(248,113,113,0.15)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 18 }}>🚨</span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: C.red, textTransform: 'uppercase', letterSpacing: 0.6 }}>Top Fan At Risk</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', filter: 'blur(7px)' }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div aria-hidden style={{ filter: 'blur(6px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 14, marginBottom: 3 }}>••••••••••</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{atRiskTopFan.platform} · last tipped {atRiskTopFan.daysSinceLastTip}d ago</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white }}>${atRiskTopFan.totalUSD.toFixed(0)}</div>
-                        <div style={{ fontSize: 10, color: C.muted }}>lifetime spend</div>
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(248,113,113,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>⚠️ One of your top tippers has broken their pattern — unlock Fan Intelligence to see who and win them back</span>
-                      <span style={{ fontSize: 12, color: C.red, fontWeight: 800, whiteSpace: 'nowrap' }}>Upgrade to Pro →</span>
-                    </div>
-                  </div>
-                </a>
-              )
-            })()}
-
             {/* A. LEADERBOARD — "Who matters?" Ranked by totalUSD (already
                 sorted descending upstream), using the shared tier/platform
                 filters above. No invented scoring column. */}
@@ -4404,6 +4361,126 @@ const stopImportMessageRotation = () => {
                 )}
               </div>
             )}
+
+            {/* PRO FAN INTELLIGENCE PREVIEW — one real fan from the
+                creator's own data, selected by a 3-tier fallback using ONLY
+                existing fields (no new formula/threshold):
+                  1. Whale/Shark tier + behavioralState === 'At Risk'
+                     (same evidence-gated bar used everywhere else)
+                  2. Whale/Shark tier + trend.direction === 'down'
+                     (same calcFanTrend() output used by Trending Fans)
+                  3. top fan by totalUSD, neutral framing (no risk claim —
+                     nothing here implies urgency that isn't supported)
+                Free: username + behavioralStateReason blurred, real
+                platform/tier/totalUSD/tipCount/daysSinceLastTip visible,
+                CTA reuses the existing openUpgradeModal() tracked flow.
+                Pro: same slot, same selected fan, unblurred, opens the
+                existing Fan Profile modal — no second profile UI. */}
+            {(() => {
+              const featuredFan = [...whales].filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+                .find(w => w.behavioralState === 'At Risk')
+                || [...whales].filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+                  .sort((a, b) => b.totalUSD - a.totalUSD)
+                  .find(w => w.trend?.direction === 'down')
+                || [...whales].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+              if (!featuredFan) return null
+
+              const isAtRisk = featuredFan.behavioralState === 'At Risk'
+              const isTrendingDown = !isAtRisk && featuredFan.trend?.direction === 'down'
+              const headline = isAtRisk ? 'A high-value fan has gone quiet'
+                : isTrendingDown ? "This fan's recent activity has changed"
+                : 'A closer look at your top fan'
+              const tierColor = TIER_COLORS[featuredFan.tier] || C.cyan
+              const accentColor = isAtRisk ? C.red : isTrendingDown ? C.gold : C.cyan
+
+              if (!isPro) {
+                return (
+                  <div style={{
+                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20,
+                    border: `1.5px solid ${accentColor}55`,
+                    boxShadow: `0 0 24px ${accentColor}22`,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: accentColor, textTransform: 'uppercase', letterSpacing: 0.6 }}>✦ CamCash Noticed</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.gold, border: `1px solid ${C.gold}55`, borderRadius: 100, padding: '2px 8px' }}>PRO</span>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 14 }}>{headline}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <div aria-label="Fan identity locked" style={{ filter: 'blur(5px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{featuredFan.username}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 10, fontWeight: 700 }}>{featuredFan.tier}</span>
+                          <span style={{ fontSize: 11, color: C.muted }}>{featuredFan.platform}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 18 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>${featuredFan.totalUSD.toFixed(0)}</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>spent</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>{featuredFan.tipCount}</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>tips</div>
+                        </div>
+                      </div>
+                    </div>
+                    {featuredFan.daysSinceLastTip != null && (
+                      <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Last tip <span style={{ color: C.text, fontWeight: 600 }}>{featuredFan.daysSinceLastTip}d ago</span></div>
+                    )}
+                    {featuredFan.behavioralStateReason && (
+                      <div aria-label="Deeper intelligence locked" style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ filter: 'blur(4px)', userSelect: 'none', fontSize: 12, color: C.text, lineHeight: 1.4 }}>{featuredFan.behavioralStateReason}</div>
+                      </div>
+                    )}
+                    <button onClick={() => openUpgradeModal('fans_pro_preview')} style={{ marginTop: 14, width: '100%', padding: '10px 0', borderRadius: 9, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                      Unlock Fan Intelligence →
+                    </button>
+                  </div>
+                )
+              }
+
+              // Pro: same slot, same fan, unblurred — opens the existing
+              // Fan Profile modal rather than a second profile UI.
+              return (
+                <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(featuredFan) }}
+                  style={{
+                    ...glassCard, display: 'block', width: '100%', textAlign: 'left', borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
+                    border: `1.5px solid ${accentColor}55`, boxShadow: `0 0 24px ${accentColor}22`,
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: accentColor, textTransform: 'uppercase', letterSpacing: 0.6 }}>✦ CamCash Noticed</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 14 }}>{headline}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <div style={{ color: C.white, fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{featuredFan.username}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 10, fontWeight: 700 }}>{featuredFan.tier}</span>
+                        <span style={{ fontSize: 11, color: C.muted }}>{featuredFan.platform}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 18 }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>${featuredFan.totalUSD.toFixed(0)}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>spent</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>{featuredFan.tipCount}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>tips</div>
+                      </div>
+                    </div>
+                  </div>
+                  {featuredFan.daysSinceLastTip != null && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Last tip <span style={{ color: C.text, fontWeight: 600 }}>{featuredFan.daysSinceLastTip}d ago</span></div>
+                  )}
+                  {featuredFan.behavioralStateReason && (
+                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>{featuredFan.behavioralStateReason}</div>
+                    </div>
+                  )}
+                </button>
+              )
+            })()}
 
             {/* B. TRENDING FANS — "Who is moving?" Uses fan.trend.direction/
                 label as already computed by calcFanTrend() (gated by the
