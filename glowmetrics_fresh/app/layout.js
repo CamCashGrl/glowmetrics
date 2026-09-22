@@ -131,6 +131,30 @@ export default function RootLayout({ children }) {
   'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
   })(window,document,'script','dataLayer','GTM-P4L7DNX6');`}
         </Script>
+        {/* Recovers automatically from a stale deployment: a visitor's browser
+            fetches an HTML shell referencing a JS chunk hash from a build
+            that's since been replaced, the chunk 404s (ChunkLoadError), and
+            without this the visitor is stuck on a blank "Application error"
+            page. This catches the failure at the window level — including
+            rejected dynamic-import promises that never reach the React error
+            boundary in app/global-error.js — and reloads once to fetch the
+            current deployment's assets. */}
+        <Script id="chunk-error-recovery" strategy="beforeInteractive">
+          {`(function(){
+  function isChunkError(msg){ return /ChunkLoadError|Loading chunk [\\w-]+ failed|Loading CSS chunk/i.test(msg||''); }
+  function recover(msg){
+    if (!isChunkError(msg)) return;
+    var key = 'camcash_chunk_reload_at';
+    var last = Number(sessionStorage.getItem(key) || 0);
+    if (Date.now() - last > 10000) {
+      sessionStorage.setItem(key, String(Date.now()));
+      window.location.reload();
+    }
+  }
+  window.addEventListener('error', function(e){ recover(e && e.message); });
+  window.addEventListener('unhandledrejection', function(e){ recover(e && e.reason && e.reason.message); });
+})();`}
+        </Script>
       </head>
       <body>
         <noscript>

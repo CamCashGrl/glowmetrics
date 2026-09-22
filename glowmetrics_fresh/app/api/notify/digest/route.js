@@ -24,18 +24,22 @@ export async function GET() {
     })
 
     // ── Signups in last 24h ──
+    // .schema() is a method on the client itself (selects which Postgres
+    // schema .from() resolves against) — it has to come before .from(), not
+    // chained after the query builder. Chaining it last threw
+    // "gte(...).schema is not a function" and crashed the whole digest.
     const { data: newUsers, error: newUsersErr } = await supabaseAdmin
+      .schema('auth')
       .from('users')
       .select('email,created_at')
       .gte('created_at', since)
-      .schema('auth')
     const newSignups = newUsersErr ? [] : (newUsers || [])
 
     // ── Total signups all time ──
     const { count: totalUsers } = await supabaseAdmin
+      .schema('auth')
       .from('users')
       .select('*', { count: 'exact', head: true })
-      .schema('auth')
 
     // ── Tips uploaded in last 24h ──
     const { data: recentUploads } = await supabaseAdmin
