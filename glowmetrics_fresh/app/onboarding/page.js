@@ -954,8 +954,10 @@ export default function OnboardingPage(){
 
   async function handleStartTrial(){
     if(!user)return
+    track('onboarding_trial_start_clicked',{plan_type:'standard_monthly'})
     try{
       const{data:{session}}=await supabase.auth.getSession()
+      track('onboarding_checkout_started',{plan_type:'standard_monthly'})
       const res=await fetch('/api/stripe/checkout',{
         method:'POST',
         headers:{
@@ -969,6 +971,7 @@ export default function OnboardingPage(){
       else throw new Error(json.error||'No checkout URL returned')
     }catch(e){
       console.error('Trial checkout failed:',e)
+      track('onboarding_checkout_failed',{message:e.message||null})
       alert(e.message||'Failed to start trial. Please try again.')
     }
   }
@@ -1294,20 +1297,7 @@ export default function OnboardingPage(){
                   </div>)
                 })}
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7}}>
-                {[
-                  {icon:'💵',label:'Earnings',value:`$${((preview?.estimatedEarnings||0)*(loadingProgress/100)).toFixed(0)}`,color:CYAN},
-                  {icon:'👥',label:'Fans',value:Math.round((preview?.fansDetected||0)*(loadingProgress/100)),color:'#a78bfa'},
-                  {icon:'💎',label:'Tips',value:Math.round((preview?.tipsDetected||0)*(loadingProgress/100)),color:'#4ade80'},
-                  {icon:'⏰',label:'Best Hour',value:loadingProgress>80?(preview?.bestHour||'–'):'…',color:PINK},
-                ].map(s=>(<div key={s.label} className="stat-card" style={{padding:'9px 8px',textAlign:'center'}}>
-                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',borderRadius:'14px 14px 0 0',background:`linear-gradient(90deg,${s.color}00,${s.color}70,${s.color}00)`}}/>
-                  <div style={{fontSize:13,marginBottom:2}}>{s.icon}</div>
-                  <div style={{fontSize:8,color:'rgba(148,163,184,0.5)',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.06em'}}>{s.label}</div>
-                  <div style={{fontSize:13,fontWeight:900,color:s.color,fontVariantNumeric:'tabular-nums'}}>{s.value}</div>
-                </div>))}
-              </div>
-              <div style={{textAlign:'center',marginTop:10,fontSize:10,color:'rgba(100,116,139,0.45)'}}>⚡ Almost there! Crunching the good stuff…</div>
+              <div style={{textAlign:'center',fontSize:11,color:'rgba(100,116,139,0.5)'}}>Your results are almost ready.</div>
             </div>
           )}
 
@@ -1446,7 +1436,7 @@ export default function OnboardingPage(){
                 <div style={{fontSize:11,color:'rgba(148,163,184,0.6)',marginBottom:4}}>Then $19.99/month. Cancel anytime.</div>
                 <div style={{fontSize:10,color:'rgba(148,163,184,0.5)',marginBottom:12}}>Don't continue? Your imported data stays yours — nothing is deleted.</div>
                 <OBBtn onClick={handleStartTrial} style={{marginBottom:10}}>Start My 7-Day Pro Trial →</OBBtn>
-                <button onClick={()=>setStep('done')} style={{width:'100%',height:44,borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,cursor:'pointer',transition:'all 0.18s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}>Skip for now</button>
+                <button onClick={()=>{track('onboarding_trial_skipped');setStep('done')}} style={{width:'100%',height:44,borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,cursor:'pointer',transition:'all 0.18s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}>Skip for now</button>
               </div>
             </div>
           )}
