@@ -95,10 +95,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Use the job's GITHUB_TOKEN so the reviewer is bound to the job
-          # permissions above (contents: read). The Claude GitHub App token
-          # would carry contents: write.
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           include_fix_links: 'false'
           prompt: |
             REPO: ${{ github.repository }}
