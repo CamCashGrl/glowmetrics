@@ -5,10 +5,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 
+:root {
+  /* Referenced by tailwind.config.js (bg-background / text-foreground). */
+  --background: #05050f;
+  --foreground: #faf5ff;
+}
+
 body {
   background: #05050f;
   color: #faf5ff;
-  font-family: 'Syne', 'Space Grotesk', sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
