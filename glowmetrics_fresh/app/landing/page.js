@@ -6,6 +6,7 @@ import { DM_Sans } from "next/font/google"
 import { supabase } from "../../lib/supabase"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
+import { LANDING_COLORS as T } from "@/lib/theme/colors"
 
 // Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
 // in the <style jsx> block below — same weights that @import requested).
@@ -20,32 +21,6 @@ const dmSans = DM_Sans({
 const FeedbackWidget = dynamic(() => import('../components/FeedbackWidget'), { ssr: false })
 
 // ── CAMCASH BRAND TOKENS (exact values from /mnt/skills/user/branding) ────
-const T = {
-  cyan: "#16F4FF",
-  cyanSoft: "#48E9FF",
-  purple: "#7C5CFF",
-  pink: "#FF2BAE",
-  magenta: "#D83DFF",
-  blue: "#248BFF",
-  gold: "#FFC857",
-
-  bgMain: "#050713",
-  bgPanel: "#080B1A",
-  bgCard: "rgba(10, 14, 32, 0.82)",
-  bgCardSoft: "rgba(16, 20, 42, 0.72)",
-  bgInput: "rgba(5, 9, 24, 0.72)",
-
-  textMain: "#FFFFFF",
-  textSoft: "#D7D9EA",
-  textMuted: "#8D93AA",
-  textFaint: "#5E647C",
-
-  green: "#10B981",
-  red: "#f87171",
-
-  gradientPrimary: "linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)",
-  panelBorderGradient: "linear-gradient(135deg, rgba(22,244,255,0.95), rgba(124,92,255,0.45), rgba(255,43,174,0.95))",
-}
 
 // ── Password validation feedback — mirrors app/landing/LandingClient.js so
 //    the signup UX (and onboarding funnel behind it) is identical everywhere.

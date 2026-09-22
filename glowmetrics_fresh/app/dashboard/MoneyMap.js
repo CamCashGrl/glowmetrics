@@ -9,23 +9,14 @@ import {
 // detection locally (was: a duplicate `detectWhales()` below using a
 // hardcoded 500-token threshold that disagreed with lib/analytics.js).
 import { identifyWhales } from "../../lib/analytics"
+import { MONEY_MAP_PLATFORM_COLORS as PLATFORM_COLORS, MONEY_MAP_COLORS } from "@/lib/theme/colors"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const BG     = "#0a0e1a"
-const CARD   = "rgba(255,255,255,0.03)"
-const BORDER = "rgba(255,255,255,0.08)"
-const CYAN   = "#22d3ee"
-const PURPLE = "#a855f7"
-const PINK   = "#f472b6"
-const AMBER  = "#f59e0b"
-const GREEN  = "#4ade80"
-const SLATE  = "#64748b"
-const TEXT   = "#f1f5f9"
+const { BG, CARD, BORDER, CYAN, PURPLE, PINK, AMBER, GREEN, SLATE, TEXT } = MONEY_MAP_COLORS
 
 const TWO_HR_SLOTS = [0,2,4,6,8,10,12,14,16,18,20,22]
 const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 const DAY_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:"#ec4899", bongacams:"#8b5cf6", camsoda:"#10b981", other:"#64748b" }
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
 // ─── Time helpers ────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import TitleGeneratorClient from './TitleGeneratorClient'
+import { CAM_MODEL_ROOM_TITLE_GUIDE_COLORS as S } from "@/lib/theme/colors"
 
 export const metadata = {
   title: 'Free Cam Room Title Generator + Hashtag Generator (2026)',
@@ -70,22 +71,6 @@ const appSchema = {
 }
 
 // ─── Style constants ──────────────────────────────────────────────────────────
-const S = {
-  bg:       '#14171C',
-  surface:  '#1C2028',
-  card:     '#21262F',
-  border:   'rgba(255,255,255,0.07)',
-  text:     '#8B92A0',
-  textMid:  '#C1C7D4',
-  textStrong:'#F0F2F6',
-  accent:   '#6366F1',
-  accentSoft:'rgba(99,102,241,0.12)',
-  green:    '#10B981',
-  gold:     '#F59E0B',
-  pink:     '#EC4899',
-  red:      '#EF4444',
-  cyan:     '#22D3EE',
-}
 
 function Section({ id, children, style }) {
   return (

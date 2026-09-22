@@ -3,23 +3,9 @@
 import { useState } from 'react'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
+import { DEMO_SECTIONS_COLORS as C } from "@/lib/theme/colors"
 
 // ─── Color constants ───────────────────────────────────────────────────────────
-const C = {
-  bg:      '#040812',
-  bg2:     '#060e1e',
-  card:    '#0d1424',
-  purple:  '#a855f7',
-  pink:    '#ec4899',
-  cyan:    '#22d3ee',
-  green:   '#10b981',
-  gold:    '#f59e0b',
-  white:   '#f1f5f9',
-  muted:   '#94a3b8',
-  dim:     '#475569',
-  red:     '#ef4444',
-  border:  'rgba(168,85,247,0.15)',
-}
 
 // ─── CSVImportSection ─────────────────────────────────────────────────────────
 export function CSVImportSection() {

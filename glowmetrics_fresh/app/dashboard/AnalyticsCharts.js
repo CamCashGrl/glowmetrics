@@ -1,25 +1,11 @@
 "use client"
 import React, { useMemo, useState } from "react"
 import { calculateConfidence } from "../../lib/analytics"
+import { ANALYTICS_CHARTS_PLATFORM_COLORS as PLATFORM_COLORS, ANALYTICS_CHARTS_COLORS } from "@/lib/theme/colors"
 
 // ─── Design tokens (matches the rest of the dashboard) ───────────────────────
-const BG     = "#0a0e1a"
-const CARD   = "rgba(255,255,255,0.03)"
-const BORDER = "rgba(255,255,255,0.08)"
-const TEXT   = "#94A3B8"
-const WHITE  = "#F1F5F9"
-const MUTED  = "#475569"
-const CYAN   = "#22D3EE"
-const GOLD   = "#F59E0B"
-const PURPLE = "#a855f7"
-const GREEN  = "#22c55e"
-const RED    = "#f87171"
+const { BG, CARD, BORDER, TEXT, WHITE, MUTED, CYAN, GOLD, PURPLE, GREEN, RED } = ANALYTICS_CHARTS_COLORS
 
-const PLATFORM_COLORS = {
-  Chaturbate: "#a855f7",
-  BongaCams:  "#ec4899",
-  MyFreeCams: "#22d3ee",
-}
 const PLATFORM_FALLBACK = ["#60A5FA", "#34D399", "#FB923C"]
 const platColor = (p, i = 0) => PLATFORM_COLORS[p] || PLATFORM_FALLBACK[i % PLATFORM_FALLBACK.length]
 

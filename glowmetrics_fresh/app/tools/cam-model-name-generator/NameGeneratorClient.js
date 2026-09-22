@@ -1,13 +1,8 @@
 'use client'
 import { useState, useCallback, useEffect } from 'react'
 import Button from '../../../components/ui/Button'
+import { NAME_GENERATOR_CLIENT_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg: '#030711', surface: '#0a0f1e', glass: 'rgba(255,255,255,0.03)',
-  border: 'rgba(255,255,255,0.08)', indigo: '#7C5CFF', cyan: '#22D3EE',
-  pink: '#EC4899', white: '#F1F5F9', muted: '#475569', text: '#94A3B8',
-  green: '#10B981', gold: '#F59E0B', red: '#EF4444', purple: '#A855F7',
-}
 
 const MODES = [
   { id: 'real',         label: 'Real Name',    icon: '👤', sub: 'Ava Quinn · Emma Hart',       color: C.cyan },

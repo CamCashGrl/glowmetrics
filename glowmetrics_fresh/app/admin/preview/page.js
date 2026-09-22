@@ -2,20 +2,8 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { DashboardPreview } from "../../dashboard/DashboardPreview"
+import { ADMIN_PREVIEW_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg:     "#050713",
-  bg1:    "#080B1A",
-  card:   "rgba(10,14,32,0.82)",
-  border: "rgba(255,255,255,0.09)",
-  cyan:   "#16F4FF",
-  pink:   "#FF2BAE",
-  purple: "#7C5CFF",
-  gold:   "#FFC857",
-  white:  "#FFFFFF",
-  text:   "#D7D9EA",
-  muted:  "#8D93AA",
-}
 
 const DASHBOARD_STAGES = [
   { id: "no-data",          label: "No Data",        color: C.muted  },

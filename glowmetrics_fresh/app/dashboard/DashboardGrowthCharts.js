@@ -4,17 +4,9 @@ import {
   ComposedChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts"
+import { DASHBOARD_GROWTH_CHARTS_COLORS } from "@/lib/theme/colors"
 
-const CARD   = "#121826"
-const BORDER = "#1e2d45"
-const CYAN   = "#22D3EE"
-const PINK   = "#EC4899"
-const RED    = "#F87171"
-const GREEN  = "#10B981"
-const WHITE  = "#F1F5F9"
-const TEXT   = "#94A3B8"
-const MUTED  = "#8a93ab"
-const FAINT  = "#5E647C"
+const { CARD, BORDER, CYAN, PINK, RED, GREEN, WHITE, TEXT, MUTED, FAINT } = DASHBOARD_GROWTH_CHARTS_COLORS
 
 const fmtUsd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 

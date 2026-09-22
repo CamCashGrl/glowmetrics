@@ -1,14 +1,13 @@
 "use client"
 import React from "react"
+import { BUTTON_GRADIENT as GRADIENT, BUTTON_GRADIENT_SHADOW as GRADIENT_SHADOW, BUTTON_GRADIENT_SHADOW_HOVER as GRADIENT_SHADOW_HOVER } from "@/lib/theme/colors"
+export { GRADIENT, GRADIENT_SHADOW, GRADIENT_SHADOW_HOVER }
 
 // Single source of truth for the app's signature gradient button.
 // Style, shadow, hover-lift, and shimmer are copied 1:1 from the landing
 // page's LPBtn (app/landing/LandingClient.js) so every CTA in the app is
 // visually identical. The shimmer sweep (.lp-btn-primary) lives in
 // app/globals.css.
-export const GRADIENT = "linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)"
-export const GRADIENT_SHADOW = "0 0 14px rgba(33,230,243,0.16),0 0 28px rgba(255,47,174,0.10)"
-export const GRADIENT_SHADOW_HOVER = "0 0 22px rgba(33,230,243,0.28),0 0 44px rgba(255,47,174,0.18),inset 0 1px 0 rgba(255,255,255,0.3)"
 
 export default function Button({
   as = "button",

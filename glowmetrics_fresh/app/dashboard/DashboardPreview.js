@@ -19,22 +19,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FREE_PLATFORM_LIMIT, isProPlan, platformLimitMessage } from '../../lib/planLimits'
+import { DASHBOARD_PREVIEW_COLORS as C, DASHBOARD_PREVIEW_PI_COLORS as PI } from "@/lib/theme/colors"
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
-const C = {
-  bg:     '#12131a',
-  card:   'rgba(255,255,255,0.04)',
-  border: 'rgba(255,255,255,0.10)',
-  cyan:   '#22D3EE',
-  pink:   '#EC4899',
-  indigo: '#7C5CFF',
-  gold:   '#F59E0B',
-  green:  '#10B981',
-  white:  '#F1F5F9',
-  text:   '#94A3B8',
-  muted:  '#475569',
-  grad:   'linear-gradient(90deg,#22D3EE,#7C5CFF,#EC4899)',
-}
 
 // ── SAFE FORMATTERS ───────────────────────────────────────────
 const safeNum = (v, fallback = 0) => { const n = parseFloat(v); return isNaN(n) || !isFinite(n) ? fallback : n }
@@ -827,23 +814,6 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
 const FREE_TIER_MAX_PLATFORMS = 3
 const SNAPSHOT_WINDOW_DAYS = 31
 
-const PI = {
-  bg: '#070B18',
-  panel: 'rgba(11,18,38,0.74)',
-  panelStrong: 'rgba(9,16,35,0.88)',
-  border: 'rgba(138,164,220,0.16)',
-  borderStrong: 'rgba(22,244,255,0.42)',
-  cyan: '#16F4FF',
-  blue: '#55B8FF',
-  purple: '#7C5CFF',
-  pink: '#FF2BAE',
-  gold: '#F6B94A',
-  green: '#59D98E',
-  text: '#F5F7FF',
-  body: '#A9B4CC',
-  muted: '#6F7C98',
-  gradient: 'linear-gradient(90deg,#16F4FF 0%,#55B8FF 36%,#7C5CFF 69%,#FF2BAE 100%)',
-}
 
 const PLATFORM_META = {
   Chaturbate: { short: 'CB', color: '#F05A2A' },

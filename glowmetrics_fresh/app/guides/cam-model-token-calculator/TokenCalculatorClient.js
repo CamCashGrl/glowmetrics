@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PLATFORM_TOKEN_RATES, PLATFORM_VIEWER_RATES } from '../../../lib/constants'
+import { TOKEN_CALCULATOR_CLIENT_COLORS as C } from "@/lib/theme/colors"
 
 const RATES = {
   Chaturbate:  { broadcaster: PLATFORM_TOKEN_RATES.Chaturbate,  viewer: PLATFORM_VIEWER_RATES.Chaturbate },
@@ -14,21 +15,6 @@ const RATES = {
 const COMMON = [50, 100, 250, 500, 1000, 2500, 5000, 10000]
 const MILESTONE_STEP = 50
 
-const C = {
-  cyan: '#16F4FF',
-  pink: '#FF2BAE',
-  purple: '#7C5CFF',
-  gold: '#F59E0B',
-  green: '#10B981',
-  red: '#F87171',
-  white: '#FFFFFF',
-  text: '#B9BED3',
-  muted: '#8D93AA',
-  faint: '#5E647C',
-  card: 'rgba(12,16,34,0.78)',
-  border: 'rgba(255,255,255,0.09)',
-  grad: 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)',
-}
 
 function card(extra = {}) {
   return {

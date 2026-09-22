@@ -14,26 +14,13 @@ import {
 // whole) and are left as-is; flagged in the report as a parallel formula
 // worth reconciling in a dedicated follow-up rather than blindly merged here.
 import { calculateConfidence } from "../../lib/analytics"
+import { STREAM_PLANNER_PLATFORM_COLORS as PLAT_COLORS, STREAM_PLANNER_COLORS } from "@/lib/theme/colors"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
-const BG      = "#0a0e1a"
-const CARD    = "rgba(255,255,255,0.03)"
-const BORDER  = "rgba(255,255,255,0.08)"
-const PRIMARY = "#f1f5f9"
-const TEXT    = "#94a3b8"
-const MUTED   = "#475569"
-const FAINT   = "#64748b"
-const CYAN    = "#22d3ee"
-const PURPLE  = "#a855f7"
-const GOLD    = "#f59e0b"
-const GREEN   = "#10b981"
-const RED     = "#f87171"
-const INDIGO  = "#818cf8"
-const GRADIENT = "linear-gradient(135deg, #22d3ee, #a855f7)"
+const { BG, CARD, BORDER, PRIMARY, TEXT, MUTED, FAINT, CYAN, PURPLE, GOLD, GREEN, RED, INDIGO, GRADIENT } = STREAM_PLANNER_COLORS
 
-const PLAT_COLORS = { Chaturbate: "#22d3ee", BongaCams: "#e879f9", MyFreeCams: "#a855f7" }
 const PLAT_FB     = ["#60a5fa", "#34d399", "#fb923c", "#f87171", "#fbbf24"]
 const UTC_DAYS    = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 const MONTHS      = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]

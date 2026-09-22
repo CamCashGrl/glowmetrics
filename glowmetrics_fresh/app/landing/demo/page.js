@@ -1,5 +1,6 @@
 "use client"
 import React, { useState, useEffect, useRef } from "react"
+import { LANDING_DEMO_COLORS as C, LANDING_DEMO_TIER_COLORS as TIER_COLORS } from "@/lib/theme/colors"
 
 // ─── DEMO DATA ────────────────────────────────────────────────────────────────
 // Multi-platform streamer: Chaturbate, BongaCams, MyFreeCams
@@ -7,11 +8,6 @@ import React, { useState, useEffect, useRef } from "react"
 
 const DEMO_USER = { email: "demo@camcash.app" }
 
-const C = {
-  bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
-  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
-  green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
-}
 
 const glassCard = {
   background: "rgba(15,20,32,0.75)",
@@ -216,7 +212,6 @@ const buildDemoDailyBrief = () => {
   }
 }
 
-const TIER_COLORS = { "Whale":"#F59E0B", "Shark":"#60A5FA", "Regular":"#22D3EE", "Dormant":"#FB923C" }
 const formatHour = h => h===0?"12 AM":h<12?`${h} AM`:h===12?"12 PM":`${h-12} PM`
 
 // ─── SIDEBAR SECTIONS ────────────────────────────────────────────────────────

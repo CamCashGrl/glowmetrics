@@ -2,12 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { STUDIO_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg: '#05070f', card: '#0d1322', border: '#1e2d45',
-  cyan: '#22D3EE', green: '#10B981', red: '#EF4444',
-  white: '#F1F5F9', muted: '#475569', text: '#94A3B8',
-}
 
 const inputStyle = {
   padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border}`,

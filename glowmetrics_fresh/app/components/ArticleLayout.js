@@ -2,14 +2,8 @@
 // Provides: compact nav, centered article container, minimal footer.
 // Each article page supplies its own breadcrumb array + children content.
 import Button from '../../components/ui/Button'
+import { ARTICLE_LAYOUT_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg:      '#0d0f14',
-  border:  'rgba(255,255,255,0.07)',
-  muted:   '#475569',
-  text:    '#94a3b8',
-  white:   '#f1f5f9',
-}
 
 export default function ArticleLayout({ children, breadcrumb = [], schema }) {
   return (

@@ -1,10 +1,4 @@
-const LEVEL_COLORS = {
-  critical: '#10b981',
-  high:     '#22d3ee',
-  medium:   '#f59e0b',
-  low:      '#94a3b8',
-  minimal:  '#475569',
-}
+import { OPPORTUNITY_LEVEL_COLORS as LEVEL_COLORS } from "@/lib/theme/colors"
 
 /**
  * Composite monetization opportunity score (0–100).
