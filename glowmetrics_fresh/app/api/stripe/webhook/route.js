@@ -86,6 +86,22 @@ async function sendResendNotification(subject, text, to = process.env.OWNER_EMAI
 // swallow the one alert that exists to catch misconfiguration.
 const SYNC_ALERT_EMAIL = 'daphneoncam@gmail.com'
 
+// A user-resolution miss is just as silent as a failed DB write — the event
+// still returns 200 (see POST below) so Stripe never retries, and until now
+// nothing but a console.error (which nobody watches) marked it. This is the
+// same alert path as updateProfile/upsertSubscriptionRecord below, so every
+// way this webhook can silently do nothing now raises the same signal.
+async function alertUnresolvedUser(eventType, event, { userId, email, customerId, subscriptionId }) {
+  console.error(`Webhook ${eventType}: could not resolve a user (userId=${userId}, email=${email})`)
+  await sendResendNotification(
+    `🚨 Subscription sync FAILED — unresolved user (${eventType})`,
+    `Stripe event ${event.id} (${eventType}) could not be matched to any Supabase user.\n\n` +
+      `userId from metadata: ${userId || '(none)'}\nemail: ${email || '(none)'}\ncustomer: ${customerId || '(none)'}\nsubscription: ${subscriptionId || '(none)'}\n\n` +
+      `This event was dropped — no profile or subscription row was written. Stripe will not retry (the webhook still returns 200). Check manually.`,
+    SYNC_ALERT_EMAIL
+  )
+}
+
 // Updates profiles and returns whether it actually succeeded
 async function updateProfile(supabase, userId, update) {
   const { error } = await supabase.from('profiles').update(update).eq('id', userId)
@@ -178,7 +194,9 @@ export async function POST(request) {
         const email = session.customer_details?.email || session.customer_email
         const user = await resolveUser(supabase, { userId: session.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook checkout.session.completed: could not resolve a user (userId=${session.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('checkout.session.completed', event, {
+            userId: session.metadata?.userId, email, customerId: session.customer,
+          })
           break
         }
 
@@ -216,7 +234,9 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook subscription.created: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('customer.subscription.created', event, {
+            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
+          })
           break
         }
 
@@ -269,7 +289,9 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook subscription.deleted: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('customer.subscription.deleted', event, {
+            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
+          })
           break
         }
 
@@ -310,7 +332,9 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook subscription.updated: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('customer.subscription.updated', event, {
+            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
+          })
           break
         }
 
