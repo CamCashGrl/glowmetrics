@@ -91,6 +91,15 @@ jobs:
 
           cat "$SUMMARY"
 
+      - name: Debug - Check if secrets exist
+        run: |
+          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "ANTHROPIC_API_KEY is not set"
+            exit 1
+          else
+            echo "ANTHROPIC_API_KEY is set"
+          fi
+
       - name: CamCash PR review (report only)
         uses: anthropics/claude-code-action@v1
         with:
@@ -110,8 +119,6 @@ jobs:
 
             1. Read `.claude/camcash-pr-review.md` (the review instructions file).
                This file exists in the PR branch. Follow it exactly.
-               (Note: the first PR that adds this file will have it available
-               because the PR head is checked out in the working directory.)
             2. Read the sources of truth it lists, starting with
                `CLAUDE.md/project-and-code-requirements` (a file inside the
                `CLAUDE.md` directory).
