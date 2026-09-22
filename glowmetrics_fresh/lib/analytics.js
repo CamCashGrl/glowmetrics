@@ -1958,3 +1958,63 @@ export function summarizeWindowExclusion(allRows = [], windowedRows = []) {
     byPlatform,
   }
 }
+
+// ── FAN PERIOD METRICS ──────────────────────────────────────────────────
+// Metric name: Fan Period Spend / Leaderboard Ranking
+// Definition: for a given lookback window (and optional platform scope),
+// how much USD each fan tipped inside that window, used to rank the Fan
+// Intelligence leaderboard and to compare platforms.
+// Formula: periodUSD = sum(t.usd) for a fan's tips where tip date falls
+// inside [now - periodDays, now] and (scopePlatform === 'ALL' || tip's
+// fan.platform === scopePlatform).
+// Included event types: whatever is already included in fan.tips from
+// identifyWhales() (manual tips + any session-based revenue already
+// attached to that fan record) — this does not reclassify revenue types,
+// it only windows/scopes the existing totals.
+// Excluded: tips outside the window; fans with zero tips in the window
+// are dropped from the ranked list entirely (never shown with a fabricated
+// $0 rank).
+// Minimum data requirement: none beyond identifyWhales() itself — a fan
+// with 0 in-window tips is simply excluded, never displayed as "Not enough
+// data" here (that label belongs to session/hourly-rate metrics).
+// Confidence behavior: not scored independently; ranking is a straight sum,
+// so callers should treat small in-period tip counts as low-confidence by
+// eye rather than this function asserting a confidence band.
+// Source function: calculateFanPeriodMetrics() — the ONLY place this ranking
+// math should exist. Do not recompute periodUSD locally in a component.
+// Test case: see lib/__tests__ — fan with tips both inside and outside the
+// window only counts the in-window tips toward periodUSD.
+export function calculateFanPeriodMetrics(whales = [], { periodDays = 30, scopePlatform = 'ALL' } = {}) {
+  const now = Date.now()
+  const cutoff = now - periodDays * 86400000
+  const inScope = (w) => scopePlatform === 'ALL' || w.platform === scopePlatform
+
+  const periodFans = whales
+    .filter(inScope)
+    .map(w => {
+      const periodTips = (w.tips || []).filter(t => {
+        const d = new Date(t.date_time || t.dateRaw).getTime()
+        return Number.isFinite(d) && d >= cutoff
+      })
+      const periodUSD = periodTips.reduce((sum, t) => sum + (t.usd || 0), 0)
+      return { ...w, periodTips, periodUSD }
+    })
+    .filter(w => w.periodTips.length > 0)
+
+  const rankedFans = [...periodFans].sort((a, b) => {
+    if (b.periodUSD !== a.periodUSD) return b.periodUSD - a.periodUSD
+    return b.tipCount - a.tipCount
+  })
+
+  const comparisonByPlatform = {}
+  periodFans.forEach(w => {
+    const key = w.platform || 'Unknown'
+    if (!comparisonByPlatform[key]) comparisonByPlatform[key] = { platform: key, fans: 0, tips: 0, usd: 0 }
+    comparisonByPlatform[key].fans += 1
+    comparisonByPlatform[key].tips += w.periodTips.length
+    comparisonByPlatform[key].usd += w.periodUSD
+  })
+  const comparison = Object.values(comparisonByPlatform).sort((a, b) => b.usd - a.usd)
+
+  return { periodFans, rankedFans, comparison }
+}
