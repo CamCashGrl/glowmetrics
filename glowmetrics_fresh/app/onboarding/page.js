@@ -1414,25 +1414,38 @@ export default function OnboardingPage(){
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={{textAlign:'center',marginBottom:22}}>
                 <div style={{width:56,height:56,borderRadius:18,background:'linear-gradient(135deg,#21E6F3,#6C5CFF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,color:'#fff',margin:'0 auto 14px',boxShadow:'0 0 40px rgba(33,230,243,0.35)'}}>⚡</div>
-                <h2 style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em'}}>Unlock Pro Features — Free for 7 Days</h2>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:360,margin:'0 auto'}}>We collected your first insights. Get access to multi-platform tracking and AI pattern learning risk-free with your 7-day trial.</p>
+                <h2 style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em'}}>Start tracking your tips automatically with Live Mode.</h2>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:360,margin:'0 auto'}}>Go live, track your tips as they happen, and see your earnings build in real time. Pro also unlocks your full history and deeper insights across every platform you connect.</p>
               </div>
-              <div style={{marginBottom:18,borderRadius:14,background:'linear-gradient(135deg,rgba(33,230,243,0.08),rgba(124,92,255,0.08))',border:'1px solid rgba(167,139,250,0.2)',padding:16}}>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                  {[{icon:'🌍',label:'All Platforms',desc:'Track multiple cam sites'},{icon:'📈',label:'AI Analytics',desc:'Pattern & trend insights'},{icon:'🎯',label:'Live Tracking',desc:'Real-time stream coaching'},{icon:'🔐',label:'Secure & Private',desc:'Your data stays private'}].map(f=>(<div key={f.label} style={{textAlign:'center'}}>
-                    <div style={{fontSize:20,marginBottom:6}}>{f.icon}</div>
-                    <div style={{fontSize:11,fontWeight:700,color:'#fff',marginBottom:2}}>{f.label}</div>
-                    <div style={{fontSize:10,color:'rgba(148,163,184,0.65)'}}>{f.desc}</div>
-                  </div>))}
+              <div style={{marginBottom:18,borderRadius:14,background:'linear-gradient(135deg,rgba(33,230,243,0.08),rgba(124,92,255,0.08))',border:'1px solid rgba(167,139,250,0.2)',padding:'14px 16px'}}>
+                <div style={{position:'relative'}}>
+                  <div style={{position:'absolute',top:0,bottom:0,left:'66.667%',right:0,background:'rgba(33,230,243,0.055)',borderLeft:`1px solid rgba(33,230,243,0.3)`,borderRadius:'0 8px 8px 0',pointerEvents:'none'}}/>
+                  <div style={{position:'relative',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',fontSize:9,fontWeight:800,letterSpacing:'0.1em',textTransform:'uppercase',color:'rgba(148,163,184,0.55)',marginBottom:10,paddingBottom:8,borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+                    <span></span>
+                    <span style={{textAlign:'center'}}>Free</span>
+                    <span style={{textAlign:'center',color:CYAN}}>Pro</span>
+                  </div>
+                  {[{label:'History',free:'Last 31 days',pro:'Full history'},{label:'Platforms',free:'Up to 3',pro:'Unlimited'},{label:'Top Fans',free:'3',pro:'10'},{label:'Whales',free:'3',pro:'5'}].map((r,i)=>(
+                    <div key={r.label} style={{position:'relative',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',alignItems:'center',padding:'7px 0',borderBottom:i<3?'1px solid rgba(255,255,255,0.05)':'none'}}>
+                      <span style={{fontSize:11,fontWeight:700,color:'rgba(226,232,240,0.85)'}}>{r.label}</span>
+                      <span style={{fontSize:11,color:'rgba(148,163,184,0.65)',textAlign:'center'}}>{r.free}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:'#fff',textAlign:'center'}}>{r.pro}</span>
+                    </div>
+                  ))}
                 </div>
+              </div>
+              <div style={{marginBottom:18,textAlign:'center'}}>
+                <div style={{fontSize:12,fontWeight:800,color:'#fff',marginBottom:4}}>Go deeper across your data.</div>
+                <p style={{fontSize:11.5,color:'rgba(166,168,189,0.8)',lineHeight:1.6,maxWidth:340,margin:'0 auto'}}>Compare platforms side by side and uncover deeper trends, fan re-engagement patterns, and what's driving your earnings.</p>
               </div>
               <div style={{marginBottom:16,paddingTop:16,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
                 <div style={{display:'flex',alignItems:'baseline',gap:4,justifyContent:'center',marginBottom:2}}>
                   <span style={{fontSize:32,fontWeight:900,color:CYAN}}>$0</span>
                   <span style={{fontSize:12,color:'rgba(148,163,184,0.6)'}}>for 7 days</span>
                 </div>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.6)',marginBottom:10}}>Then $19.99/month. Cancel anytime.</div>
-                <OBBtn onClick={handleStartTrial} style={{marginBottom:10}}>Start 7-Day Trial →</OBBtn>
+                <div style={{fontSize:11,color:'rgba(148,163,184,0.6)',marginBottom:4}}>Then $19.99/month. Cancel anytime.</div>
+                <div style={{fontSize:10,color:'rgba(148,163,184,0.5)',marginBottom:12}}>Don't continue? Your imported data stays yours — nothing is deleted.</div>
+                <OBBtn onClick={handleStartTrial} style={{marginBottom:10}}>Start My 7-Day Pro Trial →</OBBtn>
                 <button onClick={()=>setStep('done')} style={{width:'100%',height:44,borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,cursor:'pointer',transition:'all 0.18s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}>Skip for now</button>
               </div>
             </div>
