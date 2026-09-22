@@ -12,13 +12,8 @@ import {
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
+import { PLATFORMS_INTELLIGENCE_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  card: "#0d1322", card2: "#111829", border: "#1e2d45", border2: "#2a3f5f",
-  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
-  green: "#10B981", white: "#F1F5F9", muted: "#475569", text: "#94A3B8",
-  purple: "#a855f7", red: "#F87171",
-}
 
 const PLATFORM_ACCENT = {
   chaturbate: C.purple, bongacams: C.red, myfreecams: C.gold,

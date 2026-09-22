@@ -1,24 +1,8 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { ADMIN_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg:     "#050713",
-  bg1:    "#080B1A",
-  bg2:    "#0D1020",
-  card:   "rgba(10,14,32,0.82)",
-  border: "rgba(255,255,255,0.09)",
-  cyan:   "#16F4FF",
-  pink:   "#FF2BAE",
-  purple: "#7C5CFF",
-  gold:   "#FFC857",
-  green:  "#34d399",
-  red:    "#f87171",
-  white:  "#FFFFFF",
-  text:   "#D7D9EA",
-  muted:  "#8D93AA",
-  dim:    "rgba(255,255,255,0.25)",
-}
 
 const ONBOARDING = {
   "no-profile": { label: "No Profile",  color: C.red    },

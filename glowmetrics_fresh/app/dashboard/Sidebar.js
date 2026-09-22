@@ -1,13 +1,8 @@
 "use client"
 import { useState } from "react"
 import Button from "../../components/ui/Button"
+import { DASHBOARD_SIDEBAR_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg: "#05070f", card: "#0d1322", border: "#1e2d45",
-  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B",
-  green: "#10B981", white: "#F1F5F9", muted: "#475569", text: "#94A3B8",
-  purple: "#a855f7"
-}
 
 const NAV = [
   {

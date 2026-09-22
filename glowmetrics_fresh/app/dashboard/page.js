@@ -23,6 +23,7 @@ import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
+import { DASHBOARD_COLORS as C } from "@/lib/theme/colors"
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -59,11 +60,6 @@ function memoOn(cache, key, deps, compute) {
   return value
 }
 
-const C = {
-  bg: "#05070f", card: "#121826", card2: "#161e2e", border: "#1e2d45", border2: "#2a3f5f",
-  indigo: "#7C5CFF", cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
-  green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
-}
 
 const TIER_COLORS = {
   "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange

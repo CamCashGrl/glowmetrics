@@ -1,25 +1,9 @@
 'use client'
 import { useState, useCallback } from 'react'
 import Button from '../../../components/ui/Button'
+import { ROOM_TITLE_GENERATOR_CLIENT_COLORS as S } from "@/lib/theme/colors"
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
-const S = {
-  bg:        '#14171C',
-  surface:   '#1C2028',
-  card:      '#21262F',
-  border:    'rgba(255,255,255,0.07)',
-  text:      '#8B92A0',
-  textMid:   '#C1C7D4',
-  textStrong:'#F0F2F6',
-  accent:    '#6366F1',
-  accentSoft:'rgba(99,102,241,0.12)',
-  green:     '#10B981',
-  greenSoft: 'rgba(16,185,129,0.1)',
-  gold:      '#F59E0B',
-  pink:      '#EC4899',
-  cyan:      '#22D3EE',
-  gradient:  'linear-gradient(135deg, #6C5CFF, #EC4899)',
-}
 
 // ─── Title generator data ──────────────────────────────────────────────────────
 const TOY_OPTIONS = [

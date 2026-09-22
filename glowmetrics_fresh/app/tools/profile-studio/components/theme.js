@@ -1,31 +1,12 @@
 'use client'
 import React, { useState } from 'react'
+import { PROFILE_STUDIO_COLORS as T, PROFILE_STUDIO_GRADIENT as GRADIENT } from "@/lib/theme/colors"
+export { T, GRADIENT }
 
 // Shared CamCash neon design tokens for Creator Profile Studio — matches the
 // approved cyan/purple/pink gradient system used across onboarding + landing
 // (see components/ui/Button.js GRADIENT).
-export const T = {
-  bg: '#050713',
-  bgPanel: '#080B1A',
-  card: 'rgba(13,17,38,0.78)',
-  cardSoft: 'rgba(16,20,42,0.6)',
-  input: 'rgba(5,9,24,0.72)',
-  border: 'rgba(255,255,255,0.09)',
-  borderSoft: 'rgba(255,255,255,0.06)',
-  cyan: '#16F4FF',
-  cyanSoft: '#48E9FF',
-  pink: '#FF2BAE',
-  purple: '#7C5CFF',
-  gold: '#FFC857',
-  green: '#22C55E',
-  red: '#EF4444',
-  white: '#FFFFFF',
-  soft: '#D7D9EA',
-  muted: '#8D93AA',
-  faint: '#5E647C',
-}
 
-export const GRADIENT = 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)'
 
 export function PageShell({ children }) {
   return (

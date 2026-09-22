@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
+import { FLOATING_DASHBOARD_PREVIEW_COLORS as T } from "@/lib/theme/colors"
 
 // ─────────────────────────────────────────────────────────────────────────
 // FloatingDashboardPreview — PURE MARKETING VISUAL for the landing page.
@@ -17,19 +18,6 @@ import { useEffect, useRef, useState } from "react"
 // introducing a second design system.
 // ─────────────────────────────────────────────────────────────────────────
 
-const T = {
-  cyan: "#16F4FF",
-  cyanSoft: "#48E9FF",
-  purple: "#7C5CFF",
-  pink: "#FF2BAE",
-  gold: "#FFC857",
-  green: "#10B981",
-  bgCard: "rgba(10, 14, 32, 0.82)",
-  bgCardSoft: "rgba(16, 20, 42, 0.72)",
-  textMuted: "#8D93AA",
-  textFaint: "#5E647C",
-  panelBorderGradient: "linear-gradient(135deg, rgba(22,244,255,0.95), rgba(124,92,255,0.45), rgba(255,43,174,0.95))",
-}
 
 // MOCK/DEMO DATA — tips over the last few hours, purely illustrative.
 const MOCK_TIP_BARS = [22, 38, 30, 54, 41, 63, 48, 72, 58, 85]

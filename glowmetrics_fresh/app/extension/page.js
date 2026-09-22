@@ -12,25 +12,11 @@ export const metadata = {
 }
 
 import ExtensionDownloadButton from '../components/ExtensionDownloadButton'
+import { EXTENSION_PAGE_COLORS as C, EXTENSION_PAGE_BRAND_GRADIENT as BRAND_GRADIENT } from "@/lib/theme/colors"
 
 // Matches the gradient in components/ui/Button.js — single source of truth
 // for the app's signature CTA gradient.
-const BRAND_GRADIENT = 'linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
 
-const C = {
-  bg: '#040812',
-  card: '#0d1424',
-  border: 'rgba(168,85,247,0.15)',
-  purple: '#a855f7',
-  pink: '#ec4899',
-  cyan: '#22d3ee',
-  green: '#10b981',
-  amber: '#f59e0b',
-  red: '#f87171',
-  white: '#f1f5f9',
-  text: '#94a3b8',
-  muted: '#475569',
-}
 
 export default function ExtensionPage() {
   return (

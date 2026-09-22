@@ -2,6 +2,8 @@
 // pure string formatting from data already in the client — no network call,
 // no server round trip, nothing to leak.
 
+import { TIP_MENU_EXPORT_THEMES as THEME_COLORS } from "@/lib/theme/colors"
+
 const VISIBILITY_LABEL = {
   public: '',
   private_only: ' (private only)',
@@ -81,12 +83,6 @@ function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-const THEME_COLORS = {
-  dark_neon: { bg: '#0a0b14', card: '#13151f', accent: '#16F4FF', accent2: '#FF2BAE', text: '#F1F5F9', muted: '#94A3B8' },
-  pink_luxury: { bg: '#1a0b14', card: '#241220', accent: '#FF2BAE', accent2: '#FFC857', text: '#FDF2F8', muted: '#D8B4C8' },
-  minimal_bw: { bg: '#0a0a0a', card: '#161616', accent: '#FFFFFF', accent2: '#9CA3AF', text: '#F5F5F5', muted: '#9CA3AF' },
-  soft_pastel: { bg: '#fdf6f9', card: '#ffffff', accent: '#f472b6', accent2: '#60a5fa', text: '#3f2a3a', muted: '#8a7080' },
-}
 
 export function toHTML(menu, { themeId = 'dark_neon', customColors, brandName } = {}) {
   const c = themeId === 'custom' && customColors ? customColors : (THEME_COLORS[themeId] || THEME_COLORS.dark_neon)

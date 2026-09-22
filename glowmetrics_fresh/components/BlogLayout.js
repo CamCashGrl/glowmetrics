@@ -1,20 +1,8 @@
 'use client'
 import { useState } from 'react'
 import Button from './ui/Button'
+import { BLOG_LAYOUT_COLORS as S } from "@/lib/theme/colors"
 
-const S = {
-  bg:         '#0F1117',
-  surface:    '#1A1F2E',
-  card:       '#1E2435',
-  border:     'rgba(255,255,255,0.07)',
-  text:       '#8B92A0',
-  textMid:    '#C1C7D4',
-  textStrong: '#F0F2F6',
-  accent:     '#6366F1',
-  accentSoft: 'rgba(99,102,241,0.12)',
-  green:      '#10B981',
-  pink:       '#EC4899',
-}
 
 function FAQItem({ q, a }) {
   const [open, setOpen] = useState(false)

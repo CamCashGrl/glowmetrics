@@ -1,4 +1,5 @@
 import TitleGeneratorClient from '../cam-model-room-title-generator/TitleGeneratorClient'
+import { CHATURBATE_ROOM_TITLE_GUIDE_COLORS as S } from "@/lib/theme/colors"
 
 export const metadata = {
   title: 'Chaturbate Room Title Generator — Get More Tips With the Right Title | CamCash',
@@ -103,23 +104,6 @@ const breadcrumbSchema = {
   ],
 }
 
-const S = {
-  bg: '#14171C',
-  surface: '#1C2028',
-  card: '#21262F',
-  accent: '#6366F1',
-  accentLight: 'rgba(99,102,241,0.12)',
-  accentBorder: 'rgba(99,102,241,0.3)',
-  green: '#10B981',
-  gold: '#F59E0B',
-  pink: '#EC4899',
-  white: '#F1F5F9',
-  muted: '#6B7280',
-  text: '#9CA3AF',
-  textMid: '#C1C7D4',
-  textStrong: '#F0F2F6',
-  border: 'rgba(255,255,255,0.07)',
-}
 
 export default function ChaturbateRoomTitleGeneratorPage() {
   return (

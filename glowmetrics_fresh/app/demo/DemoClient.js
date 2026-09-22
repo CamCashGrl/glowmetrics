@@ -3,22 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { FinalCTASection } from './sections'
 import Button from '../../components/ui/Button'
+import { DEMO_CLIENT_COLORS as C } from "@/lib/theme/colors"
 
-const C = {
-  bg:      '#040812',
-  card:    '#0d1424',
-  sidebar: '#070d1c',
-  purple:  '#a855f7',
-  pink:    '#ec4899',
-  cyan:    '#22d3ee',
-  green:   '#10b981',
-  gold:    '#f59e0b',
-  white:   '#f1f5f9',
-  muted:   '#94a3b8',
-  dim:     '#475569',
-  red:     '#ef4444',
-  border:  'rgba(168,85,247,0.15)',
-}
 
 // ─── Static demo data ──────────────────────────────────────────────────────────
 const FANS = [

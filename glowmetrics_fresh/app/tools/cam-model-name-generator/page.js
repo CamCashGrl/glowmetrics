@@ -1,4 +1,5 @@
 import NameGeneratorClient from './NameGeneratorClient'
+import { NAME_GENERATOR_PAGE_COLORS as S } from "@/lib/theme/colors"
 
 export const metadata = {
   title: 'Cam Girl Name Generator: Find a Cute, Sexy, Brandable Stage Name',
@@ -79,16 +80,6 @@ const toolSchema = {
   featureList: ['Name generation (25/50/100)', 'Brand strength scoring', 'Domain availability checking', 'Platform availability links', 'AI branding analysis'],
 }
 
-const S = {
-  card: '#21262F',
-  gold: '#F59E0B',
-  pink: '#EC4899',
-  white: '#F1F5F9',
-  muted: '#6B7280',
-  text: '#9CA3AF',
-  textStrong: '#F0F2F6',
-  border: 'rgba(255,255,255,0.07)',
-}
 
 const PLATFORM_NOTES = [
   { platform: 'Chaturbate', color: S.gold, notes: ['Case-insensitive — AvaQuinn = avaquinn', 'Underscores allowed', 'Shown prominently in room listings', 'Can\'t be changed after registration'] },

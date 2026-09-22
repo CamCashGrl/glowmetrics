@@ -3,23 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { track } from '../../../lib/track';
 import Button from '../../../components/ui/Button';
+import { LIVE_DEMO_COLORS as C } from "@/lib/theme/colors";
 
-const C = {
-  bg: '#05070f',
-  card: 'rgba(15,20,32,0.75)',
-  border: 'rgba(168,85,247,0.2)',
-  purple: '#a855f7',
-  cyan: '#22d3ee',
-  green: '#10b981',
-  white: '#f1f5f9',
-  muted: '#94a3b8',
-  dim: '#475569',
-  text: '#e2e8f0',
-  pink: '#ec4899',
-  gold: '#f59e0b',
-  red: '#f87171',
-  orange: '#f97316',
-};
 
 const glass = {
   background: 'rgba(15,20,32,0.75)',

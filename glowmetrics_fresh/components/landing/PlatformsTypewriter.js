@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { PLATFORMS_TYPEWRITER_COLORS as T } from "@/lib/theme/colors"
 
 // ─────────────────────────────────────────────────────────────────────────
 // PlatformsTypewriter — PURE MARKETING VISUAL for the landing page.
@@ -10,12 +11,6 @@ import { useEffect, useState } from "react"
 // data implied.
 // ─────────────────────────────────────────────────────────────────────────
 
-const T = {
-  cyan: "#16F4FF",
-  pink: "#FF2BAE",
-  gold: "#FFC857",
-  textFaint: "#5E647C",
-}
 
 // MOCK/DEMO DATA — display order + accent color per chip, purely visual.
 const PLATFORMS = [

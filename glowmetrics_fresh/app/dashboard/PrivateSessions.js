@@ -6,17 +6,9 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts"
 import { computePaidSessionAnalytics } from "../../lib/analytics"
+import { PRIVATE_SESSIONS_COLORS } from "@/lib/theme/colors"
 
-const CARD   = "rgba(255,255,255,0.03)"
-const BORDER = "rgba(255,255,255,0.08)"
-const CYAN   = "#22d3ee"
-const PURPLE = "#a855f7"
-const PINK   = "#f472b6"
-const GOLD   = "#f59e0b"
-const GREEN  = "#4ade80"
-const SLATE  = "#64748b"
-const TEXT   = "#f1f5f9"
-const MUTED  = "#94a3b8"
+const { CARD, BORDER, CYAN, PURPLE, PINK, GOLD, GREEN, SLATE, TEXT, MUTED } = PRIVATE_SESSIONS_COLORS
 const TYPE_COLORS = { "Private Chat": CYAN, "Full-Private Chat": PURPLE, "Group Chat": GOLD, "Spy Mode": PINK }
 
 function fmtUsd(n) { return `$${Number(n || 0).toFixed(2)}` }

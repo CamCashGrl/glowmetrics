@@ -1,5 +1,6 @@
 import TokenCalculatorClient from './TokenCalculatorClient'
 import Button from '../../../components/ui/Button'
+import { CAM_MODEL_TOKEN_CALCULATOR_GUIDE_COLORS as S } from "@/lib/theme/colors"
 
 export const metadata = {
   title: 'Chaturbate, MFC & Stripchat Token Calculator: Convert Tokens to USD',
@@ -73,20 +74,6 @@ const appSchema = {
   url: 'https://www.camcashgrl.com/guides/cam-model-token-calculator',
 }
 
-const S = {
-  bg: '#14171C',
-  surface: '#1C2028',
-  card: '#21262F',
-  accent: '#6366F1',
-  accentLight: 'rgba(99,102,241,0.15)',
-  accentBorder: 'rgba(99,102,241,0.3)',
-  green: '#10B981',
-  gold: '#F59E0B',
-  white: '#F1F5F9',
-  muted: '#6B7280',
-  text: '#9CA3AF',
-  border: 'rgba(255,255,255,0.07)',
-}
 
 export default function TokenCalculatorPage() {
   return (
