@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, calculateFanPeriodMetrics } from "../../lib/analytics"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
@@ -1389,6 +1389,9 @@ export default function Dashboard() {
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
+  const [fanPeriod, setFanPeriod] = useState("monthly")
+  const [fanScopeMode, setFanScopeMode] = useState("unified")
+  const [fanShowAll, setFanShowAll] = useState(false)
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -3103,6 +3106,19 @@ const stopImportMessageRotation = () => {
         }
         .tier-filter-btn { transition: background 0.15s ease, color 0.15s ease; }
         .whale-modal-shell { box-shadow: 0 0 36px rgba(34,211,238,0.16), 0 0 54px rgba(124,92,255,0.15), 0 0 44px rgba(255,43,174,0.13), 0 22px 54px rgba(0,0,0,0.55); }
+        .fans-leader-row { display:grid; grid-template-columns:34px minmax(0,1fr) 100px 82px 92px; align-items:center; gap:10px; }
+        .fans-trending-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+        .fans-noticed-row { display:grid; grid-template-columns:minmax(120px,180px) 1fr auto; gap:12px; align-items:center; }
+        .fans-compare-row { display:grid; grid-template-columns:110px 1fr 80px 70px; align-items:center; gap:10px; }
+        @media (max-width: 700px) {
+          .fans-leader-row { grid-template-columns:28px minmax(0,1fr) 82px 70px; }
+          .fans-leader-row .fans-rank-action { display:none; }
+          .fans-trending-grid { grid-template-columns:1fr 1fr; }
+          .fans-noticed-row { grid-template-columns:1fr auto; }
+          .fans-noticed-event { grid-column:1 / -1; grid-row:2; }
+          .fans-compare-row { grid-template-columns:90px 1fr 70px; }
+          .fans-compare-fans { display:none; }
+        }
         .whale-modal-grid { display: grid; grid-template-columns: 1fr 220px; gap: 0; align-items: start; }
         .whale-modal-actions-col { border-left: 1px solid rgba(255,255,255,0.08); padding-left: 22px; margin-left: 22px; }
         .whale-hero-metrics { display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -4333,111 +4349,112 @@ const stopImportMessageRotation = () => {
               )
             })()}
 
-            {/* ALL TIPPERS — CRM Card Grid */}
+            {/* FAN INTELLIGENCE WORKSPACE — Leaderboard / Trending / Noticed /
+                Comparison / Directory. Ranking math comes from the single
+                shared formula calculateFanPeriodMetrics() in lib/analytics.js
+                (never recomputed locally) so this stays consistent with any
+                other place period-fan totals are shown. Operates on
+                filteredWhales so it still respects the tier/platform pills
+                above it. */}
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
                 <div style={{ fontSize: 15, color: C.text, fontWeight: 600, marginBottom: 4 }}>No fans match this filter</div>
                 <div style={{ fontSize: 12, color: C.text }}>Try a different tier or clear the platform filter</div>
               </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
-                {filteredWhales.map((w, i) => {
-                  const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
-                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
-                  const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  // Reuse the shared behavioral-state formula from analytics.js
-                  // (w.behavioralState / w.behavioralStateReason) — evidence-gated
-                  // per Fan Intelligence rules, never a raw days-since guess.
-                  const bs = w.behavioralState
-                  const riskLevel = bs === "Active" ? { label: "Active", color: C.green, pct: 15 }
-                    : bs === "Watch" ? { label: "Watch", color: C.gold, pct: 55 }
-                    : bs === "At Risk" ? { label: "At Risk", color: C.red, pct: 85 }
-                    : bs === "Dormant" ? { label: "Dormant", color: C.muted, pct: 40 }
-                    : null // New/Developing, Insufficient Data → no risk meter at all
-                  const riskReason = w.behavioralStateReason || null
-                  return (
-                    <div key={i}
-                      className="hoverable"
-                      style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.08)', cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px rgba(0,0,0,0.4)` }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
+            ) : (() => {
+              const periodDays = fanPeriod === "weekly" ? 7 : fanPeriod === "monthly" ? 30 : 365
+              const scopedPlatform = fanScopeMode === "platform" ? platformFilter : "ALL"
+              const { rankedFans, comparison } = calculateFanPeriodMetrics(filteredWhales, { periodDays, scopePlatform: scopedPlatform })
 
-                      {/* TOP ROW — avatar, name, badges, score */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                        {/* Avatar */}
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                          {(w.username || '?').charAt(0).toUpperCase()}
-                        </div>
-                        {/* Name + badges */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div title={w.username} style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>{w.username}</div>
-                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            <span style={{ padding: '1px 6px', borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
-                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.05)', color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || 'Unknown'}</span>
-                          </div>
-                        </div>
-                        {/* Relationship score */}
-                        <div title="Relationship score" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: `2px solid ${scoreColor}45`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
-                        </div>
+              const visibleCount = 6
+              const showAllFans = fanShowAll
+
+              const trendFans = rankedFans
+                .filter(w => w.trend?.direction && w.trend.direction !== 'insufficient')
+                .sort((a, b) => {
+                  const rank = { up: 0, down: 1, stable: 2 }
+                  return (rank[a.trend.direction] ?? 3) - (rank[b.trend.direction] ?? 3) || b.totalUSD - a.totalUSD
+                })
+                .slice(0, 4)
+
+              const noticed = rankedFans
+                .filter(w => w.behavioralStateReason || w.trend?.label || w.daysSinceLastTip !== null)
+                .slice(0, 4)
+                .map(w => {
+                  const trendLabel = w.trend?.direction === 'up' ? 'spending is up' : w.trend?.direction === 'down' ? 'spending is down' : w.trend?.direction === 'stable' ? 'spending is stable' : null
+                  const event = w.behavioralStateReason || (trendLabel ? `Their ${trendLabel} based on their established tipping pattern.` : `Last activity was ${w.daysSinceLastTip === 0 ? 'today' : `${w.daysSinceLastTip} days ago`}.`)
+                  return { ...w, event }
+                })
+
+              const directoryFans = [...filteredWhales].sort((a, b) => b.totalUSD - a.totalUSD)
+              const money = (n) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              const dateLabel = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+              const openProfile = (w) => { whaleModalTriggerRef.current = null; setSelectedWhale(w) }
+
+              return (
+                <div className="fans-workspace" style={{ marginBottom: 20 }}>
+                  {/* 1. LEADERBOARD */}
+                  <section style={{ ...glassCard, borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 13 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Leaderboard</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>Who matters in the selected period</div>
                       </div>
-
-                      {/* PRIMARY METRICS — typography-led, no heavy tiles */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, marginBottom: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', padding: 3, gap: 2, borderRadius: 9, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          {[['weekly', 'Weekly'], ['monthly', 'Monthly'], ['yearly', 'Yearly']].map(([v, l]) => <button key={v} onClick={() => setFanPeriod(v)} style={{ border: 0, borderRadius: 7, padding: '6px 9px', background: fanPeriod === v ? 'rgba(34,211,238,0.14)' : 'transparent', color: fanPeriod === v ? C.cyan : C.text, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{l}</button>)}
                         </div>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{(w.tipCount || 0).toLocaleString()}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
+                        <div style={{ display: 'flex', padding: 3, gap: 2, borderRadius: 9, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          {['unified', 'platform'].map(v => <button key={v} onClick={() => setFanScopeMode(v)} style={{ border: 0, borderRadius: 7, padding: '6px 9px', background: fanScopeMode === v ? 'rgba(124,92,255,0.15)' : 'transparent', color: fanScopeMode === v ? '#b8a8ff' : C.text, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{v === 'unified' ? 'Unified' : 'Platform'}</button>)}
                         </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }} title={w.lastTipDate ? new Date(w.lastTipDate).toLocaleString() : undefined}>{formatLastActive(days).replace('Last active ', '')}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Last active</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>${(w.avgTipSize || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Avg. tip</div>
-                        </div>
-                      </div>
-
-                      {/* RETENTION RISK */}
-                      {riskLevel && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention risk</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
-                          </div>
-                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
-                          </div>
-                          {riskReason && <div style={{ fontSize: 10, color: C.text, marginTop: 4 }}>{riskReason}</div>}
-                        </div>
-                      )}
-
-                      {/* ACTIONS — one primary, two secondary */}
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
-                          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-                          title="View fan profile">View Fan</button>
-                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                          className="heart-envelope-btn"
-                          aria-label={`Message ${w.username}`}
-                          title="Message fan"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
-                        <button onClick={() => setNoteTarget(w.username)}
-                          aria-label={`Add note for ${w.username}`}
-                          title="Add note"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
+                        {fanScopeMode === 'platform' && allPlatforms.length > 0 && <select value={platformFilter} onChange={e => setPlatformFilter(e.target.value)} style={{ padding: '7px 9px', borderRadius: 8, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', color: C.white, fontSize: 11 }}><option value="ALL">All platforms</option>{allPlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select>}
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            )}
+                    {rankedFans.length === 0 ? <div style={{ padding: '26px 10px', textAlign: 'center', color: C.muted, fontSize: 12 }}>No fan activity in this period.</div> : <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {(showAllFans ? rankedFans : rankedFans.slice(0, visibleCount)).map((w, i) => <div key={`${w.platform}:${w.username}`} className="fans-leader-row" style={{ padding: '10px 4px', borderTop: i === 0 ? '0' : '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ color: i < 3 ? C.cyan : C.muted, fontSize: 12, fontWeight: 800 }}>#{i + 1}</div>
+                        <button onClick={() => openProfile(w)} style={{ minWidth: 0, textAlign: 'left', border: 0, background: 'none', color: C.white, cursor: 'pointer', padding: 0 }}><div style={{ fontSize: 13, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.username}</div><div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{w.platform} · {w.tier}</div></button>
+                        <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 800, color: C.white }}>{money(w.periodUSD)}</div>
+                        <div style={{ textAlign: 'right', fontSize: 11, color: C.text }}>{w.periodTips.length} tips</div>
+                        <button className="fans-rank-action" onClick={() => openProfile(w)} style={{ justifySelf: 'end', padding: '6px 9px', borderRadius: 7, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: C.cyan, fontSize: 10, fontWeight: 750, cursor: 'pointer' }}>View Fan</button>
+                      </div>)}
+                      {rankedFans.length > visibleCount && <div style={{ textAlign: 'center', paddingTop: 10 }}><button onClick={() => setFanShowAll(v => !v)} style={{ padding: '7px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: C.text, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{showAllFans ? 'Show Less' : `Show More (${rankedFans.length - visibleCount})`}</button></div>}
+                    </div>}
+                  </section>
+
+                  {/* 2. TRENDING */}
+                  <section style={{ ...glassCard, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+                    <div style={{ marginBottom: 12 }}><div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Trending Fans</div><div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>Who is moving based on existing fan trend signals</div></div>
+                    {trendFans.length === 0 ? <div style={{ color: C.muted, fontSize: 12 }}>Not enough fan history to show a measured trend yet.</div> : <div className="fans-trending-grid">
+                      {trendFans.map(w => <button key={`${w.platform}:${w.username}`} onClick={() => openProfile(w)} style={{ textAlign: 'left', padding: 12, borderRadius: 11, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ color: C.white, fontSize: 12, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.username}</span><span style={{ color: w.trend.direction === 'up' ? C.green : w.trend.direction === 'down' ? C.red : C.text, fontSize: 11, fontWeight: 800 }}>{w.trend.direction === 'up' ? '↑' : w.trend.direction === 'down' ? '↓' : '→'}</span></div><div style={{ marginTop: 5, color: C.muted, fontSize: 10 }}>{w.platform} · {w.trend.label}</div></button>)}
+                    </div>}
+                  </section>
+
+                  {/* 3. CAMCASH NOTICED */}
+                  <section style={{ ...glassCard, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+                    <div style={{ marginBottom: 12 }}><div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>CAMCASH NOTICED</div><div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>Individual fan events and supported signals</div></div>
+                    {noticed.length === 0 ? <div style={{ color: C.muted, fontSize: 12 }}>Nothing stands out yet. More fan history will create more supported signals.</div> : <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                      {noticed.map(w => <div key={`${w.platform}:${w.username}`} className="fans-noticed-row" style={{ padding: '10px 11px', borderRadius: 10, background: 'rgba(34,211,238,0.025)', border: '1px solid rgba(34,211,238,0.09)' }}><div><button onClick={() => openProfile(w)} style={{ padding: 0, border: 0, background: 'none', color: C.white, fontSize: 12, fontWeight: 750, cursor: 'pointer' }}>{w.username}</button><div style={{ color: C.muted, fontSize: 10, marginTop: 2 }}>{w.platform}</div></div><div className="fans-noticed-event" style={{ color: C.text, fontSize: 11, lineHeight: 1.4 }}>{w.event}</div><div style={{ color: C.muted, fontSize: 10, whiteSpace: 'nowrap' }}>{w.daysSinceLastTip === 0 ? 'Today' : w.daysSinceLastTip === 1 ? 'Yesterday' : `${w.daysSinceLastTip}d ago`}</div></div>)}
+                    </div>}
+                  </section>
+
+                  {/* 4. COMPARISON */}
+                  <section style={{ ...glassCard, borderRadius: 16, padding: 18, marginBottom: 14 }}>
+                    <div style={{ marginBottom: 12 }}><div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Fan Intelligence / Comparison</div><div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>How fan populations differ across your platforms</div></div>
+                    {comparison.length === 0 ? <div style={{ color: C.muted, fontSize: 12 }}>No platform fan data available yet.</div> : <div style={{ display: 'grid', gap: 9 }}>
+                      {comparison.map((p) => { const max = Math.max(...comparison.map(x => x.usd), 1); return <div key={p.platform} className="fans-compare-row"><div style={{ color: C.white, fontSize: 11, fontWeight: 700 }}>{p.platform}</div><div style={{ height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}><div style={{ width: `${Math.max(2, (p.usd / max) * 100)}%`, height: '100%', borderRadius: 99, background: 'linear-gradient(90deg,#22D3EE,#7C5CFF,#EC4899)' }} /></div><div style={{ textAlign: 'right', color: C.white, fontSize: 11, fontWeight: 750 }}>{money(p.usd)}</div><div className="fans-compare-fans" style={{ textAlign: 'right', color: C.muted, fontSize: 10 }}>{p.fans} fans</div></div> })}
+                    </div>}
+                  </section>
+
+                  {/* 5. DIRECTORY */}
+                  <section style={{ ...glassCard, borderRadius: 16, padding: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}><div><div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>Fan Directory</div><div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{directoryFans.length} fans · compact lookup</div></div><button onClick={() => setFanSearchOpen(true)} style={{ padding: '7px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: C.text, fontSize: 11, cursor: 'pointer' }}>Search</button></div>
+                    <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}><thead><tr>{['Fan', 'Platform', 'Tier', 'Tips', 'Lifetime', 'Last active', ''].map(h => <th key={h} style={{ padding: '7px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', textAlign: h ? 'left' : 'right', color: C.muted, fontSize: 9, textTransform: 'uppercase', letterSpacing: .7 }}>{h}</th>)}</tr></thead><tbody>{directoryFans.slice(0, 12).map(w => <tr key={`${w.platform}:${w.username}`}><td style={{ padding: '9px 8px', color: C.white, fontSize: 11, fontWeight: 700 }}>{w.username}</td><td style={{ padding: '9px 8px', color: C.text, fontSize: 10 }}>{w.platform}</td><td style={{ padding: '9px 8px', color: TIER_COLORS[w.tier] || C.text, fontSize: 10 }}>{w.tier}</td><td style={{ padding: '9px 8px', color: C.text, fontSize: 10 }}>{w.tipCount}</td><td style={{ padding: '9px 8px', color: C.white, fontSize: 11, fontWeight: 700 }}>{money(w.totalUSD)}</td><td style={{ padding: '9px 8px', color: C.text, fontSize: 10 }}>{dateLabel(w.lastTipDate)}</td><td style={{ padding: '9px 8px', textAlign: 'right' }}><button onClick={() => openProfile(w)} style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid rgba(124,92,255,0.25)', background: 'rgba(124,92,255,0.08)', color: '#b8a8ff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>View Fan</button></td></tr>)}</tbody></table></div>
+                  </section>
+                </div>
+              )
+            })()}
 
             {/* 💎 WHALE INTELLIGENCE PANEL */}
             {filteredWhales.length > 0 && (
