@@ -4436,7 +4436,14 @@ const stopImportMessageRotation = () => {
                     {featuredFan.daysSinceLastTip != null && (
                       <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Last tip <span style={{ color: C.text, fontWeight: 600 }}>{featuredFan.daysSinceLastTip}d ago</span></div>
                     )}
-                    {featuredFan.behavioralStateReason && (
+                    {/* Only shown for isAtRisk: that's the one state where
+                        behavioralStateReason is guaranteed to be a real,
+                        evidence-based At-Risk conclusion. In the trending-
+                        down or neutral-top-fan branches, behavioralStateReason
+                        could just as easily be an unrelated "on schedule"
+                        or "too early to assess" message -- rendering it here
+                        would imply a locked insight that doesn't exist. */}
+                    {isAtRisk && featuredFan.behavioralStateReason && (
                       <div aria-label="Deeper intelligence locked" style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                         <div style={{ filter: 'blur(4px)', userSelect: 'none', fontSize: 12, color: C.text, lineHeight: 1.4 }}>{featuredFan.behavioralStateReason}</div>
                       </div>
@@ -4482,7 +4489,9 @@ const stopImportMessageRotation = () => {
                   {featuredFan.daysSinceLastTip != null && (
                     <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Last tip <span style={{ color: C.text, fontWeight: 600 }}>{featuredFan.daysSinceLastTip}d ago</span></div>
                   )}
-                  {featuredFan.behavioralStateReason && (
+                  {/* Same isAtRisk gate as the free variant above -- see
+                      comment there. */}
+                  {isAtRisk && featuredFan.behavioralStateReason && (
                     <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
                       <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>{featuredFan.behavioralStateReason}</div>
                     </div>
