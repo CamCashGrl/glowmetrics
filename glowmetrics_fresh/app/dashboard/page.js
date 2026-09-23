@@ -6848,7 +6848,7 @@ const stopImportMessageRotation = () => {
                         {[
                           { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
                           { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
-                          { icon: "🕐", label: "Avg days between tips", value: w.tipCount > 1 ? `Every ~${Math.round(w.avgDaysBetweenTips)} days` : "Not enough data yet" },
+                          { icon: "🕐", label: "Avg days between visits", value: w.avgDaysBetweenTips != null ? `Every ~${Math.round(w.avgDaysBetweenTips)} days` : "Not enough data yet" },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
                         ].map(({ icon, label, value, sub, color }) => (
                           <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
