@@ -13,20 +13,17 @@ import { aggregateRows } from '../analytics'
 describe('Phase 2 Platform Momentum', () => {
   describe('Platform Momentum: ALL Tips', () => {
     test('platform momentum should use ALL tips in revenue calculation', () => {
-      const today = new Date('2026-09-13')
-      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-      const sixtyDaysAgo = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
-
+      const now = new Date()
       const tips = [
         // Meaningful Chaturbate (last 30 days)
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
         // Low-signal Chaturbate (last 30 days) - should be included
-        { platform: 'Chaturbate', username: 'u2', date_time: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 5, tokens: 100 },
+        { platform: 'Chaturbate', username: 'u2', date_time: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 5, tokens: 100 },
 
         // Meaningful MyFreeCams (prior 30 days)
-        { platform: 'MyFreeCams', username: 'u3', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
+        { platform: 'MyFreeCams', username: 'u3', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
         // Low-signal MyFreeCams (prior 30 days) - should be included
-        { platform: 'MyFreeCams', username: 'u4', date_time: new Date(today.getTime() - 45 * 24 * 60 * 60 * 1000).toISOString(), usd: 5, tokens: 100 },
+        { platform: 'MyFreeCams', username: 'u4', date_time: new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000).toISOString(), usd: 5, tokens: 100 },
       ]
 
       const result = aggregateRows(tips)
@@ -43,15 +40,15 @@ describe('Phase 2 Platform Momentum', () => {
     })
 
     test('platform momentum should match overall momentum period totals', () => {
-      const today = new Date('2026-09-13')
+      const now = new Date()
       const tips = [
         // Last 30 days: Chaturbate $100, MyFreeCams $80, total $180
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
-        { platform: 'MyFreeCams', username: 'u2', date_time: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'MyFreeCams', username: 'u2', date_time: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
 
         // Prior 30 days: Chaturbate $50, MyFreeCams $40, total $90
-        { platform: 'Chaturbate', username: 'u3', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
-        { platform: 'MyFreeCams', username: 'u4', date_time: new Date(today.getTime() - 45 * 24 * 60 * 60 * 1000).toISOString(), usd: 40, tokens: 800 },
+        { platform: 'Chaturbate', username: 'u3', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
+        { platform: 'MyFreeCams', username: 'u4', date_time: new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000).toISOString(), usd: 40, tokens: 800 },
       ]
 
       const result = aggregateRows(tips)
@@ -75,13 +72,13 @@ describe('Phase 2 Platform Momentum', () => {
     })
 
     test('platform momentum low-signal tips should be included in revenue', () => {
-      const today = new Date('2026-09-13')
+      const now = new Date()
       const tips = [
         // Meaningful Chaturbate
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
         // Low-signal Chaturbate (both < 15 min AND < $10)
-        { platform: 'Chaturbate', username: 'u2', date_time: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 2, tokens: 40 },
-        { platform: 'Chaturbate', username: 'u2', date_time: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 3, tokens: 60 },
+        { platform: 'Chaturbate', username: 'u2', date_time: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 2, tokens: 40 },
+        { platform: 'Chaturbate', username: 'u2', date_time: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 3, tokens: 60 },
       ]
 
       const result = aggregateRows(tips)
@@ -94,15 +91,15 @@ describe('Phase 2 Platform Momentum', () => {
 
   describe('Platform Momentum Reconciliation', () => {
     test('sum of platform momentum should reconcile across multiple platforms', () => {
-      const today = new Date('2026-09-13')
+      const now = new Date()
       const tips = [
         // Chaturbate last 30: $100
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
         // MyFreeCams last 30: $80
-        { platform: 'MyFreeCams', username: 'u2', date_time: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
+        { platform: 'MyFreeCams', username: 'u2', date_time: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
         // BongaCams last 30: $20 (mix of meaningful and low-signal)
-        { platform: 'BongaCams', username: 'u3', date_time: new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(), usd: 15, tokens: 300 },
-        { platform: 'BongaCams', username: 'u4', date_time: new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString(), usd: 5, tokens: 100 },
+        { platform: 'BongaCams', username: 'u3', date_time: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString(), usd: 15, tokens: 300 },
+        { platform: 'BongaCams', username: 'u4', date_time: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString(), usd: 5, tokens: 100 },
       ]
 
       const result = aggregateRows(tips)
@@ -116,14 +113,13 @@ describe('Phase 2 Platform Momentum', () => {
     })
 
     test('platform momentum dates should correctly categorize into 30-day periods', () => {
-      const today = new Date('2026-09-13')
-      const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+      const now = new Date()
 
       const tips = [
         // Clearly in last 30 days
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
         // Clearly in prior 30 days
-        { platform: 'Chaturbate', username: 'u2', date_time: new Date(today.getTime() - 50 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
+        { platform: 'Chaturbate', username: 'u2', date_time: new Date(now.getTime() - 50 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
       ]
 
       const result = aggregateRows(tips)
@@ -136,12 +132,12 @@ describe('Phase 2 Platform Momentum', () => {
 
   describe('Platform Momentum Calculations', () => {
     test('platform momentum percentage should reflect period-over-period growth', () => {
-      const today = new Date('2026-09-13')
+      const now = new Date()
       const tips = [
         // Last 30 days: $100
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
         // Prior 30 days: $50 (so growth is 100%)
-        { platform: 'Chaturbate', username: 'u2', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
+        { platform: 'Chaturbate', username: 'u2', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 50, tokens: 1000 },
       ]
 
       const result = aggregateRows(tips)
@@ -154,36 +150,36 @@ describe('Phase 2 Platform Momentum', () => {
     })
 
     test('platform momentum labels should be assigned correctly', () => {
-      const today = new Date('2026-09-13')
+      const now = new Date()
 
       // Test Surging (>50%)
       let tips = [
-        { platform: 'Chaturbate', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 160, tokens: 3200 },
-        { platform: 'Chaturbate', username: 'u2', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'Chaturbate', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 160, tokens: 3200 },
+        { platform: 'Chaturbate', username: 'u2', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
       ]
       let result = aggregateRows(tips)
       expect(result.platformMomentum.Chaturbate.label).toBe('Surging')
 
       // Test Growing (>10% and <=50%)
       tips = [
-        { platform: 'MyFreeCams', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 115, tokens: 2300 },
-        { platform: 'MyFreeCams', username: 'u2', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'MyFreeCams', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 115, tokens: 2300 },
+        { platform: 'MyFreeCams', username: 'u2', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
       ]
       result = aggregateRows(tips)
       expect(result.platformMomentum.MyFreeCams.label).toBe('Growing')
 
       // Test Steady (>-10% and <=10%)
       tips = [
-        { platform: 'BongaCams', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 105, tokens: 2100 },
-        { platform: 'BongaCams', username: 'u2', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'BongaCams', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 105, tokens: 2100 },
+        { platform: 'BongaCams', username: 'u2', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
       ]
       result = aggregateRows(tips)
       expect(result.platformMomentum.BongaCams.label).toBe('Steady')
 
       // Test Declining (<-10%)
       tips = [
-        { platform: 'StripChat', username: 'u1', date_time: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
-        { platform: 'StripChat', username: 'u2', date_time: new Date(today.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
+        { platform: 'StripChat', username: 'u1', date_time: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(), usd: 80, tokens: 1600 },
+        { platform: 'StripChat', username: 'u2', date_time: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString(), usd: 100, tokens: 2000 },
       ]
       result = aggregateRows(tips)
       expect(result.platformMomentum.StripChat.label).toBe('Declining')
