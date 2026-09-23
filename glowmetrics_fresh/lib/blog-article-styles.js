@@ -17,6 +17,12 @@ export const s = {
   stepNum: { display: 'inline-block', fontSize: 12, fontWeight: 800, letterSpacing: '.08em', color: '#0ea5e9', marginBottom: 8 },
   code: { fontSize: 14, fontFamily: "'Fira Code', monospace", color: '#f0f4f8', background: 'rgba(15,23,42,.6)', padding: '2px 6px', borderRadius: 4 },
   codeBlock: { background: 'rgba(15,23,42,.8)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 8, padding: '16px', overflow: 'auto', marginBottom: 20, fontSize: 13, lineHeight: 1.6, color: '#cbd5e1' },
+  promo: { background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(239,68,68,0.08))', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '32px 24px', margin: '38px 0' },
+  promoTitle: { fontSize: 18, fontWeight: 800, color: '#f1f5f9', marginBottom: 12 },
+  promoButtons: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 },
+  promoBtn: { display: 'inline-block', padding: '12px 24px', borderRadius: 8, color: '#fff', fontWeight: 700, fontSize: 14, textDecoration: 'none', textAlign: 'center', cursor: 'pointer', border: 'none' },
+  promoBtnModel: { background: 'linear-gradient(135deg, #f59e0b, #d97706)', transition: 'all 0.3s ease' },
+  promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
 }
 
 export const articleSchema = ({ title, description, slug, faqs } = {}) => ({
