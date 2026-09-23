@@ -78,7 +78,6 @@ export default function sitemap() {
     'is-camming-legal',
 
     // Existing and new coaching content
-    'live-ai-coaching-cam-models',
     'live-mode-coaching-for-cam-models',
 
     // New MyFreeCams articles
