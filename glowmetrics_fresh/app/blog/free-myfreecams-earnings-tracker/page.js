@@ -353,7 +353,7 @@ export default function FreeMyFreeCamsEarningsTrackerPage() {
             The free Mini Tracker is perfect for getting started. When you're ready to expand, the full MyFreeCams Creator Tip Tracker is a comprehensive 64-page workbook with advanced tracking pages, monthly reviews, goal setting, and business planning sections.
           </p>
 
-          <section style={s.cta}}>
+          <section style={s.cta}>
             <div style={s.ctaTitle}>Get the Full MyFreeCams Tracker</div>
             <p style={s.ctaText}>
               64-page workbook with session logs, earnings analysis, monthly reviews, goal tracking, and performance optimization pages.
