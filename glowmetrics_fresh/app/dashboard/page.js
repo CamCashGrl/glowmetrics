@@ -2478,19 +2478,21 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
-    whales.filter(w => w.totalUSD >= 50).forEach(w => {
+    // 2. WIN BACK — $50+ lifetime AND a canonical, baseline-gated "At Risk"
+    // behavioral state (lib/analytics.js calcFanBehavioralState). A fan
+    // with only one visit has no established personal cadence, so an
+    // independent day-range can't tell us their absence is abnormal --
+    // only the canonical behavioralState may make that call.
+    whales.filter(w => w.totalUSD >= 50 && w.behavioralState === 'At Risk').forEach(w => {
       const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 45 && days <= 90) {
-        const name = w.username
-        winBack.push({
-          type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
-          title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
-          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
-          cta: 'Copy Message', username: name, whale: w,
-          reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
-        })
-      }
+      const name = w.username
+      winBack.push({
+        type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
+        title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
+        message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+        cta: 'Copy Message', username: name, whale: w,
+        reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
+      })
     })
 
     // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
@@ -2514,45 +2516,14 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 4. ONLINE NOW / ONLINE SOON
-    whales.slice(0, 5).forEach(w => {
-      if (w.tipCount < 5) return
-      const fanTips = (w.tips && w.tips.length > 0)
-        ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
-      if (fanTips.length < 5) return
-      const hourCounts = {}
-      fanTips.forEach(t => {
-        // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
-        hourCounts[h] = (hourCounts[h] || 0) + 1
-      })
-      const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-      if (!bestHour) return
-      const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
-      const hoursAway = (peakHour - currentUTCHr + 24) % 24
-      const _pf0 = bestHour[1] / fanTips.length
-      const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
-      const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
-      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
-      if (hoursAway <= 2 && probability >= 40) {
-        onlineNow.push({
-          type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
-          title: `${w.username} is probably online right now`,
-          message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
-          cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: getPersonalMsg(w)
-        })
-      } else if (hoursAway <= 10 && probability >= 40) {
-        onlineNow.push({
-          type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
-          title: `${w.username} is likely online in ~${hoursAway}h`,
-          message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
-          cta: null, username: w.username, whale: w, reengageMsg: ''
-        })
-      }
-    })
+    // 4. ONLINE NOW / ONLINE SOON — removed. This previously computed its
+    // own hour-of-day "usually tips around X" pattern and probability
+    // percentage from raw tip timestamps, gated only on raw tipCount >= 5.
+    // Raw tips within one behavioral visit (observationCount) can all land
+    // minutes apart, which can fabricate an hourly pattern from a single
+    // visit. No canonical field in lib/analytics.js currently supports an
+    // "expected time of day" claim, so no such behavioral action is
+    // rendered here rather than inventing a new formula for it.
 
     // 5. DORMANT
     whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {

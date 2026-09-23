@@ -1056,7 +1056,11 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
     const drop = Math.round(((lastAvg - thisAvg) / lastAvg) * 100)
     if (drop >= 15) alerts.push({ type: 'tip_drop', severity: 'warning', icon: '📉', message: `Your avg tip dropped ${drop}% this week ($${lastAvg.toFixed(2)} → $${thisAvg.toFixed(2)})`, action: 'Focus on high-value fans during your next stream' })
   }
-  whales.filter(w => w.totalUSD >= 50 && w.daysSinceLastTip >= 5 && w.daysSinceLastTip < 30).slice(0, 2).forEach(w => {
+  // fan_churn must rely on the canonical, baseline-gated behavioralState
+  // (lib/analytics.js calcFanBehavioralState) rather than an independent
+  // day-range/totalUSD formula -- a single-visit fan has no personal
+  // cadence to compare against, so it can never be "At Risk" on its own.
+  whales.filter(w => w.behavioralState === 'At Risk' && w.totalUSD >= 50).slice(0, 2).forEach(w => {
     alerts.push({ type: 'fan_churn', severity: 'critical', icon: '🚨', message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — high churn risk ($${w.totalUSD.toFixed(0)} lifetime value)`, action: 'Send a re-engagement message now' })
   })
   const lastStreamed = sessions.length ? (now - new Date(sessions[sessions.length - 1].startTime)) / 86400000 : 999
