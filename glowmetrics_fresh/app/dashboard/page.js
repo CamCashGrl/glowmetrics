@@ -2611,22 +2611,26 @@ const stopImportMessageRotation = () => {
   }
 
   // ── Build re-engage list outside JSX for the same reason
+  // Eligibility comes from the canonical, evidence-gated behavioralState
+  // (lib/analytics.js calcFanBehavioralState) -- NOT an independent
+  // days-since-last-tip + minimum-spend filter. That standalone filter
+  // could flag a fan with a single tip as "at risk" purely from elapsed
+  // time, bypassing the per-fan baseline/eligibility/evidence checks the
+  // canonical function requires. This list is a display ordering over
+  // fans already determined to be At Risk elsewhere, not a second
+  // determination of who counts as at risk.
   const buildReengageList = () => {
-    const now = Date.now()
     const messageSets = [
       (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
       (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
       (name) => `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
     ]
     return whales
-      .filter(w => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-        return days >= 3 && days <= 60 && w.totalUSD >= 10
-      })
+      .filter(w => w.behavioralState === 'At Risk')
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
       .map((w, i) => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        const days = w.daysSinceLastTip ?? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
         return {
           whale: w,
           days,
