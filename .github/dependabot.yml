@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # App dependencies — flags known-vulnerable packages (e.g. the Next.js
+  # 14.2.0 security advisory surfaced during the Sept 19 audit) and opens a
+  # PR automatically instead of only turning up when someone runs npm install.
+  - package-ecosystem: "npm"
+    directory: "/glowmetrics_fresh"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Batch routine patch/minor bumps into one PR so they don't flood the
+      # PR list; security fixes always get their own PR regardless of group.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # First run (Sept 19) opened 7 major-version PRs at once — Next 14→16,
+      # Stripe SDK 14→22, React 18→19, Tailwind 3→4, recharts 2→3,
+      # @vercel/analytics 1→2 — each a real risk of breaking the build if
+      # merged without dedicated testing, not something to auto-propose
+      # weekly. Blocking major-version-update PRs here only affects routine
+      # version updates (Dependabot's default) — a major bump that's also a
+      # security fix still opens a PR regardless of this rule.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Keeps the build-check.yml workflow's own actions (checkout, setup-node)
+  # current — these need dependency updates too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

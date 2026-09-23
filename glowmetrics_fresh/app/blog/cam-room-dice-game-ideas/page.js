@@ -171,6 +171,7 @@ export default function BlogPost() {
 
       <div style={s.cta}><div style={s.ctaTitle}>See whether your game actually improved the stream</div><p style={s.ctaText}>CamCash helps you compare sessions, earning pace, tip timing, and fan activity instead of relying on whether the room merely felt busy.</p><a href="/landing" style={s.ctaBtn}>Compare My Sessions →</a></div>
 
+      <p style={s.p}>For complete game templates, pricing guides, and performance tracking worksheets, the <a href="/blog/roll-the-dice-game-pack" style={s.link}>Roll the Dice Game Pack</a> includes organized layouts for seven game types, session tracking sheets, and tips for optimizing each game based on your room's response.</p>
 
       <div style={s.etsy}>
         <div style={s.etsyLabel}>Pretty Profitz Creator Resource</div>

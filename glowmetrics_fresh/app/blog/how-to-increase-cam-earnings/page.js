@@ -121,6 +121,7 @@ export default function HowToIncreaseCamEarnings() {
         </p>
       </div>
       <p style={s.p}>You can't optimize what you don't measure — <a href="/blog/how-to-track-cam-tips-automatically" style={s.iLink}>automate your tip tracking</a> so the data is always current.</p>
+      <p style={s.p}>For a hands-on workbook system, the <a href="/blog/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate Earnings Tracker</a> provides structured worksheets for session tracking, pattern analysis, and goal-setting organized in one resource. If you want a complete system that combines tracking with strategy planning and performance testing, the <a href="/blog/chaturbate-earnings-growth-bundle" style={s.iLink}>Chaturbate Earnings Growth Bundle</a> integrates everything into one comprehensive toolkit.</p>
 
       <h2 style={s.h2}>Step 2: Find Your Real Peak Hours</h2>
       <p style={s.p}>The most common tip for increasing cam earnings is "stream at peak traffic times." The problem is that generic peak hours are based on platform-wide traffic — not your specific audience.</p>
@@ -146,7 +147,7 @@ export default function HowToIncreaseCamEarnings() {
         <li style={s.li}>Risk level based on their typical tipping pattern</li>
       </ul>
       <p style={s.p}>When a high-value fan's gap since last tip exceeds their average interval, it's time to reach out. A personalized message has a much higher re-engagement rate than a generic note.</p>
-      <p style={s.p}>Your regulars drive most of your income, so <a href="/blog/cam-model-fan-crm" style={s.iLink}>build profiles on your top tippers</a> (Pro feature — upgrade after signup) and treat them like VIPs.</p>
+      <p style={s.p}>Your regulars drive most of your income, so <a href="/blog/cam-model-fan-crm" style={s.iLink}>build profiles on your top tippers</a> (Pro feature — upgrade after signup) and treat them like VIPs. For a dedicated workbook system, the <a href="/blog/vip-client-tracker" style={s.iLink}>VIP Client Tracker</a> provides templates for whale profiles, spending history, gap notifications, and re-engagement messaging all in one organized resource.</p>
 
       <h2 style={s.h2}>Step 4: Analyze Every Session Like a Business</h2>
       <p style={s.p}>After each stream, ask three questions:</p>

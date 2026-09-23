@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How to Diversify Your Cam Model Income in 2026: Clips, Multistreaming & More | CamCash',
@@ -268,6 +269,7 @@ export default function CamModelIncomeDiversification() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ How Much Do Cam Models Make?</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

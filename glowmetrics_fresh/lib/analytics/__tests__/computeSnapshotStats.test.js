@@ -67,10 +67,15 @@ describe('computeSnapshotStats — Free-tier 31-day window math', () => {
   })
 
   test('accepts Date objects, dateRaw strings, and ts fields interchangeably', () => {
+    // Each row still uses a different field and format — that is what this
+    // test is for — but all three are midday local. A bare '2026-01-02'
+    // parses as UTC midnight while new Date(2026, 0, 1) is local midnight, so
+    // the original mix collapsed two rows onto one day west of UTC and the
+    // test passed or failed depending on the machine's timezone.
     const rows = [
-      { ts: new Date(2026, 0, 1), tokens: 10, usd: 1 },
-      { dateRaw: '2026-01-02', tokens: 10, usd: 1 },
-      { date: '2026-01-03', tokens: 10, usd: 1 },
+      { ts: new Date(2026, 0, 1, 12), tokens: 10, usd: 1 },
+      { dateRaw: '2026-01-02T12:00:00', tokens: 10, usd: 1 },
+      { date: '2026-01-03T12:00:00', tokens: 10, usd: 1 },
     ]
     const { full } = computeSnapshotStats(rows, 31)
     expect(full.tips).toBe(3)

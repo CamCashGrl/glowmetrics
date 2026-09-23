@@ -1,6 +1,7 @@
 // app/blog/freemium-vs-premium-cam-model/page.js
 import Button from '../../../components/ui/Button'
 // Target keywords: freemium vs premium cam model, should i do private shows cam, cam model public room vs private
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Freemium vs Premium Cam Model: Which Model Is Right for You? | CamCash',
@@ -291,6 +292,7 @@ export default function FreemiumVsPremium() {
         </article>
       </div>
 
+      <ChaturbateAffiliateCTA />
       <footer style={s.footer}>
         <span style={s.footerText}>© 2026 <a href="/" style={s.footerLink}>CamCashGrl</a> — free analytics for cam models</span>
         <div style={s.footerLinks}>

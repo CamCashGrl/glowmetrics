@@ -40,6 +40,12 @@ jobs:
       - name: Run estimated-hourly-rate verification
         run: node scripts/verify-estimated-hourly-rate.mjs
 
+      - name: Run timezone guard
+        run: node scripts/check-timezone.mjs
+
+      - name: Run test suite
+        run: npm test
+
       - name: Run production build
         run: npm run build
         env:

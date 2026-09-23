@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Button from '../../../components/ui/Button'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: "Why You're Not Making Money on Chaturbate (And How to Fix It) | CamCash",
@@ -179,6 +180,8 @@ export default function Page() {
         <p style={{ fontSize: 15, lineHeight: 1.85, color: '#94A3B8', marginBottom: 16 }}>Every problem on this list has the same root cause: streaming without feedback. When you have no data, you can't know what's actually working. You repeat the same patterns because nothing is telling you to stop.</p>
         <p style={{ fontSize: 15, lineHeight: 1.85, color: '#94A3B8', marginBottom: 32 }}>The models who grow fastest are not necessarily the most talented or experienced. They're the ones who look at their own numbers and adjust. They know their peak hours. They know their top fans. They know their average revenue per session and use it as a benchmark for every stream.</p>
 
+        <p style={{ fontSize: 15, lineHeight: 1.85, color: '#94A3B8', marginBottom: 32 }}>There are two approaches to building your data system. <a href="/blog/how-to-track-cam-tips-automatically" style={{ color: '#A5B4FC', textDecoration: 'none' }}>Automatic tip tracking</a> through <a href="/landing" style={{ color: '#A5B4FC', textDecoration: 'none' }}>CamCash</a> logs everything while you stream in real time — no spreadsheets, just live insights. If you prefer hands-on tracking systems, the <a href="/blog/chaturbate-earnings-tracker" style={{ color: '#A5B4FC', textDecoration: 'none' }}>Chaturbate Earnings Tracker</a> workbook provides structured worksheets for session analysis, pattern identification, and performance benchmarking. For a complete system combining tracking with planning and testing, the <a href="/blog/chaturbate-earnings-growth-bundle" style={{ color: '#A5B4FC', textDecoration: 'none' }}>Chaturbate Earnings Growth Bundle</a> brings everything together into one toolkit.</p>
+
         <div style={{ margin: '32px 0', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
           <img
             src="/blog-images/camcash-earnings-stats.webp"
@@ -225,6 +228,7 @@ export default function Page() {
         </div>
       </article>
 
+      <ChaturbateAffiliateCTA />
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px 40px', textAlign: 'center' }}>
         <p style={{ fontSize: 12, color: '#475569' }}>© 2026 CamCash — Built for cam models who want to grow</p>
       </footer>

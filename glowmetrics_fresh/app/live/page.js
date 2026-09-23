@@ -10,6 +10,8 @@ import { detectSessions } from '../../lib/analytics/sessions';
 import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
+import LiveTipsStream from './LiveTipsStream';
+import PlatformBreakdown from './components/PlatformBreakdown';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
@@ -46,6 +48,13 @@ export default function LivePage() {
   const [liveTick, setLiveTick]       = useState(0);
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [legacyStartError, setLegacyStartError] = useState(null);
+
+  // ── PLATFORM TRACKING STATE ────────────────────────────────────────────
+  const [platformStats, setPlatformStats] = useState([]);
+  const [streamStatus, setStreamStatus] = useState('connecting');
+  const [platformTotalUSD, setPlatformTotalUSD] = useState(0);
+  const [currentlyStreamingPlatform, setCurrentlyStreamingPlatform] = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -225,29 +234,40 @@ export default function LivePage() {
 
   const handleStartStream = async () => {
     const startTime = new Date();
-    setLiveActive(true);
-    setLiveStartTime(startTime);
     setLiveEvents([]);
     processedTipIds.current = new Set();
     if (user) {
-      const { data: session } = await supabase
-        .from('stream_sessions')
+      // Legacy engine path writes directly to live_sessions (the real,
+      // RLS-protected table — "Users manage own live sessions" grants ALL
+      // to auth.uid() = user_id) instead of the old stream_sessions table,
+      // which no longer exists in production. A prior version of this
+      // handler wrote to stream_sessions and always failed silently here,
+      // while still reporting the stream as active below.
+      const { data: session, error } = await supabase
+        .from('live_sessions')
         .insert({
           user_id: user.id,
-          platform: livePlatform,
-          start_time: startTime.toISOString(),
-          end_time: startTime.toISOString(), // placeholder; updated on stop
-          hours_streamed: 0,
+          stream_platform: livePlatform,
+          started_at: startTime.toISOString(),
+          status: 'active',
         })
         .select()
         .single();
-      if (session) setCurrentSessionId(session.id);
+      if (error || !session) {
+        console.error('[live] failed to start session:', error);
+        setLegacyStartError('Could not start your live session. Please try again.');
+        return;
+      }
+      setLegacyStartError(null);
+      setCurrentSessionId(session.id);
+      setLiveActive(true);
+      setLiveStartTime(startTime);
       // Broadcast stream start to extension via real-time channel
       supabase.channel(`extension_${user.id}`).send('broadcast', {
         event: 'stream_started',
         timestamp: startTime.toISOString(),
         platform: livePlatform,
-        session_id: session?.id,
+        session_id: session.id,
       }).catch(() => {});
       // Also notify via localStorage for extension to pick up immediately
       if (typeof window !== 'undefined') {
@@ -255,9 +275,12 @@ export default function LivePage() {
           active: true,
           startTime: startTime.toISOString(),
           platform: livePlatform,
-          sessionId: session?.id,
+          sessionId: session.id,
         }));
       }
+    } else {
+      setLiveActive(true);
+      setLiveStartTime(startTime);
     }
   };
 
@@ -265,20 +288,20 @@ export default function LivePage() {
     setLiveActive(false);
     if (user && currentSessionId && liveStartTime) {
       const endTime = new Date();
-      const hoursStreamed = (endTime - new Date(liveStartTime)) / 1000 / 60 / 60;
       const sessionTips = liveEvents.filter(e => !e._isHistory);
       const totalUsd    = sessionTips.reduce((sum, t) => sum + (t.normalizedRevenue || t.usd || 0), 0);
       const totalTokens = sessionTips.reduce((sum, t) => sum + (t.tokens || 0), 0);
-      await supabase
-        .from('stream_sessions')
+      const { error } = await supabase
+        .from('live_sessions')
         .update({
-          end_time:      endTime.toISOString(),
-          hours_streamed: parseFloat(hoursStreamed.toFixed(4)),
-          usd:           parseFloat(totalUsd.toFixed(2)),
-          tokens:        totalTokens,
-          tip_count:     sessionTips.length,
+          ended_at:     endTime.toISOString(),
+          status:       'ended',
+          total_usd:    parseFloat(totalUsd.toFixed(2)),
+          total_tokens: totalTokens,
+          tip_count:    sessionTips.length,
         })
         .eq('id', currentSessionId);
+      if (error) console.error('[live] failed to close session:', error);
       // Broadcast stream stop to extension via real-time channel
       supabase.channel(`extension_${user.id}`).send('broadcast', {
         event: 'stream_stopped',
@@ -926,6 +949,33 @@ export default function LivePage() {
           setLiveEvents(prev => [...prev, ...mapped])
         }} />
 
+        <LiveTipsStream
+          onNewTips={(newTips) => {
+            const mapped = newTips.map(t => normalizeTip({
+              ...t,
+              username: t.username || 'anon',
+              tokens: t.tokens || 0,
+              usd: t.usd || 0,
+              timestamp: t.received_at || new Date(),
+              platform: t.platform || 'Unknown',
+            }))
+            setLiveEvents(prev => [...prev, ...mapped])
+          }}
+          onPlatformUpdate={(stats) => {
+            // stats is the full platformStats array from the API
+            setPlatformStats(stats)
+            const total = stats.reduce((sum, p) => sum + (p.totalUSD || 0), 0)
+            setPlatformTotalUSD(total)
+            // Update currently streaming platform (most recent)
+            if (stats && stats.length > 0) {
+              setCurrentlyStreamingPlatform(stats[0].platform)
+            }
+          }}
+          onStatusChange={(status) => {
+            setStreamStatus(status)
+          }}
+        />
+
         {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -1111,12 +1161,17 @@ export default function LivePage() {
                 )}
               </>
             ) : !liveActive ? (
-              <button onClick={handleStartStream}
-                style={{ padding: '10px 24px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.target.style.boxShadow = '0 0 28px rgba(16,185,129,0.6)'; }}
-                onMouseLeave={e => { e.target.style.boxShadow = '0 0 20px rgba(16,185,129,0.4)'; }}>
-                ▶ START STREAM
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                <button onClick={handleStartStream}
+                  style={{ padding: '10px 24px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 0 20px rgba(16,185,129,0.4)', transition: 'all 0.2s' }}
+                  onMouseEnter={e => { e.target.style.boxShadow = '0 0 28px rgba(16,185,129,0.6)'; }}
+                  onMouseLeave={e => { e.target.style.boxShadow = '0 0 20px rgba(16,185,129,0.4)'; }}>
+                  ▶ START STREAM
+                </button>
+                {legacyStartError && (
+                  <span style={{ fontSize: 11, color: C.red }}>{legacyStartError}</span>
+                )}
+              </div>
             ) : (
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <div style={{ fontSize: 12, color: C.muted }}>Platform: <span style={{ color: C.white, fontWeight: 700 }}>{livePlatform}</span></div>
@@ -1158,6 +1213,9 @@ export default function LivePage() {
               onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(6,182,212,0.3)'; }}>
               ▶ START STREAM
             </button>
+            {legacyStartError && (
+              <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>{legacyStartError}</div>
+            )}
           </div>
         )}
 
@@ -1296,6 +1354,15 @@ export default function LivePage() {
                 </div>
               );
             })()}
+
+            {/* ── PLATFORM BREAKDOWN ────────────────────────────────── */}
+            {platformStats && platformStats.length > 0 && (
+              <PlatformBreakdown
+                platformStats={platformStats}
+                totalUSD={platformTotalUSD}
+                currentlyStreaming={currentlyStreamingPlatform}
+              />
+            )}
 
             {/* ── MAIN GRID ─────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>

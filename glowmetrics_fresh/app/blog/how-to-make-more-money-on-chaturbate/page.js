@@ -1,5 +1,6 @@
 // app/blog/how-to-make-more-money-on-chaturbate/page.js
 import Button from '../../../components/ui/Button'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How to Make More Money on Chaturbate: 11 Advanced Tactics',
@@ -493,6 +494,7 @@ export default function MakeMoreOnChaturbate() {
         </div>
       </article>
 
+      <ChaturbateAffiliateCTA />
       <footer style={s.footer}>
         <p style={s.footerText}>
           © 2026 CamCash — Built for cam models who want to grow
