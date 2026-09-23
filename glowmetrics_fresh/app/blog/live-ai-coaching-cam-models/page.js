@@ -3,7 +3,7 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'live-ai-coaching-cam-models';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Live AI Coaching for Cam Models — Real-Time Stream Advice';
+const TITLE = 'AI Coaching for Cam Models: Personalized Earning Strategies';
 const DESC =
   'How AI coaching during a live stream tells you when to push a goal, stay live longer, or switch strategy based on your real earnings data.';
 

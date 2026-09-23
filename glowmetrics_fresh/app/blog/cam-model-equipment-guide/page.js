@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Equipment Guide',
-  description: 'Build a cam setup that looks professional without overspending. Learn the right order for lighting, internet, camera, and audio.',
+  title: 'Cam Model Equipment Guide: Professional Setup & Budget Tips',
+  description: 'Professional cam setup guide: essential equipment, lighting, camera, audio, computer specs, internet requirements, budget options, and step-by-step optimization for HD streaming quality.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-equipment-guide' },
   openGraph: {
     title: 'Cam Model Equipment Guide',

@@ -7,7 +7,7 @@ const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
-  description: 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.',
+  description: 'Cam platforms with external broadcasting: OBS support, RTMP streaming, multi-site broadcast, compatible platforms, setup requirements, and how external broadcast expands your streaming options.',
   url: 'https://www.camcashgrl.com/blog/what-cam-sites-allow-external-broadcasting',
   datePublished: '2026-08-26',
   dateModified: '2026-08-26',
@@ -27,7 +27,7 @@ const faqSchema = {
 }
 
 export const metadata = {
-  title: 'Which Cam Sites Allow External Broadcasting? OBS, RTMP and Multistreaming',
+  title: 'What Cam Sites Allow External Broadcasting & OBS Streaming?',
   description: 'A practical guide to external broadcasting for cam models: what OBS/RTMP actually means, how platform support differs, and what to verify before multistreaming.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/what-cam-sites-allow-external-broadcasting' },
   openGraph: {

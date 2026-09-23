@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Is Camming Legal? A Plain-English Guide for 2026',
-  description: 'Is camming legal? A clear breakdown of federal law, state age-verification rules, platform compliance, and when to get professional legal advice.',
+  title: 'Is Camming Legal? Age, Laws & Regulations by Country',
+  description: 'Cam modeling legality by country: age requirements, laws, regulations, taxes, content restrictions, platform rules, and safety considerations for legal cam streaming income.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/is-camming-legal' },
   openGraph: {
     title: 'Is Camming Legal? A Plain-English Guide for 2026',

@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Get More Viewers as a Cam Model Across Chaturbate, BongaCams, MFC, Stripchat, and CamSoda | CamCash',
-  description: 'Streaming on multiple cam sites and want more viewers? This cross-platform guide covers viewer growth strategies for Chaturbate, BongaCams, MyFreeCams, Stripchat, and CamSoda — discovery, retention, off-platform promotion, and how to compare platform performance.',
+  title: 'How to Get More Viewers as a Cam Model: Discovery & Growth',
+  description: 'Attract more cam viewers with proven tactics: room titles, niche positioning, social media, profile optimization, bot tools, games, tip incentives, and consistent streaming schedules.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-get-more-viewers-as-a-cam-model' },
   openGraph: {
     title: 'How to Get More Viewers as a Cam Model Across Chaturbate, BongaCams, MFC, Stripchat, and CamSoda',

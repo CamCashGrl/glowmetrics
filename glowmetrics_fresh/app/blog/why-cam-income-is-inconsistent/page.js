@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Why Cam Income Is Inconsistent (And How to Fix It)',
-  description: 'The real reasons your earnings vary so much stream to stream — and the data-driven fixes that create more consistent income.',
+  title: 'Why Cam Model Income Is Inconsistent: Patterns & Solutions',
+  description: 'Understand why cam model income varies: seasonal patterns, viewer spending cycles, platform algorithm changes, niche factors, burnout, and data-driven strategies to stabilize monthly earnings.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/why-cam-income-is-inconsistent' },
   openGraph: {
     title: 'Why Cam Income Is Inconsistent',

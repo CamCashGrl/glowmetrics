@@ -3,8 +3,8 @@ import Button from '../../../components/ui/Button'
 // Target keywords: cam model burnout, cam model mental health, how to avoid burnout camming, cam model self care
 
 export const metadata = {
-  title: 'Cam Model Burnout Prevention: Signs, Causes & How to Actually Recover | CamCash',
-  description: 'Burnout is the most common reason cam models quit — and it\'s almost always preventable. The real signs of cam model burnout, what causes it, and how to recover before it ends your career.',
+  title: 'Cam Model Burnout Prevention: Mental Health & Sustainable Income',
+  description: 'Prevent cam model burnout with mental health strategies: burnout warning signs, boundaries, self-care routines, therapy resources, and how to sustain long-term streaming success.'s almost always preventable. The real signs of cam model burnout, what causes it, and how to recover before it ends your career.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-mental-health-burnout-prevention' },
   openGraph: {
     title: 'Cam Model Burnout Prevention: Signs, Causes & How to Actually Recover',

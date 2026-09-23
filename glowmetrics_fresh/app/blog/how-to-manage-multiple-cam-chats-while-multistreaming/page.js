@@ -2,7 +2,7 @@ import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
   title: 'How to Manage Multiple Cam Chats While Multistreaming',
-  description: 'Learn practical ways to handle multiple cam-site chats, identify tips by platform, and avoid missing messages when multistreaming.',
+  description: 'Handle multiple cam site chats simultaneously: chat tools, platform identification, message tracking, tip alerts, multi-monitor setup, and strategies to avoid missing tips or clients.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-manage-multiple-cam-chats-while-multistreaming' },
   openGraph: { title: 'How to Manage Multiple Cam Chats While Multistreaming', description: 'Learn practical ways to handle multiple cam-site chats, identify tips by platform, and avoid missing messages when multistreaming.', url: 'https://www.camcashgrl.com/blog/how-to-manage-multiple-cam-chats-while-multistreaming', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'How to Manage Multiple Cam Chats While Multistreaming', description: 'Learn practical ways to handle multiple cam-site chats, identify tips by platform, and avoid missing messages when multistreaming.' },

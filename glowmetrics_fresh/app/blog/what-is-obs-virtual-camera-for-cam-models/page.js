@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'What Is OBS Virtual Camera for Cam Models?',
-  description: 'Learn what OBS Virtual Camera does, when cam models should use it, and how it differs from sending OBS directly to a platform with a stream key.',
+  title: 'What Is OBS Virtual Camera? Guide for Cam Models',
+  description: 'OBS Virtual Camera explained: create a software camera for multistreaming, virtual cam setup, platform compatibility, streaming without hardware camera, and multi-platform broadcast.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/what-is-obs-virtual-camera-for-cam-models' },
   openGraph: { title: 'What Is OBS Virtual Camera for Cam Models?', description: 'Learn what OBS Virtual Camera does, when cam models should use it, and how it differs from sending OBS directly to a platform with a stream key.', url: 'https://www.camcashgrl.com/blog/what-is-obs-virtual-camera-for-cam-models', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'What Is OBS Virtual Camera for Cam Models?', description: 'Learn what OBS Virtual Camera does, when cam models should use it, and how it differs from sending OBS directly to a platform with a stream key.' },

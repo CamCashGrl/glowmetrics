@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Stay Safe as a Cam Model: Anonymity, Doxxing Prevention & Privacy in 2026',
-  description: 'The complete cam model safety guide — protect your real identity, prevent doxxing, stay anonymous online, and keep your personal life private while building your brand.',
+  title: 'How to Stay Safe as a Cam Model: Privacy, Security & Boundaries',
+  description: 'Cam model safety: protect your privacy, prevent doxxing, manage personal information, secure payments, identify scams, set boundaries, screen clients, and build safety protocols.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-stay-safe-as-a-cam-model' },
   openGraph: {
     title: 'How to Stay Safe as a Cam Model: Anonymity, Doxxing Prevention & Privacy in 2026',

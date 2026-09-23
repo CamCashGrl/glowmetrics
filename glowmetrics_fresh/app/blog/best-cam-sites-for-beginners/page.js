@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Best Cam Sites for Beginners',
-  description: 'A beginner-friendly breakdown of cam platforms, with selection criteria and the best starting strategy for new models.',
+  title: 'Best Cam Platforms for Beginners: Platform Comparison & Setup',
+  description: 'Best cam platforms for beginners: beginner-friendly sites, learning curve comparison, support resources, payout minimums, and guidance for choosing your first streaming platform.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/best-cam-sites-for-beginners' },
   openGraph: {
     title: 'Best Cam Sites for Beginners',

@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Handle a Private Show While Multistreaming',
-  description: 'A practical workflow for models who multistream and need to handle private shows without accidentally leaving another platform broadcasting.',
+  title: 'How to Handle Private Shows While Multistreaming',
+  description: 'Manage private shows on one platform while multistreaming: room goes private, other platforms, tech management, income tracking, and seamless handoffs between private and group shows.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-handle-a-private-show-while-multistreaming' },
   openGraph: { title: 'How to Handle a Private Show While Multistreaming', description: 'A practical workflow for models who multistream and need to handle private shows without accidentally leaving another platform broadcasting.', url: 'https://www.camcashgrl.com/blog/how-to-handle-a-private-show-while-multistreaming', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'How to Handle a Private Show While Multistreaming', description: 'A practical workflow for models who multistream and need to handle private shows without accidentally leaving another platform broadcasting.' },

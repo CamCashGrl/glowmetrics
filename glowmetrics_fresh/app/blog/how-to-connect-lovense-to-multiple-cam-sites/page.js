@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Connect Lovense to Multiple Cam Sites',
-  description: 'Learn how models connect Lovense across multiple cam sites, how multistreaming changes the workflow, and how to test each platform separately.',
+  title: 'How to Connect Lovense to Multiple Cam Sites Simultaneously',
+  description: 'Sync Lovense to multiple cam platforms at once: setup guide, stream master vs manual, platform compatibility, tips and toys control, and multi-site toy monetization.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-connect-lovense-to-multiple-cam-sites' },
   openGraph: { title: 'How to Connect Lovense to Multiple Cam Sites', description: 'Learn how models connect Lovense across multiple cam sites, how multistreaming changes the workflow, and how to test each platform separately.', url: 'https://www.camcashgrl.com/blog/how-to-connect-lovense-to-multiple-cam-sites', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'How to Connect Lovense to Multiple Cam Sites', description: 'Learn how models connect Lovense across multiple cam sites, how multistreaming changes the workflow, and how to test each platform separately.' },

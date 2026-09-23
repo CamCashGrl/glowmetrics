@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Pick a Cam Name — What Actually Works in 2026',
-  description: 'What makes a great cam model name — memorable, searchable, on-brand. Tips from real broadcasters plus a free name generator tool.',
+  title: 'How to Pick a Cam Name: Branding, Psychology & Conversion',
+  description: 'Choose a cam name that attracts viewers: branding strategy, memorability, niche alignment, platform optimization, uniqueness factors, and psychology of stage names that convert viewers.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-pick-a-cam-name' },
   openGraph: {
     title: 'How to Pick a Cam Name in 2026',

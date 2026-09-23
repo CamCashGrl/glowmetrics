@@ -7,7 +7,7 @@ const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
-  description: 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.',
+  description: 'Stream MyFreeCams with OBS: RTMP server setup, stream key configuration, bitrate optimization, scene transitions, and best practices for professional HD broadcasts on MyFreeCams.',
   url: 'https://www.camcashgrl.com/blog/how-touse-myfreecams-with-obs',
   datePublished: '2026-08-26',
   dateModified: '2026-08-26',
@@ -27,7 +27,7 @@ const faqSchema = {
 }
 
 export const metadata = {
-  title: 'How to Use MyFreeCams With OBS: External Broadcasting Setup',
+  title: 'How to Use MyFreeCams with OBS: Stream Setup & Integration',
   description: 'A practical MyFreeCams OBS setup guide covering the ModelWeb connection, Stream Key, OBS settings, camera, audio, preview, and common setup mistakes.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-touse-myfreecams-with-obs' },
   openGraph: {

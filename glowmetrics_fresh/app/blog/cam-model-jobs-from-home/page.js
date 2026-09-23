@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Jobs From Home',
-  description: 'Learn how cam model jobs really work, from direct platform sign-up to agencies, contracts, payouts, and remote-work red flags.',
+  title: 'Cam Modeling as Work from Home: Real Income & Career Guide',
+  description: 'Cam modeling as a work-from-home job: realistic income, schedule flexibility, equipment needs, audience building, tax implications, and career longevity for home-based content creators.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-jobs-from-home' },
   openGraph: {
     title: 'Cam Model Jobs From Home',

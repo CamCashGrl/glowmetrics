@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Self-Employment Tax Prep: The Complete How-To Guide | CamCash',
-  description: 'Self-employed cam models owe taxes differently than regular employees. Here\'s how to prep, what to set aside, and how to avoid the mistakes that get models audited.',
+  title: 'Self-Employment Tax for Cam Models: Complete IRS Guide',
+  description: 'Self-employment tax for cam models explained: deductible expenses, quarterly payments, 1099 forms, filing deadlines, state taxes, and how to avoid IRS penalties and audit risk.'s how to prep, what to set aside, and how to avoid the mistakes that get models audited.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-self-employment-tax-prep' },
   openGraph: {
     title: 'Cam Model Self-Employment Tax Prep: The Complete How-To Guide',

@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Build Loyal Fans on Chaturbate (That Keep Coming Back)',
-  description: 'What separates one-time tippers from regulars who show up every stream. Strategies that actually work based on real session data.',
+  title: 'How to Build Loyal Cam Model Fans: Relationship Strategies',
+  description: 'Build loyal cam fans through relationship-building: engagement strategies, personalization, consistency, exclusive content, fan appreciation, and how loyalty increases recurring revenue.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-build-loyal-fans' },
   openGraph: {
     title: 'How to Build Loyal Fans on Chaturbate',

@@ -3,7 +3,7 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'how-to-track-cam-tips-automatically';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'How to Track Cam Tips Automatically — No Spreadsheets';
+const TITLE = 'How to Track Cam Tips Automatically Across All Platforms';
 const DESC =
   'Stop manually logging tips. How cam models automatically track earnings across Chaturbate, BongaCams and MFC in one dashboard.';
 

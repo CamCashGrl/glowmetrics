@@ -2,7 +2,7 @@ import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
   title: 'Do You Need Two Computers to Multistream Cam Sites?',
-  description: 'You usually do not need two computers to multistream cam sites. Learn when one PC is enough, when a second machine helps, and what to measure first.',
+  description: 'Multistream without two computers: single-PC solutions, software alternatives, bandwidth requirements, and strategies to broadcast to multiple platforms from one camera and computer.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/do-you-need-two-computers-to-multistream-cam-sites' },
   openGraph: { title: 'Do You Need Two Computers to Multistream Cam Sites?', description: 'You usually do not need two computers to multistream cam sites. Learn when one PC is enough, when a second machine helps, and what to measure first.', url: 'https://www.camcashgrl.com/blog/do-you-need-two-computers-to-multistream-cam-sites', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'Do You Need Two Computers to Multistream Cam Sites?', description: 'You usually do not need two computers to multistream cam sites. Learn when one PC is enough, when a second machine helps, and what to measure first.' },

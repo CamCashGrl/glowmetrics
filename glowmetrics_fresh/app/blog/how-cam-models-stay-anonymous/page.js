@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',
-  description: 'Protect your identity as a cam model with practical steps for stage names, accounts, photos, location privacy, payments and online security.',
+  title: 'How to Stay Anonymous as a Cam Model: Privacy & Safety',
+  description: 'Protect your identity as a cam model with privacy strategies: stage names, account separation, photo safety, location privacy, payment security, and online identity protection.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-cam-models-stay-anonymous' },
   openGraph: {
     title: 'How to Stay Anonymous as a Cam Model: Privacy Checklist',

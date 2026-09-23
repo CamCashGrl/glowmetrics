@@ -3,7 +3,7 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'viral-cam-room-titles';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Viral Cam Room Titles That Get Viewers to Stay and Tip';
+const TITLE = 'Viral Cam Room Titles: Keywords, Formulas & Viewer Psychology';
 const DESC =
   'Room title formulas that actually work — urgency titles, goal titles, bratty titles — with examples from high-earning Chaturbate sessions.';
 

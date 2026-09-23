@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'OBS vs Lovense Stream Master for Cam Models: What Is the Difference?',
-  description: 'Compare OBS and Lovense Stream Master for cam models: broadcasting, Lovense integration, chat management, scenes, and when each workflow makes sense.',
+  title: 'OBS vs Lovense Stream Master: Which Tool for Cam Models?',
+  description: 'OBS vs Lovense Stream Master comparison: features, syncing, multi-site broadcasting, toy control, ease of use, and which tool works best for your cam streaming setup and workflow.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/obs-vs-lovense-stream-master-cam-models' },
   openGraph: { title: 'OBS vs Lovense Stream Master for Cam Models: What Is the Difference?', description: 'Compare OBS and Lovense Stream Master for cam models: broadcasting, Lovense integration, chat management, scenes, and when each workflow makes sense.', url: 'https://www.camcashgrl.com/blog/obs-vs-lovense-stream-master-cam-models', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'OBS vs Lovense Stream Master for Cam Models: What Is the Difference?', description: 'Compare OBS and Lovense Stream Master for cam models: broadcasting, Lovense integration, chat management, scenes, and when each workflow makes sense.' },

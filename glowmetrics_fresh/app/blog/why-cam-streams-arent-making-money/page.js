@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: "Why Your Cam Streams Aren't Making Money (Real Reasons)",
-  description: "The most common reasons streams underperform — wrong time slots, platform mismatch, weak titles — and exactly how to fix each one.",
+  title: 'Why Cam Streams Aren't Making Money: Revenue Analysis't Making Money (Real Reasons)",
+  description: 'Diagnose why your cam stream isn't profitable: viewer quality, niche fit, pricing, show timing, engagement level, platform choice, and data-driven solutions to increase earnings.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/why-cam-streams-arent-making-money' },
   openGraph: {
     title: "Why Cam Streams Aren't Making Money",

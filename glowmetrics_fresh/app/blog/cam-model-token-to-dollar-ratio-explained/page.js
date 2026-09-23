@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Token to Dollar Ratio Explained: What Your Tips Are Really Worth | CamCash',
-  description: 'Confused by tokens vs. dollars on cam platforms? Here\'s exactly how the token-to-dollar conversion works on Chaturbate, BongaCams, and MyFreeCams — and why it matters for your income.',
+  title: 'Token to Dollar Ratio Explained: Compare Platform Payouts',
+  description: 'Understand token-to-dollar ratios on each cam platform. Learn conversion rates, payout percentages, how ratio differences affect earnings, and which platforms offer best value for models.'s exactly how the token-to-dollar conversion works on Chaturbate, BongaCams, and MyFreeCams — and why it matters for your income.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-token-to-dollar-ratio-explained' },
   openGraph: {
     title: 'Cam Model Token to Dollar Ratio Explained: What Your Tips Are Really Worth',

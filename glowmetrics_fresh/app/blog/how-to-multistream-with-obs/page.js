@@ -7,7 +7,7 @@ const schema = {
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: 'How to Multistream Cam Sites With OBS: What Models Need to Know',
-  description: 'How to plan a multi-platform cam setup with OBS, including direct vs relay delivery, bandwidth, chat management, testing order, and platform-rule checks.',
+  description: 'Multistream on OBS: RTMP setup for multiple cam sites, scene setup, bitrate settings, encoder optimization, simultaneous broadcast configuration, and OBS multistream plugin guide.',
   url: 'https://www.camcashgrl.com/blog/how-to-multistream-with-obs',
   datePublished: '2026-08-26',
   dateModified: '2026-08-26',
@@ -27,7 +27,7 @@ const faqSchema = {
 }
 
 export const metadata = {
-  title: 'How to Multistream Cam Sites With OBS: What Models Need to Know',
+  title: 'How to Multistream with OBS: Setup Guide for Cam Models',
   description: 'How to plan a multi-platform cam setup with OBS, including direct vs relay delivery, bandwidth, chat management, testing order, and platform-rule checks.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/how-to-multistream-with-obs' },
   openGraph: {

@@ -3,9 +3,9 @@ import BlogLayout from '@/components/BlogLayout';
 
 const SLUG = 'cam-model-fan-crm';
 const URL = `https://www.camcashgrl.com/blog/${SLUG}`;
-const TITLE = 'Whale Watch: Profiles on All Your High Rollers';
+const TITLE = 'Cam Model Fan CRM: Track VIP Clients, Spending & Follow-Ups';
 const DESC =
-  'CamCash builds a profile on every high roller in your room, all in one spot — with multiple freemium cam platforms integrated.';
+  'Build lasting fan relationships with a practical CRM system. Track spending history, follow-ups, preferences, and re-engagement tactics to turn casual viewers into loyal supporters.';
 
 export const metadata = {
   title: TITLE,

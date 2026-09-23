@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
-  description: 'Cam room slow? Get 12 things to try right now, a quick way to tell a slow room from a dead one, and exactly how long to stay online before you log off.',
+  title: 'Cam Room Slow? 12 Solutions & When to Log Off',
+  description: 'Slow cam room? Try 12 quick fixes: games, tip goals, niche pivots, social media calls, app notifications, and timing strategies. Learn when staying online helps vs when to log off.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow' },
   openGraph: {
     title: 'Cam Room Slow? 12 Things to Do Before You Log Off',

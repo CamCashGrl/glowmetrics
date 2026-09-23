@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Why Cam Model Data Prevents Overspending: The Case for Tracking | CamCash',
-  description: 'Most cam models overspend on gear, platforms, and promotions that don\'t pay off. Here\'s how tracking your data stops the leaks and keeps more money in your pocket.',
+  title: 'Why Cam Model Earnings Data Prevents Overspending & Debt',
+  description: 'Cam model financial tracking prevents overspending. Learn how earnings data reveals spending patterns, debt prevention, budgeting strategies, and financial stability through analytics.'t pay off. Here\'s how tracking your data stops the leaks and keeps more money in your pocket.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/why-cam-model-data-prevents-overspending' },
   openGraph: {
     title: 'Why Cam Model Data Prevents Overspending: The Case for Tracking',

@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: '7 Cam Model Tipping Pattern Data Examples: What Your Tips Are Telling You | CamCash',
-  description: 'Real cam model tipping patterns — from whale behavior to dead hour dips — and how to use that data to earn more. Includes actual examples from analytics dashboards.',
+  title: 'Cam Model Tipping Patterns: Real Data & Viewer Behavior',
+  description: 'Real cam model tipping data: whale behavior patterns, dead hour trends, seasonal variations, and how tipping data reveals viewer psychology to optimize your pricing and show structure.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-tipping-pattern-data-examples' },
   openGraph: {
     title: '7 Cam Model Tipping Pattern Data Examples: What Your Tips Are Telling You',

@@ -3,8 +3,8 @@ import Button from '../../../components/ui/Button'
 // Target keywords: how to set boundaries as a cam model, toxic chat cam model, cam model dealing with difficult viewers
 
 export const metadata = {
-  title: 'How to Set Boundaries as a Cam Model: Toxic Chat, Pushy Fans & Knowing Your Limits | CamCash',
-  description: 'Setting limits as a cam model is a skill — not a personality trait. How to handle toxic chat, pushy fans, and limit-testing without burning out or losing income.',
+  title: 'Cam Model Boundaries: Handle Toxic Chat & Pushy Fans',
+  description: 'Set boundaries as a cam model: handle toxic chat, pushy fans, and limit-testing strategies that protect your mental health and income without burning out or losing regular viewers.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-boundaries-toxic-chat' },
   openGraph: {
     title: 'How to Set Boundaries as a Cam Model: Toxic Chat, Pushy Fans & Knowing Your Limits',

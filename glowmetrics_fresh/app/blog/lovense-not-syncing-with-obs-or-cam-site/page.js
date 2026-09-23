@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Lovense Not Syncing With OBS or Your Cam Site? Troubleshooting Guide',
-  description: 'Troubleshoot common Lovense, OBS, and cam-site connection problems: missing overlays, disconnected toys, wrong software, and setup-order issues.',
+  title: 'Lovense Not Syncing? Troubleshoot OBS & Cam Site Integration',
+  description: 'Fix Lovense sync issues with OBS and cam platforms: connection troubleshooting, bluetooth problems, app conflicts, browser settings, and step-by-step Lovense reconnection guide.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/lovense-not-syncing-with-obs-or-cam-site' },
   openGraph: { title: 'Lovense Not Syncing With OBS or Your Cam Site? Troubleshooting Guide', description: 'Troubleshoot common Lovense, OBS, and cam-site connection problems: missing overlays, disconnected toys, wrong software, and setup-order issues.', url: 'https://www.camcashgrl.com/blog/lovense-not-syncing-with-obs-or-cam-site', type: 'article' },
   twitter: { card: 'summary_large_image', title: 'Lovense Not Syncing With OBS or Your Cam Site? Troubleshooting Guide', description: 'Troubleshoot common Lovense, OBS, and cam-site connection problems: missing overlays, disconnected toys, wrong software, and setup-order issues.' },

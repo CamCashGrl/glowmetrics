@@ -1,8 +1,8 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Model Taxes 2026: 1099s, Deductions, Write-Offs & Quarterly Payments',
-  description: 'A plain-English tax guide for cam models: 1099 income, self-employment tax, write-offs, quarterly payments, and records to keep..',
+  title: 'Cam Model Taxes: 1099, Deductions & Complete Filing Guide',
+  description: 'Cam model taxes explained: 1099 income, self-employment tax, deductible expenses, filing requirements, state taxes, quarterly payments, and how to prepare taxes correctly and reduce liability.',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/cam-model-taxes' },
   openGraph: {
     title: 'Cam Model Taxes 2026 — What You Owe',
