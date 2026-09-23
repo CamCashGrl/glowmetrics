@@ -1,3 +1,4 @@
+
 import ArticleLayout from '../../components/ArticleLayout'
 import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
 
@@ -27,15 +28,6 @@ const FAQS = [
 export const metadata = articleMeta({ title: TITLE, description: DESC, slug: SLUG })
 const schema = articleSchema({ title: TITLE, description: DESC, slug: SLUG, faqs: FAQS })
 
-const trackClick = (label) => {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', 'link_click', {
-      event_category: 'bongacams_promotion',
-      event_label: label,
-      page_title: document.title,
-    })
-  }
-}
 
 export default function Page() {
   return (
@@ -204,7 +196,7 @@ export default function Page() {
             target="_blank"
             rel="noopener noreferrer"
             style={{...s.promoBtn, ...s.promoBtnModel}}
-            onClick={() => trackClick('interested_in_being_model')}
+            
           >
             Interested in being a model?
           </a>
@@ -213,7 +205,7 @@ export default function Page() {
             target="_blank"
             rel="noopener noreferrer"
             style={{...s.promoBtn, ...s.promoBtnCam}}
-            onClick={() => trackClick('looking_for_hot_cam_show')}
+            
           >
             Looking for a hot cam show?
           </a>
