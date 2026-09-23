@@ -6740,8 +6740,6 @@ const stopImportMessageRotation = () => {
         const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
         const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
-        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
-        const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
         // same fix as the card grid — instead of a second local calculation.
         const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null
@@ -6842,7 +6840,7 @@ const stopImportMessageRotation = () => {
                         {[
                           { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
                           { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
-                          { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                          { icon: "🕐", label: "Avg days between tips", value: w.tipCount > 1 ? `Every ~${Math.round(w.avgDaysBetweenTips)} days` : "Not enough data yet" },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
                         ].map(({ icon, label, value, sub, color }) => (
                           <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -6984,19 +6982,33 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
-                {whaleTips.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
-                    <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
-                          <div style={{ fontSize: 13, color: C.text }}>{label}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
-                        </div>
-                      ))}
+                {whaleTips.length > 0 && (() => {
+                  // Only canonical, already-gated fields -- no local formulas,
+                  // no invented multipliers. "Likely to tip again" and
+                  // "Monthly value" are each omitted (not fabricated) when
+                  // the canonical analytics don't yet support them for this
+                  // fan, rather than displaying an unsupported claim.
+                  const hasEstablishedBaseline = w.behavioralState !== 'Insufficient Data' && w.behavioralState !== 'New/Developing'
+                  const items = [
+                    (hasEstablishedBaseline && w.expectedNextTip) ? { label: "📅 Likely to tip again", value: w.expectedNextTip, color: C.cyan } : null,
+                    { label: "💸 Average tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold },
+                    (w.lifetimeValue && w.lifetimeValue.monthly != null) ? { label: "📈 Monthly value", value: `$${w.lifetimeValue.monthly.toFixed(2)}${w.lifetimeValue.confidence === 'Low' ? ' · Low confidence' : ''}`, color: C.green } : null,
+                  ].filter(Boolean)
+                  if (items.length === 0) return null
+                  return (
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Insights</div>
+                      <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                        {items.map(({ label, value, color }) => (
+                          <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+                            <div style={{ fontSize: 13, color: C.text }}>{label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
                 <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
                 <div style={{ textAlign: "center", fontSize: 11, color: C.text, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>🔒 All fan data is private and secure.</div>
                 </div>
