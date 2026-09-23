@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import PromoButtons from '../../components/PromoButtons'
 import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
 
 const SLUG = 'how-to-set-up-chat-bots-on-bongacams'
@@ -26,16 +27,6 @@ const FAQS = [
 
 export const metadata = articleMeta({ title: TITLE, description: DESC, slug: SLUG })
 const schema = articleSchema({ title: TITLE, description: DESC, slug: SLUG, faqs: FAQS })
-
-const trackClick = (label) => {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', 'link_click', {
-      event_category: 'bongacams_promotion',
-      event_label: label,
-      page_title: document.title,
-    })
-  }
-}
 
 export default function Page() {
   return (
@@ -198,26 +189,7 @@ export default function Page() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
-        <div style={s.promoButtons}>
-          <a
-            href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnModel}}
-            onClick={() => trackClick('interested_in_being_model')}
-          >
-            Interested in being a model?
-          </a>
-          <a
-            href="https://bongacams.com?fuid=166966512&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_viewer"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnCam}}
-            onClick={() => trackClick('looking_for_hot_cam_show')}
-          >
-            Looking for a hot cam show?
-          </a>
-        </div>
+        <PromoButtons styles={s} />
       </div>
 
       <div style={s.faq}>
