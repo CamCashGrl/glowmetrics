@@ -1,4 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'Sissy Training & Obedience Bundle for Adult Creators — Organized Workbook',
@@ -253,6 +255,8 @@ export default function SissyTrainingObedienceBundle() {
           View on Etsy →
         </a>
       </div>
+
+      <ProductCarousel products={PRODUCTS} currentProductId="sissy-training" />
 
       <h2 id="additional-tools" style={s.h2}>
         Related Creator Tools
