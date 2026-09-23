@@ -10,6 +10,8 @@ import { detectSessions } from '../../lib/analytics/sessions';
 import { tokenRate } from '../../lib/constants';
 import FeedbackWidget from '../components/FeedbackWidget';
 import EventsSync from './EventsSync';
+import LiveTipsStream from './LiveTipsStream';
+import PlatformBreakdown from './components/PlatformBreakdown';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
@@ -47,6 +49,12 @@ export default function LivePage() {
   const [sessions, setSessions]       = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [legacyStartError, setLegacyStartError] = useState(null);
+
+  // ── PLATFORM TRACKING STATE ────────────────────────────────────────────
+  const [platformStats, setPlatformStats] = useState([]);
+  const [streamStatus, setStreamStatus] = useState('connecting');
+  const [platformTotalUSD, setPlatformTotalUSD] = useState(0);
+  const [currentlyStreamingPlatform, setCurrentlyStreamingPlatform] = useState(null);
 
   // ── DEMO / AUTH / EXT MODAL STATE ────────────────────────────────────
   const [demoTips, setDemoTips]           = useState([]);
@@ -941,6 +949,33 @@ export default function LivePage() {
           setLiveEvents(prev => [...prev, ...mapped])
         }} />
 
+        <LiveTipsStream
+          onNewTips={(newTips) => {
+            const mapped = newTips.map(t => normalizeTip({
+              ...t,
+              username: t.username || 'anon',
+              tokens: t.tokens || 0,
+              usd: t.usd || 0,
+              timestamp: t.received_at || new Date(),
+              platform: t.platform || 'Unknown',
+            }))
+            setLiveEvents(prev => [...prev, ...mapped])
+          }}
+          onPlatformUpdate={(stats) => {
+            // stats is the full platformStats array from the API
+            setPlatformStats(stats)
+            const total = stats.reduce((sum, p) => sum + (p.totalUSD || 0), 0)
+            setPlatformTotalUSD(total)
+            // Update currently streaming platform (most recent)
+            if (stats && stats.length > 0) {
+              setCurrentlyStreamingPlatform(stats[0].platform)
+            }
+          }}
+          onStatusChange={(status) => {
+            setStreamStatus(status)
+          }}
+        />
+
         {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -1319,6 +1354,15 @@ export default function LivePage() {
                 </div>
               );
             })()}
+
+            {/* ── PLATFORM BREAKDOWN ────────────────────────────────── */}
+            {platformStats && platformStats.length > 0 && (
+              <PlatformBreakdown
+                platformStats={platformStats}
+                totalUSD={platformTotalUSD}
+                currentlyStreaming={currentlyStreamingPlatform}
+              />
+            )}
 
             {/* ── MAIN GRID ─────────────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 20, marginBottom: 20 }}>
