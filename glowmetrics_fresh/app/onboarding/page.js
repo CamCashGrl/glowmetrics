@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats } from '../../lib/analytics'
 import { track } from '../../lib/track'
+import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
@@ -43,6 +44,19 @@ const TOKEN_RATES = {
 }
 const LOADING_MESSAGES=['Cleaning your tip history…','Finding your top fans…','Calculating your average earnings per hour…','Detecting your best stream windows…','Building your dashboard…']
 const EXTRA_MSGS=['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
+
+// Maps an import/upload error to a controlled category for analytics — never
+// send e.message here, since parser errors can echo back pasted content.
+function categorizeImportError(e){
+  if(e.name==='AbortError')return 'timeout'
+  if(e.code==='platform_limit_reached')return 'platform_limit'
+  if(e.code)return String(e.code)
+  const msg=(e.message||'').toLowerCase()
+  if(msg.includes('no tip rows')||msg.includes("couldn't find"))return 'empty_data'
+  if(msg.includes('format')||msg.includes('unsupported'))return 'unsupported_format'
+  if(msg.includes('not logged in'))return 'auth_error'
+  return 'unknown_error'
+}
 
 // BongaCams paid chat session types
 const BC_PAID_TYPES=['Private Chat','Full-Private Chat','Group Chat','Spy Mode']
@@ -573,12 +587,17 @@ const CSS=`
     .ob-card{padding:22px 16px!important;border-radius:24px!important}
     .ob-plat-row{flex-direction:column!important}
   }
+  @media(min-width:601px){
+    .ob-card-shell{max-width:600px!important}
+    main{padding:10px 16px 10px!important}
+    .ob-card{padding:18px 28px 14px!important;max-height:calc(100vh - 20px)!important}
+  }
 `
 
 // ── UI components ──────────────────────────────────────────────
 function OBLogo({showSub=false}){
   return(
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:12}}>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:8}}>
       <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:showSub?4:0}}>
         <div style={{width:32,height:32,borderRadius:12,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 14px rgba(33,230,243,0.25),0 0 28px rgba(255,47,174,0.12)`}}>$</div>
         <div style={{fontSize:20,fontWeight:900,letterSpacing:'-0.035em'}}>
@@ -594,7 +613,7 @@ function OBLogo({showSub=false}){
 function OBProgress({current}){
   const steps=[{n:1,label:'Stats'},{n:2,label:'Tips'},{n:3,label:'Done'}]
   return(
-    <div className="ob-stepper" style={{marginBottom:22}}>
+    <div className="ob-stepper" style={{marginBottom:14}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
@@ -741,6 +760,25 @@ export default function OnboardingPage(){
     track('onboarding_step_viewed',{step,platform:platformId})
   },[step,user])
 
+  // Fires exactly once per session when a logged-in user actually lands in
+  // onboarding — distinct from onboarding_step_viewed (which fires per-step
+  // for drop-off analysis) so funnel tools can mark true entry vs. re-views.
+  const onboardingStartedRef=useRef(false)
+  useEffect(()=>{
+    if(!user||onboardingStartedRef.current)return
+    onboardingStartedRef.current=true
+    track('onboarding_started',{primary_platform:primaryPlatformId||null})
+  },[user])
+
+  // Fires once per transition into the trial screen (not per render). Named
+  // pro_preview_viewed rather than a new onboarding-prefixed event so it
+  // slots into the same taxonomy as upgrade_click/paywall_hit if a matching
+  // dashboard-side event is ever added.
+  useEffect(()=>{
+    if(!user||step!=='trial')return
+    track('pro_preview_viewed',{source:'onboarding',plan:'free',trial_length:7})
+  },[step,user])
+
   async function markDone(){
     if(!user)return
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
@@ -759,7 +797,6 @@ export default function OnboardingPage(){
     setPlatformId(id)
     setPasteText('');setPreview(null);setParseError('');setImportError('');setCsvError('');setUpgradeBlocked(null);setHowItWorksOpen(false)
     if(id==='chaturbate'&&!cbUsername)setStep('username');else setStep('paste')
-    track('onboarding_import_started',{platform:id})
   }
 
   async function confirmPlatforms(){
@@ -877,6 +914,7 @@ export default function OnboardingPage(){
     const p=previewArg||preview
     if(!user)return
     setImportError('');setUpgradeBlocked(null);setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
+    track('onboarding_import_started',{platform:platformId,source:'paste'})
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
@@ -935,27 +973,32 @@ export default function OnboardingPage(){
       const inserted=json.inserted??p?.tipsDetected??0
       setImportResult({inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0})
+      track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'paste'})
       if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
       setPlatformResults(prev=>({...prev,[platformId]:{
         status:'connected',inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0,
         snapshot:p?.snapshot||null,topSpender:p?.topSpender||null,
         bestHour:p?.bestHour||null,bestHourConfident:p?.bestHourConfident||false,
       }}))
+      track('onboarding_results_viewed',{platform:platformId,source:'paste'})
       setStep('platformSuccess')
     }catch(e){
       if(e.name==='AbortError')setImportError('Import timed out. Check your connection or try a smaller file.')
       else if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
       else setImportError(e.message||'Import failed')
-      track('onboarding_import_failed',{platform:platformId,code:e.code||null,message:e.message||null})
+      track('onboarding_import_failed',{platform:platformId,source:'paste',error_category:categorizeImportError(e)})
       setStep('paste')
     }
   }
 
   async function handleStartTrial(){
     if(!user)return
+    // Reuse the existing upgrade_click taxonomy (already fired from the
+    // dashboard's upgrade prompts) rather than a new onboarding-only event.
+    track('upgrade_click',{source:'onboarding',placement:'trial',plan:'free'})
     try{
       const{data:{session}}=await supabase.auth.getSession()
+      trackCheckoutEvent('started',{source:'onboarding',billing_interval:'monthly'})
       const res=await fetch('/api/stripe/checkout',{
         method:'POST',
         headers:{
@@ -969,6 +1012,7 @@ export default function OnboardingPage(){
       else throw new Error(json.error||'No checkout URL returned')
     }catch(e){
       console.error('Trial checkout failed:',e)
+      trackCheckoutEvent('failed',{source:'onboarding'})
       alert(e.message||'Failed to start trial. Please try again.')
     }
   }
@@ -976,6 +1020,7 @@ export default function OnboardingPage(){
   async function handleCsvUpload(file){
     if(!file||!user)return
     setCsvUploading(true);setCsvError('');setStep('loading');setLoadingProgress(0)
+    track('onboarding_import_started',{platform:platformId,source:'csv'})
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
@@ -1005,10 +1050,11 @@ export default function OnboardingPage(){
         status:'connected',inserted,skipped:json.skipped??0,
         snapshot:json.snapshot||null,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo,source:'csv',
       }}))
+      track('onboarding_results_viewed',{platform:platformId,source:'csv'})
       setStep('platformSuccess')
     }catch(e){
       setCsvError(e.name==='AbortError'?'Upload timed out. Try a smaller file or check your connection.':e.message||'Upload failed')
-      track('onboarding_import_failed',{platform:platformId,message:e.message||null,source:'csv'})
+      track('onboarding_import_failed',{platform:platformId,source:'csv',error_category:categorizeImportError(e)})
       setStep('csv')
     }
     finally{setCsvUploading(false)}
@@ -1033,7 +1079,7 @@ export default function OnboardingPage(){
   const fmtDate=d=>d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'
 
   return(
-    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'28px 16px 34px',background:'#070b18',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
+    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'28px 16px 34px',background:'#070b18',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
       <style>{CSS}</style>
 
       {/* ── BACKGROUND ── */}
@@ -1052,10 +1098,10 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div style={{position:'absolute',inset:-2,borderRadius:30,background:'linear-gradient(135deg,rgba(33,230,243,0.9) 0%,rgba(124,92,255,0.45) 45%,rgba(255,47,174,0.9) 100%)',zIndex:-1,filter:'blur(1.5px)',animation:'glowPulse 3.5s ease-in-out infinite'}}/>
-        <div style={{position:'absolute',inset:-60,borderRadius:'50%',background:'radial-gradient(circle,rgba(124,92,255,0.10) 0%,transparent 70%)',zIndex:-2,pointerEvents:'none'}}/>
-        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflow:'hidden',boxShadow:'0 0 46px rgba(33,230,243,0.25),0 0 70px rgba(255,47,174,0.15),0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+      <div className="ob-card-shell" style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+        <div style={{position:'absolute',left:-2,top:'6%',bottom:'6%',width:3,borderRadius:4,background:'linear-gradient(180deg,transparent,rgba(33,230,243,0.9),transparent)',zIndex:-1}}/>
+        <div style={{position:'absolute',right:-2,top:'6%',bottom:'6%',width:3,borderRadius:4,background:'linear-gradient(180deg,transparent,rgba(255,47,174,0.9),transparent)',zIndex:-1}}/>
+        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',maxHeight:'calc(100vh - 64px)',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
@@ -1218,11 +1264,7 @@ export default function OnboardingPage(){
               )}
               {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:16}}>
-                {['Open your earnings page','Highlight the rows you want','Copy and paste them here'].map((t,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:10,color:'rgba(148,163,184,0.8)'}}><div style={{width:19,height:19,borderRadius:'50%',border:'1px solid rgba(33,230,243,0.35)',background:'rgba(33,230,243,0.08)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:CYAN,flexShrink:0}}>{i+1}</div><span>{t}</span></div>))}
-              </div>
-
-              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6}}>
+              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6,marginTop:12}}>
                 <OBSecBtn onClick={()=>setStep('platforms')} style={{height:46}}>← Back</OBSecBtn>
                 <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Import & build dashboard →</OBBtn>
               </div>
@@ -1294,20 +1336,7 @@ export default function OnboardingPage(){
                   </div>)
                 })}
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:7}}>
-                {[
-                  {icon:'💵',label:'Earnings',value:`$${((preview?.estimatedEarnings||0)*(loadingProgress/100)).toFixed(0)}`,color:CYAN},
-                  {icon:'👥',label:'Fans',value:Math.round((preview?.fansDetected||0)*(loadingProgress/100)),color:'#a78bfa'},
-                  {icon:'💎',label:'Tips',value:Math.round((preview?.tipsDetected||0)*(loadingProgress/100)),color:'#4ade80'},
-                  {icon:'⏰',label:'Best Hour',value:loadingProgress>80?(preview?.bestHour||'–'):'…',color:PINK},
-                ].map(s=>(<div key={s.label} className="stat-card" style={{padding:'9px 8px',textAlign:'center'}}>
-                  <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',borderRadius:'14px 14px 0 0',background:`linear-gradient(90deg,${s.color}00,${s.color}70,${s.color}00)`}}/>
-                  <div style={{fontSize:13,marginBottom:2}}>{s.icon}</div>
-                  <div style={{fontSize:8,color:'rgba(148,163,184,0.5)',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.06em'}}>{s.label}</div>
-                  <div style={{fontSize:13,fontWeight:900,color:s.color,fontVariantNumeric:'tabular-nums'}}>{s.value}</div>
-                </div>))}
-              </div>
-              <div style={{textAlign:'center',marginTop:10,fontSize:10,color:'rgba(100,116,139,0.45)'}}>⚡ Almost there! Crunching the good stuff…</div>
+              <div style={{textAlign:'center',fontSize:11,color:'rgba(100,116,139,0.5)'}}>Your results are almost ready.</div>
             </div>
           )}
 
@@ -1412,28 +1441,41 @@ export default function OnboardingPage(){
           {/* ══ TRIAL UPSELL ══ */}
           {step==='trial'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={{textAlign:'center',marginBottom:22}}>
-                <div style={{width:56,height:56,borderRadius:18,background:'linear-gradient(135deg,#21E6F3,#6C5CFF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,color:'#fff',margin:'0 auto 14px',boxShadow:'0 0 40px rgba(33,230,243,0.35)'}}>⚡</div>
-                <h2 style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em'}}>Unlock Pro Features — Free for 7 Days</h2>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.65,maxWidth:360,margin:'0 auto'}}>We collected your first insights. Get access to multi-platform tracking and AI pattern learning risk-free with your 7-day trial.</p>
+              <div style={{textAlign:'center',marginBottom:12}}>
+                <div style={{width:40,height:40,borderRadius:14,background:'linear-gradient(135deg,#21E6F3,#6C5CFF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff',margin:'0 auto 8px',boxShadow:'0 0 40px rgba(33,230,243,0.35)'}}>⚡</div>
+                <h1 style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em'}}>Start tracking your tips automatically with Live Mode.</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.6,maxWidth:420,margin:'0 auto'}}>Go live, track your tips as they happen, and see your earnings build in real time. Pro also unlocks your full history and deeper insights across every platform you connect.</p>
               </div>
-              <div style={{marginBottom:18,borderRadius:14,background:'linear-gradient(135deg,rgba(33,230,243,0.08),rgba(124,92,255,0.08))',border:'1px solid rgba(167,139,250,0.2)',padding:16}}>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                  {[{icon:'🌍',label:'All Platforms',desc:'Track multiple cam sites'},{icon:'📈',label:'AI Analytics',desc:'Pattern & trend insights'},{icon:'🎯',label:'Live Tracking',desc:'Real-time stream coaching'},{icon:'🔐',label:'Secure & Private',desc:'Your data stays private'}].map(f=>(<div key={f.label} style={{textAlign:'center'}}>
-                    <div style={{fontSize:20,marginBottom:6}}>{f.icon}</div>
-                    <div style={{fontSize:11,fontWeight:700,color:'#fff',marginBottom:2}}>{f.label}</div>
-                    <div style={{fontSize:10,color:'rgba(148,163,184,0.65)'}}>{f.desc}</div>
-                  </div>))}
+              <div style={{marginBottom:12,borderRadius:14,background:'linear-gradient(135deg,rgba(33,230,243,0.08),rgba(124,92,255,0.08))',border:'1px solid rgba(167,139,250,0.2)',padding:'14px 20px'}}>
+                <div style={{position:'relative'}}>
+                  <div style={{position:'absolute',top:0,bottom:0,left:'66.667%',right:0,background:'rgba(33,230,243,0.055)',borderLeft:`1px solid rgba(33,230,243,0.3)`,borderRadius:'0 8px 8px 0',pointerEvents:'none'}}/>
+                  <div style={{position:'relative',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',fontSize:9,fontWeight:800,letterSpacing:'0.1em',textTransform:'uppercase',color:'rgba(148,163,184,0.55)',marginBottom:10,paddingBottom:8,borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+                    <span></span>
+                    <span style={{textAlign:'center'}}>Free</span>
+                    <span style={{textAlign:'center',color:CYAN}}>Pro</span>
+                  </div>
+                  {[{label:'History',free:'Last 31 days',pro:'Full history'},{label:'Platforms',free:'Up to 3',pro:'Unlimited'},{label:'Top Fans',free:'3',pro:'10'},{label:'Whales',free:'3',pro:'5'}].map((r,i)=>(
+                    <div key={r.label} style={{position:'relative',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',alignItems:'center',padding:'8px 0',borderBottom:i<3?'1px solid rgba(255,255,255,0.05)':'none'}}>
+                      <span style={{fontSize:11,fontWeight:700,color:'rgba(226,232,240,0.85)'}}>{r.label}</span>
+                      <span style={{fontSize:11,color:'rgba(148,163,184,0.65)',textAlign:'center'}}>{r.free}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:'#fff',textAlign:'center'}}>{r.pro}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div style={{marginBottom:16,paddingTop:16,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+              <div style={{marginBottom:10,textAlign:'center'}}>
+                <div style={{fontSize:12,fontWeight:800,color:'#fff',marginBottom:4}}>Go deeper across your data.</div>
+                <p style={{fontSize:11.5,color:'rgba(166,168,189,0.8)',lineHeight:1.5,maxWidth:380,margin:'0 auto'}}>Compare platforms side by side and uncover deeper trends, fan re-engagement patterns, and what's driving your earnings.</p>
+              </div>
+              <div style={{marginBottom:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
                 <div style={{display:'flex',alignItems:'baseline',gap:4,justifyContent:'center',marginBottom:2}}>
                   <span style={{fontSize:32,fontWeight:900,color:CYAN}}>$0</span>
                   <span style={{fontSize:12,color:'rgba(148,163,184,0.6)'}}>for 7 days</span>
                 </div>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.6)',marginBottom:10}}>Then $19.99/month. Cancel anytime.</div>
-                <OBBtn onClick={handleStartTrial} style={{marginBottom:10}}>Start 7-Day Trial →</OBBtn>
-                <button onClick={()=>setStep('done')} style={{width:'100%',height:44,borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,cursor:'pointer',transition:'all 0.18s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}>Skip for now</button>
+                <div style={{fontSize:11,color:'rgba(148,163,184,0.6)',marginBottom:4}}>Then $19.99/month. Cancel anytime.</div>
+                <div style={{fontSize:10,color:'rgba(148,163,184,0.5)',marginBottom:8}}>Don't continue? Your imported data stays yours — nothing is deleted.</div>
+                <OBBtn onClick={handleStartTrial} style={{marginBottom:8}}>Start My 7-Day Pro Trial →</OBBtn>
+                <button onClick={()=>{track('onboarding_trial_skipped');setStep('done')}} style={{width:'100%',height:44,borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,cursor:'pointer',transition:'all 0.18s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}>Skip for now</button>
               </div>
             </div>
           )}
