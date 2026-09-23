@@ -1380,7 +1380,7 @@ function FanRow({ w, rank, onView, onMessage, onNote }) {
         <div title={w.username} style={{ fontSize: 13, fontWeight: 700, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.username}</div>
         <div style={{ display: "flex", gap: 5, marginTop: 2 }}>
           <span style={{ padding: "1px 6px", borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
-          <span style={{ padding: "1px 6px", borderRadius: 100, background: "rgba(255,255,255,0.05)", color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || "Unknown"}</span>
+          <span style={{ padding: "2px 8px", borderRadius: 100, background: "rgba(255,255,255,0.09)", border: "1px solid rgba(255,255,255,0.14)", color: C.white, fontSize: 10, fontWeight: 700 }}>{w.platform || "Unknown"}</span>
         </div>
       </div>
       <div style={{ textAlign: "right", minWidth: 74 }}>
@@ -3169,8 +3169,9 @@ const stopImportMessageRotation = () => {
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
-        {/* ── STICKY COMMAND BAR ── */}
-        {(() => {
+        {/* ── STICKY COMMAND BAR — Command Center only, not shown on other
+             tabs (e.g. Fans) so it doesn't compete with tab-specific content ── */}
+        {activeTab === 'overview' && (() => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
           const atPeak = brief?.atPeak
@@ -3264,10 +3265,9 @@ const stopImportMessageRotation = () => {
           )}
         </div>
 
-        {/* ── DASHBOARD PROGRESS CARD — on other tabs only; Overview leads with
-             Platform Intelligence instead so the first view is never just a
-             checklist ── */}
-        {_isLowData && activeTab !== 'overview' && (
+        {/* ── DASHBOARD PROGRESS CARD — Command Center only, so it doesn't
+             compete with tab-specific content (e.g. the Fans tab) ── */}
+        {_isLowData && activeTab === 'overview' && (
           <DashboardProgressCard
             totalTips={tips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
@@ -7131,6 +7131,10 @@ const stopImportMessageRotation = () => {
                   <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
                   <input
                     autoFocus
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    name="camcash-fan-search"
                     value={fanSearchQuery}
                     onChange={e => setFanSearchQuery(e.target.value)}
                     placeholder="Search by username..."
