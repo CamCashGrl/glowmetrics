@@ -11,19 +11,30 @@
   if (host.includes('myfreecams')) platform = 'myfreecams';
 
   // ─── Tip / event patterns ───────────────────────────────────────────────────
+  // Username capture is a bounded handle charset (letters/digits/._-, with an
+  // optional leading @), NOT `^(.+?)`. Chaturbate renders some tip lines with
+  // a decorative prefix before the handle -- e.g. `Notice: ⭐ @user tipped 50
+  // tokens` for highlighted tips, or a stray leading quote character from how
+  // the DOM text node was split -- and an anchored `(.+?)` swallowed that
+  // whole prefix as the "username", fragmenting one real fan into multiple
+  // fan-identity rows (`user`, `"user`, `Notice: ⭐ @user`) on the dashboard.
+  // Without a `^` anchor, the engine skips any leading junk that isn't a
+  // valid handle character and locks onto the real handle right before
+  // "tipped"/"sent", so all variants of the same line resolve to one username.
+  const HANDLE = '@?([A-Za-z0-9_.\\-]{2,32})';
   const TIP_PATTERNS = {
     chaturbate: [
-      /^(.+?) tipped (\d+) token/i,
-      /^(.+?): tipped (\d+)/i,
-      /^(.+?) sent (\d+) token/i,
+      new RegExp(`${HANDLE}\\s+tipped\\s+(\\d+)\\s*token`, 'i'),
+      new RegExp(`${HANDLE}:\\s*tipped\\s+(\\d+)`, 'i'),
+      new RegExp(`${HANDLE}\\s+sent\\s+(\\d+)\\s*token`, 'i'),
     ],
     bongacams: [
-      /^(.+?) sent (\d+) token/i,
-      /^(.+?) tipped (\d+)/i,
+      new RegExp(`${HANDLE}\\s+sent\\s+(\\d+)\\s*token`, 'i'),
+      new RegExp(`${HANDLE}\\s+tipped\\s+(\\d+)`, 'i'),
     ],
     myfreecams: [
-      /^(.+?) tips? (\d+) token/i,
-      /^(.+?) tip[pt]ed (\d+)/i,
+      new RegExp(`${HANDLE}\\s+tips?\\s+(\\d+)\\s*token`, 'i'),
+      new RegExp(`${HANDLE}\\s+tip[pt]ed\\s+(\\d+)`, 'i'),
     ],
   };
 

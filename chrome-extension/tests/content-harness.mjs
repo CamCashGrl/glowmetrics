@@ -170,6 +170,45 @@ async function main() {
     await page.close();
   }
 
+  // ---- Test 11: a "Notice: ⭐ @user tipped N tokens" decorated tip line
+  // resolves to the same plain username, not a separate fan identity ----
+  {
+    const page = await freshPage(browser);
+    await appendChatLine(page, 'Notice: ⭐ @n9nature tipped 50 tokens');
+    const sent = await page.evaluate(() => window.__sent);
+    const tip = sent.find(m => m.action === 'tip');
+    check('T11: decorated Notice-prefixed tip line still parses', !!tip);
+    check('T11: username strips the "Notice: ⭐ @" prefix', tip?.username === 'n9nature');
+    check('T11: token amount parsed correctly', tip?.tokens === 50);
+    await page.close();
+  }
+
+  // ---- Test 12: a stray leading quote character on the chat line does not
+  // get captured as part of the username ----
+  {
+    const page = await freshPage(browser);
+    await appendChatLine(page, '"n9nature tipped 50 tokens');
+    const sent = await page.evaluate(() => window.__sent);
+    const tip = sent.find(m => m.action === 'tip');
+    check('T12: stray leading quote does not block tip parsing', !!tip);
+    check('T12: username strips the leading quote character', tip?.username === 'n9nature');
+    await page.close();
+  }
+
+  // ---- Test 13: the same fan across the three line variants (T1-style,
+  // Notice-decorated, quote-prefixed) all resolve to one identical username,
+  // proving they collapse into a single fan identity on the dashboard ----
+  {
+    const page = await freshPage(browser);
+    await appendChatLine(page, 'n9nature tipped 10 tokens');
+    await appendChatLine(page, 'Notice: ⭐ @n9nature tipped 20 tokens');
+    await appendChatLine(page, '"n9nature tipped 30 tokens');
+    const sent = await page.evaluate(() => window.__sent);
+    const usernames = new Set(sent.filter(m => m.action === 'tip').map(m => m.username));
+    check('T13: all three decorated variants collapse to one username', usernames.size === 1 && usernames.has('n9nature'));
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
