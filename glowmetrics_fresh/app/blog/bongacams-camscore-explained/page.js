@@ -1,3 +1,4 @@
+
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
@@ -106,15 +107,6 @@ const s = {
   promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
 }
 
-const trackClick = (label) => {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', 'link_click', {
-      event_category: 'bongacams_promotion',
-      event_label: label,
-      page_title: document.title,
-    })
-  }
-}
 
 export default function BlogPost() {
   return (
@@ -209,7 +201,7 @@ export default function BlogPost() {
             target="_blank"
             rel="noopener noreferrer"
             style={{...s.promoBtn, ...s.promoBtnModel}}
-            onClick={() => trackClick('interested_in_being_model')}
+            
           >
             Interested in being a model?
           </a>
@@ -218,7 +210,7 @@ export default function BlogPost() {
             target="_blank"
             rel="noopener noreferrer"
             style={{...s.promoBtn, ...s.promoBtnCam}}
-            onClick={() => trackClick('looking_for_hot_cam_show')}
+            
           >
             Looking for a hot cam show?
           </a>
