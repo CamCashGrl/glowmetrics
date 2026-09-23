@@ -13,7 +13,7 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, tokenRate, platformColor, platformDisplayName } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { trackTrialEvent } from '../../lib/analytics-client'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
@@ -1365,22 +1365,23 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
 
 // Compact ranked-row for the Fans tab Leaderboard / Directory sections.
 // Pure presentation over already-computed fan fields — no derived scoring.
+// No avatar: username is the primary identity, platform is a prominent
+// color-coded badge (colors from lib/constants.js platformColor(), the
+// single shared source, not a new one-off palette).
 function FanRow({ w, rank, onView, onMessage, onNote }) {
   const tc = TIER_COLORS[w.tier] || C.cyan
+  const pc = platformColor(w.platform)
   const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
   return (
     <div className="whale-row" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 9, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap" }}>
       {rank != null && (
         <div style={{ width: 22, flexShrink: 0, fontSize: 11, fontWeight: 700, color: C.muted, textAlign: "center" }}>#{rank}</div>
       )}
-      <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff" }}>
-        {(w.username || "?").charAt(0).toUpperCase()}
-      </div>
-      <div style={{ flex: "1 1 120px", minWidth: 0 }}>
-        <div title={w.username} style={{ fontSize: 13, fontWeight: 700, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.username}</div>
-        <div style={{ display: "flex", gap: 5, marginTop: 2 }}>
-          <span style={{ padding: "1px 6px", borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
-          <span style={{ padding: "2px 8px", borderRadius: 100, background: "rgba(255,255,255,0.09)", border: "1px solid rgba(255,255,255,0.14)", color: C.white, fontSize: 10, fontWeight: 700 }}>{w.platform || "Unknown"}</span>
+      <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+        <div title={w.username} style={{ fontSize: 14, fontWeight: 800, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.username}</div>
+        <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ padding: "1px 6px", borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700, flexShrink: 0 }}>{w.tier}</span>
+          <span style={{ padding: "3px 9px", borderRadius: 6, background: `${pc}22`, border: `1px solid ${pc}70`, color: pc, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>{platformDisplayName(w.platform)}</span>
         </div>
       </div>
       <div style={{ textAlign: "right", minWidth: 74 }}>
@@ -3169,9 +3170,9 @@ const stopImportMessageRotation = () => {
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
-        {/* ── STICKY COMMAND BAR — Command Center only, not shown on other
-             tabs (e.g. Fans) so it doesn't compete with tab-specific content ── */}
-        {activeTab === 'overview' && (() => {
+        {/* ── STICKY COMMAND BAR — shown on every tab (Go Live must stay
+             reachable everywhere, not just Command Center) ── */}
+        {(() => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
           const atPeak = brief?.atPeak

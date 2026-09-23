@@ -41,3 +41,39 @@ export const DEFAULT_VIEWER_RATE = 0.10
 export function viewerRate(platform) {
   return PLATFORM_VIEWER_RATES[platform] ?? DEFAULT_VIEWER_RATE
 }
+
+// ============================================================
+// CAMCASH — PLATFORM DISPLAY IDENTITY (name casing + color)
+// Single source of truth for platform badges. Reuses the same colors
+// already used for platforms in AnalyticsCharts.js (Chaturbate/BongaCams/
+// MyFreeCams) rather than inventing a new palette; Stripchat/CamSoda
+// extend it using colors already established elsewhere in the app.
+// Never hardcode a platform color anywhere else in the codebase.
+// ============================================================
+
+export const PLATFORM_COLORS = {
+  Chaturbate: "#a855f7",
+  BongaCams:  "#ec4899",
+  MyFreeCams: "#22d3ee",
+  Stripchat:  "#60A5FA",
+  CamSoda:    "#34D399",
+}
+
+const DEFAULT_PLATFORM_COLOR = "#64748b"
+
+// Canonical display name (correct capitalization), matched case-insensitively
+// so DB/CSV casing variants (e.g. 'bongacams') still resolve correctly.
+const PLATFORM_NAMES_LOWER = Object.fromEntries(
+  Object.keys(PLATFORM_TOKEN_RATES).map(k => [k.toLowerCase(), k])
+)
+
+export function platformDisplayName(platform) {
+  if (!platform) return "Unknown"
+  return PLATFORM_NAMES_LOWER[platform.toLowerCase()] || platform
+}
+
+export function platformColor(platform) {
+  if (!platform) return DEFAULT_PLATFORM_COLOR
+  const canonical = PLATFORM_NAMES_LOWER[platform.toLowerCase()]
+  return (canonical && PLATFORM_COLORS[canonical]) || DEFAULT_PLATFORM_COLOR
+}
