@@ -98,6 +98,22 @@ const s = {
   related: { marginTop: '38px', paddingTop: '25px', borderTop: '1px solid rgba(255,255,255,0.06)' },
   relatedTitle: { fontSize: '11px', color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' },
   relatedLinks: { display: 'flex', flexDirection: 'column', gap: '7px' },
+  promo: { background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(239,68,68,0.08))', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '12px', padding: '32px 24px', margin: '38px 0' },
+  promoTitle: { fontSize: '18px', fontWeight: 800, color: '#f1f5f9', marginBottom: '12px' },
+  promoButtons: { display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '18px' },
+  promoBtn: { display: 'inline-block', padding: '12px 24px', borderRadius: '8px', color: '#fff', fontWeight: 700, fontSize: '14px', textDecoration: 'none', textAlign: 'center', cursor: 'pointer', border: 'none' },
+  promoBtnModel: { background: 'linear-gradient(135deg, #f59e0b, #d97706)', transition: 'all 0.3s ease' },
+  promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
+}
+
+const trackClick = (label) => {
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', 'link_click', {
+      event_category: 'bongacams_promotion',
+      event_label: label,
+      page_title: document.title,
+    })
+  }
 }
 
 export default function BlogPost() {
@@ -183,6 +199,30 @@ export default function BlogPost() {
         >
           View It in the Pretty Profitz Shop →
         </a>
+      </div>
+
+      <div style={s.promo}>
+        <div style={s.promoTitle}>Ready to Join BongaCams?</div>
+        <div style={s.promoButtons}>
+          <a
+            href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{...s.promoBtn, ...s.promoBtnModel}}
+            onClick={() => trackClick('interested_in_being_model')}
+          >
+            Interested in being a model?
+          </a>
+          <a
+            href="https://bongacams.com?fuid=166966512&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_viewer"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{...s.promoBtn, ...s.promoBtnCam}}
+            onClick={() => trackClick('looking_for_hot_cam_show')}
+          >
+            Looking for a hot cam show?
+          </a>
+        </div>
       </div>
 
       <div style={s.faq}>
