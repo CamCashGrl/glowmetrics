@@ -4368,8 +4368,12 @@ const stopImportMessageRotation = () => {
                 existing fields (no new formula/threshold):
                   1. Whale/Shark tier + behavioralState === 'At Risk'
                      (same evidence-gated bar used everywhere else)
-                  2. Whale/Shark tier + trend.direction === 'down'
-                     (same calcFanTrend() output used by Trending Fans)
+                  2. Whale/Shark tier + trend.direction === 'down' AND
+                     trend.confidence === 'Medium' (same calcFanTrend()
+                     output AND the same confidence bar Trending Fans/
+                     CamCash Noticed require -- a Low-confidence trend is
+                     data the formula itself calls too thin, so it's not
+                     eligible to feature here either)
                   3. top fan by totalUSD, neutral framing (no risk claim —
                      nothing here implies urgency that isn't supported)
                 Free: username + behavioralStateReason blurred, real
@@ -4382,12 +4386,12 @@ const stopImportMessageRotation = () => {
                 .find(w => w.behavioralState === 'At Risk')
                 || [...whales].filter(w => w.tier === 'Whale' || w.tier === 'Shark')
                   .sort((a, b) => b.totalUSD - a.totalUSD)
-                  .find(w => w.trend?.direction === 'down')
+                  .find(w => w.trend?.direction === 'down' && w.trend?.confidence === 'Medium')
                 || [...whales].sort((a, b) => b.totalUSD - a.totalUSD)[0]
               if (!featuredFan) return null
 
               const isAtRisk = featuredFan.behavioralState === 'At Risk'
-              const isTrendingDown = !isAtRisk && featuredFan.trend?.direction === 'down'
+              const isTrendingDown = !isAtRisk && featuredFan.trend?.direction === 'down' && featuredFan.trend?.confidence === 'Medium'
               const headline = isAtRisk ? 'A high-value fan has gone quiet'
                 : isTrendingDown ? "This fan's recent activity has changed"
                 : 'A closer look at your top fan'
@@ -4484,12 +4488,26 @@ const stopImportMessageRotation = () => {
             })()}
 
             {/* B. TRENDING FANS — "Who is moving?" Uses fan.trend.direction/
-                label as already computed by calcFanTrend() (gated by the
-                file's own TREND_CHANGE_THRESHOLD). pctChange/confidence are
-                shown as-is, no new thresholds. Renders nothing if no fan has
-                genuine up/down movement — we don't fabricate movement. */}
+                label as already computed by calcFanTrend(). Confidence is NOT
+                a label to attach after the fact -- calcFanTrend's own
+                confidence field (Low = 4-7 tips, Medium = 8+) IS the existing
+                minimum-data gate for this insight, so only Medium-confidence
+                trends are eligible to be shown as a real signal here (same
+                bar CamCash Noticed's "rising" bucket already used). A
+                Low-confidence trend is data the formula itself has already
+                marked too thin to call a pattern -- it's suppressed, not
+                just styled smaller. No new threshold invented: this reuses
+                calcFanTrend's own confidence classification. */}
             {(() => {
-              const moving = filteredWhales.filter(w => w.trend && (w.trend.direction === 'up' || w.trend.direction === 'down')).slice(0, 5)
+              const moving = filteredWhales.filter(w => w.trend?.confidence === 'Medium' && (w.trend.direction === 'up' || w.trend.direction === 'down')).slice(0, 5)
+              if (moving.length === 0 && filteredWhales.length > 0) {
+                return (
+                  <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>📈 Trending Fans</div>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Trend unavailable — more activity is needed to establish a reliable trend for your fans.</div>
+                  </div>
+                )
+              }
               if (moving.length === 0) return null
               return (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
