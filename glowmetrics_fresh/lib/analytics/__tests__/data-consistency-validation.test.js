@@ -9,7 +9,8 @@
  */
 
 // Mock computePlatformCardStats for testing revenue consistency rules
-function computePlatformCardStats(tips = [], sessions = [], platformName, windowDays = 31, platformRoi = {}, paidSessions = []) {
+function computePlatformCardStats(tips = [], sessions = [], platformName, windowDays = 31, platformRoi = {}, paidSessions = [], nowDate = null) {
+  const now = nowDate || new Date()
   const resolvePlatformName = (p) => p?.toLowerCase().trim() || ''
   const platTips = (tips || []).filter(t => resolvePlatformName(t.platform) === resolvePlatformName(platformName))
   const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
@@ -33,7 +34,8 @@ function computePlatformCardStats(tips = [], sessions = [], platformName, window
   const to = dated[dated.length - 1]._d
   const from = dated[0]._d
   const fullHistoryDays = Math.max(1, Math.floor((to - from) / 86400000) + 1)
-  const windowStart = new Date(to.getTime() - (windowDays - 1) * 86400000)
+  // Window is calculated from NOW, not from the most recent data point
+  const windowStart = new Date(now.getTime() - (windowDays - 1) * 86400000)
   const recentStart = windowStart < from ? from : windowStart
   const recentRevenue = dated.filter(t => t._d >= recentStart)
 
@@ -161,33 +163,43 @@ describe('Data Consistency Validation', () => {
 
   describe('Time Window Consistency', () => {
     test('all metrics use same SNAPSHOT_WINDOW_DAYS (31)', () => {
-      const now = new Date('2026-09-05')
-      const thirtyTwoDaysAgo = new Date(now.getTime() - 32 * 86400000)
-      const twentyEightDaysAgo = new Date(now.getTime() - 28 * 86400000)
+      // The window is anchored to the platform's latest activity, not to today
+      // — see applyFreeAnalysisWindow, "per-platform, activity-anchored". So a
+      // tip is inside or outside the window by its distance from the newest
+      // tip, and these two must be more than the window apart from each other
+      // for one of them to fall outside it.
+      const latest = new Date('2026-09-05')
+      const fortyDaysEarlier = new Date(latest.getTime() - 40 * 86400000)
 
       const tips = [
-        { platform: 'BongaCams', date_time: thirtyTwoDaysAgo.toISOString(), usd: 100, tokens: 2000, username: 'u1' }, // Outside window
-        { platform: 'BongaCams', date_time: twentyEightDaysAgo.toISOString(), usd: 200, tokens: 4000, username: 'u2' }, // Inside window
+        { platform: 'BongaCams', date_time: fortyDaysEarlier.toISOString(), usd: 100, tokens: 2000, username: 'u1' }, // Outside window
+        { platform: 'BongaCams', date_time: latest.toISOString(), usd: 200, tokens: 4000, username: 'u2' }, // Inside window
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], latest)
 
       // Only recent tip (200) should be counted, old tip (100) excluded
       expect(stats.usd).toBe(200)
     })
 
     test('full history includes all data regardless of window', () => {
-      const now = new Date('2026-09-05')
-      const ninetyDaysAgo = new Date(now.getTime() - 90 * 86400000)
+      // fullHistoryDays is the span from the earliest tip to the latest, not
+      // the age of a single tip, so covering 90 days takes a tip at each end.
+      // One lone tip spans nothing and correctly reports a single day.
+      const latest = new Date('2026-09-05')
+      const ninetyDaysEarlier = new Date(latest.getTime() - 90 * 86400000)
 
       const tips = [
-        { platform: 'BongaCams', date_time: ninetyDaysAgo.toISOString(), usd: 100, tokens: 2000, username: 'u1' },
+        { platform: 'BongaCams', date_time: ninetyDaysEarlier.toISOString(), usd: 100, tokens: 2000, username: 'u1' },
+        { platform: 'BongaCams', date_time: latest.toISOString(), usd: 50, tokens: 1000, username: 'u2' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], latest)
 
-      // fullHistoryDays should count all 90 days
+      // The full span is reported even though the window covers only part of it
       expect(stats.fullHistoryDays).toBeGreaterThanOrEqual(90)
+      // ...and the window still excludes the far end of that span
+      expect(stats.usd).toBe(50)
     })
   })
 

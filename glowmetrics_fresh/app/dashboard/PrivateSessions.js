@@ -233,7 +233,7 @@ export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null
         <div style={chartTitleStyle}>Private Session Leaderboard</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {stats.topClients.map((c, i) => (
-            <div key={c.username} onClick={() => onViewFan?.(c.username, stats.platformBreakdown[0]?.platform)}
+            <div key={c.username} onClick={() => onViewFan?.(c.username, c.platform)}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 10, background: i < 3 ? "rgba(168,85,247,0.08)" : "transparent", cursor: onViewFan ? "pointer" : "default" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 12, color: MUTED, width: 20 }}>#{i + 1}</span>

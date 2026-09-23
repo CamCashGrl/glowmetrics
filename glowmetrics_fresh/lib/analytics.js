@@ -7,7 +7,7 @@
 import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
-import { detectSessions } from './analytics/sessions'
+import { detectSessions, SESSION_GAP_MS } from './analytics/sessions'
 
 // ===============================
 // TIMEZONE HELPERS
@@ -113,6 +113,16 @@ function validateInsights(insights = []) {
 // (date line / "Tip From: user" line / "tokens  running_balance" line)
 const CB_DATE_LINE_RE = /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
 const CB_TIP_FROM_RE = /^Tip From:\s*(.+)$/i
+// Fan Club Membership purchases are real earnings from a named fan, same as
+// a tip — mirrors app/onboarding/page.js's parseRows(), which handles the
+// same three Chaturbate paste cases for the client-side preview. Kept in
+// sync manually (see the comment there) since this is the separate parser
+// used server-side for direct CSV-file uploads of the same raw export.
+const CB_FAN_CLUB_RE = /^Fan Club Membership:\s*(.+)$/i
+// Not earnings from a fan at all — an account-level token debit/cashout —
+// so it must never fall through to the generic multi-line date match below
+// and get treated as an unrecognized (but still date-stamped) tip block.
+const CB_NON_EARNING_ACTION_RE = /^(Admin Adjustment|Transfer tokens to)\b/i
 const CB_TOKENS_LINE_RE = /^(\d+)\s+(\d+)$/
 const CB_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
 
@@ -125,10 +135,13 @@ function parseChaturbateMultiLine(lines) {
 
     const [, mon, day, year, hr, min, ampm] = dateMatch
     const actionLine = (lines[i + 1] || '').trim()
+    if (CB_PRIVATE_SHOW_PATTERN.test(actionLine)) { i++; continue }
+    if (CB_NON_EARNING_ACTION_RE.test(actionLine)) { i++; continue }
     const tipMatch = actionLine.match(CB_TIP_FROM_RE)
-    if (!tipMatch) { i++; continue }
+    const fanClubMatch = !tipMatch && actionLine.match(CB_FAN_CLUB_RE)
+    if (!tipMatch && !fanClubMatch) { i++; continue }
 
-    const username = tipMatch[1].trim()
+    const username = (tipMatch ? tipMatch[1] : fanClubMatch[1]).trim()
     let tokensLine = (lines[i + 2] || '').trim()
     let note = ''
     let tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
@@ -146,6 +159,7 @@ function parseChaturbateMultiLine(lines) {
         if (/am/i.test(ampm) && h === 12) h = 0
         const monthNum = CB_MONTHS[mon.toLowerCase()] || 1
         const dateRaw = `${year}-${String(monthNum).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')} ${String(h).padStart(2, '0')}:${min}:00`
+        if (fanClubMatch) note = note ? `Fan Club Membership: ${note}` : 'Fan Club Membership'
         results.push({
           dateRaw, date_time: dateRaw, username, platform: 'Chaturbate',
           tokens, usd: parseFloat((tokens * tokenRate('Chaturbate')).toFixed(2)),
@@ -159,7 +173,7 @@ function parseChaturbateMultiLine(lines) {
 }
 
 export function parseCSV(text, platform = null) {
-  const allLines = text.trim().split('\n')
+  let allLines = text.trim().split('\n')
   if (allLines.length === 0) return []
 
   if (!platform) platform = detectPlatform(text)
@@ -172,10 +186,19 @@ export function parseCSV(text, platform = null) {
   }
   const detectedDelimiter = delimiter || ','
 
+  // Some BongaCams pastes (Reports → General earnings table) put every
+  // header cell on its own line — "Date and Time" / "Member" / "Type" /
+  // "Tokens Earned" / "Your Payout" — instead of one delimiter-joined
+  // header row. parseWithHeaders below only maps as many columns as the
+  // header row contains, so left alone this silently drops every value
+  // past column 0 and the whole paste parses to zero rows. Stitch a
+  // detected stacked-header block back into one row before anything else runs.
+  allLines = joinStackedHeaderLines(allLines, detectedDelimiter)
+
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
-  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()))) {
+  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()) || CB_FAN_CLUB_RE.test(l.trim()))) {
     return parseChaturbateMultiLine(allLines).map(normalizeTip).filter(isValidTip)
   }
 
@@ -188,21 +211,22 @@ export function parseCSV(text, platform = null) {
   const lines = allLines.slice(startIdx).filter(l => l.trim())
   if (lines.length === 0) return []
 
-  const firstLower = lines[0].toLowerCase()
   const firstCols = parseCSVLine(lines[0], detectedDelimiter)
 
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
-                         /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(firstCols[0])
+                         /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(firstCols[0]) ||
+                         /^\d{10,13}$/.test(firstCols[0]) // MyFreeCams epoch-id column
 
-  const hasHeaders = !firstColIsDate && (
-    firstLower.includes('date') || firstLower.includes('username') ||
-    firstLower.includes('member') || firstLower.includes('amount') ||
-    firstLower.includes('tokens') || firstLower.includes('timestamp') ||
-    firstLower.includes('payout') || firstLower.includes('action') ||
-    firstLower.includes('transaction') || firstLower.includes('platform') ||
-    firstLower.includes('user')
-  )
+  // Checks each COLUMN of the first line against the same normalizeHeaderName
+  // used to map real header cells — never a raw substring match against the
+  // whole line. A substring check (e.g. firstLine.includes('username')) is a
+  // false-positive trap: a headerless MyFreeCams paste whose first data row
+  // contains a real username like "username123" contains the literal
+  // substring "username" and was wrongly routed to parseWithHeaders, which
+  // then found no recognized columns and silently produced zero rows.
+  const KNOWN_HEADER_FIELDS = new Set(['date_time','username','tokens','usd','tip_type','action','note','platform','session_id','token_balance'])
+  const hasHeaders = !firstColIsDate && firstCols.some(c => KNOWN_HEADER_FIELDS.has(normalizeHeaderName(c)))
 
   const raw = hasHeaders ? parseWithHeaders(lines, platform, detectedDelimiter) : parseHeaderless(lines, platform, detectedDelimiter)
   // Per-row format-based platform fallback — runs after both parsers
@@ -213,6 +237,28 @@ export function parseCSV(text, platform = null) {
     if (/^\d{10,13}$/.test(String(r.dateRaw || '').trim())) { r.platform = 'MyFreeCams'; return }
   })
   return raw.map(normalizeTip).filter(isValidTip)
+}
+
+// Detects a run of 2+ consecutive single-column lines at the top of the
+// paste followed by a data line whose column count matches that run
+// exactly, and joins the header block into one delimiter-separated row.
+// Deliberately conservative (exact column-count match required) so it
+// never fires on ordinary single-column data.
+function joinStackedHeaderLines(lines, delimiter) {
+  let i = 0
+  const headerCells = []
+  while (i < lines.length && i < 10) {
+    const line = lines[i].trim()
+    if (!line) break
+    if (parseCSVLine(line, delimiter).length !== 1) break
+    headerCells.push(line)
+    i++
+  }
+  if (headerCells.length < 2) return lines
+  const dataLine = (lines[i] || '').trim()
+  if (!dataLine) return lines
+  if (parseCSVLine(dataLine, delimiter).length !== headerCells.length) return lines
+  return [headerCells.join(delimiter), ...lines.slice(i)]
 }
 
 function normalizeTip(row) {
@@ -262,6 +308,11 @@ export function detectPlatform(text) {
 
 function normalizeDate(raw) {
   if (!raw) return null
+  // MyFreeCams' "Token Sessions" export uses ordinal day numbers — "Jun 18th,
+  // 2026 10:40 PM". `new Date()` cannot parse the "th"/"st"/"nd"/"rd" suffix
+  // at all (returns Invalid Date), so every MFC row silently failed the
+  // isNaN(new Date(...)) validity check below. Strip it before anything else.
+  raw = raw.replace(/\b(\d{1,2})(st|nd|rd|th)\b/i, '$1')
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
   if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
   const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
@@ -496,6 +547,30 @@ function parseHeaderless(lines, platform, delimiter = ',') {
       continue
     }
 
+    // MyFreeCams "Token Sessions" paste — epoch_id / formatted date / tokens /
+    // username / type ("Tip" or "Private"), e.g.:
+    //   1746555770  Jun 18th, 2026 10:40 PM  500  username123  Tip
+    // Previously fell through to the generic branch below, which reads
+    // column 0 as the date (the epoch id, not a parseable date) and column 1
+    // as the username (actually the date) — every row failed validation and
+    // this, MFC's own documented paste format, parsed to zero rows.
+    if (vals.length >= 5 && /^\d{10,13}$/.test(vals[0])) {
+      const dateRaw = normalizeDate(vals[1])
+      const username = (vals[3] || '').trim()
+      const tokens = parseInt(vals[2]) || 0
+      const typeVal = (vals[4] || 'Tip').trim()
+      if (!username || tokens <= 0) continue
+      if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
+      const isPrivate = typeVal.toLowerCase() === MFC_PRIVATE_TYPE.toLowerCase()
+      results.push({
+        dateRaw, date_time: dateRaw, username, platform: 'MyFreeCams',
+        tokens, usd: parseFloat((tokens * tokenRate('MyFreeCams')).toFixed(2)),
+        tip_type: isPrivate ? 'Private' : 'Tip', tip_note: '',
+        ...(isPrivate ? { is_paid_session: true, session_type: 'Private' } : {}),
+      })
+      continue
+    }
+
     if (vals.length >= 2) {
       const dateRaw = normalizeDate(vals[0]) || vals[0]
       const username = (vals[1] || '').trim()
@@ -528,12 +603,65 @@ function fanKey(platform, username) {
   return `${platform || 'Unknown'}:${(username || '').toLowerCase()}`
 }
 
+// ── FAN BEHAVIORAL VISITS ────────────────────────────────────────────────
+// A raw tip is not an independent behavioral observation: several tips sent
+// minutes apart in one sitting are one visit, not evidence of several
+// separate returns. This groups ONE FAN's own tips (already scoped to a
+// single platform+username via fanKey upstream) into visits using the same
+// gap constant the creator-stream session detector uses (SESSION_GAP_MS,
+// lib/analytics/sessions.js) -- not a new threshold, the existing one,
+// applied to a different partition of the data. detectSessions() itself
+// cannot be reused directly here: it groups an entire creator's tip stream
+// across ALL fans by platform+gap (shared with app/live/page.js for
+// stream-level metrics), so a single multi-fan creator session would
+// otherwise collapse many different fans' independent visits into one.
+function groupFanVisits(tips) {
+  if (!tips || tips.length === 0) return []
+  const sorted = [...tips]
+    .map(t => ({ ...t, _ts: new Date(t.dateRaw || t.date_time) }))
+    .filter(t => !isNaN(t._ts.getTime()))
+    .sort((a, b) => a._ts - b._ts)
+  if (sorted.length === 0) return []
+
+  const visits = []
+  let cur = null
+  sorted.forEach(t => {
+    if (!cur) {
+      cur = { startTime: t._ts, endTime: t._ts, tips: [t] }
+    } else if (t._ts - cur.endTime <= SESSION_GAP_MS) {
+      cur.endTime = t._ts
+      cur.tips.push(t)
+    } else {
+      visits.push(cur)
+      cur = { startTime: t._ts, endTime: t._ts, tips: [t] }
+    }
+  })
+  if (cur) visits.push(cur)
+
+  return visits.map(v => ({
+    startTime: v.startTime,
+    endTime: v.endTime,
+    tipCount: v.tips.length,
+    totalUSD: parseFloat(v.tips.reduce((s, t) => s + (t.usd || 0), 0).toFixed(2)),
+  }))
+}
+
 // Minimum tip count before we trust a fan's own history as a baseline for
-// tiering or risk — reused as the single source of truth for both the tier
-// split (New/Developing) and the behavioral-state split below, so the two
-// dimensions never disagree about what counts as "not enough history yet."
-// Carried over from the original calcChurnRisk's `count < 3` floor.
+// TIER classification only (New/Developing split, identifyWhales below) —
+// unchanged, tier logic is out of scope for the behavioral-observation
+// correction. Carried over from the original calcChurnRisk's `count < 3`
+// floor.
 const FAN_MIN_TIPS_FOR_BASELINE = 3
+
+// Minimum DISTINCT BEHAVIORAL VISITS (not raw tips) before we trust a fan's
+// own history as an established personal baseline for behavioral claims
+// (calcFanBehavioralState, expectedNextTip, tipProbability, trend, spend
+// decline). Same value (3) as FAN_MIN_TIPS_FOR_BASELINE -- this is the
+// existing product minimum translated into the correct observation unit,
+// not a new threshold. A fan can clear FAN_MIN_TIPS_FOR_BASELINE (tier)
+// while remaining below this bar (behavioral baseline) if their tips all
+// came from one or two visits.
+const FAN_MIN_OBSERVATIONS_FOR_BASELINE = 3
 
 // ── CREATOR/PLATFORM ACTIVITY CONTEXT ────────────────────────────────────
 // A fan's absence can only be evidence of that FAN's decline if the creator
@@ -600,24 +728,37 @@ export function getPlatformRiskContext(tips, meaningfulSessions = []) {
 // Single source of truth for churn/risk labeling — replaces calcChurnRisk.
 // Two independent dimensions, per the spec: `tier` (relationship/type,
 // computed in identifyWhales below) and `behavioralState` (this function).
+//
+// CURRENT (before this change): gated on raw tipCount >= FAN_MIN_TIPS_FOR_BASELINE.
+// NEW: gated on observationCount (distinct behavioral visits, see
+//   groupFanVisits above) >= FAN_MIN_OBSERVATIONS_FOR_BASELINE.
+// REASON: a fan can send several tips in one sitting; that is one visit,
+//   not several independent observations of return behavior. Gating on raw
+//   tip count let a single burst satisfy the baseline and immediately
+//   qualify for At Risk once the (near-zero, burst-derived) cadence was
+//   exceeded. Gating on distinct visits requires the fan to have actually
+//   returned multiple times before any behavioral claim is made.
+//
 // A fan can only be labeled At Risk when ALL of:
-//   (a) an established per-fan baseline exists (tipCount >= FAN_MIN_TIPS_FOR_BASELINE)
+//   (a) an established per-fan baseline exists (observationCount >= FAN_MIN_OBSERVATIONS_FOR_BASELINE)
 //   (b) the creator had meaningful same-platform opportunity recently (platformCtx)
 //   (c) the comparison is same-platform (platformCtx is keyed by the fan's own platform)
 //   (d) the fan's own data isn't stale relative to the creator's recent activity (platformCtx)
 //   (e) there is a meaningful decline from the fan's own baseline — frequency
-//       (daysSinceLastTip vs avgDaysBetweenTips) OR spend amount (this fan's
-//       own recent tip sizes vs their own earlier tip sizes)
-function calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, tipCount, spendDeclineRatio, platformCtx }) {
-  // Fewer than 3 tips: never enough baseline to claim decline of any kind.
-  if (tipCount < FAN_MIN_TIPS_FOR_BASELINE) {
-    if (tipCount <= 0) return { state: 'Insufficient Data', reason: 'No tip history yet.' }
-    // Still within a plausible early window since their (only) tip(s) — treat
-    // as a developing relationship, not a risk signal either way.
+//       (daysSinceLastTip vs avgDaysBetweenTips, now visit-cadence-based) OR
+//       spend amount (this fan's own recent VISITS' spend vs their own
+//       earlier visits' spend — see spendDeclineRatio in identifyWhales)
+function calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, observationCount, spendDeclineRatio, platformCtx }) {
+  // Fewer than 3 distinct visits: never enough baseline to claim decline of
+  // any kind, regardless of how many raw tips those visits contained.
+  if (observationCount < FAN_MIN_OBSERVATIONS_FOR_BASELINE) {
+    if (observationCount <= 0) return { state: 'Insufficient Data', reason: 'No tip history yet.' }
+    // Still within a plausible early window since their (only) visit(s) —
+    // treat as a developing relationship, not a risk signal either way.
     if (daysSinceLastTip <= 45) {
-      return { state: 'New/Developing', reason: `Only ${tipCount} tip${tipCount === 1 ? '' : 's'} so far — too early to assess a pattern.` }
+      return { state: 'New/Developing', reason: `Only ${observationCount} visit${observationCount === 1 ? '' : 's'} so far — too early to assess a pattern.` }
     }
-    return { state: 'Insufficient Data', reason: `Only ${tipCount} tip${tipCount === 1 ? '' : 's'} on record and no recent activity — not enough history to assess behavior.` }
+    return { state: 'Insufficient Data', reason: `Only ${observationCount} visit${observationCount === 1 ? '' : 's'} on record and no recent activity — not enough history to assess behavior.` }
   }
 
   const r = avgDaysBetweenTips > 0 ? daysSinceLastTip / avgDaysBetweenTips : (daysSinceLastTip > 0 ? Infinity : 0)
@@ -689,7 +830,13 @@ export function identifyWhales(tips, meaningfulSessions = []) {
     const firstTipDate = new Date(fanSorted[fanSorted.length - 1].dateRaw || fanSorted[fanSorted.length - 1].date_time)
     const daysSinceLastTip = Math.floor((Date.now() - lastTipDate) / 86400000)
     const lifetimeDays = Math.max(Math.floor((lastTipDate - firstTipDate) / 86400000), 1)
-    const avgDaysBetweenTips = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
+    // TIER-ONLY raw-tip interval. Tier classification (below) is explicitly
+    // out of scope for the behavioral-observation correction and is
+    // preserved byte-for-byte, including this fallback -- it must NOT be
+    // replaced by the visit-based avgDaysBetweenVisits used for behavioral
+    // fields further down, which is intentionally a different, nullable
+    // value with no fabricated fallback.
+    const rawAvgDaysBetweenTipsForTier = f.tipCount > 1 ? Math.max(1, lifetimeDays / (f.tipCount - 1)) : 30
     const biggestTip = Math.max(...f.tips.map(t => t.usd))
     const fanRankIndex = rankByFanKey.get(fanKey(f.platform, f.username))
     const percentileRank = totalFans > 1 ? fanRankIndex / (totalFans - 1) : 0
@@ -697,12 +844,13 @@ export function identifyWhales(tips, meaningfulSessions = []) {
     // ── TIER (relationship/type) — independent of behavioral state ────────
     // Whale/Shark/Dormant thresholds and priority order preserved exactly as
     // before. New/Developing and Occasional fill the previously-uniform
-    // "Regular" bucket for low-history/low-frequency fans.
+    // "Regular" bucket for low-history/low-frequency fans. UNCHANGED by the
+    // behavioral-observation correction (out of scope).
     let tier = 'Regular'
     if (percentileRank <= 0.05) tier = 'Whale'
     else if (percentileRank <= 0.20) tier = 'Shark'
     else if (f.tipCount < FAN_MIN_TIPS_FOR_BASELINE) tier = 'New/Developing'
-    else if (daysSinceLastTip > Math.max(60, avgDaysBetweenTips * 3)) tier = 'Dormant'
+    else if (daysSinceLastTip > Math.max(60, rawAvgDaysBetweenTipsForTier * 3)) tier = 'Dormant'
     else if (f.tipCount < 5) tier = 'Occasional' // NEW threshold (unvalidated) — see report
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
@@ -710,44 +858,98 @@ export function identifyWhales(tips, meaningfulSessions = []) {
     f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const spendPercentile = Math.round((1 - percentileRank) * 100)
-    const tipsAsc = [...f.tips].sort((a, b) => new Date(a.dateRaw || a.date_time) - new Date(b.dateRaw || b.date_time))
-    const tipDates = tipsAsc.map(t => new Date(t.dateRaw || t.date_time))
-    const daysBetweenTipsArr = []
-    for (let i = 1; i < tipDates.length; i++) { daysBetweenTipsArr.push((tipDates[i] - tipDates[i - 1]) / 86400000) }
 
-    // Spend-decline baseline: this fan's own recent tip amounts vs their own
-    // earlier tip amounts (split their history in half chronologically).
-    // Needs at least 4 tips to form two non-trivial halves; otherwise null
-    // (not computable — never fabricated).
+    // ── BEHAVIORAL OBSERVATIONS: distinct visits, not raw tips ────────────
+    // CURRENT (before this change): avgDaysBetweenTips = lifetimeDays /
+    //   (tipCount - 1), fallback 30 when tipCount <= 1; spend-decline and
+    //   trend split raw tips in half chronologically; baseline gated on
+    //   raw tipCount >= FAN_MIN_TIPS_FOR_BASELINE.
+    // NEW: all of the above operate on `visits` (groupFanVisits output —
+    //   tips grouped using the same SESSION_GAP_MS gap the creator-stream
+    //   session detector uses), gated on observationCount (visits.length)
+    //   >= FAN_MIN_OBSERVATIONS_FOR_BASELINE. No fabricated 30-day fallback:
+    //   an unestablished cadence is null, not invented.
+    // REASON: 10 tips in one sitting must not read as "returns every day."
+    const visits = groupFanVisits(f.tips)
+    const observationCount = visits.length
+
+    let avgDaysBetweenVisits = null
+    const daysBetweenVisitsArr = []
+    if (observationCount >= 2) {
+      for (let i = 1; i < observationCount; i++) {
+        daysBetweenVisitsArr.push((visits[i].startTime - visits[i - 1].startTime) / 86400000)
+      }
+      const totalSpanDays = (visits[observationCount - 1].startTime - visits[0].startTime) / 86400000
+      // Mean gap between visit starts. Deliberately no Math.max(1, ...) floor
+      // and no hardcoded fallback -- if a fan's 2-3 visits all landed on the
+      // same day, the true observed cadence IS sub-daily; flooring it to "1
+      // day" would fabricate elapsed history that wasn't actually observed.
+      // (This does mean a same-day multi-visit fan can still produce a very
+      // small, technically-honest cadence number that reads oddly if
+      // displayed without qualification -- flagged in the final report as a
+      // residual case requiring a product decision, not resolved by
+      // inventing a new elapsed-day threshold here.)
+      avgDaysBetweenVisits = totalSpanDays / (observationCount - 1)
+    }
+
+    // Spend-decline baseline: this fan's own recent VISITS' spend vs their
+    // own earlier visits' spend (split visit history in half chronologically
+    // -- not raw tips, so one 10-tip burst visit can't be internally split
+    // into fake "earlier" and "recent" halves of itself). Needs at least 4
+    // visits to form two non-trivial halves; otherwise null (not computable
+    // — never fabricated). Direct unit translation of the existing ">= 4"
+    // requirement (was raw tips, now visits) -- not a new threshold value.
     let spendDeclineRatio = null
-    if (f.tipCount >= 4) {
-      const mid = Math.floor(tipsAsc.length / 2)
-      const earlier = tipsAsc.slice(0, mid)
-      const recent = tipsAsc.slice(mid)
-      const earlierAvg = earlier.reduce((s, t) => s + (t.usd || 0), 0) / earlier.length
-      const recentAvg = recent.reduce((s, t) => s + (t.usd || 0), 0) / recent.length
+    if (observationCount >= 4) {
+      const mid = Math.floor(observationCount / 2)
+      const earlier = visits.slice(0, mid)
+      const recent = visits.slice(mid)
+      const earlierAvg = earlier.reduce((s, v) => s + v.totalUSD, 0) / earlier.length
+      const recentAvg = recent.reduce((s, v) => s + v.totalUSD, 0) / recent.length
       if (earlierAvg > 0) spendDeclineRatio = parseFloat((recentAvg / earlierAvg).toFixed(3))
     }
 
+    const baselineEstablished = observationCount >= FAN_MIN_OBSERVATIONS_FOR_BASELINE
     const platformCtx = platformRiskContext[f.platform || 'Unknown'] || null
-    const behavioral = calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips, tipCount: f.tipCount, spendDeclineRatio, platformCtx })
+    const behavioral = calcFanBehavioralState({ daysSinceLastTip, avgDaysBetweenTips: avgDaysBetweenVisits, observationCount, spendDeclineRatio, platformCtx })
 
     return {
       username: f.username, totalUSD: parseFloat(f.totalUSD.toFixed(2)), totalTokens: f.totalTokens,
       tipCount: f.tipCount, avgTipSize: parseFloat((f.totalUSD / f.tipCount).toFixed(2)),
       biggestTip: parseFloat(biggestTip.toFixed(2)), platform: f.platform, tier,
       lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
-      daysSinceLastTip, avgDaysBetweenTips: parseFloat(avgDaysBetweenTips.toFixed(1)), daysBetweenTipsArr,
-      tipProbability: calcTipProbability(daysSinceLastTip, avgDaysBetweenTips),
-      trend: calcFanTrend(tipsAsc),
+      daysSinceLastTip,
+      // Field NAME kept as avgDaysBetweenTips for compatibility (per spec),
+      // but its MEANING is now avg days between distinct visits, and it is
+      // null (not a fabricated number) below FAN_MIN_OBSERVATIONS_FOR_BASELINE
+      // worth of visits.
+      avgDaysBetweenTips: avgDaysBetweenVisits !== null ? parseFloat(avgDaysBetweenVisits.toFixed(1)) : null,
+      daysBetweenTipsArr: daysBetweenVisitsArr,
+      observationCount, baselineEstablished,
+      // tipProbability: CURRENT was hardcoded 85/70/50/30/15% buckets framed
+      // as a statistical probability, computed unconditionally (even at 1
+      // tip). NEW: still the same internal bucket math (no new probability
+      // model invented, per spec), but now null unless a personal baseline
+      // is established -- so it can no longer misrepresent a single-visit
+      // fan's likelihood of return as a computed percentage.
+      tipProbability: (baselineEstablished && avgDaysBetweenVisits) ? calcTipProbability(daysSinceLastTip, avgDaysBetweenVisits) : null,
+      // trend: calcFanTrend now receives `visits`, not raw tips (see
+      // function below) -- a burst of tips in one visit can no longer
+      // manufacture a trend by being split against itself.
+      trend: calcFanTrend(visits),
       // behavioralState: the new, correct, eligibility-gated status (spec Step 1).
       behavioralState: behavioral.state, behavioralStateReason: behavioral.reason,
       spendDeclineRatio, platformRiskContext: platformCtx,
       // churnRisk: kept only for backward compatibility with existing UI —
       // derived 1:1 from behavioralState above, not a second formula.
       churnRisk: legacyChurnRiskShape(behavioral.state),
-      lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, f.tipCount),
-      expectedNextTip: calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenTips),
+      lifetimeValue: calcLifetimeValue(f.totalUSD, lifetimeDays, observationCount),
+      // expectedNextTip: CURRENT was computed unconditionally from
+      // avg-based subtraction, even for a 1-2 tip fan (using the 30-day
+      // fallback). NEW: null unless a personal baseline is established --
+      // "likely to tip again" cannot exist before CamCash has seen the fan
+      // return multiple times.
+      expectedNextTip: (baselineEstablished && avgDaysBetweenVisits !== null) ? calcExpectedNextTip(daysSinceLastTip, avgDaysBetweenVisits) : null,
       hasPrivates: privateTips.length > 0, privateCount: privateTips.length,
       privateSpent: parseFloat(privateTips.reduce((s, t) => s + t.usd, 0).toFixed(2)),
       typicalOnlineHours: mostActiveHour ? `${mostActiveHour[0]}:00 - ${parseInt(mostActiveHour[0]) + 2}:00` : 'Unknown',
@@ -764,10 +966,24 @@ function calcTipProbability(d, avg) {
   return                     { level: 'Low',           percentage: 15 }
 }
 
-function calcLifetimeValue(spent, days, count) {
-  if (days < 7 || count < 2) return { prediction: spent, confidence: 'Low' }
+// CURRENT (before this change): gated on days>=7 && tipCount>=2 -- two tips
+//   sent minutes apart within one short visit could clear this and still
+//   produce a run-rate confidence-labeled 'Low' (conflating "insufficient
+//   data" with "valid-but-weak estimate", the distinction this task
+//   requires to be enforced).
+// NEW: gated on days>=7 && observationCount>=FAN_MIN_OBSERVATIONS_FOR_BASELINE
+//   (distinct visits, not raw tips). Below that bar, returns nulls rather
+//   than a number-plus-'Low'-confidence -- insufficient data means no
+//   run-rate exists yet, not a weak one.
+// REASON: the days>=7 floor alone doesn't prevent a burst-then-nothing fan
+//   (e.g. 2 tips in one visit, 7 days ago) from producing a confident-
+//   looking monthly figure; requiring an established visit baseline does.
+function calcLifetimeValue(spent, days, observationCount) {
+  if (days < 7 || observationCount < FAN_MIN_OBSERVATIONS_FOR_BASELINE) {
+    return { prediction: null, confidence: null, monthly: null }
+  }
   const p = (spent / days) * 365
-  return { prediction: parseFloat(p.toFixed(2)), confidence: count > 10 ? 'High' : count > 5 ? 'Medium' : 'Low', monthly: parseFloat((p / 12).toFixed(2)) }
+  return { prediction: parseFloat(p.toFixed(2)), confidence: observationCount > 10 ? 'High' : observationCount > 5 ? 'Medium' : 'Low', monthly: parseFloat((p / 12).toFixed(2)) }
 }
 
 function calcExpectedNextTip(d, avg) {
@@ -783,23 +999,36 @@ function calcExpectedNextTip(d, avg) {
 // Trending is a separate signal from tier/behavioralState — describes whether a
 // fan's own spending is moving relative to their own established pattern,
 // never relative to other fans or a single outlier tip.
-// tipsAsc: this fan's tips, sorted oldest -> newest (usd required).
-// NOTE: TREND_CHANGE_THRESHOLD of 0.25 is a starting point, not yet
-// validated against real fan spending distributions — flag per formula-requirements.
+//
+// CURRENT (before this change): tipsAsc — raw tips, sorted oldest -> newest
+//   — split in half, comparing per-tip average spend.
+// NEW: visits — this fan's distinct behavioral visits (groupFanVisits
+//   output, from identifyWhales), sorted oldest -> newest, split in half,
+//   comparing per-visit average spend.
+// REASON: a single burst visit with several tips of increasing size would
+//   previously manufacture an "up" trend purely from tip-to-tip noise
+//   inside one sitting. Comparing visits instead requires the fan to have
+//   actually returned multiple times, with the later returns spending more
+//   or less than the earlier ones.
+// NOTE: TREND_CHANGE_THRESHOLD of 0.25 is unchanged -- a starting point,
+// not yet validated against real fan spending distributions — flag per
+// formula-requirements. The "4" and "8" counts below are also unchanged
+// values, now counting visits instead of tips (direct unit translation,
+// not a new threshold, per spec).
 const TREND_CHANGE_THRESHOLD = 0.25
 
-function calcFanTrend(tipsAsc) {
-  const count = tipsAsc.length
-  // Fewer than 4 tips isn't enough to compare a "before" and "after" window
-  // without a single tip dominating either side.
+function calcFanTrend(visits) {
+  const count = visits.length
+  // Fewer than 4 visits isn't enough to compare a "before" and "after"
+  // window without a single visit dominating either side.
   if (count < 4) {
     return { direction: 'insufficient', label: 'New / Insufficient Data', confidence: 'none' }
   }
 
   const mid = Math.floor(count / 2)
-  const priorHalf = tipsAsc.slice(0, mid)
-  const recentHalf = tipsAsc.slice(mid)
-  const avg = arr => arr.reduce((s, t) => s + (t.usd || 0), 0) / arr.length
+  const priorHalf = visits.slice(0, mid)
+  const recentHalf = visits.slice(mid)
+  const avg = arr => arr.reduce((s, v) => s + (v.totalUSD || 0), 0) / arr.length
   const priorAvg = avg(priorHalf)
   const recentAvg = avg(recentHalf)
 
@@ -830,15 +1059,23 @@ export function generateWhaleAlerts(whales) {
   whales.forEach(w => {
     if (w.tier === 'Whale' && w.daysSinceLastTip < 7 && w.isTopSpender)
       alerts.push({ type: 'new_whale', severity: 'success', icon: '🐳', whale: w, message: `${w.username} just became your top tipper! ($${w.totalUSD.toFixed(0)} lifetime)`, action: 'Send a thank you message' })
-    if ((w.churnRisk.level === 'High' || w.churnRisk.level === 'Critical') && w.totalUSD >= churnThreshold && w.tipCount >= 3) {
+    // churnRisk.level can only be 'High'/'Critical' when behavioralState is
+    // 'At Risk', which now already requires an established visit baseline
+    // (see calcFanBehavioralState) -- this alert can't fire from a burst.
+    // avgDaysBetweenTips can be null even when this fires if daysBetween...Arr
+    // is empty for some other reason; guarded below rather than assumed.
+    if ((w.churnRisk.level === 'High' || w.churnRisk.level === 'Critical') && w.totalUSD >= churnThreshold && w.observationCount >= 3) {
       const freq = getTipFrequency(w.daysBetweenTipsArr)
-      const freqText = freq ? `they typically tip ${freq}` : `they usually tip every ${w.avgDaysBetweenTips.toFixed(0)} days`
-      alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — ${freqText}`, action: 'Re-engage now before they go cold' })
+      const freqText = freq ? `they typically tip ${freq}` : (w.avgDaysBetweenTips != null ? `they usually tip every ${w.avgDaysBetweenTips.toFixed(0)} days` : null)
+      if (freqText) alerts.push({ type: 'churn_risk', severity: 'warning', icon: '⚠️', whale: w, message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — ${freqText}`, action: 'Re-engage now before they go cold' })
     }
-    if (w.tipProbability.level === 'High' && w.totalUSD >= tipLikelyThreshold)
+    // tipProbability is null below the same established-baseline gate (see
+    // identifyWhales) -- this can no longer claim a "likely to tip soon"
+    // percentage for a fan CamCash hasn't seen return multiple times.
+    if (w.tipProbability?.level === 'High' && w.totalUSD >= tipLikelyThreshold)
       alerts.push({ type: 'tip_likely', severity: 'info', icon: '💰', whale: w, message: `${w.username} is likely to tip soon (${w.tipProbability.percentage}% probability based on their pattern)`, action: 'Go live during their active hours' })
     if (w.daysSinceLastTip > 0 && w.daysSinceLastTip <= 3 && w.tipCount > 5) {
-      if (w.daysSinceLastTip > w.avgDaysBetweenTips * 1.5)
+      if (w.avgDaysBetweenTips != null && w.daysSinceLastTip > w.avgDaysBetweenTips * 1.5)
         alerts.push({ type: 'returned', severity: 'success', icon: '🎉', whale: w, message: `${w.username} just tipped again after ${w.daysSinceLastTip} days away — welcome them back!`, action: 'Send a thank you message' })
     }
   })
@@ -894,7 +1131,11 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
     const drop = Math.round(((lastAvg - thisAvg) / lastAvg) * 100)
     if (drop >= 15) alerts.push({ type: 'tip_drop', severity: 'warning', icon: '📉', message: `Your avg tip dropped ${drop}% this week ($${lastAvg.toFixed(2)} → $${thisAvg.toFixed(2)})`, action: 'Focus on high-value fans during your next stream' })
   }
-  whales.filter(w => w.totalUSD >= 50 && w.daysSinceLastTip >= 5 && w.daysSinceLastTip < 30).slice(0, 2).forEach(w => {
+  // fan_churn must rely on the canonical, baseline-gated behavioralState
+  // (lib/analytics.js calcFanBehavioralState) rather than an independent
+  // day-range/totalUSD formula -- a single-visit fan has no personal
+  // cadence to compare against, so it can never be "At Risk" on its own.
+  whales.filter(w => w.behavioralState === 'At Risk' && w.totalUSD >= 50).slice(0, 2).forEach(w => {
     alerts.push({ type: 'fan_churn', severity: 'critical', icon: '🚨', message: `${w.username} hasn't tipped in ${w.daysSinceLastTip} days — high churn risk ($${w.totalUSD.toFixed(0)} lifetime value)`, action: 'Send a re-engagement message now' })
   })
   const lastStreamed = sessions.length ? (now - new Date(sessions[sessions.length - 1].startTime)) / 86400000 : 999
@@ -1121,14 +1362,34 @@ export function aggregateRows(tips, tz = null) {
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
 
+  // FINANCIAL TRUTH: Platform revenue breakdown from ALL tips (not filtered)
+  // This ensures platform rows reconcile to totalUSD
   const platformMap = {}
+  const platformSessionMap = {}
+  const platformHoursMap = {}
+
+  // Sum all tips by platform
+  tips.forEach(t => {
+    const p = t.platform || 'Chaturbate'
+    if (!platformMap[p]) { platformMap[p] = { platform: p, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
+    platformMap[p].totalUSD += t.usd || 0
+    platformMap[p].totalTokens += t.tokens || 0
+    platformMap[p].tips += 1
+  })
+
+  // Add session and hours data from meaningful sessions (for context, but revenue is from all tips)
   meaningfulSessions.forEach(s => {
-    if (!platformMap[s.platform]) { platformMap[s.platform] = { platform: s.platform, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
-    platformMap[s.platform].totalUSD    += s.totalUSD
-    platformMap[s.platform].totalTokens += s.totalTokens
-    platformMap[s.platform].sessions    += 1
-    if (!s.durationUnknown) platformMap[s.platform].hours += s.durationHours
-    platformMap[s.platform].tips        += s.tipCount
+    if (!platformSessionMap[s.platform]) platformSessionMap[s.platform] = { sessions: 0, hours: 0 }
+    platformSessionMap[s.platform].sessions += 1
+    if (!s.durationUnknown) platformSessionMap[s.platform].hours += s.durationHours
+  })
+
+  // Merge session/hours data into platform map
+  Object.keys(platformMap).forEach(p => {
+    if (platformSessionMap[p]) {
+      platformMap[p].sessions = platformSessionMap[p].sessions
+      platformMap[p].hours = platformSessionMap[p].hours
+    }
   })
 
   // Per-platform rate basis — revenue and time from the same eligible sessions,
@@ -1272,7 +1533,11 @@ export function aggregateRows(tips, tz = null) {
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
     const bestHourAvg = bestHourData.avg
     if (bestHourAvg <= overallAvg * 1.2) return
-    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bestHourData.hour) > 1).length
+    // bestHourData.hour came from toLocalHour, so the session hour has to be
+    // read on the same clock. Comparing a UTC hour against a local one made
+    // this count every session "not at the best hour" for any creator whose
+    // offset exceeded an hour, inflating the missed-revenue figure below.
+    const sessionsNotAtBestHour = platSessions.filter(s => Math.abs(toLocalHour(s.startTime, userTz) - bestHourData.hour) > 1).length
     const missedRevenue = parseFloat(((bestHourAvg - overallAvg) * sessionsNotAtBestHour).toFixed(2))
     if (missedRevenue > 5) {
       missedRevenueByPlatform[p] = { bestHour: bestHourData.hour, bestHourAvg, overallAvg: parseFloat(overallAvg.toFixed(2)), sessionsNotAtBestHour, missedRevenue, multiplier: parseFloat((bestHourAvg / overallAvg).toFixed(1)) }
@@ -1397,10 +1662,13 @@ export function aggregateRows(tips, tz = null) {
     .filter(t => new Date(t.date_time) >= thirtyDaysAgo)
     .reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
 
-  const prior30USD = tips
+  const priorWindowTips = tips
     .filter(t => new Date(t.date_time) >= sixtyDaysAgo &&
                  new Date(t.date_time) < thirtyDaysAgo)
-    .reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
+  const prior30USD = priorWindowTips.reduce((sum, t) => sum + (parseFloat(t.usd) || 0), 0)
+  // Distinguishes "the prior period was empty of data" from "the prior period
+  // genuinely earned nothing", which are very different claims.
+  const priorWindowTipCount = priorWindowTips.length
 
   let momentumPct = 0
   let momentumLabel = 'Steady'
@@ -1413,8 +1681,13 @@ export function aggregateRows(tips, tz = null) {
     // recent streaming, not a measured downward trend. Don't fabricate
     // a "Declining" claim from zero data.
     momentumPct = -100; momentumLabel = 'Inactive'; momentumEmoji = '💤'
-  } else if (prior30USD === 0) {
-    momentumPct = 100; momentumLabel = 'Surging'; momentumEmoji = '🚀'
+  } else if (priorWindowTipCount === 0 || prior30USD === 0) {
+    // Nothing in the prior 30 days to compare against. That is usually not a
+    // standing start: the free tier hands this engine a 31-day window, so the
+    // prior period is empty by construction for those accounts. Reading that
+    // emptiness as a 100% rise badged every free user "Surging" off data they
+    // were never asked for. An unmeasurable trend is reported as such.
+    momentumPct = null; momentumLabel = 'Not enough history'; momentumEmoji = '—'
   } else {
     momentumPct = ((last30USD - prior30USD) / prior30USD) * 100
     if (momentumPct > 50)       { momentumLabel = 'Surging';   momentumEmoji = '🚀' }
@@ -1439,14 +1712,14 @@ export function aggregateRows(tips, tz = null) {
   const platformMomentum = {}
   Object.keys(platformMap).forEach(p => {
     let last = 0, prior = 0, priorTips = 0
-    meaningfulSessions.forEach(s => {
-      if ((s.platform || 'Unknown') !== p) return
-      ;(s.tips || []).forEach(t => {
-        const d = new Date(t.dateRaw || t.date_time)
-        if (isNaN(d.getTime())) return
-        if (d >= thirtyDaysAgo) last += t.usd || 0
-        else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
-      })
+    // FINANCIAL TRUTH: Use ALL tips by platform (matching overall momentum calculation)
+    tips.forEach(t => {
+      const tipPlatform = t.platform || 'Chaturbate'
+      if (tipPlatform !== p) return
+      const d = new Date(t.dateRaw || t.date_time)
+      if (isNaN(d.getTime())) return
+      if (d >= thirtyDaysAgo) last += t.usd || 0
+      else if (d >= sixtyDaysAgo) { prior += t.usd || 0; priorTips += 1 }
     })
 
     if (priorTips === 0) {
@@ -1473,7 +1746,7 @@ export function aggregateRows(tips, tz = null) {
     totalTokens,
     totalTips: tips.length,
     avgTipSize: parseFloat((tips.length > 0 ? totalUSD / tips.length : 0).toFixed(2)),
-    topTippers, platforms, sessions: allValidSessions,
+    topTippers, platforms, sessions: meaningfulSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
@@ -1557,19 +1830,28 @@ export function computePaidSessionAnalytics(sessions) {
       usd: 0, tokens: 0, count: 0,
       sessionTypes: new Set(),
       dates: [],
+      platforms: new Map(),
     }
     clientMap[k].usd    += parseFloat(s.usd) || 0
     clientMap[k].tokens += parseInt(s.tokens) || 0
     clientMap[k].count  += 1
     clientMap[k].sessionTypes.add(s.session_type || 'Unknown')
     clientMap[k].dates.push(new Date(s.date_time))
+    if (s.platform) {
+      clientMap[k].platforms.set(s.platform, (clientMap[k].platforms.get(s.platform) || 0) + 1)
+    }
   })
 
   const topClients = Object.values(clientMap)
     .map(c => {
       const sorted = [...c.dates].sort((a, b) => a - b)
+      // Most-used platform for this client — used to open the correct
+      // fan profile (platform + username is the match key there).
+      let platform = null, platformMax = 0
+      c.platforms.forEach((count, p) => { if (count > platformMax) { platformMax = count; platform = p } })
       return {
         username:     c.username,
+        platform,
         totalUSD:     parseFloat(c.usd.toFixed(2)),
         totalTokens:  c.tokens,
         sessionCount: c.count,

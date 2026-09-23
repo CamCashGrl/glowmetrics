@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How Much Do Chaturbate Models Make in 2026? Real Earnings',
@@ -471,6 +472,10 @@ export default function ChaturbateEarningsPost() {
         <a href="/landing" style={s.insightBtn}>See What My Data Says</a>
       </div>
 
+      <p style={s.p}>
+        If you prefer a hands-on approach, the <a href="/blog/chaturbate-earnings-tracker" style={s.iLink}>Chaturbate Earnings Tracker</a> workbook provides structured worksheets for tracking your sessions, identifying patterns, analyzing peak hours, and setting data-driven performance goals. It's designed to work alongside your CSV exports, giving you both the automated view and the written-out version for deeper analysis.
+      </p>
+
       <h2 style={s.h2}>What This Data Can and Cannot Tell You</h2>
       <p style={s.p}>Once you're tracking your own numbers, be clear about what they actually support.</p>
       <p style={s.p}><strong style={{ color: '#f1f5f9' }}>It can help you identify:</strong></p>
@@ -623,6 +628,7 @@ export default function ChaturbateEarningsPost() {
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

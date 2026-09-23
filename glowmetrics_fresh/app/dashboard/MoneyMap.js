@@ -31,8 +31,12 @@ const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "
 // ─── Time helpers ────────────────────────────────────────────────────────────
 function localHour(date) { return new Date(date).getHours() }
 function localDay(date)  { return new Date(date).getDay() }
-function utcYMD(date)   { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}` }
-function utcMonthKey(date) { const d = new Date(date); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}` }
+// Date keys follow the creator's own clock, matching localHour/localDay above
+// and the analytics engine. Keying by UTC while bucketing hours locally put a
+// late-evening tip on the next calendar day for anyone west of UTC, so the day
+// it was counted in disagreed with the hour it was shown at.
+function localYMD(date)   { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
+function localMonthKey(date) { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` }
 
 function fmtHour(localH) {
   return new Date(2000,0,1,localH).toLocaleTimeString([],{hour:"numeric",hour12:true})
@@ -109,7 +113,7 @@ function platformEfficiency(tips) {
     map[p].tokens += Number(t.tokens||0)
     map[p].usd    += Number(t.usd||0)
     map[p].count++
-    map[p].days.add(utcYMD(t.date_time))
+    map[p].days.add(localYMD(t.date_time))
   }
   return Object.values(map).map(p => ({
     ...p,
@@ -142,12 +146,12 @@ function windowStats(tips) {
 function monthlyTotals(tips) {
   const map = {}
   for (const t of tips) {
-    const mk = utcMonthKey(t.date_time)
+    const mk = localMonthKey(t.date_time)
     if (!map[mk]) map[mk] = { month:mk, usd:0, tokens:0, count:0, activeDays:new Set() }
     map[mk].usd    += Number(t.usd||0)
     map[mk].tokens += Number(t.tokens||0)
     map[mk].count++
-    map[mk].activeDays.add(utcYMD(t.date_time))
+    map[mk].activeDays.add(localYMD(t.date_time))
   }
   return Object.values(map)
     .map(m=>({...m, activeDays:m.activeDays.size}))
@@ -158,7 +162,7 @@ function monthlyTotals(tips) {
 function weeklyEfficiency(sessions) {
   const map = {}
   for (const s of sessions) {
-    const wk = utcYMD(s.start).slice(0,7)
+    const wk = localYMD(s.start).slice(0,7)
     if (!map[wk]) map[wk] = { week:wk, usd:0, hours:0, sessions:0 }
     map[wk].usd     += s.usd
     map[wk].hours   += s.durationMins/60
@@ -395,7 +399,7 @@ function SessionsTab({ sessions }) {
   const calDays = useMemo(()=>{
     const dayMap = {}
     for (const s of sessions) {
-      const dk = utcYMD(s.start)
+      const dk = localYMD(s.start)
       if (!dayMap[dk]) dayMap[dk] = { date:s.start, key:dk, sessions:[] }
       dayMap[dk].sessions.push(s)
     }
@@ -503,7 +507,7 @@ function PlatformsTab({ tips, sessions }) {
   const multiDays = useMemo(()=>{
     const byDay = {}
     for (const s of sessions) {
-      const dk = utcYMD(s.start)
+      const dk = localYMD(s.start)
       if (!byDay[dk]) byDay[dk] = { date:dk, platforms:new Set(), usd:0, hours:0 }
       byDay[dk].platforms.add(s.platform)
       byDay[dk].usd   += s.usd
@@ -520,7 +524,7 @@ function PlatformsTab({ tips, sessions }) {
   const platformDayData = useMemo(()=>{
     const map = {}
     for (const t of tips) {
-      const dk = utcYMD(t.date_time).slice(5)
+      const dk = localYMD(t.date_time).slice(5)
       const p  = normPlatform(t.platform)
       if (!map[dk]) map[dk] = { date:dk }
       map[dk][p] = (map[dk][p]||0) + Number(t.usd||0)

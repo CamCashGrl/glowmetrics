@@ -1,4 +1,4 @@
-import { PRODUCTS } from "../../lib/shop-products";
+import { PRODUCTS, getAbsoluteImageUrl } from "../../lib/shop-products";
 import { ProductCard } from "./ProductCard";
 
 export const metadata = {
@@ -37,7 +37,7 @@ export default function ShopPage() {
         'position': index + 1,
         'name': product.shortTitle,
         'url': `https://www.camcashgrl.com/shop/${product.slug}`,
-        'image': `https://www.camcashgrl.com${product.coverImage}`,
+        'image': getAbsoluteImageUrl(product.coverImage),
       }))
     }
   }

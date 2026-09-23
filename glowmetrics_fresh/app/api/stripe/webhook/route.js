@@ -57,7 +57,7 @@ async function getEmailFromCustomer(customerId) {
   return customer?.email || null
 }
 
-async function sendResendNotification(subject, text) {
+async function sendResendNotification(subject, text, to = process.env.OWNER_EMAIL || 'support@glowmetrics.co') {
   try {
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -67,7 +67,7 @@ async function sendResendNotification(subject, text) {
       },
       body: JSON.stringify({
         from: 'GlowMetrics <notifications@glowmetrics.co>',
-        to: process.env.OWNER_EMAIL || 'support@glowmetrics.co',
+        to,
         subject,
         text,
       }),
@@ -77,11 +77,76 @@ async function sendResendNotification(subject, text) {
   }
 }
 
+// Failures here have caused real, silent data drift before (subscribers who
+// paid or lost payment showing as plain "free" users on the admin/dashboard
+// stats that read from profiles/subscriptions) — always alert on a failed
+// write instead of leaving it as a console.error only the deploy logs see,
+// which is what let it go unnoticed for days last time. Sent to a fixed
+// address rather than OWNER_EMAIL so a misconfigured env var can't silently
+// swallow the one alert that exists to catch misconfiguration.
+const SYNC_ALERT_EMAIL = 'daphneoncam@gmail.com'
+
+// A user-resolution miss is just as silent as a failed DB write — the event
+// still returns 200 (see POST below) so Stripe never retries, and until now
+// nothing but a console.error (which nobody watches) marked it. This is the
+// same alert path as updateProfile/upsertSubscriptionRecord below, so every
+// way this webhook can silently do nothing now raises the same signal.
+async function alertUnresolvedUser(eventType, event, { userId, email, customerId, subscriptionId }) {
+  console.error(`Webhook ${eventType}: could not resolve a user (userId=${userId}, email=${email})`)
+  await sendResendNotification(
+    `🚨 Subscription sync FAILED — unresolved user (${eventType})`,
+    `Stripe event ${event.id} (${eventType}) could not be matched to any Supabase user.\n\n` +
+      `userId from metadata: ${userId || '(none)'}\nemail: ${email || '(none)'}\ncustomer: ${customerId || '(none)'}\nsubscription: ${subscriptionId || '(none)'}\n\n` +
+      `This event was dropped — no profile or subscription row was written. Stripe will not retry (the webhook still returns 200). Check manually.`,
+    SYNC_ALERT_EMAIL
+  )
+}
+
 // Updates profiles and returns whether it actually succeeded
 async function updateProfile(supabase, userId, update) {
   const { error } = await supabase.from('profiles').update(update).eq('id', userId)
   if (error) {
     console.error(`Webhook: failed to update profile ${userId} with`, update, error.message)
+    await sendResendNotification(
+      `🚨 Subscription sync FAILED — profiles (user ${userId})`,
+      `Failed to write to profiles for user ${userId}.\n\nAttempted update: ${JSON.stringify(update)}\n\nError: ${error.message}\n\nThis user's plan/subscription_status may now be stale — check manually.`,
+      SYNC_ALERT_EMAIL
+    )
+    return false
+  }
+  return true
+}
+
+// subscriptions.plan_type has a CHECK constraint limited to these values —
+// map Stripe's billing interval onto the closest one instead of writing
+// something like "pro" that the constraint would reject outright.
+function planTypeFor(sub) {
+  const interval = sub.items?.data?.[0]?.price?.recurring?.interval
+  return interval === 'year' ? 'standard_annual' : 'standard_monthly'
+}
+
+function billingCycleFor(sub) {
+  const interval = sub.items?.data?.[0]?.price?.recurring?.interval
+  return interval === 'year' ? 'annual' : 'monthly'
+}
+
+// Keeps public.subscriptions (read by /api/admin/stats and /api/admin-stats
+// for subscriber/revenue counts) in sync with what the webhook already
+// writes to profiles. Previously this table was only ever touched by
+// handle_new_user() at signup (always plan_type='free') and by one-off
+// manual SQL patches (see 20260912_emergency_fix_emmyfox2_subscription_sync.sql)
+// — every real subscribe/renew/cancel silently left it stale.
+async function upsertSubscriptionRecord(supabase, userId, fields) {
+  const { error } = await supabase
+    .from('subscriptions')
+    .upsert({ user_id: userId, updated_at: new Date().toISOString(), ...fields }, { onConflict: 'user_id' })
+  if (error) {
+    console.error(`Webhook: failed to upsert subscriptions row for ${userId}:`, error.message)
+    await sendResendNotification(
+      `🚨 Subscription sync FAILED — subscriptions (user ${userId})`,
+      `Failed to write to subscriptions for user ${userId}.\n\nAttempted fields: ${JSON.stringify(fields)}\n\nError: ${error.message}\n\nAdmin/dashboard subscriber and revenue stats read from this table — this user may now be undercounted or shown with the wrong status until manually corrected.`,
+      SYNC_ALERT_EMAIL
+    )
     return false
   }
   return true
@@ -129,7 +194,9 @@ export async function POST(request) {
         const email = session.customer_details?.email || session.customer_email
         const user = await resolveUser(supabase, { userId: session.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook checkout.session.completed: could not resolve a user (userId=${session.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('checkout.session.completed', event, {
+            userId: session.metadata?.userId, email, customerId: session.customer,
+          })
           break
         }
 
@@ -167,12 +234,16 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook subscription.created: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('customer.subscription.created', event, {
+            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
+          })
           break
         }
 
-        // Determine subscription status based on Stripe status
-        const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
+        // Carry Stripe's actual status through (trialing/active/past_due/unpaid/...)
+        // instead of collapsing every non-trialing status into 'active' — a
+        // past_due or unpaid subscription must not read as 'active' downstream.
+        const subscriptionStatus = sub.status
 
         const update = {
           plan: 'pro',
@@ -186,6 +257,17 @@ export async function POST(request) {
         if (!ok) {
           console.error(`Webhook subscription.created: failed to save subscription data for ${email}`)
         }
+
+        await upsertSubscriptionRecord(supabase, user.id, {
+          stripe_customer_id: sub.customer,
+          stripe_subscription_id: sub.id,
+          stripe_price_id: sub.items?.data?.[0]?.price?.id || null,
+          plan_type: planTypeFor(sub),
+          billing_cycle: billingCycleFor(sub),
+          status: sub.status,
+          current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
+          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+        })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
           stripeEventId: event.id,
@@ -207,7 +289,9 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook subscription.deleted: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('customer.subscription.deleted', event, {
+            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
+          })
           break
         }
 
@@ -221,6 +305,12 @@ export async function POST(request) {
         if (!ok) {
           console.error(`Webhook subscription.deleted: failed to downgrade ${email}`)
         }
+
+        await upsertSubscriptionRecord(supabase, user.id, {
+          plan_type: 'free',
+          billing_cycle: null,
+          status: 'canceled',
+        })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_canceled', {
           stripeEventId: event.id,
@@ -242,11 +332,17 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
         if (!user) {
-          console.error(`Webhook subscription.updated: could not resolve a user (userId=${sub.metadata?.userId}, email=${email})`)
+          await alertUnresolvedUser('customer.subscription.updated', event, {
+            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
+          })
           break
         }
 
-        const subscriptionStatus = sub.status === 'trialing' ? 'trialing' : 'active'
+        // Carry Stripe's actual status through (see subscription.created above) —
+        // plan is the pro/free gate; subscription_status must reflect what
+        // Stripe actually reports (e.g. past_due) so it isn't mistaken for a
+        // healthy 'active' subscription downstream.
+        const subscriptionStatus = sub.status
         const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
 
         const update = {
@@ -260,6 +356,17 @@ export async function POST(request) {
         if (!ok) {
           console.error(`Webhook subscription.updated: failed to update ${email}`)
         }
+
+        await upsertSubscriptionRecord(supabase, user.id, {
+          stripe_customer_id: sub.customer,
+          stripe_subscription_id: sub.id,
+          stripe_price_id: sub.items?.data?.[0]?.price?.id || null,
+          plan_type: plan === 'pro' ? planTypeFor(sub) : 'free',
+          billing_cycle: plan === 'pro' ? billingCycleFor(sub) : null,
+          status: sub.status,
+          current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
+          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+        })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_updated', {
           stripeEventId: event.id,

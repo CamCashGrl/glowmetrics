@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Why Is My Camera Black on Chaturbate in OBS? Troubleshooting Guide',
@@ -81,6 +82,7 @@ export default function BlogPost() {
         <div style={s.faqItem}><div style={s.faqQ}>Do I need a stream key to use OBS on Chaturbate?</div><p style={s.faqA}>Chaturbate supports external encoders and documents a broadcast-token/stream-key workflow. The exact setup should follow its current broadcaster documentation.</p></div>
         <div style={s.faqItem}><div style={s.faqQ}>Why does my camera work in OBS but not the cam site?</div><p style={s.faqA}>The site may be using a different camera source, the physical camera may be locked by another application, or the site may require a virtual-camera/external-encoder workflow.</p></div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'My Best Month Ever on Chaturbate — $956.70 (Real Numbers)',
@@ -423,6 +424,7 @@ export default function BestMonthPost() {
           </div>
         ))}
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

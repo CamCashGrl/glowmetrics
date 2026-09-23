@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Cam Model Jobs From Home',
@@ -179,6 +180,7 @@ export default function CamModelJobsFromHome() {
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best Cam Model Analytics Tools</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

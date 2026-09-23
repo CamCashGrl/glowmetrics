@@ -2,18 +2,12 @@
 import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
-import { DM_Sans } from "next/font/google"
 import { supabase } from "../../lib/supabase"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
 
-// Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
-// in the <style jsx> block below — same weights that @import requested).
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  display: 'swap',
-})
+// Font loaded via CSS — moved to avoid client-side font loading issues
+const dmSans = { className: '' }
 
 // Only needed once a visitor scrolls this far — deferred so its JS isn't
 // downloaded/parsed on every /landing visit.

@@ -26,9 +26,20 @@ export async function GET(req) {
     goodwillExpiryError = err.message
   }
 
+  let subscriptionDrift = null
+  let subscriptionDriftError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/check-subscription-drift`)
+    subscriptionDrift = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to check subscription drift:', err.message)
+    subscriptionDriftError = err.message
+  }
+
   return NextResponse.json({
-    success: !digestError && !goodwillExpiryError,
+    success: !digestError && !goodwillExpiryError && !subscriptionDriftError,
     digest, digestError,
     goodwillExpiry, goodwillExpiryError,
+    subscriptionDrift, subscriptionDriftError,
   })
 }
