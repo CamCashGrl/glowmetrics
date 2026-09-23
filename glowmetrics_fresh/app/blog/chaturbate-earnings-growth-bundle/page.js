@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
-import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'Chaturbate Earnings & Growth Bundle — Planning Tools for Cam Models',
@@ -274,6 +275,8 @@ export default function ChaturbateEarningsGrowthBundle() {
         and the bundle for hands-on planning, testing, and follow-up workflows.
       </p>
 
+      <ProductCarousel products={PRODUCTS} currentProductId="chaturbate-bundle" />
+
       <div style={s.related}>
         <div style={s.relT}>Related Articles</div>
         <div style={s.relLinks}>
@@ -291,7 +294,6 @@ export default function ChaturbateEarningsGrowthBundle() {
           </a>
         </div>
       </div>
-    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }
