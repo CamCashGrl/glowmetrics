@@ -10,6 +10,24 @@
 
 import { aggregateRows } from '../analytics'
 
+// Every test below builds tip fixture dates relative to a fixed fictional
+// "today" ('2026-09-13'), but aggregateRows() buckets "last 30 days" /
+// "prior 30 days" relative to the REAL wall-clock Date.now(). As real time
+// passed the fixed fictional date, fixture tips meant to sit safely inside
+// a 30-day window drifted across the boundary (e.g. a tip built as "20 days
+// before 2026-09-13" is actually ~30+ days before the real current date),
+// causing these tests to fail purely from the calendar advancing -- not
+// from any change to the momentum calculation itself. Freezing the clock
+// to the same fictional "today" the fixtures were built around makes
+// aggregateRows() see the same reference point, independent of which real
+// day the suite runs on.
+beforeEach(() => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-09-13T12:00:00Z'))
+})
+afterEach(() => {
+  jest.useRealTimers()
+})
+
 describe('Phase 2 Platform Momentum', () => {
   describe('Platform Momentum: ALL Tips', () => {
     test('platform momentum should use ALL tips in revenue calculation', () => {
