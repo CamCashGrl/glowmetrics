@@ -1,8 +1,41 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { track, getSource } from '../lib/tracking'
+
 const AFFILIATE_URL = 'https://chaturbate.com/in/?tour=5zjT&campaign=IEYPs&track=default'
 
 export default function ChaturbateAffiliateCTA() {
+  const [pagePath, setPagePath] = useState('')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPagePath(window.location.pathname)
+    }
+  }, [])
+
+  const handleAffiliateClick = () => {
+    try {
+      track('affiliate_link_clicked', {
+        affiliate_program: 'chaturbate',
+        page_path: pagePath,
+        traffic_source: getSource(),
+        button_text: 'Sign Up',
+        cta_location: 'article_end',
+        timestamp: new Date().toISOString(),
+      })
+      // Log to console in development for verification
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Affiliate Tracking] Chaturbate CTA clicked', {
+          page: pagePath,
+          source: getSource(),
+        })
+      }
+    } catch (e) {
+      console.error('[Affiliate Tracking Error]', e)
+    }
+  }
+
   return (
     <div
       style={{
@@ -24,6 +57,7 @@ export default function ChaturbateAffiliateCTA() {
         href={AFFILIATE_URL}
         target="_blank"
         rel="noopener noreferrer sponsored nofollow"
+        onClick={handleAffiliateClick}
         style={{
           display: 'inline-block',
           background: '#f97316',
