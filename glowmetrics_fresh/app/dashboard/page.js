@@ -4380,18 +4380,26 @@ const stopImportMessageRotation = () => {
                      eligible to feature here either)
                   3. top fan by totalUSD, neutral framing (no risk claim —
                      nothing here implies urgency that isn't supported)
+                Scoped to the creator's primary platform (dailyBrief.
+                displayPlat -- the existing "highest lifetime revenue"
+                platform already computed for the BEST PLATFORM stat, not
+                a new concept), falling back to all platforms if no fan
+                qualifies there or no primary platform is established yet.
                 Free: username + behavioralStateReason blurred, real
                 platform/tier/totalUSD/tipCount/daysSinceLastTip visible,
                 CTA reuses the existing openUpgradeModal() tracked flow.
                 Pro: same slot, same selected fan, unblurred, opens the
                 existing Fan Profile modal — no second profile UI. */}
             {(() => {
-              const featuredFan = [...whales].filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+              const primaryPlatform = dailyBrief?.displayPlat || null
+              const pool = primaryPlatform ? whales.filter(w => w.platform === primaryPlatform) : whales
+              const selectFrom = (arr) => arr.filter(w => w.tier === 'Whale' || w.tier === 'Shark')
                 .find(w => w.behavioralState === 'At Risk')
-                || [...whales].filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+                || arr.filter(w => w.tier === 'Whale' || w.tier === 'Shark')
                   .sort((a, b) => b.totalUSD - a.totalUSD)
                   .find(w => w.trend?.direction === 'down' && w.trend?.confidence === 'Medium')
-                || [...whales].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+                || [...arr].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+              const featuredFan = (pool.length > 0 ? selectFrom(pool) : null) || selectFrom(whales)
               if (!featuredFan) return null
 
               const isAtRisk = featuredFan.behavioralState === 'At Risk'
