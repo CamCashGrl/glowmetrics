@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { track, getSource } from '../lib/tracking'
+import { track, getSource } from '../../lib/tracking'
 
 const AFFILIATE_URL = 'https://chaturbate.com/in/?tour=5zjT&campaign=IEYPs&track=default'
 
