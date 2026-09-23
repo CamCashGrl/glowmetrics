@@ -14,11 +14,17 @@ import { supabase } from '@/lib/supabase'
 //   NEXT_PUBLIC_PREVIEW_PASSWORD_2 = "testpassword"
 //   ...up to _5
 
-const ACCOUNTS = [1, 2, 3, 4, 5].map(n => ({
-  label:    process.env[`NEXT_PUBLIC_PREVIEW_LABEL_${n}`]    || null,
-  email:    process.env[`NEXT_PUBLIC_PREVIEW_EMAIL_${n}`]    || null,
-  password: process.env[`NEXT_PUBLIC_PREVIEW_PASSWORD_${n}`] || null,
-})).filter(a => a.email && a.password)
+// Next.js only inlines NEXT_PUBLIC_* vars when referenced as a static,
+// literal `process.env.NEXT_PUBLIC_X` expression -- a dynamic/templated
+// key (e.g. process.env[`...${n}`]) can never be replaced at build time,
+// so each slot must be spelled out individually here.
+const ACCOUNTS = [
+  { label: process.env.NEXT_PUBLIC_PREVIEW_LABEL_1 || null, email: process.env.NEXT_PUBLIC_PREVIEW_EMAIL_1 || null, password: process.env.NEXT_PUBLIC_PREVIEW_PASSWORD_1 || null },
+  { label: process.env.NEXT_PUBLIC_PREVIEW_LABEL_2 || null, email: process.env.NEXT_PUBLIC_PREVIEW_EMAIL_2 || null, password: process.env.NEXT_PUBLIC_PREVIEW_PASSWORD_2 || null },
+  { label: process.env.NEXT_PUBLIC_PREVIEW_LABEL_3 || null, email: process.env.NEXT_PUBLIC_PREVIEW_EMAIL_3 || null, password: process.env.NEXT_PUBLIC_PREVIEW_PASSWORD_3 || null },
+  { label: process.env.NEXT_PUBLIC_PREVIEW_LABEL_4 || null, email: process.env.NEXT_PUBLIC_PREVIEW_EMAIL_4 || null, password: process.env.NEXT_PUBLIC_PREVIEW_PASSWORD_4 || null },
+  { label: process.env.NEXT_PUBLIC_PREVIEW_LABEL_5 || null, email: process.env.NEXT_PUBLIC_PREVIEW_EMAIL_5 || null, password: process.env.NEXT_PUBLIC_PREVIEW_PASSWORD_5 || null },
+].filter(a => a.email && a.password)
 
 const outer = {
   minHeight: '100vh', display: 'flex', flexDirection: 'column',

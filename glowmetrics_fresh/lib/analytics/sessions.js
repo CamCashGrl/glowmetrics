@@ -12,6 +12,11 @@
  * @param {Array} tips - tip rows with { dateRaw|date_time, platform, tokens, usd, username }
  * @returns {Array} sessions — see finalizeSession() below for shape
  */
+// Exported so any other grouping that needs "how long a gap means a new
+// visit" (e.g. per-fan visit detection in lib/analytics.js) uses this same
+// value rather than a second hardcoded constant.
+export const SESSION_GAP_MS = 3 * 60 * 60 * 1000
+
 export function detectSessions(tips) {
   if (!tips || tips.length === 0) return []
   const parsed = tips.map(t => {
@@ -21,7 +26,6 @@ export function detectSessions(tips) {
   }).filter(Boolean).sort((a, b) => a.timestamp - b.timestamp)
   if (parsed.length === 0) return []
 
-  const SESSION_GAP_MS = 3 * 60 * 60 * 1000
   const sessions = []
   let cur = null
 

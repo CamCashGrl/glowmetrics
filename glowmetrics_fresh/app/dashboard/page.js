@@ -13,7 +13,7 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, tokenRate, platformColor, platformDisplayName } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { trackTrialEvent } from '../../lib/analytics-client'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
@@ -1363,6 +1363,47 @@ function CopyButton({ text, label = "📋 Copy", copiedLabel = "✅ Copied!", st
   )
 }
 
+// Compact ranked-row for the Fans tab Leaderboard / Directory sections.
+// Pure presentation over already-computed fan fields — no derived scoring.
+// No avatar: username is the primary identity, platform is a prominent
+// color-coded badge (colors from lib/constants.js platformColor(), the
+// single shared source, not a new one-off palette).
+function FanRow({ w, rank, onView, onMessage, onNote }) {
+  const tc = TIER_COLORS[w.tier] || C.cyan
+  const pc = platformColor(w.platform)
+  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
+  return (
+    <div className="whale-row" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 9, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap" }}>
+      {rank != null && (
+        <div style={{ width: 22, flexShrink: 0, fontSize: 11, fontWeight: 700, color: C.muted, textAlign: "center" }}>#{rank}</div>
+      )}
+      <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+        <div title={w.username} style={{ fontSize: 14, fontWeight: 800, color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.username}</div>
+        <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ padding: "1px 6px", borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700, flexShrink: 0 }}>{w.tier}</span>
+          <span style={{ padding: "3px 9px", borderRadius: 6, background: `${pc}22`, border: `1px solid ${pc}70`, color: pc, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, flexShrink: 0 }}>{platformDisplayName(w.platform)}</span>
+        </div>
+      </div>
+      <div style={{ textAlign: "right", minWidth: 74 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        <div style={{ fontSize: 9, color: C.text }}>{(w.tipCount || 0).toLocaleString()} tips</div>
+      </div>
+      <div style={{ textAlign: "right", minWidth: 84 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.text }}>{formatLastActive(days).replace("Last active ", "")}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+        <button onClick={onView} style={{ padding: "5px 10px", borderRadius: 7, background: "linear-gradient(135deg, #22D3EE, #EC4899)", border: "none", color: "#06101A", fontSize: 11, fontWeight: 800, cursor: "pointer" }} title="View fan profile">View Fan</button>
+        {onMessage && (
+          <button onClick={onMessage} aria-label={`Message ${w.username}`} title="Message fan" style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, background: "rgba(255,43,174,0.1)", border: "1px solid rgba(255,43,174,0.25)", color: C.pink, cursor: "pointer" }}><EnvelopeHeartIcon size={13} /></button>
+        )}
+        {onNote && (
+          <button onClick={onNote} aria-label={`Add note for ${w.username}`} title="Add note" style={{ width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa", fontSize: 12, cursor: "pointer" }}>📝</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
@@ -1389,6 +1430,7 @@ export default function Dashboard() {
   const [uploadCount, setUploadCount] = useState(0)
   const [whaleFilter, setWhaleFilter] = useState("ALL")
   const [platformFilter, setPlatformFilter] = useState("ALL")
+  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false) // Fans tab Leaderboard "Show More" toggle
   const [meaningfulOnly, setMeaningfulOnly] = useState(true)
   const [platformTimeFilter, setPlatformTimeFilter] = useState("ALL")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -2436,19 +2478,21 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 2. WIN BACK — $50+ lifetime, 45–90 days gone
-    whales.filter(w => w.totalUSD >= 50).forEach(w => {
+    // 2. WIN BACK — $50+ lifetime AND a canonical, baseline-gated "At Risk"
+    // behavioral state (lib/analytics.js calcFanBehavioralState). A fan
+    // with only one visit has no established personal cadence, so an
+    // independent day-range can't tell us their absence is abnormal --
+    // only the canonical behavioralState may make that call.
+    whales.filter(w => w.totalUSD >= 50 && w.behavioralState === 'At Risk').forEach(w => {
       const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 45 && days <= 90) {
-        const name = w.username
-        winBack.push({
-          type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
-          title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
-          message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
-          cta: 'Copy Message', username: name, whale: w,
-          reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
-        })
-      }
+      const name = w.username
+      winBack.push({
+        type: 'win_back', icon: '💔', color: C.pink, severity: 'warning',
+        title: `Win back ${name} — $${w.totalUSD.toFixed(0)} lifetime fan`,
+        message: `They spent $${w.totalUSD.toFixed(0)} total but haven't tipped in ${days} days. A personal message could bring them back.`,
+        cta: 'Copy Message', username: name, whale: w,
+        reengageMsg: `Hey ${name}! I miss you — it's been a while and I just wanted to check in 💕 I'm going live tonight and it would mean a lot to see you there`
+      })
     })
 
     // 3. MILESTONE — within 10% of $50 / $100 / $200 / $500
@@ -2472,59 +2516,36 @@ const stopImportMessageRotation = () => {
       }
     })
 
-    // 4. ONLINE NOW / ONLINE SOON
-    whales.slice(0, 5).forEach(w => {
-      if (w.tipCount < 5) return
-      const fanTips = (w.tips && w.tips.length > 0)
-        ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
-      if (fanTips.length < 5) return
-      const hourCounts = {}
-      fanTips.forEach(t => {
-        // FIX: use getUTCHours() — tips stored in UTC
-        const h = new Date(t.date_time || t.dateRaw).getUTCHours()
-        hourCounts[h] = (hourCounts[h] || 0) + 1
-      })
-      const bestHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
-      if (!bestHour) return
-      const peakHour = parseInt(bestHour[0])
-      const currentUTCHr = new Date().getUTCHours()
-      const hoursAway = (peakHour - currentUTCHr + 24) % 24
-      const _pf0 = bestHour[1] / fanTips.length
-      const _pd0 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
-      const probability = Math.min(90, Math.max(25, Math.round(_pf0 * 200 * _pd0)))
-      const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((peakHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
-      if (hoursAway <= 2 && probability >= 40) {
-        onlineNow.push({
-          type: 'online_now', icon: '🟢', color: C.green, severity: 'success',
-          title: `${w.username} is probably online right now`,
-          message: `They usually tip around ${label} — ~${probability}% chance they're active. Go live or message now!`,
-          cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: getPersonalMsg(w)
-        })
-      } else if (hoursAway <= 10 && probability >= 40) {
-        onlineNow.push({
-          type: 'online_soon', icon: '⏰', color: C.gold, severity: 'warning',
-          title: `${w.username} is likely online in ~${hoursAway}h`,
-          message: `They typically tip around ${label} (${probability}% probability). Plan your stream around it.`,
-          cta: null, username: w.username, whale: w, reengageMsg: ''
-        })
-      }
-    })
+    // 4. ONLINE NOW / ONLINE SOON — removed. This previously computed its
+    // own hour-of-day "usually tips around X" pattern and probability
+    // percentage from raw tip timestamps, gated only on raw tipCount >= 5.
+    // Raw tips within one behavioral visit (observationCount) can all land
+    // minutes apart, which can fabricate an hourly pattern from a single
+    // visit. No canonical field in lib/analytics.js currently supports an
+    // "expected time of day" claim, so no such behavioral action is
+    // rendered here rather than inventing a new formula for it.
 
-    // 5. DORMANT
-    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+    // 5. DORMANT — $20+ lifetime AND a canonical, baseline-gated 'Watch'
+    // behavioral state (lib/analytics.js calcFanBehavioralState). A fan
+    // with fewer than 3 behavioral visits has no established personal
+    // cadence, so an independent day-range can't tell us their absence is
+    // unusual -- only the canonical behavioralState may make that call.
+    // 'Watch' (not the canonical 'Dormant' state) is the correct match:
+    // canonical 'Dormant' means the CREATOR hasn't streamed enough to
+    // attribute the fan's absence to the fan at all, whereas 'Watch' means
+    // this specific fan has a real, baseline-backed deviation from their
+    // own pattern that isn't yet severe enough to be 'At Risk' -- which is
+    // exactly the softer "check in on them" tone this action uses.
+    whales.filter(w => w.totalUSD >= 20 && w.behavioralState === 'Watch').slice(0, 3).forEach(w => {
       const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 7 && days <= 44) {
-        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
-        dormant.push({
-          type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
-          title: `You haven't heard from ${w.username} in ${timeStr}`,
-          message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
-          cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: getPersonalMsg(w)
-        })
-      }
+      const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+      dormant.push({
+        type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
+        title: `You haven't heard from ${w.username} in ${timeStr}`,
+        message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+        cta: 'Copy Message', username: w.username, whale: w,
+        reengageMsg: getPersonalMsg(w)
+      })
     })
 
 
@@ -2569,22 +2590,26 @@ const stopImportMessageRotation = () => {
   }
 
   // ── Build re-engage list outside JSX for the same reason
+  // Eligibility comes from the canonical, evidence-gated behavioralState
+  // (lib/analytics.js calcFanBehavioralState) -- NOT an independent
+  // days-since-last-tip + minimum-spend filter. That standalone filter
+  // could flag a fan with a single tip as "at risk" purely from elapsed
+  // time, bypassing the per-fan baseline/eligibility/evidence checks the
+  // canonical function requires. This list is a display ordering over
+  // fans already determined to be At Risk elsewhere, not a second
+  // determination of who counts as at risk.
   const buildReengageList = () => {
-    const now = Date.now()
     const messageSets = [
       (name) => `Hey ${name}! I've been thinking about you lately 💕 I'm going live tonight and would love to see your name in the chat 🔥`,
       (name) => `${name}! It's been a minute and honestly I miss you 😊 Jumping on soon — come say hi? 💋`,
       (name) => `Hey love 💕 Just wanted to reach out because I was literally just thinking about you. Going live tonight — hope to see you there!`,
     ]
     return whales
-      .filter(w => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-        return days >= 3 && days <= 60 && w.totalUSD >= 10
-      })
+      .filter(w => w.behavioralState === 'At Risk')
       .sort((a, b) => b.totalUSD - a.totalUSD)
       .slice(0, 5)
       .map((w, i) => {
-        const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
+        const days = w.daysSinceLastTip ?? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000)
         return {
           whale: w,
           days,
@@ -3128,7 +3153,8 @@ const stopImportMessageRotation = () => {
       <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
-        {/* ── STICKY COMMAND BAR ── */}
+        {/* ── STICKY COMMAND BAR — shown on every tab (Go Live must stay
+             reachable everywhere, not just Command Center) ── */}
         {(() => {
           const safeAvg = (!isNaN(avgPerHour) && isFinite(avgPerHour)) ? avgPerHour : 0
           const brief = dailyBrief
@@ -3223,10 +3249,9 @@ const stopImportMessageRotation = () => {
           )}
         </div>
 
-        {/* ── DASHBOARD PROGRESS CARD — on other tabs only; Overview leads with
-             Platform Intelligence instead so the first view is never just a
-             checklist ── */}
-        {_isLowData && activeTab !== 'overview' && (
+        {/* ── DASHBOARD PROGRESS CARD — Command Center only, so it doesn't
+             compete with tab-specific content (e.g. the Fans tab) ── */}
+        {_isLowData && activeTab === 'overview' && (
           <DashboardProgressCard
             totalTips={tips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
@@ -4220,11 +4245,11 @@ const stopImportMessageRotation = () => {
         {activeTab === "whales" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 2 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <h1 style={{ fontSize: 22, fontWeight: 800, color: C.white, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 20 }}>🐳</span> Top Fans
+                  <span style={{ fontSize: 20 }}>🐳</span> Fan Intelligence
                 </h1>
-                <span style={{ fontSize: 13, color: C.text }}>Your highest-value supporters ranked by total spend</span>
+                <span style={{ fontSize: 13, color: C.text }}>Who matters, who's moving, and who needs attention — ranked by real spend and behavior</span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 {chartDrillDay && (
@@ -4290,50 +4315,9 @@ const stopImportMessageRotation = () => {
               )
             })()}
 
-            {/* CONVERSION CARD — free plan only. Only ever built from a REAL
-                fan who is both a top tipper (Whale/Shark tier) and has
-                genuinely passed the evidence-gated At Risk bar in
-                lib/analytics.js (same behavioralState used everywhere else
-                — never a separate/fabricated risk claim). If no such fan
-                exists, nothing renders — we do not manufacture urgency. */}
-            {!isPro && (() => {
-              const atRiskTopFan = [...whales]
-                .filter(w => (w.tier === 'Whale' || w.tier === 'Shark') && w.behavioralState === 'At Risk')
-                .sort((a, b) => b.totalUSD - a.totalUSD)[0]
-              if (!atRiskTopFan) return null
-              return (
-                <a href="/pricing" style={{ textDecoration: 'none', display: 'block' }}>
-                  <div style={{
-                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
-                    border: '1.5px solid rgba(248,113,113,0.6)',
-                    background: 'linear-gradient(135deg, rgba(248,113,113,0.08), rgba(251,146,60,0.05))',
-                    boxShadow: '0 0 24px rgba(248,113,113,0.15)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 18 }}>🚨</span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: C.red, textTransform: 'uppercase', letterSpacing: 0.6 }}>Top Fan At Risk</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <div aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', filter: 'blur(7px)' }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div aria-hidden style={{ filter: 'blur(6px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 14, marginBottom: 3 }}>••••••••••</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{atRiskTopFan.platform} · last tipped {atRiskTopFan.daysSinceLastTip}d ago</div>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontSize: 19, fontWeight: 800, color: C.white }}>${atRiskTopFan.totalUSD.toFixed(0)}</div>
-                        <div style={{ fontSize: 10, color: C.muted }}>lifetime spend</div>
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(248,113,113,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>⚠️ One of your top tippers has broken their pattern — unlock Fan Intelligence to see who and win them back</span>
-                      <span style={{ fontSize: 12, color: C.red, fontWeight: 800, whiteSpace: 'nowrap' }}>Upgrade to Pro →</span>
-                    </div>
-                  </div>
-                </a>
-              )
-            })()}
-
-            {/* ALL TIPPERS — CRM Card Grid */}
+            {/* A. LEADERBOARD — "Who matters?" Ranked by totalUSD (already
+                sorted descending upstream), using the shared tier/platform
+                filters above. No invented scoring column. */}
             {filteredWhales.length === 0 ? (
               <div style={{ ...glassCard, borderRadius: 14, padding: 32, textAlign: 'center', marginBottom: 20 }}>
                 <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
@@ -4341,267 +4325,320 @@ const stopImportMessageRotation = () => {
                 <div style={{ fontSize: 12, color: C.text }}>Try a different tier or clear the platform filter</div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14, marginBottom: 20 }}>
-                {filteredWhales.map((w, i) => {
-                  const tc = TIER_COLORS[w.tier] || C.cyan
-                  const days = w.daysSinceLastTip ?? (w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null)
-                  const relScore = Math.min(100, Math.round((w.tipCount * 3) + (w.totalUSD / 10) + (days < 7 ? 20 : days < 30 ? 10 : 0)))
-                  const scoreColor = relScore >= 70 ? C.green : relScore >= 40 ? C.gold : C.red
-                  // Reuse the shared behavioral-state formula from analytics.js
-                  // (w.behavioralState / w.behavioralStateReason) — evidence-gated
-                  // per Fan Intelligence rules, never a raw days-since guess.
-                  const bs = w.behavioralState
-                  const riskLevel = bs === "Active" ? { label: "Active", color: C.green, pct: 15 }
-                    : bs === "Watch" ? { label: "Watch", color: C.gold, pct: 55 }
-                    : bs === "At Risk" ? { label: "At Risk", color: C.red, pct: 85 }
-                    : bs === "Dormant" ? { label: "Dormant", color: C.muted, pct: 40 }
-                    : null // New/Developing, Insufficient Data → no risk meter at all
-                  const riskReason = w.behavioralStateReason || null
-                  return (
-                    <div key={i}
-                      className="hoverable"
-                      style={{ ...glassCard, borderRadius: 16, padding: 16, border: '1px solid rgba(255,255,255,0.08)', cursor: 'default', transition: 'transform 0.18s ease, box-shadow 0.18s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px rgba(0,0,0,0.4)` }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '' }}>
-
-                      {/* TOP ROW — avatar, name, badges, score */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                        {/* Avatar */}
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${tc}, ${tc}80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                          {(w.username || '?').charAt(0).toUpperCase()}
-                        </div>
-                        {/* Name + badges */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div title={w.username} style={{ fontSize: 14, fontWeight: 700, color: C.white, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 3 }}>{w.username}</div>
-                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            <span style={{ padding: '1px 6px', borderRadius: 100, background: `${tc}18`, color: tc, fontSize: 9, fontWeight: 700 }}>{w.tier}</span>
-                            <span style={{ padding: '1px 6px', borderRadius: 100, background: 'rgba(255,255,255,0.05)', color: C.text, fontSize: 9, fontWeight: 600 }}>{w.platform || 'Unknown'}</span>
-                          </div>
-                        </div>
-                        {/* Relationship score */}
-                        <div title="Relationship score" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: `2px solid ${scoreColor}45`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>{relScore}</div>
-                        </div>
-                      </div>
-
-                      {/* PRIMARY METRICS — typography-led, no heavy tiles */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', rowGap: 8, columnGap: 10, marginBottom: 12, padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>${(w.totalUSD || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Lifetime spend</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>{(w.tipCount || 0).toLocaleString()}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Total tips</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }} title={w.lastTipDate ? new Date(w.lastTipDate).toLocaleString() : undefined}>{formatLastActive(days).replace('Last active ', '')}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Last active</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>${(w.avgTipSize || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: 10, color: C.text }}>Avg. tip</div>
-                        </div>
-                      </div>
-
-                      {/* RETENTION RISK */}
-                      {riskLevel && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <span style={{ fontSize: 9, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>Retention risk</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: riskLevel.color }}>{riskLevel.label}</span>
-                          </div>
-                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${riskLevel.pct}%`, borderRadius: 2, background: riskLevel.color, transition: 'width 0.4s ease' }} />
-                          </div>
-                          {riskReason && <div style={{ fontSize: 10, color: C.text, marginTop: 4 }}>{riskReason}</div>}
-                        </div>
-                      )}
-
-                      {/* ACTIONS — one primary, two secondary */}
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
-                          style={{ flex: 1, padding: '8px 0', borderRadius: 8, background: 'linear-gradient(135deg, #22D3EE, #EC4899)', border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
-                          title="View fan profile">View Fan</button>
-                        <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                          className="heart-envelope-btn"
-                          aria-label={`Message ${w.username}`}
-                          title="Message fan"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(255,43,174,0.1)', border: '1px solid rgba(255,43,174,0.25)', color: C.pink, cursor: 'pointer' }}><EnvelopeHeartIcon size={15} /></button>
-                        <button onClick={() => setNoteTarget(w.username)}
-                          aria-label={`Add note for ${w.username}`}
-                          title="Add note"
-                          style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#a78bfa', fontSize: 13, cursor: 'pointer' }}>📝</button>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>🏆 Leaderboard</div>
+                  <span style={{ fontSize: 11, color: C.muted }}>Ranked by lifetime spend</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {(showAllLeaderboard ? filteredWhales.slice(0, 25) : filteredWhales.slice(0, 5)).map((w, i) => (
+                    <FanRow key={w.username + i} w={w} rank={i + 1}
+                      onView={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
+                      onMessage={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                      onNote={() => setNoteTarget(w.username)} />
+                  ))}
+                </div>
+                {filteredWhales.length > 5 && (
+                  <button onClick={() => setShowAllLeaderboard(v => !v)} style={{ marginTop: 12, width: "100%", padding: "8px 0", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    {showAllLeaderboard ? "Show Less" : `Show More (${Math.min(filteredWhales.length, 25) - 5} more)`}
+                  </button>
+                )}
               </div>
             )}
 
-            {/* 💎 WHALE INTELLIGENCE PANEL */}
-            {filteredWhales.length > 0 && (
-              <div style={{ ...glassCard, borderRadius: 16, padding: 24, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #EC4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧠</div>
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: C.white }}>Fan Intelligence</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>Deep behavior patterns, projections & how to engage each fan</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {filteredWhales.slice(0, isPro ? 5 : 3).map((w, i) => {
-                    const tags = []
-                    if (w.hasPrivates && w.privateCount >= 2) tags.push({ label: "📷 Cam2Cam spender", color: C.pink })
-                    if (w.avgTipSize >= 20) tags.push({ label: "💸 Big tipper", color: C.gold })
-                    if (w.tipCount >= 20 && w.avgTipSize < 5) tags.push({ label: "🎯 Micro-tipper", color: C.cyan })
-                    if (w.tipProbability?.level === "High") tags.push({ label: "🟢 Likely to tip soon", color: C.green })
-                    if (w.behavioralState === "At Risk") tags.push({ label: "🚨 At churn risk", color: C.red })
-                    if (w.daysSinceLastTip <= 3) tags.push({ label: "🔥 Recently active", color: C.orange })
-                    if (w.tipNotes && w.tipNotes.length > 0) tags.push({ label: "💬 Leaves tip notes", color: C.indigo })
-                    if (w.spendPercentile >= 90) tags.push({ label: `👑 Top ${100 - w.spendPercentile}% spender`, color: C.gold })
+            {/* PRO FAN INTELLIGENCE PREVIEW — one real fan from the
+                creator's own data, selected by a 3-tier fallback using ONLY
+                existing fields (no new formula/threshold):
+                  1. Whale/Shark tier + behavioralState === 'At Risk'
+                     (same evidence-gated bar used everywhere else)
+                  2. Whale/Shark tier + trend.direction === 'down' AND
+                     trend.confidence === 'Medium' (same calcFanTrend()
+                     output AND the same confidence bar Trending Fans/
+                     CamCash Noticed require -- a Low-confidence trend is
+                     data the formula itself calls too thin, so it's not
+                     eligible to feature here either)
+                  3. top fan by totalUSD, neutral framing (no risk claim —
+                     nothing here implies urgency that isn't supported)
+                Scoped to the creator's primary platform (dailyBrief.
+                displayPlat -- the existing "highest lifetime revenue"
+                platform already computed for the BEST PLATFORM stat, not
+                a new concept), falling back to all platforms if no fan
+                qualifies there or no primary platform is established yet.
+                Free: username + behavioralStateReason blurred, real
+                platform/tier/totalUSD/tipCount/daysSinceLastTip visible,
+                CTA reuses the existing openUpgradeModal() tracked flow.
+                Pro: same slot, same selected fan, unblurred, opens the
+                existing Fan Profile modal — no second profile UI. */}
+            {(() => {
+              const primaryPlatform = dailyBrief?.displayPlat || null
+              const pool = primaryPlatform ? whales.filter(w => w.platform === primaryPlatform) : whales
+              const selectFrom = (arr) => arr.filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+                .find(w => w.behavioralState === 'At Risk')
+                || arr.filter(w => w.tier === 'Whale' || w.tier === 'Shark')
+                  .sort((a, b) => b.totalUSD - a.totalUSD)
+                  .find(w => w.trend?.direction === 'down' && w.trend?.confidence === 'Medium')
+                || [...arr].sort((a, b) => b.totalUSD - a.totalUSD)[0]
+              const featuredFan = (pool.length > 0 ? selectFrom(pool) : null) || selectFrom(whales)
+              if (!featuredFan) return null
 
-                    // Relationship status
-                    const relStatus = w.daysSinceLastTip <= 7
-                      ? { label: "🔥 Hot", color: C.orange }
-                      : w.daysSinceLastTip <= 30
-                      ? { label: "👀 Watching", color: C.cyan }
-                      : w.daysSinceLastTip <= 60
-                      ? { label: "❄️ Cooling", color: C.blue }
-                      : { label: "💀 At Risk", color: C.red }
+              const isAtRisk = featuredFan.behavioralState === 'At Risk'
+              const isTrendingDown = !isAtRisk && featuredFan.trend?.direction === 'down' && featuredFan.trend?.confidence === 'Medium'
+              const headline = isAtRisk ? 'A high-value fan has gone quiet'
+                : isTrendingDown ? "This fan's recent activity has changed"
+                : 'A closer look at your top fan'
+              const tierColor = TIER_COLORS[featuredFan.tier] || C.cyan
+              const accentColor = isAtRisk ? C.red : isTrendingDown ? C.gold : C.cyan
 
-                    // Spending velocity vs avg fan
-                    const avgFanUSD = whales.length > 0 ? whales.reduce((s, ww) => s + ww.totalUSD, 0) / whales.length : 1
-                    const velocity = avgFanUSD > 0 ? (w.totalUSD / avgFanUSD).toFixed(1) : "1.0"
-                    const velocityPct = Math.min(100, Math.round((w.totalUSD / Math.max(...whales.map(ww => ww.totalUSD))) * 100))
-
-                    // Coaching bullets
-                    const getCoachingBullets = () => {
-                      const bullets = []
-                      if (w.churnRisk?.level === "Critical") {
-                        bullets.push({ text: "Send a personal message today — they may not return without one", color: C.red })
-                        bullets.push({ text: "Reference something specific — their username, a past tip, or a show they loved", color: C.red })
-                        bullets.push({ text: "Offer something exclusive to bring them back (early access, private goal)", color: C.orange })
-                      } else if (w.churnRisk?.level === "High") {
-                        bullets.push({ text: "Re-engage this week — their pattern shows they go cold fast without contact", color: C.orange })
-                        bullets.push({ text: "Offer something special: a goal just for them or a shoutout next stream", color: C.gold })
-                        bullets.push({ text: "Keep the message short and warm — don't make it feel like a sales pitch", color: C.muted })
-                      } else if (w.tipProbability?.level === "High") {
-                        bullets.push({ text: "Go live during their active window — they're very likely to tip", color: C.green })
-                        bullets.push({ text: "Set a tip goal that matches their avg ($" + w.avgTipSize.toFixed(0) + ") — it feels achievable to them", color: C.cyan })
-                        bullets.push({ text: "Acknowledge them by name in stream — they respond to direct recognition", color: C.muted })
-                      } else if (w.hasPrivates) {
-                        bullets.push({ text: "Offer a private show — they've already bought one before", color: C.pink })
-                        bullets.push({ text: "Mention privates casually in stream — a soft reminder works well with this fan type", color: C.muted })
-                        bullets.push({ text: "They respond to exclusivity — make them feel like a VIP", color: C.gold })
-                      } else if (w.avgTipSize >= 20) {
-                        bullets.push({ text: "Give them VIP attention in stream — big tippers notice when they're seen", color: C.gold })
-                        bullets.push({ text: "Set a goal around their avg tip size ($" + w.avgTipSize.toFixed(0) + ") — they enjoy being the hero", color: C.cyan })
-                        bullets.push({ text: "Thank them publicly and specifically — it reinforces the behavior", color: C.muted })
-                      } else if (w.tipCount >= 20) {
-                        bullets.push({ text: "Thank them publicly — frequent tippers love recognition in front of the room", color: C.cyan })
-                        bullets.push({ text: "Small goals and countdowns keep micro-tippers engaged and clicking", color: C.muted })
-                        bullets.push({ text: "Consistency is their love language — show up regularly and they will too", color: C.muted })
-                      } else {
-                        bullets.push({ text: "Keep them warm — consistent presence builds loyalty over time", color: C.muted })
-                        bullets.push({ text: "Greet them by name next time they appear in chat", color: C.muted })
-                        bullets.push({ text: "They have potential — early engagement now converts them to regulars", color: C.cyan })
-                      }
-                      return bullets
-                    }
-                    const coachingBullets = getCoachingBullets()
-                    const tierColor = TIER_COLORS[w.tier] || C.cyan
-
-                    return (
-                      <div key={i} style={{ padding: 18, borderRadius: 14, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                        {/* HEADER ROW */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 9, background: `${tierColor}20`, border: `1px solid ${tierColor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: tierColor }}>
-                              {w.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</span>
-                                <span style={{ padding: "2px 8px", borderRadius: 20, background: `${relStatus.color}15`, border: `1px solid ${relStatus.color}30`, fontSize: 10, fontWeight: 700, color: relStatus.color }}>{relStatus.label}</span>
-                              </div>
-                              <span style={{ fontSize: 11, color: C.muted }}>${w.totalUSD.toFixed(0)} lifetime · {w.tipCount} tips · {w.platform}</span>
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", gap: 6, alignItems:"center" }}>
-                            <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }} style={{ padding: "4px 10px", borderRadius: 6, background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.25)", color: C.cyan, fontSize: 11, cursor: "pointer" }}>🔍 Profile</button>
-                            <button onClick={() => { setNoteTarget(w.username); setNoteText(tipperNotes[w.username?.toLowerCase()]?.note || '') }}
-                              style={{ padding: "4px 8px", borderRadius: 6, background: tipperNotes[w.username?.toLowerCase()]?.note ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)", border: tipperNotes[w.username?.toLowerCase()]?.note ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.1)", color: tipperNotes[w.username?.toLowerCase()]?.note ? C.gold : C.muted, fontSize: 11, cursor: "pointer" }}>
-                              {tipperNotes[w.username?.toLowerCase()]?.note ? "📝 Note" : "📝"}
-                            </button>
-                            <button onClick={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
-                              className="heart-envelope-btn"
-                              aria-label={`Message ${w.username}`}
-                              title="Message fan"
-                              style={{ padding: 6, borderRadius: 8, background: "rgba(255,43,174,0.1)", border: "1px solid rgba(255,43,174,0.25)", color: C.pink, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><EnvelopeHeartIcon size={17} /></button>
-                          </div>
-                        </div>
-
-                        {/* PERSONALITY TAGS */}
-                        {tags.length > 0 && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                            {tags.map((tag, j) => (
-                              <span key={j} style={{ padding: "3px 10px", borderRadius: 20, background: `${tag.color}15`, border: `1px solid ${tag.color}30`, fontSize: 11, fontWeight: 600, color: tag.color }}>{tag.label}</span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* METRICS ROW */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                          {/* Spending velocity */}
-                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>SPENDING VELOCITY</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 6 }}>{velocity}x avg fan</div>
-                            <div style={{ height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
-                              <div style={{ height: "100%", width: `${velocityPct}%`, borderRadius: 2, background: `linear-gradient(90deg, ${C.gold}, ${C.orange})` }} />
-                            </div>
-                          </div>
-                          {/* Visit pattern */}
-                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ACTIVE WINDOW</div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: C.cyan }}>{w.typicalOnlineHours !== 'Unknown' ? w.typicalOnlineHours : '—'}</div>
-                          </div>
-                          {/* Monthly projection */}
-                          <div style={{ padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)" }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>MONTHLY VALUE</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>${w.lifetimeValue?.monthly > 0 ? w.lifetimeValue.monthly.toFixed(0) : '—'}</div>
-                          </div>
-                        </div>
-
-                        {/* TIP NOTES */}
-                        {w.tipNotes && w.tipNotes.length > 0 && (
-                          <div style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Recent Tip Notes</div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 64, overflowY: "auto" }}>
-                              {w.tipNotes.slice(-2).reverse().map((note, j) => (
-                                <div key={j} style={{ padding: "6px 10px", background: `${C.indigo}10`, border: `1px solid ${C.indigo}20`, borderRadius: 6, fontSize: 11, color: C.text, fontStyle: "italic" }}>
-                                  "{note}"
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* COACHING BULLETS */}
-                        <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10 }}>
-                          <div style={{ fontSize: 10, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>💡 Action Plan</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {coachingBullets.map((b, j) => (
-                              <div key={j} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                                <span style={{ color: b.color, fontSize: 12, flexShrink: 0, marginTop: 1 }}>•</span>
-                                <span style={{ fontSize: 12, color: b.color, lineHeight: 1.4 }}>{b.text}</span>
-                              </div>
-                            ))}
-                          </div>
+              if (!isPro) {
+                return (
+                  <div style={{
+                    ...glassCard, borderRadius: 16, padding: 18, marginBottom: 20,
+                    border: `1.5px solid ${accentColor}55`,
+                    boxShadow: `0 0 24px ${accentColor}22`,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: accentColor, textTransform: 'uppercase', letterSpacing: 0.6 }}>✦ CamCash Noticed</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.gold, border: `1px solid ${C.gold}55`, borderRadius: 100, padding: '2px 8px' }}>PRO</span>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 14 }}>{headline}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <div aria-label="Fan identity locked" style={{ filter: 'blur(5px)', userSelect: 'none', color: C.white, fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{featuredFan.username}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 10, fontWeight: 700 }}>{featuredFan.tier}</span>
+                          <span style={{ fontSize: 11, color: C.muted }}>{featuredFan.platform}</span>
                         </div>
                       </div>
-                    )
-                  })}
+                      <div style={{ display: 'flex', gap: 18 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>${featuredFan.totalUSD.toFixed(0)}</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>spent</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>{featuredFan.tipCount}</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>tips</div>
+                        </div>
+                      </div>
+                    </div>
+                    {featuredFan.daysSinceLastTip != null && (
+                      <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Last tip <span style={{ color: C.text, fontWeight: 600 }}>{featuredFan.daysSinceLastTip}d ago</span></div>
+                    )}
+                    {/* Only shown for isAtRisk: that's the one state where
+                        behavioralStateReason is guaranteed to be a real,
+                        evidence-based At-Risk conclusion. In the trending-
+                        down or neutral-top-fan branches, behavioralStateReason
+                        could just as easily be an unrelated "on schedule"
+                        or "too early to assess" message -- rendering it here
+                        would imply a locked insight that doesn't exist. */}
+                    {isAtRisk && featuredFan.behavioralStateReason && (
+                      <div aria-label="Deeper intelligence locked" style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ filter: 'blur(4px)', userSelect: 'none', fontSize: 12, color: C.text, lineHeight: 1.4 }}>{featuredFan.behavioralStateReason}</div>
+                      </div>
+                    )}
+                    <button onClick={() => openUpgradeModal('fans_pro_preview')} style={{ marginTop: 14, width: '100%', padding: '10px 0', borderRadius: 9, background: `linear-gradient(135deg, ${C.cyan}, ${C.pink})`, border: 'none', color: '#06101A', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                      Unlock Fan Intelligence →
+                    </button>
+                  </div>
+                )
+              }
+
+              // Pro: same slot, same fan, unblurred — opens the existing
+              // Fan Profile modal rather than a second profile UI.
+              return (
+                <button onClick={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(featuredFan) }}
+                  style={{
+                    ...glassCard, display: 'block', width: '100%', textAlign: 'left', borderRadius: 16, padding: 18, marginBottom: 20, cursor: 'pointer',
+                    border: `1.5px solid ${accentColor}55`, boxShadow: `0 0 24px ${accentColor}22`,
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: accentColor, textTransform: 'uppercase', letterSpacing: 0.6 }}>✦ CamCash Noticed</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.white, marginBottom: 14 }}>{headline}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <div style={{ color: C.white, fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{featuredFan.username}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 100, background: `${tierColor}20`, border: `1px solid ${tierColor}50`, color: tierColor, fontSize: 10, fontWeight: 700 }}>{featuredFan.tier}</span>
+                        <span style={{ fontSize: 11, color: C.muted }}>{featuredFan.platform}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 18 }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>${featuredFan.totalUSD.toFixed(0)}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>spent</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>{featuredFan.tipCount}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>tips</div>
+                      </div>
+                    </div>
+                  </div>
+                  {featuredFan.daysSinceLastTip != null && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: C.muted }}>Last tip <span style={{ color: C.text, fontWeight: 600 }}>{featuredFan.daysSinceLastTip}d ago</span></div>
+                  )}
+                  {/* Same isAtRisk gate as the free variant above -- see
+                      comment there. */}
+                  {isAtRisk && featuredFan.behavioralStateReason && (
+                    <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>{featuredFan.behavioralStateReason}</div>
+                    </div>
+                  )}
+                </button>
+              )
+            })()}
+
+            {/* B. TRENDING FANS — "Who is moving?" Uses fan.trend.direction/
+                label as already computed by calcFanTrend(). Confidence is NOT
+                a label to attach after the fact -- calcFanTrend's own
+                confidence field (Low = 4-7 tips, Medium = 8+) IS the existing
+                minimum-data gate for this insight, so only Medium-confidence
+                trends are eligible to be shown as a real signal here (same
+                bar CamCash Noticed's "rising" bucket already used). A
+                Low-confidence trend is data the formula itself has already
+                marked too thin to call a pattern -- it's suppressed, not
+                just styled smaller. No new threshold invented: this reuses
+                calcFanTrend's own confidence classification. */}
+            {(() => {
+              const moving = filteredWhales.filter(w => w.trend?.confidence === 'Medium' && (w.trend.direction === 'up' || w.trend.direction === 'down')).slice(0, 5)
+              if (moving.length === 0 && filteredWhales.length > 0) {
+                return (
+                  <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>📈 Trending Fans</div>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>Trend unavailable — more activity is needed to establish a reliable trend for your fans.</div>
+                  </div>
+                )
+              }
+              if (moving.length === 0) return null
+              return (
+                <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 12 }}>📈 Trending Fans</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {moving.map((w, i) => {
+                      const up = w.trend.direction === 'up'
+                      const color = up ? C.green : C.red
+                      return (
+                        <div key={w.username + i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 9, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 14 }}>{up ? "🔼" : "🔽"}</span>
+                          <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.username}</div>
+                            <div style={{ fontSize: 10, color: C.muted }}>{w.platform}</div>
+                          </div>
+                          <span style={{ padding: "2px 8px", borderRadius: 20, background: `${color}15`, border: `1px solid ${color}30`, fontSize: 11, fontWeight: 700, color }}>{w.trend.label}</span>
+                          {typeof w.trend.pctChange === 'number' && (
+                            <span style={{ fontSize: 11, fontWeight: 700, color }}>{w.trend.pctChange > 0 ? '+' : ''}{w.trend.pctChange.toFixed(0)}%</span>
+                          )}
+                          {w.trend.confidence && w.trend.confidence !== 'none' && (
+                            <span style={{ fontSize: 10, color: C.muted }}>{w.trend.confidence} confidence</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* C. CAMCASH NOTICED — "What happened?" Fans-native feed built
+                ONLY from already-gated fields: the same At-Risk gate used by
+                the free-plan upsell card above (Whale/Shark tier +
+                behavioralState === 'At Risk'), and Medium-confidence upward
+                trend fans (the higher-confidence trend bucket). No new
+                thresholds, no synthetic events. Renders nothing if empty. */}
+            {(() => {
+              const items = []
+              const riskFans = [...filteredWhales]
+                .filter(w => (w.tier === 'Whale' || w.tier === 'Shark') && w.behavioralState === 'At Risk')
+                .sort((a, b) => b.totalUSD - a.totalUSD)
+              riskFans.slice(0, 2).forEach(w => {
+                items.push({
+                  key: `risk-${w.username}`,
+                  color: C.red,
+                  icon: '🚨',
+                  text: `${w.username} (${w.tier}, $${w.totalUSD.toFixed(0)} lifetime) is at risk — ${w.behavioralStateReason || 'their tipping pattern has broken from the norm'}.`,
+                })
+              })
+              const risingFans = filteredWhales
+                .filter(w => w.trend?.direction === 'up' && w.trend?.confidence === 'Medium')
+                .slice(0, 2)
+              risingFans.forEach(w => {
+                items.push({
+                  key: `up-${w.username}`,
+                  color: C.green,
+                  icon: '📈',
+                  text: `${w.username} is ${w.trend.label.toLowerCase()}${typeof w.trend.pctChange === 'number' ? ` (${w.trend.pctChange > 0 ? '+' : ''}${w.trend.pctChange.toFixed(0)}%)` : ''} — Medium confidence.`,
+                })
+              })
+              const shown = items.slice(0, 3)
+              if (shown.length === 0) return null
+              return (
+                <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 12 }}>👀 CamCash Noticed</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {shown.map(item => (
+                      <div key={item.key} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "9px 12px", borderRadius: 9, background: `${item.color}0d`, border: `1px solid ${item.color}25` }}>
+                        <span style={{ fontSize: 13, flexShrink: 0 }}>{item.icon}</span>
+                        <span style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>{item.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* D. FAN INTELLIGENCE / COMPARISON — "What's happening across my
+                fan base?" Pure aggregation of already-existing per-fan
+                fields, grouped by platform. A plain CSS bar compares revenue
+                by platform (no new charting library pulled in). */}
+            {allPlatforms.length > 0 && (() => {
+              const rows = allPlatforms.map(p => {
+                const fansHere = whales.filter(w => w.platform === p)
+                return {
+                  platform: p,
+                  fanCount: fansHere.length,
+                  revenue: fansHere.reduce((s, w) => s + (w.totalUSD || 0), 0),
+                  whaleCount: fansHere.filter(w => w.tier === 'Whale').length,
+                  tipCount: fansHere.reduce((s, w) => s + (w.tipCount || 0), 0),
+                }
+              }).sort((a, b) => b.revenue - a.revenue)
+              const maxRevenue = Math.max(1, ...rows.map(r => r.revenue))
+              if (rows.length === 0) return null
+              return (
+                <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 12 }}>📊 Fan Base by Platform</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {rows.map(r => (
+                      <div key={r.platform}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6, marginBottom: 5 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{r.platform}</span>
+                          <span style={{ fontSize: 11, color: C.muted }}>{r.fanCount} fans · {r.whaleCount} whale · {r.tipCount} tips</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.gold }}>${r.revenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.round((r.revenue / maxRevenue) * 100)}%`, borderRadius: 3, background: "linear-gradient(90deg, #22D3EE, #EC4899)" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* E. FAN DIRECTORY — "Find any fan." Full filtered list, sharing
+                the same whaleFilter/platformFilter state as the Leaderboard
+                above (one shared filter, no duplicate pills). */}
+            {filteredWhales.length > 0 && (
+              <div style={{ ...glassCard, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.white }}>📇 Fan Directory</div>
+                  <span style={{ fontSize: 11, color: C.muted }}>{filteredWhales.length} fan{filteredWhales.length === 1 ? '' : 's'}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 520, overflowY: "auto" }}>
+                  {filteredWhales.map((w, i) => (
+                    <FanRow key={w.username + '-dir-' + i} w={w}
+                      onView={(e) => { whaleModalTriggerRef.current = e.currentTarget; setSelectedWhale(w) }}
+                      onMessage={() => { setMessageTarget(w); setMessageIndex(0); setMessageCopied(false) }}
+                      onNote={() => setNoteTarget(w.username)} />
+                  ))}
                 </div>
               </div>
             )}
@@ -6690,8 +6727,6 @@ const stopImportMessageRotation = () => {
         const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
         const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
-        const avgDaysBetweenTips = whaleTips.length > 1 ? Math.floor((new Date(w.lastTipDate) - new Date(firstTip?.date_time)) / 86400000 / (whaleTips.length - 1)) : 7
-        const likelyReturnDays = daysSinceLastTip !== null ? Math.max(0, avgDaysBetweenTips - daysSinceLastTip) : null
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
         // same fix as the card grid — instead of a second local calculation.
         const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null
@@ -6792,7 +6827,7 @@ const stopImportMessageRotation = () => {
                         {[
                           { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
                           { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
-                          { icon: "🕐", label: "Avg days between tips", value: whaleTips.length > 1 ? `Every ~${avgDaysBetweenTips} days` : "Not enough data yet" },
+                          { icon: "🕐", label: "Avg days between visits", value: w.avgDaysBetweenTips != null ? `Every ~${Math.round(w.avgDaysBetweenTips)} days` : "Not enough data yet" },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
                         ].map(({ icon, label, value, sub, color }) => (
                           <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -6934,19 +6969,33 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
                 )}
-                {whaleTips.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>🤖 AI Predictions</div>
-                    <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[{ label: "📅 Likely to tip again in", value: likelyReturnDays === 0 ? "Overdue!" : `~${likelyReturnDays} days`, color: C.cyan }, { label: "💸 Predicted next tip size", value: `$${(w.avgTipSize * 1.1).toFixed(2)}`, color: C.gold }, { label: "🎯 Engagement score", value: `${Math.min(99, Math.round((w.tipCount / 10) * 20 + (w.totalUSD / 100) * 10))} / 100`, color: C.pink }, { label: "📈 30-day revenue forecast", value: `$${((w.totalUSD / Math.max(1, Math.floor((Date.now() - new Date(firstTip?.date_time)) / 2592000000))) * 1.05).toFixed(2)}`, color: C.green }].map(({ label, value, color }) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
-                          <div style={{ fontSize: 13, color: C.text }}>{label}</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
-                        </div>
-                      ))}
+                {whaleTips.length > 0 && (() => {
+                  // Only canonical, already-gated fields -- no local formulas,
+                  // no invented multipliers. "Likely to tip again" and
+                  // "Monthly value" are each omitted (not fabricated) when
+                  // the canonical analytics don't yet support them for this
+                  // fan, rather than displaying an unsupported claim.
+                  const hasEstablishedBaseline = w.behavioralState !== 'Insufficient Data' && w.behavioralState !== 'New/Developing'
+                  const items = [
+                    (hasEstablishedBaseline && w.expectedNextTip) ? { label: "📅 Likely to tip again", value: w.expectedNextTip, color: C.cyan } : null,
+                    { label: "💸 Average tip", value: `$${w.avgTipSize.toFixed(2)}`, color: C.gold },
+                    (w.lifetimeValue && w.lifetimeValue.monthly != null) ? { label: "📈 Monthly value", value: `$${w.lifetimeValue.monthly.toFixed(2)}${w.lifetimeValue.confidence === 'Low' ? ' · Low confidence' : ''}`, color: C.green } : null,
+                  ].filter(Boolean)
+                  if (items.length === 0) return null
+                  return (
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>📊 Fan Insights</div>
+                      <div style={{ padding: 16, background: "rgba(255,255,255,0.04)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", gap: 10 }}>
+                        {items.map(({ label, value, color }) => (
+                          <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8 }}>
+                            <div style={{ fontSize: 13, color: C.text }}>{label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color }}>{value}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
                 <button onClick={() => setSelectedWhale(null)} style={{ width: "100%", padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: C.text, fontSize: 14, cursor: "pointer" }}>Close Profile</button>
                 <div style={{ textAlign: "center", fontSize: 11, color: C.text, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>🔒 All fan data is private and secure.</div>
                 </div>
@@ -7113,6 +7162,10 @@ const stopImportMessageRotation = () => {
                   <span style={{ fontSize: 16, flexShrink: 0 }}>🔍</span>
                   <input
                     autoFocus
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    name="camcash-fan-search"
                     value={fanSearchQuery}
                     onChange={e => setFanSearchQuery(e.target.value)}
                     placeholder="Search by username..."
