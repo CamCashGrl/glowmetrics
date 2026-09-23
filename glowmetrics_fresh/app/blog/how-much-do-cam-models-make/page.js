@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How Much Do Cam Models Make in 2026? (Real Income Ranges)',
@@ -224,6 +225,7 @@ export default function HowMuchDoCamModelsMake() {
           <a href="/blog/best-cam-model-tools" style={s.relLink}>→ Best Cam Model Analytics Tools</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

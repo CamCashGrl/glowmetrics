@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How to Make Money on Chaturbate: Beginner Guide to Tokens, Payouts, and First Tips | CamCash',
@@ -404,6 +405,7 @@ export default function HowToMakeMoneyOnChaturbate() {
           <a href="/blog/cam-model-earnings" style={s.relLink}>→ Cam Model Earnings: The Complete Guide</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

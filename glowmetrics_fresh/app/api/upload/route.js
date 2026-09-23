@@ -72,21 +72,30 @@ async function handleUpload(req) {
 
   // Log parse attempt to track platform support and format issues
   const formatAnalysis = analyzeFormat(raw)
-  await supabase.rpc('log_paste_parse_attempt', {
-    p_user_id: user.id,
-    p_source: 'dashboard',
-    p_attempted_platform: textDetectedPlatform,
-    p_claimed_platform: explicitPlatform || null,
-    p_supported: ['Chaturbate', 'BongaCams', 'MyFreeCams'].includes(textDetectedPlatform),
-    p_raw_text: raw.substring(0, 500),
-    p_line_count: formatAnalysis.line_count || null,
-    p_has_tabs: formatAnalysis.has_tabs || null,
-    p_has_commas: formatAnalysis.has_commas || null,
-    p_top_shapes: formatAnalysis.top_shapes || null,
-    p_parse_success: parsed.length > 0,
-    p_error_reason: parsed.length > 0 ? null : 'CSV parsing returned no rows',
-    p_error_details: formatAnalysis,
-  }).catch(err => console.error('Failed to log parse attempt:', err))
+  // supabase.rpc() returns a PostgrestFilterBuilder — a thenable, not a real
+  // Promise (it only implements .then(), not .catch()). Chaining .catch()
+  // on it throws synchronously and was taking down the entire upload
+  // request before any tips were inserted. try/catch keeps this logging
+  // call non-blocking as intended.
+  try {
+    await supabase.rpc('log_paste_parse_attempt', {
+      p_user_id: user.id,
+      p_source: 'dashboard',
+      p_attempted_platform: textDetectedPlatform,
+      p_claimed_platform: explicitPlatform || null,
+      p_supported: ['Chaturbate', 'BongaCams', 'MyFreeCams'].includes(textDetectedPlatform),
+      p_raw_text: raw.substring(0, 500),
+      p_line_count: formatAnalysis.line_count || null,
+      p_has_tabs: formatAnalysis.has_tabs || null,
+      p_has_commas: formatAnalysis.has_commas || null,
+      p_top_shapes: formatAnalysis.top_shapes || null,
+      p_parse_success: parsed.length > 0,
+      p_error_reason: parsed.length > 0 ? null : 'CSV parsing returned no rows',
+      p_error_details: formatAnalysis,
+    })
+  } catch (err) {
+    console.error('Failed to log parse attempt:', err)
+  }
 
   const rows = parsed.map((row) => {
     const tokens = Number(row.tokens) || 0

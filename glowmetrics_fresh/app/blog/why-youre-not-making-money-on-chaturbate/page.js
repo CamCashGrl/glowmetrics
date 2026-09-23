@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Button from '../../../components/ui/Button'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: "Why You're Not Making Money on Chaturbate (And How to Fix It) | CamCash",
@@ -227,6 +228,7 @@ export default function Page() {
         </div>
       </article>
 
+      <ChaturbateAffiliateCTA />
       <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px 40px', textAlign: 'center' }}>
         <p style={{ fontSize: 12, color: '#475569' }}>© 2026 CamCash — Built for cam models who want to grow</p>
       </footer>

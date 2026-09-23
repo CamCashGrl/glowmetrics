@@ -1,4 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ProductCarousel from '../../components/ProductCarousel'
+import { PRODUCTS } from '@/app/lib/productsData'
 
 export const metadata = {
   title: 'Spin-the-Wheel Cam Game: Pricing, Prize Ideas & 8 Show Formats',
@@ -169,6 +171,8 @@ export default function BlogPost() {
       </div>
 
       <p style={s.p}>Looking for more game-based revenue ideas? The <a href="/blog/roll-the-dice-game-pack" style={s.link}>Roll the Dice Game Pack</a> provides pricing guides, results templates, and performance tracking for dice games and other tip-game formats alongside your wheel strategies.</p>
+
+      <ProductCarousel products={PRODUCTS} currentProductId="spin-wheel" />
 
       <div style={s.faq}>
         <h2 style={{...s.h2, marginTop: 0}}>Spin-the-Wheel FAQ</h2>

@@ -48,7 +48,7 @@ export default function sitemap() {
 
     // New creator-product articles
     'cam-room-dice-game-pack',
-    'cam-room-dice-games',
+    'cam-room-dice-game-ideas',
     'what-to-do-when-cam-room-is-slow',
     'cam-session-scripts-for-models',
     'chaturbate-earnings-growth-bundle',
@@ -89,7 +89,6 @@ export default function sitemap() {
     'is-camming-legal',
 
     // Existing and new coaching content
-    'live-ai-coaching-cam-models',
     'live-mode-coaching-for-cam-models',
 
     // New MyFreeCams articles

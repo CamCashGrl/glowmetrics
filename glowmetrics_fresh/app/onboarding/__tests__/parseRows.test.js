@@ -176,6 +176,66 @@ describe('parseRows — Chaturbate header-mapped CSV paste', () => {
   })
 })
 
+describe('parseRows — Chaturbate "Token Statement" pasted-page format (date / action / tip / tokens\\tbalance blocks)', () => {
+  // Mirrors the real production paste that triggered this fix: a copy/paste
+  // of Chaturbate's token statement page, not the quoted-CSV export. Each
+  // transaction is its own multi-line block with no delimiters.
+  const lines = [
+    'Sep 20, 2026, 5:34 AM',
+    'Admin Adjustment: Deduction: Please email support@chaturbate.com for more information.',
+    '-8\t0',
+    'Sep 19, 2026, 4:53 PM',
+    'Tip From: jiggamane420513',
+    "Your gonna get reported if this is a recording pinch your nipples and prove otherwise",
+    '1\t8',
+    'Sep 19, 2026, 4:39 PM',
+    'Transfer tokens to $2.80 cash.',
+    '-56\t0',
+    'Sep 19, 2026, 4:11 PM',
+    'Fan Club Membership: assclap23',
+    '50\t56',
+    'Sep 19, 2026, 3:24 PM',
+    'Tip From: assclap23',
+    '6\t6',
+  ]
+  const rawText = lines.join('\n')
+
+  test('Fan Club Membership purchases are counted as earnings, tagged distinctly from tips', () => {
+    const { rows } = parseRows(rawText, 'chaturbate')
+    const membership = rows.find(r => r.username === 'assclap23' && r.tokens === 50)
+    expect(membership).toBeTruthy()
+    expect(membership.usd).toBe(2.5) // 50 * $0.05
+    expect(membership.note).toBe('Fan Club Membership')
+  })
+
+  test('Admin Adjustment and cash-transfer lines never count as earnings', () => {
+    const { rows } = parseRows(rawText, 'chaturbate')
+    expect(rows.some(r => r.tokens === 8 || r.tokens === 56)).toBe(false)
+    expect(rows.length).toBe(3) // the two real tips + one membership
+  })
+
+  test('Admin Adjustment and cash-transfer lines are counted as skipped, not silently dropped', () => {
+    const { skipped } = parseRows(rawText, 'chaturbate')
+    expect(skipped).toBeGreaterThanOrEqual(2)
+  })
+
+  test('ordinary tips with and without a fan message both still parse correctly', () => {
+    const { rows } = parseRows(rawText, 'chaturbate')
+    const withMessage = rows.find(r => r.username === 'jiggamane420513')
+    const withoutMessage = rows.find(r => r.username === 'assclap23' && r.tokens === 6)
+    expect(withMessage.tokens).toBe(1)
+    expect(withMessage.note).toMatch(/nipples/)
+    expect(withoutMessage.tokens).toBe(6)
+    expect(withoutMessage.note).toBe('')
+  })
+
+  test('overall earnings total includes tips and Fan Club Memberships, excludes adjustments/transfers', () => {
+    const { rows } = parseRows(rawText, 'chaturbate')
+    const totalTokens = rows.reduce((s, r) => s + r.tokens, 0)
+    expect(totalTokens).toBe(1 + 50 + 6) // NOT including the -8 adjustment or -56 transfer
+  })
+})
+
 describe('buildPreview — best-hour insight confidence', () => {
   test('a single whale tip on one day is not a confident recurring pattern', () => {
     const lines = [CB_HEADER, cbRow('2026-02-01 11:39:00.000000', 1500, 1500, 'whale', 'huge one-off tip')]

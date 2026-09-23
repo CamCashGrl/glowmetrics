@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'Best Cam Sites for Beginners',
@@ -224,6 +225,7 @@ export default function BestCamSitesForBeginners() {
           <a href="/blog/how-much-do-cam-models-make" style={s.relLink}>→ How Much Do Cam Models Make</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

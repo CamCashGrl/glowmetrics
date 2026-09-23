@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
 import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 const SLUG = 'how-long-does-chaturbate-new-tag-last'
 const TITLE = 'How Long Does the Chaturbate NEW Tag Last?'
@@ -162,6 +163,7 @@ export default function Page() {
         <p style={{ ...s.p, marginBottom: 6 }}><a href="/guides/chaturbate-best-hours" style={s.link}>&rarr; Best hours to stream on Chaturbate</a></p>
         <p style={{ ...s.p, marginBottom: 0 }}><a href="/blog/chaturbate-first-30-days-real-earnings" style={s.link}>&rarr; What I actually made my first 30 days</a></p>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

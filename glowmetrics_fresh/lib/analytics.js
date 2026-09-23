@@ -113,6 +113,16 @@ function validateInsights(insights = []) {
 // (date line / "Tip From: user" line / "tokens  running_balance" line)
 const CB_DATE_LINE_RE = /^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i
 const CB_TIP_FROM_RE = /^Tip From:\s*(.+)$/i
+// Fan Club Membership purchases are real earnings from a named fan, same as
+// a tip — mirrors app/onboarding/page.js's parseRows(), which handles the
+// same three Chaturbate paste cases for the client-side preview. Kept in
+// sync manually (see the comment there) since this is the separate parser
+// used server-side for direct CSV-file uploads of the same raw export.
+const CB_FAN_CLUB_RE = /^Fan Club Membership:\s*(.+)$/i
+// Not earnings from a fan at all — an account-level token debit/cashout —
+// so it must never fall through to the generic multi-line date match below
+// and get treated as an unrecognized (but still date-stamped) tip block.
+const CB_NON_EARNING_ACTION_RE = /^(Admin Adjustment|Transfer tokens to)\b/i
 const CB_TOKENS_LINE_RE = /^(\d+)\s+(\d+)$/
 const CB_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
 
@@ -125,10 +135,13 @@ function parseChaturbateMultiLine(lines) {
 
     const [, mon, day, year, hr, min, ampm] = dateMatch
     const actionLine = (lines[i + 1] || '').trim()
+    if (CB_PRIVATE_SHOW_PATTERN.test(actionLine)) { i++; continue }
+    if (CB_NON_EARNING_ACTION_RE.test(actionLine)) { i++; continue }
     const tipMatch = actionLine.match(CB_TIP_FROM_RE)
-    if (!tipMatch) { i++; continue }
+    const fanClubMatch = !tipMatch && actionLine.match(CB_FAN_CLUB_RE)
+    if (!tipMatch && !fanClubMatch) { i++; continue }
 
-    const username = tipMatch[1].trim()
+    const username = (tipMatch ? tipMatch[1] : fanClubMatch[1]).trim()
     let tokensLine = (lines[i + 2] || '').trim()
     let note = ''
     let tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
@@ -146,6 +159,7 @@ function parseChaturbateMultiLine(lines) {
         if (/am/i.test(ampm) && h === 12) h = 0
         const monthNum = CB_MONTHS[mon.toLowerCase()] || 1
         const dateRaw = `${year}-${String(monthNum).padStart(2, '0')}-${String(parseInt(day, 10)).padStart(2, '0')} ${String(h).padStart(2, '0')}:${min}:00`
+        if (fanClubMatch) note = note ? `Fan Club Membership: ${note}` : 'Fan Club Membership'
         results.push({
           dateRaw, date_time: dateRaw, username, platform: 'Chaturbate',
           tokens, usd: parseFloat((tokens * tokenRate('Chaturbate')).toFixed(2)),
@@ -159,7 +173,7 @@ function parseChaturbateMultiLine(lines) {
 }
 
 export function parseCSV(text, platform = null) {
-  const allLines = text.trim().split('\n')
+  let allLines = text.trim().split('\n')
   if (allLines.length === 0) return []
 
   if (!platform) platform = detectPlatform(text)
@@ -172,10 +186,19 @@ export function parseCSV(text, platform = null) {
   }
   const detectedDelimiter = delimiter || ','
 
+  // Some BongaCams pastes (Reports → General earnings table) put every
+  // header cell on its own line — "Date and Time" / "Member" / "Type" /
+  // "Tokens Earned" / "Your Payout" — instead of one delimiter-joined
+  // header row. parseWithHeaders below only maps as many columns as the
+  // header row contains, so left alone this silently drops every value
+  // past column 0 and the whole paste parses to zero rows. Stitch a
+  // detected stacked-header block back into one row before anything else runs.
+  allLines = joinStackedHeaderLines(allLines, detectedDelimiter)
+
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
-  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()))) {
+  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()) || CB_FAN_CLUB_RE.test(l.trim()))) {
     return parseChaturbateMultiLine(allLines).map(normalizeTip).filter(isValidTip)
   }
 
@@ -188,21 +211,22 @@ export function parseCSV(text, platform = null) {
   const lines = allLines.slice(startIdx).filter(l => l.trim())
   if (lines.length === 0) return []
 
-  const firstLower = lines[0].toLowerCase()
   const firstCols = parseCSVLine(lines[0], detectedDelimiter)
 
   const firstColIsDate = /^\d{2}[.\-/]\d{2}[.\-/]\d{4}/.test(firstCols[0]) ||
                          /^\d{4}[.\-/]\d{2}[.\-/]\d{2}/.test(firstCols[0]) ||
-                         /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(firstCols[0])
+                         /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(firstCols[0]) ||
+                         /^\d{10,13}$/.test(firstCols[0]) // MyFreeCams epoch-id column
 
-  const hasHeaders = !firstColIsDate && (
-    firstLower.includes('date') || firstLower.includes('username') ||
-    firstLower.includes('member') || firstLower.includes('amount') ||
-    firstLower.includes('tokens') || firstLower.includes('timestamp') ||
-    firstLower.includes('payout') || firstLower.includes('action') ||
-    firstLower.includes('transaction') || firstLower.includes('platform') ||
-    firstLower.includes('user')
-  )
+  // Checks each COLUMN of the first line against the same normalizeHeaderName
+  // used to map real header cells — never a raw substring match against the
+  // whole line. A substring check (e.g. firstLine.includes('username')) is a
+  // false-positive trap: a headerless MyFreeCams paste whose first data row
+  // contains a real username like "username123" contains the literal
+  // substring "username" and was wrongly routed to parseWithHeaders, which
+  // then found no recognized columns and silently produced zero rows.
+  const KNOWN_HEADER_FIELDS = new Set(['date_time','username','tokens','usd','tip_type','action','note','platform','session_id','token_balance'])
+  const hasHeaders = !firstColIsDate && firstCols.some(c => KNOWN_HEADER_FIELDS.has(normalizeHeaderName(c)))
 
   const raw = hasHeaders ? parseWithHeaders(lines, platform, detectedDelimiter) : parseHeaderless(lines, platform, detectedDelimiter)
   // Per-row format-based platform fallback — runs after both parsers
@@ -213,6 +237,28 @@ export function parseCSV(text, platform = null) {
     if (/^\d{10,13}$/.test(String(r.dateRaw || '').trim())) { r.platform = 'MyFreeCams'; return }
   })
   return raw.map(normalizeTip).filter(isValidTip)
+}
+
+// Detects a run of 2+ consecutive single-column lines at the top of the
+// paste followed by a data line whose column count matches that run
+// exactly, and joins the header block into one delimiter-separated row.
+// Deliberately conservative (exact column-count match required) so it
+// never fires on ordinary single-column data.
+function joinStackedHeaderLines(lines, delimiter) {
+  let i = 0
+  const headerCells = []
+  while (i < lines.length && i < 10) {
+    const line = lines[i].trim()
+    if (!line) break
+    if (parseCSVLine(line, delimiter).length !== 1) break
+    headerCells.push(line)
+    i++
+  }
+  if (headerCells.length < 2) return lines
+  const dataLine = (lines[i] || '').trim()
+  if (!dataLine) return lines
+  if (parseCSVLine(dataLine, delimiter).length !== headerCells.length) return lines
+  return [headerCells.join(delimiter), ...lines.slice(i)]
 }
 
 function normalizeTip(row) {
@@ -262,6 +308,11 @@ export function detectPlatform(text) {
 
 function normalizeDate(raw) {
   if (!raw) return null
+  // MyFreeCams' "Token Sessions" export uses ordinal day numbers — "Jun 18th,
+  // 2026 10:40 PM". `new Date()` cannot parse the "th"/"st"/"nd"/"rd" suffix
+  // at all (returns Invalid Date), so every MFC row silently failed the
+  // isNaN(new Date(...)) validity check below. Strip it before anything else.
+  raw = raw.replace(/\b(\d{1,2})(st|nd|rd|th)\b/i, '$1')
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
   if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
   const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
@@ -493,6 +544,30 @@ function parseHeaderless(lines, platform, delimiter = ',') {
       if (!username || (tokens <= 0 && usd <= 0)) continue
       if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
       results.push({ dateRaw, date_time: dateRaw, username, platform: platform || 'BongaCams', tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(platform || 'BongaCams')), usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(platform || 'BongaCams')).toFixed(2)), tip_type: vals[2] || 'Tip', tip_note: '' })
+      continue
+    }
+
+    // MyFreeCams "Token Sessions" paste — epoch_id / formatted date / tokens /
+    // username / type ("Tip" or "Private"), e.g.:
+    //   1746555770  Jun 18th, 2026 10:40 PM  500  username123  Tip
+    // Previously fell through to the generic branch below, which reads
+    // column 0 as the date (the epoch id, not a parseable date) and column 1
+    // as the username (actually the date) — every row failed validation and
+    // this, MFC's own documented paste format, parsed to zero rows.
+    if (vals.length >= 5 && /^\d{10,13}$/.test(vals[0])) {
+      const dateRaw = normalizeDate(vals[1])
+      const username = (vals[3] || '').trim()
+      const tokens = parseInt(vals[2]) || 0
+      const typeVal = (vals[4] || 'Tip').trim()
+      if (!username || tokens <= 0) continue
+      if (!dateRaw || isNaN(new Date(dateRaw).getTime())) continue
+      const isPrivate = typeVal.toLowerCase() === MFC_PRIVATE_TYPE.toLowerCase()
+      results.push({
+        dateRaw, date_time: dateRaw, username, platform: 'MyFreeCams',
+        tokens, usd: parseFloat((tokens * tokenRate('MyFreeCams')).toFixed(2)),
+        tip_type: isPrivate ? 'Private' : 'Tip', tip_note: '',
+        ...(isPrivate ? { is_paid_session: true, session_type: 'Private' } : {}),
+      })
       continue
     }
 

@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
 import Button from '../../../components/ui/Button'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 export const metadata = {
   title: 'How Much Do Cam Models Make? Webcam Model Earnings Guide',
@@ -481,6 +482,7 @@ export default function CamModelEarnings() {
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
         </div>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }

@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
 import { s, articleSchema, articleMeta } from '../../../lib/blog-article-styles'
+import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
 
 const SLUG = 'how-to-set-up-chat-bots-on-chaturbate'
 const TITLE = 'How to Set Up Chat Bots on Chaturbate: Apps, Bots & Configuration'
@@ -236,6 +237,7 @@ export default function Page() {
         <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/cam-room-dice-games" style={s.link}>&rarr; Dice game formats and pricing</a></p>
         <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/chaturbate-earnings-tracker" style={s.link}>&rarr; Chaturbate earnings tracker</a></p>
       </div>
+    <ChaturbateAffiliateCTA />
     </ArticleLayout>
   )
 }
