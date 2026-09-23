@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import PromoButtons from '../../components/PromoButtons'
 
 export const metadata = {
   title: 'BongaCams Queen of Queens 2026: How the Contest Works & How Models Can Prepare',
@@ -331,16 +332,6 @@ const s = {
   promoBtn: { display: 'inline-block', padding: '12px 24px', borderRadius: '8px', color: '#fff', fontWeight: 700, fontSize: '14px', textDecoration: 'none', textAlign: 'center', cursor: 'pointer', border: 'none' },
   promoBtnModel: { background: 'linear-gradient(135deg, #f59e0b, #d97706)', transition: 'all 0.3s ease' },
   promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
-}
-
-const trackClick = (label) => {
-  if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', 'link_click', {
-      event_category: 'bongacams_promotion',
-      event_label: label,
-      page_title: document.title,
-    })
-  }
 }
 
 export default function BongaCamsQueenOfQueensPage() {
@@ -701,26 +692,7 @@ export default function BongaCamsQueenOfQueensPage() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
-        <div style={s.promoButtons}>
-          <a
-            href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnModel}}
-            onClick={() => trackClick('interested_in_being_model')}
-          >
-            Interested in being a model?
-          </a>
-          <a
-            href="https://bongacams.com?fuid=166966512&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_viewer"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnCam}}
-            onClick={() => trackClick('looking_for_hot_cam_show')}
-          >
-            Looking for a hot cam show?
-          </a>
-        </div>
+        <PromoButtons styles={s} />
       </div>
 
       <h2 style={s.h2}>Frequently Asked Questions</h2>
