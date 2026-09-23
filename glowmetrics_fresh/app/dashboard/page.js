@@ -2525,19 +2525,27 @@ const stopImportMessageRotation = () => {
     // "expected time of day" claim, so no such behavioral action is
     // rendered here rather than inventing a new formula for it.
 
-    // 5. DORMANT
-    whales.filter(w => w.totalUSD >= 20).slice(0, 3).forEach(w => {
+    // 5. DORMANT — $20+ lifetime AND a canonical, baseline-gated 'Watch'
+    // behavioral state (lib/analytics.js calcFanBehavioralState). A fan
+    // with fewer than 3 behavioral visits has no established personal
+    // cadence, so an independent day-range can't tell us their absence is
+    // unusual -- only the canonical behavioralState may make that call.
+    // 'Watch' (not the canonical 'Dormant' state) is the correct match:
+    // canonical 'Dormant' means the CREATOR hasn't streamed enough to
+    // attribute the fan's absence to the fan at all, whereas 'Watch' means
+    // this specific fan has a real, baseline-backed deviation from their
+    // own pattern that isn't yet severe enough to be 'At Risk' -- which is
+    // exactly the softer "check in on them" tone this action uses.
+    whales.filter(w => w.totalUSD >= 20 && w.behavioralState === 'Watch').slice(0, 3).forEach(w => {
       const days = Math.floor((now - new Date(w.lastTipDate)) / 86400000)
-      if (days >= 7 && days <= 44) {
-        const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
-        dormant.push({
-          type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
-          title: `You haven't heard from ${w.username} in ${timeStr}`,
-          message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
-          cta: 'Copy Message', username: w.username, whale: w,
-          reengageMsg: getPersonalMsg(w)
-        })
-      }
+      const timeStr = days >= 30 ? `${Math.round(days / 30)} month${days >= 60 ? 's' : ''}` : `${days} days`
+      dormant.push({
+        type: 'dormant', icon: '💤', color: C.orange, severity: 'warning',
+        title: `You haven't heard from ${w.username} in ${timeStr}`,
+        message: `They've spent $${w.totalUSD.toFixed(0)} total — send them a message so they know you're thinking of them`,
+        cta: 'Copy Message', username: w.username, whale: w,
+        reengageMsg: getPersonalMsg(w)
+      })
     })
 
 

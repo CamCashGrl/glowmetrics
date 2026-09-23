@@ -110,3 +110,62 @@ describe('generateLossAlerts fan_churn — canonical gate only', () => {
     expect(cb.behavioralState).not.toBe('At Risk')
   })
 })
+
+// The DORMANT quick action (app/dashboard/page.js) now gates on
+// behavioralState === 'Watch' instead of an independent
+// totalUSD/day-range formula. It lives inside the ~7000-line dashboard
+// component as an inline closure, not an exported function, so it can't
+// be unit-tested directly without restructuring the component (out of
+// scope for this fix). These tests instead prove the canonical field it
+// now depends on -- behavioralState, gated by observationCount and
+// FAN_MIN_OBSERVATIONS_FOR_BASELINE -- behaves correctly; the removal of
+// the independent day-range formula itself was verified by code
+// inspection and the production build.
+describe('DORMANT quick action canonical dependency — behavioralState === "Watch"', () => {
+  test('TEST 1: a one-visit fan cannot reach "Watch" merely because 7+ days elapsed', () => {
+    const tips = burstVisit('oneVisitDormantFan', 'Chaturbate', 2, 10, 25) // $50, 1 visit, 10 days ago
+    const [fan] = identifyWhales(tips, [])
+    expect(fan.observationCount).toBe(1)
+    expect(fan.baselineEstablished).toBe(false)
+    expect(fan.behavioralState).not.toBe('Watch')
+  })
+
+  test('TEST 2: raw tip count cannot bypass the observation-count gate', () => {
+    const tips = burstVisit('burstDormantFan', 'Chaturbate', 8, 10, 25) // 8 raw tips, still 1 visit
+    const [fan] = identifyWhales(tips, [])
+    expect(fan.tipCount).toBe(8)
+    expect(fan.observationCount).toBe(1)
+    expect(fan.baselineEstablished).toBe(false)
+    expect(fan.behavioralState).not.toBe('Watch')
+  })
+
+  test('TEST 3: a fan with an established baseline and real deviation reaches "Watch" legitimately', () => {
+    // 4 visits ~5 days apart, most recent 7 days ago -> r = 7/5 = 1.4,
+    // inside [1,2) i.e. deviation without full at-risk evidence.
+    const tips = multiVisitTips('watchFan', 'Chaturbate', 4, 5, 7)
+    const sessions = [meaningfulSession('Chaturbate', 1), meaningfulSession('Chaturbate', 3)]
+    const [fan] = identifyWhales(tips, sessions)
+    expect(fan.baselineEstablished).toBe(true)
+    expect(fan.behavioralState).toBe('Watch')
+  })
+
+  test('TEST 4: descriptive fan data remains available for an insufficient-history fan', () => {
+    const tips = burstVisit('descriptiveDormantFan', 'Chaturbate', 2, 10, 25)
+    const [fan] = identifyWhales(tips, [])
+    expect(fan.behavioralState).not.toBe('Watch')
+    expect(fan.totalUSD).toBeCloseTo(50)
+    expect(fan.platform).toBe('Chaturbate')
+    expect(fan.lastTipDate).toBeTruthy()
+  })
+
+  test('TEST 5: same username on different platforms stays isolated for the Watch gate', () => {
+    const tipsA = burstVisit('crossPlatformDormant', 'Chaturbate', 2, 10, 25) // 1 visit
+    const tipsB = multiVisitTips('crossPlatformDormant', 'BongaCams', 4, 5, 7) // established, Watch
+    const sessions = [meaningfulSession('BongaCams', 1), meaningfulSession('BongaCams', 3)]
+    const whales = identifyWhales([...tipsA, ...tipsB], sessions)
+    const cb = whales.find(w => w.platform === 'Chaturbate')
+    const bc = whales.find(w => w.platform === 'BongaCams')
+    expect(cb.behavioralState).not.toBe('Watch')
+    expect(bc.behavioralState).toBe('Watch')
+  })
+})
