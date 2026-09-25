@@ -6,6 +6,7 @@ const TEST_EMAIL_PATTERNS = [
   'daphneoncam+test',
   'daphenoncam+testing',
   'camcashgrl+testing',
+  'daphneoncam@gmail.com',  // founder account — exclude from public metrics
 ]
 
 function isTestAccount(email) {
