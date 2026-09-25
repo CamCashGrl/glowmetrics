@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { track } from '../../lib/track'
-import { isProPlan } from '../../lib/plan'
+import { isProPlan } from '../../lib/planLimits'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
 
 
@@ -611,7 +611,7 @@ export default function OnboardingPage(){
   const[userPlan,setUserPlan]=useState('free')
 
   const[step,setStep]=useState('platform')
-  const[platformId,setPlatformId]=useState('chaturbate')
+  const[platformId,setPlatformId]=useState(null)
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
@@ -899,7 +899,7 @@ export default function OnboardingPage(){
                   })}
                 </div>
               </div>
-              <OBBtn onClick={()=>selectPlatform(platformId)} style={{marginBottom:10}}>Continue with {platform.label} →</OBBtn>
+              <OBBtn onClick={()=>selectPlatform(platformId)} disabled={!platformId} style={{marginBottom:10}}>{platformId ? `Continue with ${platform.label} →` : 'Select a platform to continue'}</OBBtn>
             </div>
           )}
 
