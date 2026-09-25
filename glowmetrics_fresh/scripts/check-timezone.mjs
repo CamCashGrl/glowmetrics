@@ -38,6 +38,7 @@ const BASELINE = {
   'app/dashboard/page.js': 18,
   'lib/analytics.js': 9,
   'app/dashboard/DashboardGrowthCharts.js': 2,
+  'lib/analytics/localTime.js': 2, // Fallback when Intl.DateTimeFormat fails; legitimately safe
 }
 
 // Genuinely correct uses: the tz helpers' own fallback when Intl is missing,
