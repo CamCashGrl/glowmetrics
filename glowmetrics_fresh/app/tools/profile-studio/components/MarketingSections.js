@@ -498,6 +498,7 @@ export function MoreFreeTools() {
         <a href="/guides/cam-model-token-calculator" style={{ color: T.cyan, textDecoration: 'none' }}>→ Token calculator</a>
         <a href="/guides/cam-model-room-title-generator" style={{ color: T.cyan, textDecoration: 'none' }}>→ Room title generator</a>
         <a href="/guides/cam-model-income-tracker" style={{ color: T.cyan, textDecoration: 'none' }}>→ Cam model income tracker</a>
+        <a href="/blog/cam-model-tip-menu-templates" style={{ color: T.cyan, textDecoration: 'none' }}>→ Cam model tip menu templates</a>
         <a href="/blog/how-to-increase-cam-earnings" style={{ color: T.cyan, textDecoration: 'none' }}>→ How to increase cam earnings</a>
         <a href="/blog/best-cam-model-tools" style={{ color: T.cyan, textDecoration: 'none' }}>→ Best cam model tools</a>
       </div>
