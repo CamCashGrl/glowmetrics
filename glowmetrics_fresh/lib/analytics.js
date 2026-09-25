@@ -8,19 +8,11 @@ import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
 import { detectSessions, SESSION_GAP_MS } from './analytics/sessions'
-
-// ===============================
-// TIMEZONE HELPERS
-// ===============================
-
-function calcMedian(arr) {
-  if (!arr || arr.length === 0) return 0
-  const sorted = [...arr].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid]
-}
+// Best times and local timezone computations
+import { calcMedian, toLocalHour, toLocalDow, toLocalDateStr } from './analytics/localTime'
+import { computeCanonicalBestTimes } from './analytics/bestTimes'
+// Re-export timezone helpers for backward compatibility
+export { calcMedian, toLocalHour, toLocalDow, toLocalDateStr }
 
 // ===============================
 // DATA CONFIDENCE
@@ -34,39 +26,6 @@ export function calculateConfidence(validSessionCount, streamedHours) {
   if (n < 3 || h < 3)     return { level: 'Very Low', label: 'Not enough data yet' }
   if (n <= 4 || h <= 5)   return { level: 'Low',      label: 'Early signal' }
   return { level: 'Medium', label: 'Likely pattern' }
-}
-
-export function toLocalHour(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      hour: 'numeric',
-      hour12: false
-    }).format(date)
-    const h = parseInt(formatted)
-    return isNaN(h) ? 0 : h === 24 ? 0 : h
-  } catch { return new Date(dateStr).getUTCHours() }
-}
-
-export function toLocalDow(dateStr, tz) {
-  try {
-    const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      weekday: 'long'
-    }).format(date)
-    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      .indexOf(dayName)
-  } catch { return new Date(dateStr).getUTCDay() }
-}
-
-function toLocalDateStr(dateStr, tz) {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
-  } catch { return new Date(dateStr).toISOString().slice(0, 10) }
 }
 
 // ===============================
@@ -1959,6 +1918,11 @@ export function computePaidSessionAnalytics(sessions) {
   const avgTokensPerSession = totalCount > 0 ? Math.round(totalTokens / totalCount) : 0
   const avgPayoutPerToken   = totalTokens > 0 ? parseFloat((totalUSD / totalTokens).toFixed(4)) : 0
 
+  // ── CANONICAL BEST TIMES ─────────────────────────────────────
+  // The definitive best streaming window, computed from meaningful sessions
+  // Read by CommandCenter and other components that need window recommendations
+  const canonicalBestTimes = computeCanonicalBestTimes(meaningfulSessions, userTz)
+
   return {
     totalUSD:            parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1983,6 +1947,11 @@ export function computePaidSessionAnalytics(sessions) {
       prior30USD: parseFloat(prior30USD.toFixed(2)),
     },
     dateRange,
+    canonicalBestTimes: {
+      grid: canonicalBestTimes?.grid || [],
+      bestWindow: canonicalBestTimes?.bestWindow || null,
+      earlySignal: canonicalBestTimes?.earlySignal || null,
+    },
   }
 }
 
