@@ -1,6 +1,7 @@
 
 import ArticleLayout from '../../components/ArticleLayout'
 import ChaturbateAffiliateCTA from '../../components/ChaturbateAffiliateCTA'
+import PromoButtons from '../../components/PromoButtons'
 
 export const metadata = {
   title: 'How Much Do BongaCams Models Make? Real Earnings Guide',
@@ -89,7 +90,10 @@ const s = {
   promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> claude/epic-feynman-se9tyh
 export default function BongaCamsEarningsPost() {
   return (
     <ArticleLayout
@@ -199,6 +203,7 @@ export default function BongaCamsEarningsPost() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
+<<<<<<< HEAD
         <div style={s.promoButtons}>
           <a
             href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
@@ -219,6 +224,9 @@ export default function BongaCamsEarningsPost() {
             Looking for a hot cam show?
           </a>
         </div>
+=======
+        <PromoButtons styles={s} />
+>>>>>>> claude/epic-feynman-se9tyh
       </div>
 
       <div style={s.faqSection}>

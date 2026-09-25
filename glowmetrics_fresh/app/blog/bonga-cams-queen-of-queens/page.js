@@ -1,5 +1,6 @@
 
 import ArticleLayout from '../../components/ArticleLayout'
+import PromoButtons from '../../components/PromoButtons'
 
 export const metadata = {
   title: 'BongaCams Queen of Queens 2026: How the Contest Works & How Models Can Prepare',
@@ -334,7 +335,10 @@ const s = {
   promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> claude/epic-feynman-se9tyh
 export default function BongaCamsQueenOfQueensPage() {
   return (
     <ArticleLayout
@@ -693,6 +697,7 @@ export default function BongaCamsQueenOfQueensPage() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
+<<<<<<< HEAD
         <div style={s.promoButtons}>
           <a
             href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
@@ -713,6 +718,9 @@ export default function BongaCamsQueenOfQueensPage() {
             Looking for a hot cam show?
           </a>
         </div>
+=======
+        <PromoButtons styles={s} />
+>>>>>>> claude/epic-feynman-se9tyh
       </div>
 
       <h2 style={s.h2}>Frequently Asked Questions</h2>
