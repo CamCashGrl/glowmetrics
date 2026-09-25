@@ -297,6 +297,93 @@ async function loadPlan() {
   } catch (_) {}
 }
 
+// ─── Multi-Platform Tip Fetching (seamless sync) ────────────────────────────────
+// Fetch tips from all configured platforms and sync to dashboard
+async function fetchAllPlatformTips() {
+  await restorePromise;
+  if (!session) return { success: false, error: 'Not authenticated' };
+
+  try {
+    const res = await fetch(`${API_BASE}/api/live/tips/fetch-all-platforms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (!refreshed) return { success: false, error: 'Authentication failed' };
+      // Retry once with refreshed token
+      const retryRes = await fetch(`${API_BASE}/api/live/tips/fetch-all-platforms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+      return await retryRes.json();
+    }
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[MultiPlatform] fetch failed:', res.status, err);
+      return { success: false, error: 'Failed to fetch tips' };
+    }
+
+    const data = await res.json();
+    console.log('[MultiPlatform] fetched from all platforms:', data);
+    return data;
+  } catch (e) {
+    console.error('[MultiPlatform] error:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+// ─── Stream End Detection & Final Sync ──────────────────────────────────────────
+// Detects when stream ends and performs final tip sync + dashboard refresh
+async function endStreamAndSync(sessionId) {
+  await restorePromise;
+  if (!session) return { success: false, error: 'Not authenticated' };
+
+  try {
+    const res = await fetch(`${API_BASE}/api/live/session/end-stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      if (!refreshed) return { success: false, error: 'Authentication failed' };
+    }
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[StreamEnd] failed:', res.status, err);
+      return { success: false, error: 'Failed to end stream' };
+    }
+
+    const data = await res.json();
+    console.log('[StreamEnd] completed:', data);
+
+    // Notify all tabs (popup + content scripts) to refresh
+    chrome.runtime.sendMessage({
+      action: 'stream_ended',
+      summary: data.streamSummary,
+    }).catch(() => {}); // Ignore if no listeners
+
+    return data;
+  } catch (e) {
+    console.error('[StreamEnd] error:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
 // ─── Whale loading — reads historical tips directly from Supabase ─────────────
 async function loadWhales() {
   await restorePromise;
@@ -406,6 +493,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (liveSession) {
       await sendExtensionHeartbeat();
       await fetchCoachingPrompt();
+      // Multi-platform seamless tip fetching: poll all configured platforms
+      // This runs every heartbeat (1 minute) to keep tips synced across all platforms
+      await fetchAllPlatformTips().catch(err => {
+        console.warn('[MultiPlatform] Heartbeat fetch failed:', err?.error || err.message);
+      });
     } else {
       // No session currently tracked here — check whether one was started
       // on another surface (the website) since we last knew. Without this,
@@ -533,6 +625,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.action === 'confirm_token_import') {
     confirmTokenImport(msg.rows).then(reply);
+    return true;
+  }
+
+  if (msg.action === 'fetch_all_platforms') {
+    fetchAllPlatformTips().then(reply);
+    return true;
+  }
+
+  if (msg.action === 'end_stream') {
+    endStreamAndSync(msg.sessionId).then(reply);
     return true;
   }
 
