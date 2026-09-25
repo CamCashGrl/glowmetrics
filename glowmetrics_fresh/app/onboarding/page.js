@@ -1083,12 +1083,11 @@ export default function OnboardingPage(){
       <style>{CSS}</style>
 
       {/* ── BACKGROUND ── */}
-      <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(90deg,rgba(7,178,207,0.22) 0%,rgba(8,14,31,0.92) 48%,rgba(29,12,45,0.88) 72%,rgba(255,47,174,0.16) 100%),radial-gradient(ellipse at 14% 46%,rgba(33,230,243,0.24) 0%,transparent 54%),radial-gradient(ellipse at 86% 50%,rgba(255,47,174,0.22) 0%,transparent 58%),radial-gradient(ellipse at 50% 100%,rgba(139,92,246,0.12) 0%,transparent 50%)'}}/>
-        <div style={{position:'absolute',left:'-12%',top:'8%',width:620,height:620,borderRadius:'50%',background:'rgba(33,230,243,0.22)',filter:'blur(100px)'}}/>
-        <div style={{position:'absolute',right:'-14%',bottom:'2%',width:640,height:640,borderRadius:'50%',background:'rgba(255,47,174,0.20)',filter:'blur(110px)'}}/>
-        <div style={{position:'absolute',left:'35%',top:'30%',width:420,height:420,borderRadius:'50%',background:'rgba(139,92,246,0.12)',filter:'blur(90px)'}}/>
-        <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
+      <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,overflow:'hidden'}}>
+        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 50% 45%,#0b0e1c 0%,#070914 55%,#05060f 100%)'}}/>
+        <div style={{position:'absolute',left:'-22%',top:'10%',width:520,height:520,borderRadius:'50%',background:'rgba(33,230,243,0.13)',filter:'blur(140px)'}}/>
+        <div style={{position:'absolute',right:'-24%',bottom:'4%',width:560,height:560,borderRadius:'50%',background:'rgba(255,47,174,0.11)',filter:'blur(150px)'}}/>
+        <div style={{position:'absolute',right:'-10%',top:'-8%',width:360,height:360,borderRadius:'50%',background:'rgba(139,92,246,0.08)',filter:'blur(120px)'}}/>
         <div style={{position:'absolute',inset:0,opacity:0.13,backgroundImage:'radial-gradient(rgba(255,255,255,0.58) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
       </div>
 
