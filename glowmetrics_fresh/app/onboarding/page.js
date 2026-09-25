@@ -123,7 +123,7 @@ function parseBCPaidSessions(rawText){
   return{sessions,skipped}
 }
 
-function parseRows(rawText,platformId){
+export function parseRows(rawText,platformId){
   const rate=TOKEN_RATES[platformId]||0.05
   const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
   const rows=[];let skipped=0
@@ -217,7 +217,7 @@ function paidSessionsToCSVBlob(sessions){
   return new Blob([csvRows.join('\n')],{type:'text/csv'})
 }
 
-function buildPreview(rawText,platformId,platformLabel){
+export function buildPreview(rawText,platformId,platformLabel){
   const{rows,skipped}=parseRows(rawText,platformId)
 
   // Also detect paid sessions for BongaCams so we can show them in preview
