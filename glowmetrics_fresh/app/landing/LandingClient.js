@@ -1067,7 +1067,7 @@ export default function LandingClient() {
                 ["⚡", "Your best stream time, calculated from your real data"],
                 ["👑", "Top fan alerts — who to message and when"],
                 ["📊", "Platform ROI — where your time is actually worth more"],
-                ["🔓", "Free tier tracks 1 platform (extension or CSV upload) — $19.99/mo to track multiple"],
+                ["🔓", "Free tier tracks 3 platforms (1 Primary + 2 Secondary) — $19.99/mo for unlimited"],
               ].map(([icon, text]) => (
                 <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: T.textFaint }}>
                   <span style={{ fontSize: 14 }}>{icon}</span>
