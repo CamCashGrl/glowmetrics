@@ -1,11 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { emailTemplates, sendEmail } from '../../../../lib/emailTemplates'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
 /**
  * POST /api/emails/send-day7-final
  *
@@ -18,6 +13,11 @@ const supabaseAdmin = createClient(
  */
 export async function POST(request) {
   try {
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+
     const url = new URL(request.url)
     const userId = url.searchParams.get('userId')
     const dryRun = url.searchParams.get('dryRun') === 'true'
