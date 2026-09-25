@@ -1,4 +1,5 @@
 import ArticleLayout from '../../components/ArticleLayout'
+import PromoButtons from '../../components/PromoButtons'
 
 export const metadata = {
   title: 'BongaCams Payout Guide: Schedule, Minimums, Methods & Fast Withdrawals',
@@ -197,6 +198,7 @@ export default function BlogPost() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
+<<<<<<< HEAD
         <div style={s.promoButtons}>
           <a
             href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
@@ -215,6 +217,9 @@ export default function BlogPost() {
             Looking for a hot cam show?
           </a>
         </div>
+=======
+        <PromoButtons styles={s} />
+>>>>>>> claude/epic-feynman-se9tyh
       </div>
 
       <div style={s.faq}>
