@@ -242,13 +242,13 @@ export async function POST(request) {
         // past_due or unpaid subscription must not read as 'active' downstream.
         const subscriptionStatus = sub.status
 
+        // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         const update = {
           plan: 'pro',
           stripe_customer_id: sub.customer,
           stripe_subscription_id: sub.id,
           subscription_status: subscriptionStatus,
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-          // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         }
 
         const ok = await updateProfile(supabase, user.id, update)
@@ -343,12 +343,12 @@ export async function POST(request) {
         const subscriptionStatus = sub.status
         const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
 
+        // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         const update = {
           plan,
           stripe_subscription_id: sub.id,
           subscription_status: subscriptionStatus,
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-          // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         }
 
         const ok = await updateProfile(supabase, user.id, update)
