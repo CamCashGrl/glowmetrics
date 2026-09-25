@@ -216,11 +216,8 @@ export async function POST(request) {
           // even if our DB update has issues
         }
 
-        await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
-          stripeEventId: event.id,
-          customerId: session.customer,
-          newPlan: 'pro',
-        })
+        // subscription_started is logged by customer.subscription.created event (fired ~0.3s later)
+        // Don't log it here to avoid duplicate entries in subscription_events
 
         await sendResendNotification(
           `💰 New CamCash Subscriber — ${email}`,
@@ -251,6 +248,7 @@ export async function POST(request) {
           stripe_subscription_id: sub.id,
           subscription_status: subscriptionStatus,
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+          // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         }
 
         const ok = await updateProfile(supabase, user.id, update)
@@ -350,6 +348,7 @@ export async function POST(request) {
           stripe_subscription_id: sub.id,
           subscription_status: subscriptionStatus,
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+          // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         }
 
         const ok = await updateProfile(supabase, user.id, update)
