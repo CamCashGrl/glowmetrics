@@ -216,11 +216,8 @@ export async function POST(request) {
           // even if our DB update has issues
         }
 
-        await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
-          stripeEventId: event.id,
-          customerId: session.customer,
-          newPlan: 'pro',
-        })
+        // subscription_started is logged by customer.subscription.created event (fired ~0.3s later)
+        // Don't log it here to avoid duplicate entries in subscription_events
 
         await sendResendNotification(
           `💰 New CamCash Subscriber — ${email}`,
@@ -245,6 +242,7 @@ export async function POST(request) {
         // past_due or unpaid subscription must not read as 'active' downstream.
         const subscriptionStatus = sub.status
 
+        // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         const update = {
           plan: 'pro',
           stripe_customer_id: sub.customer,
@@ -345,6 +343,7 @@ export async function POST(request) {
         const subscriptionStatus = sub.status
         const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
 
+        // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         const update = {
           plan,
           stripe_subscription_id: sub.id,
