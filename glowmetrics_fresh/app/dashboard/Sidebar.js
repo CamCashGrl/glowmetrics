@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import Button from "../../components/ui/Button"
+import SubscriptionManager from "./SubscriptionManager"
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
@@ -132,17 +133,8 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         </div>
       </div>
 
-      {/* Upgrade CTA — always visible, but the Pro state stays low-key since it's a status, not a call to action */}
-      {isPro ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", marginBottom: 8 }}>
-          <span style={{ fontSize: 11 }}>✦</span>
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.purple }}>Pro plan active</span>
-        </div>
-      ) : (
-        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
-          ✦ Upgrade to Pro
-        </Button>
-      )}
+      {/* Subscription Manager — interactive badge with billing info and management links */}
+      <SubscriptionManager isPro={isPro} />
 
       {/* User footer — email + sign out share one compact row */}
       {user && (
