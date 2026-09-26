@@ -21,7 +21,7 @@ export function toLocalHour(dateStr, tz) {
     }).format(date)
     const h = parseInt(formatted)
     return isNaN(h) ? 0 : h === 24 ? 0 : h
-  } catch { return new Date(dateStr).getUTCHours() }
+  } catch { return new Date(dateStr).getHours() }
 }
 
 export function toLocalDow(dateStr, tz) {
@@ -33,7 +33,7 @@ export function toLocalDow(dateStr, tz) {
     }).format(date)
     return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
       .indexOf(dayName)
-  } catch { return new Date(dateStr).getUTCDay() }
+  } catch { return new Date(dateStr).getDay() }
 }
 
 export function toLocalDateStr(dateStr, tz) {

@@ -44,7 +44,6 @@ const BASELINE = {
 // and fixtures/demos that are not creator data.
 const EXEMPT = [
   /^lib\/analytics\/__tests__\//,
-  /^lib\/analytics\/localTime\.js$/, // Fallback for when Intl.DateTimeFormat fails
   /^app\/dashboard\/__tests__\//,
   /^app\/landing\/demo\//,
   /^app\/demo\//,
