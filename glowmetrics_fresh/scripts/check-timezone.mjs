@@ -35,8 +35,8 @@ const PATTERN = /\.getUTC(Day|Hours)\s*\(\s*\)/g
 
 // Known, accepted sites as of this guard's introduction.
 const BASELINE = {
-  'app/dashboard/page.js': 18,
-  'lib/analytics.js': 9,
+  'app/dashboard/page.js': 15,
+  'lib/analytics.js': 7,
   'app/dashboard/DashboardGrowthCharts.js': 2,
 }
 
@@ -44,6 +44,7 @@ const BASELINE = {
 // and fixtures/demos that are not creator data.
 const EXEMPT = [
   /^lib\/analytics\/__tests__\//,
+  /^lib\/analytics\/localTime\.js$/, // Fallback for when Intl.DateTimeFormat fails
   /^app\/dashboard\/__tests__\//,
   /^app\/landing\/demo\//,
   /^app\/demo\//,
