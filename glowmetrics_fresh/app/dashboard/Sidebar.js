@@ -49,6 +49,7 @@ const NAV = [
     items: [
       { id: "upload", icon: "📥", label: "Import CSV" },
       { id: "help",   icon: "❓", label: "CSV Help" },
+      { id: "subscription", icon: "✦", label: "Subscription" },
     ]
   },
 ]
@@ -132,6 +133,17 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
         </div>
       </div>
 
+      {/* Upgrade CTA — always visible, but the Pro state stays low-key since it's a status, not a call to action */}
+      {isPro ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", marginBottom: 8, fontSize: 11.5, fontWeight: 700, color: C.purple }}>
+          <span>✦</span>
+          <span>Pro plan active</span>
+        </div>
+      ) : (
+        <Button as="a" href="/pricing" style={{ width: "100%", marginBottom: 8, fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
+          ✦ Upgrade to Pro
+        </Button>
+      )}
       {/* User footer — email + sign out share one compact row */}
       {user && (
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, marginTop: 4, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
