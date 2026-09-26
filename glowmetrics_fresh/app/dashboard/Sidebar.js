@@ -1,7 +1,6 @@
 "use client"
 import { useState } from "react"
 import Button from "../../components/ui/Button"
-import SubscriptionManager from "./SubscriptionManager"
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
@@ -132,9 +131,6 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           </a>
         </div>
       </div>
-
-      {/* Subscription Manager — interactive badge with billing info and management links */}
-      <SubscriptionManager isPro={isPro} />
 
       {/* User footer — email + sign out share one compact row */}
       {user && (
