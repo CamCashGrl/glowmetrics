@@ -1,5 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
+import RetentionPopup from './RetentionPopup'
+import ExitSurveyPopup from './ExitSurveyPopup'
+import DeleteAccountPopup from './DeleteAccountPopup'
+import SuccessModal from './SuccessModal'
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
@@ -30,6 +34,15 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
   const [error, setError] = useState(null)
   const [data, setData] = useState(subscriptionData)
   const [isHovered, setIsHovered] = useState(false)
+
+  // Popup states
+  const [showRetentionPopup, setShowRetentionPopup] = useState(false)
+  const [showExitSurvey, setShowExitSurvey] = useState(false)
+  const [showDeletePopup, setShowDeletePopup] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [successIcon, setSuccessIcon] = useState('✓')
+  const [popupLoading, setPopupLoading] = useState(false)
 
   useEffect(() => {
     if (!subscriptionData) {
@@ -98,6 +111,97 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
       case 'canceled': return '✕ Canceled'
       default: return status
     }
+  }
+
+  // Retention offer flow
+  const handleCancelClick = () => {
+    setShowRetentionPopup(true)
+  }
+
+  const handleRetentionAccept = async () => {
+    setPopupLoading(true)
+    try {
+      const res = await fetch('/api/user/subscription/retention-offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setShowRetentionPopup(false)
+        setSuccessMessage('🎉 Great! Your subscription has been updated with 50% off. Your next bill will reflect this discount.')
+        setSuccessIcon('✓')
+        setShowSuccessModal(true)
+      } else {
+        alert('Error: ' + (json.error || 'Failed to apply discount'))
+      }
+    } catch (e) {
+      alert('Error applying retention offer: ' + e.message)
+    } finally {
+      setPopupLoading(false)
+    }
+  }
+
+  const handleRetentionDecline = () => {
+    setShowRetentionPopup(false)
+    setShowExitSurvey(true)
+  }
+
+  // Exit survey flow (subscription cancel)
+  const handleExitSurveySubmit = async (surveyData) => {
+    setPopupLoading(true)
+    try {
+      const res = await fetch('/api/user/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ surveyData })
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setShowExitSurvey(false)
+        setSuccessMessage('✓ Your subscription will be canceled at the end of your billing period. Thank you for the feedback!')
+        setSuccessIcon('👋')
+        setShowSuccessModal(true)
+      } else {
+        alert('Error: ' + (json.error || 'Failed to cancel subscription'))
+      }
+    } catch (e) {
+      alert('Error canceling subscription: ' + e.message)
+    } finally {
+      setPopupLoading(false)
+    }
+  }
+
+  // Delete account flow
+  const handleDeleteAccountConfirm = async (surveyData) => {
+    setPopupLoading(true)
+    try {
+      const res = await fetch('/api/user/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ surveyData })
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setShowDeletePopup(false)
+        setSuccessMessage('✓ Your account has been deleted. Your data has been preserved for compliance purposes.')
+        setSuccessIcon('🗑️')
+        setShowSuccessModal(true)
+        // Redirect after success
+        setTimeout(() => {
+          window.location.href = '/logout'
+        }, 3000)
+      } else {
+        alert('Error: ' + (json.error || 'Failed to delete account'))
+      }
+    } catch (e) {
+      alert('Error deleting account: ' + e.message)
+    } finally {
+      setPopupLoading(false)
+    }
+  }
+
+  const handleCloseSuccess = () => {
+    setShowSuccessModal(false)
   }
 
   if (!isPro) {
@@ -184,30 +288,61 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
       )}
 
       {/* Action Buttons */}
-      <div style={{ display: "flex", gap: 6 }}>
-        <button onClick={handleOpenPortal} disabled={loading}
-          style={{
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={handleOpenPortal} disabled={loading}
+            style={{
+              flex: 1, padding: "8px 10px", borderRadius: 6,
+              background: C.purple, color: C.white, border: "none",
+              fontSize: 11, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
+              transition: "all 0.2s", opacity: loading ? 0.7 : 1
+            }}
+            onMouseEnter={e => !loading && (e.target.style.background = "#9d4edd")}
+            onMouseLeave={e => !loading && (e.target.style.background = C.purple)}
+          >
+            {loading ? 'Opening...' : '⚙️ Manage'}
+          </button>
+          <a href="/pricing" style={{
             flex: 1, padding: "8px 10px", borderRadius: 6,
-            background: C.purple, color: C.white, border: "none",
-            fontSize: 11, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-            transition: "all 0.2s", opacity: loading ? 0.7 : 1
+            background: "rgba(34,211,238,0.15)", color: C.cyan, border: "none",
+            fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
+            textDecoration: 'none', transition: "all 0.2s"
           }}
-          onMouseEnter={e => !loading && (e.target.style.background = "#9d4edd")}
-          onMouseLeave={e => !loading && (e.target.style.background = C.purple)}
+            onMouseEnter={e => e.target.style.background = "rgba(34,211,238,0.25)"}
+            onMouseLeave={e => e.target.style.background = "rgba(34,211,238,0.15)"}
+          >
+            📊 Plans
+          </a>
+        </div>
+
+        {/* Cancel Subscription Button */}
+        <button onClick={handleCancelClick} disabled={loading || popupLoading}
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 6,
+            background: "rgba(248,113,113,0.15)", color: C.red, border: `1px solid ${C.red}`,
+            fontSize: 11, fontWeight: 600, cursor: loading || popupLoading ? 'not-allowed' : 'pointer',
+            transition: "all 0.2s", opacity: loading || popupLoading ? 0.7 : 1
+          }}
+          onMouseEnter={e => !loading && !popupLoading && (e.target.style.background = "rgba(248,113,113,0.25)")}
+          onMouseLeave={e => !loading && !popupLoading && (e.target.style.background = "rgba(248,113,113,0.15)")}
         >
-          {loading ? 'Opening...' : '⚙️ Manage'}
+          ✕ Cancel Subscription
         </button>
-        <a href="/pricing" style={{
-          flex: 1, padding: "8px 10px", borderRadius: 6,
-          background: "rgba(34,211,238,0.15)", color: C.cyan, border: "none",
-          fontSize: 11, fontWeight: 700, cursor: 'pointer', textAlign: 'center',
-          textDecoration: 'none', transition: "all 0.2s"
-        }}
-          onMouseEnter={e => e.target.style.background = "rgba(34,211,238,0.25)"}
-          onMouseLeave={e => e.target.style.background = "rgba(34,211,238,0.15)"}
+
+        {/* Delete Account Button (Red Glow) */}
+        <button onClick={() => setShowDeletePopup(true)} disabled={loading || popupLoading}
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 6,
+            background: C.red, color: C.white, border: "none",
+            fontSize: 11, fontWeight: 700, cursor: loading || popupLoading ? 'not-allowed' : 'pointer',
+            transition: "all 0.2s", opacity: loading || popupLoading ? 0.7 : 1,
+            boxShadow: '0 0 12px rgba(248,113,113,0.4)'
+          }}
+          onMouseEnter={e => !loading && !popupLoading && (e.target.style.boxShadow = '0 0 20px rgba(248,113,113,0.6)')}
+          onMouseLeave={e => !loading && !popupLoading && (e.target.style.boxShadow = '0 0 12px rgba(248,113,113,0.4)')}
         >
-          📊 Plans
-        </a>
+          🗑️ Delete Account
+        </button>
       </div>
 
       {error && (
@@ -223,9 +358,39 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
           fontSize: 9, color: "#7d8aa3", textAlign: "center",
           borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 8, marginTop: 4
         }}>
-          💡 Click "Manage" to change payment method, upgrade billing cycle, or cancel
+          💡 Click "Manage" to change payment method or billing cycle
         </div>
       </div>
+
+      {/* Popups */}
+      <RetentionPopup
+        isOpen={showRetentionPopup}
+        isLoading={popupLoading}
+        onAccept={handleRetentionAccept}
+        onDecline={handleRetentionDecline}
+      />
+
+      <ExitSurveyPopup
+        isOpen={showExitSurvey}
+        isLoading={popupLoading}
+        surveyType="subscription_cancel"
+        onSubmit={handleExitSurveySubmit}
+      />
+
+      <DeleteAccountPopup
+        isOpen={showDeletePopup}
+        isLoading={popupLoading}
+        onConfirm={handleDeleteAccountConfirm}
+        onCancel={() => setShowDeletePopup(false)}
+      />
+
+      <SuccessModal
+        isOpen={showSuccessModal}
+        message={successMessage}
+        icon={successIcon}
+        autoCloseMs={5000}
+        onClose={handleCloseSuccess}
+      />
     </>
   )
 }
