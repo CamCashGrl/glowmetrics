@@ -1218,9 +1218,16 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour)
 }
 
 export function aggregateRows(tips, tz = null) {
-  const userTz = tz || (typeof Intl !== 'undefined'
-    ? Intl.DateTimeFormat().resolvedOptions().timeZone
-    : 'UTC')
+  let userTz = tz
+  if (!userTz) {
+    if (typeof Intl === 'undefined') {
+      throw new Error('Intl API not available and no timezone provided to aggregateRows')
+    }
+    userTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (!userTz) {
+      throw new Error('Failed to resolve user timezone from Intl API')
+    }
+  }
 
   if (!tips || tips.length === 0) {
     return {
