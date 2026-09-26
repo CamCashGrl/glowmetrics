@@ -1228,6 +1228,11 @@ export function aggregateRows(tips, tz = null) {
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
       bestDay: null, bestHour: null, platformBestTimes: {},
+      canonicalBestTimes: {
+        grid: [],
+        bestWindow: null,
+        earlySignal: null,
+      },
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [], platformTipTypes: {},
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
@@ -1317,6 +1322,7 @@ export function aggregateRows(tips, tz = null) {
   const whaleAlerts = generateWhaleAlerts(whales)
   const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
   const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
+  const canonicalBestTimes = computeCanonicalBestTimes(meaningfulSessions, userTz)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -1709,6 +1715,11 @@ export function aggregateRows(tips, tz = null) {
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
     bestDay, bestHour, platformBestTimes,
+    canonicalBestTimes: {
+      grid: canonicalBestTimes?.grid || [],
+      bestWindow: canonicalBestTimes?.bestWindow || null,
+      earlySignal: canonicalBestTimes?.earlySignal || null,
+    },
     monthlyData, bestMonth,
     tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
