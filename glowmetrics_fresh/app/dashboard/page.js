@@ -3340,16 +3340,16 @@ const stopImportMessageRotation = () => {
                   sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
                   icon:'💰', isHero:true },
                 { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
-                  value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
-                  sub: meaningfulSessions.length > 0 ? `Across ${meaningfulSessions.length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
+                  value: (meaningfulSessions || []).length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
+                  sub: (meaningfulSessions || []).length > 0 ? `Across ${(meaningfulSessions || []).length.toLocaleString()} meaningful sessions` : 'Not enough data yet',
                   icon:'🎯' },
                 { label:"Total Fans", accent:'#a78bfa', glowClass:'card-glow-violet', trend:fansGrowth,
                   value: whales.length > 0 ? whales.length.toLocaleString() : '—',
                   sub: fansActiveLast30 > 0 ? `${fansActiveLast30} active in last 30 days` : 'None active in the last 30 days',
                   icon:'👥' },
                 { label:"Meaningful Sessions", accent:'#fbbf24', glowClass:'card-glow-gold', trend:sessGrowth,
-                  value: meaningfulSessions.length > 0 ? meaningfulSessions.length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
-                  sub: meaningfulSessions.length > 0
+                  value: (meaningfulSessions || []).length > 0 ? (meaningfulSessions || []).length.toLocaleString() : (sessions.length > 0 ? '0' : '—'),
+                  sub: (meaningfulSessions || []).length > 0
                     ? `${sessions.length.toLocaleString()} tracked · ${(analytics?.lowSignalSessionCount || 0).toLocaleString()} low-signal`
                     : (sessions.length > 0 ? `${sessions.length} detected, none meaningful yet` : (sessionsLast30 > 0 ? `${sessionsLast30} in last 30 days` : 'No sessions yet')),
                   icon:'🎥' }
