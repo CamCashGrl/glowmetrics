@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlowMetrics Blog Pages Inventory</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 8px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .metadata-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .metadata-card h3 {
+            color: #667eea;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .metadata-card p {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .blog-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .blog-card:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+            border-color: #667eea;
+        }
+
+        .blog-card h3 {
+            color: #667eea;
+            font-size: 1em;
+            margin-bottom: 10px;
+            word-break: break-word;
+            font-weight: 600;
+        }
+
+        .blog-card p {
+            font-size: 0.85em;
+            color: #666;
+            word-break: break-all;
+        }
+
+        .blog-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .category-section {
+            margin-bottom: 60px;
+        }
+
+        .category-title {
+            background: #f0f0f0;
+            padding: 15px 20px;
+            border-left: 4px solid #667eea;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .summary {
+            background: #f0f7ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 40px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .summary h2 {
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+
+        .summary ul {
+            margin-left: 20px;
+        }
+
+        .summary li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        footer {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            color: #666;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+        }
+
+        @media print {
+            body {
+                padding: 20px;
+            }
+            .blog-card {
+                page-break-inside: avoid;
+            }
+        }
+
+        .table-view {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 40px;
+        }
+
+        .table-view th,
+        .table-view td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .table-view th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        .table-view tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .table-view tr:hover {
+            background: #f0f7ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 GlowMetrics Blog Pages Inventory</h1>
+            <p>Complete Documentation of All Blog Content</p>
+        </header>
+
+        <div class="metadata">
+            <div class="metadata-card">
+                <h3>Total Blog Pages</h3>
+                <p>97</p>
+            </div>
+            <div class="metadata-card">
+                <h3>Generated Date</h3>
+                <p>September 27, 2026</p>
+            </div>
+            <div class="metadata-card">
+                <h3>Project</h3>
+                <p>GlowMetrics</p>
+            </div>
+        </div>
+
+        <div class="summary">
+            <h2>📋 Content Summary</h2>
+            <ul>
+                <li><strong>Total Active Blog Pages:</strong> 97 (excluding dynamic route [slug])</li>
+                <li><strong>Primary Topics:</strong> Cam modeling earnings, platform guides, technical setup, strategies, tools, and safety</li>
+                <li><strong>Content Focus:</strong> Educational guides, earnings tracking, technical tutorials, platform comparisons</li>
+                <li><strong>Location:</strong> /app/blog/ in Next.js application</li>
+                <li><strong>Access Path:</strong> /blog/[slug-name]</li>
+            </ul>
+        </div>
+
+        <div class="category-section">
+            <h2 class="category-title">📑 All Blog Pages</h2>
+            <table class="table-view">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Blog Slug</th>
+                        <th>URL Path</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>101-sexting-tips-long-distance</td>
+                        <td>/blog/101-sexting-tips-long-distance</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>benefits-of-cam-model-bookkeeping</td>
+                        <td>/blog/benefits-of-cam-model-bookkeeping</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>best-cam-model-tools</td>
+                        <td>/blog/best-cam-model-tools</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>best-cam-sites-for-beginners</td>
+                        <td>/blog/best-cam-sites-for-beginners</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>best-cam-sites-for-models</td>
+                        <td>/blog/best-cam-sites-for-models</td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>bonga-cams-queen-of-queens</td>
+                        <td>/blog/bonga-cams-queen-of-queens</td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>bongacams-camscore-explained</td>
+                        <td>/blog/bongacams-camscore-explained</td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>bongacams-payout-guide</td>
+                        <td>/blog/bongacams-payout-guide</td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>cam-model-boundaries-toxic-chat</td>
+                        <td>/blog/cam-model-boundaries-toxic-chat</td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>cam-model-earnings</td>
+                        <td>/blog/cam-model-earnings</td>
+                    </tr>
+                    <tr>
+                        <td>11</td>
+                        <td>cam-model-equipment-guide</td>
+                        <td>/blog/cam-model-equipment-guide</td>
+                    </tr>
+                    <tr>
+                        <td>12</td>
+                        <td>cam-model-fan-crm</td>
+                        <td>/blog/cam-model-fan-crm</td>
+                    </tr>
+                    <tr>
+                        <td>13</td>
+                        <td>cam-model-income-diversification</td>
+                        <td>/blog/cam-model-income-diversification</td>
+                    </tr>
+                    <tr>
+                        <td>14</td>
+                        <td>cam-model-jobs-from-home</td>
+                        <td>/blog/cam-model-jobs-from-home</td>
+                    </tr>
+                    <tr>
+                        <td>15</td>
+                        <td>cam-model-mental-health-burnout-prevention</td>
+                        <td>/blog/cam-model-mental-health-burnout-prevention</td>
+                    </tr>
+                    <tr>
+                        <td>16</td>
+                        <td>cam-model-self-employment-tax-prep</td>
+                        <td>/blog/cam-model-self-employment-tax-prep</td>
+                    </tr>
+                    <tr>
+                        <td>17</td>
+                        <td>cam-model-taxes</td>
+                        <td>/blog/cam-model-taxes</td>
+                    </tr>
+                    <tr>
+                        <td>18</td>
+                        <td>cam-model-tip-menu-templates</td>
+                        <td>/blog/cam-model-tip-menu-templates</td>
+                    </tr>
+                    <tr>
+                        <td>19</td>
+                        <td>cam-model-tipping-pattern-data-examples</td>
+                        <td>/blog/cam-model-tipping-pattern-data-examples</td>
+                    </tr>
+                    <tr>
+                        <td>20</td>
+                        <td>cam-model-token-to-dollar-ratio-explained</td>
+                        <td>/blog/cam-model-token-to-dollar-ratio-explained</td>
+                    </tr>
+                    <tr>
+                        <td>21</td>
+                        <td>cam-room-dice-game-ideas</td>
+                        <td>/blog/cam-room-dice-game-ideas</td>
+                    </tr>
+                    <tr>
+                        <td>22</td>
+                        <td>cam-session-scripts-for-models</td>
+                        <td>/blog/cam-session-scripts-for-models</td>
+                    </tr>
+                    <tr>
+                        <td>23</td>
+                        <td>cam-sites-compared-viewers-models-competition</td>
+                        <td>/blog/cam-sites-compared-viewers-models-competition</td>
+                    </tr>
+                    <tr>
+                        <td>24</td>
+                        <td>camcash-vs-camdash-vs-cb-cam-insights</td>
+                        <td>/blog/camcash-vs-camdash-vs-cb-cam-insights</td>
+                    </tr>
+                    <tr>
+                        <td>25</td>
+                        <td>can-one-webcam-stream-to-multiple-cam-sites</td>
+                        <td>/blog/can-one-webcam-stream-to-multiple-cam-sites</td>
+                    </tr>
+                    <tr>
+                        <td>26</td>
+                        <td>chaturbate-best-month-real-numbers</td>
+                        <td>/blog/chaturbate-best-month-real-numbers</td>
+                    </tr>
+                    <tr>
+                        <td>27</td>
+                        <td>chaturbate-earnings-growth-bundle</td>
+                        <td>/blog/chaturbate-earnings-growth-bundle</td>
+                    </tr>
+                    <tr>
+                        <td>28</td>
+                        <td>chaturbate-earnings-tracker</td>
+                        <td>/blog/chaturbate-earnings-tracker</td>
+                    </tr>
+                    <tr>
+                        <td>29</td>
+                        <td>chaturbate-first-30-days-real-earnings</td>
+                        <td>/blog/chaturbate-first-30-days-real-earnings</td>
+                    </tr>
+                    <tr>
+                        <td>30</td>
+                        <td>chaturbate-payout-explained</td>
+                        <td>/blog/chaturbate-payout-explained</td>
+                    </tr>
+                    <tr>
+                        <td>31</td>
+                        <td>daddys-girl-roleplay-script-pack</td>
+                        <td>/blog/daddys-girl-roleplay-script-pack</td>
+                    </tr>
+                    <tr>
+                        <td>32</td>
+                        <td>do-you-need-two-computers-to-multistream-cam-sites</td>
+                        <td>/blog/do-you-need-two-computers-to-multistream-cam-sites</td>
+                    </tr>
+                    <tr>
+                        <td>33</td>
+                        <td>femdom-message-scripts-for-creators</td>
+                        <td>/blog/femdom-message-scripts-for-creators</td>
+                    </tr>
+                    <tr>
+                        <td>34</td>
+                        <td>findom-kink-niche</td>
+                        <td>/blog/findom-kink-niche</td>
+                    </tr>
+                    <tr>
+                        <td>35</td>
+                        <td>free-myfreecams-earnings-tracker</td>
+                        <td>/blog/free-myfreecams-earnings-tracker</td>
+                    </tr>
+                    <tr>
+                        <td>36</td>
+                        <td>freemium-vs-premium-cam-model</td>
+                        <td>/blog/freemium-vs-premium-cam-model</td>
+                    </tr>
+                    <tr>
+                        <td>37</td>
+                        <td>girlfriend-experience-gfe-cam-modeling-strategy</td>
+                        <td>/blog/girlfriend-experience-gfe-cam-modeling-strategy</td>
+                    </tr>
+                    <tr>
+                        <td>38</td>
+                        <td>how-cam-models-stay-anonymous</td>
+                        <td>/blog/how-cam-models-stay-anonymous</td>
+                    </tr>
+                    <tr>
+                        <td>39</td>
+                        <td>how-long-does-chaturbate-new-tag-last</td>
+                        <td>/blog/how-long-does-chaturbate-new-tag-last</td>
+                    </tr>
+                    <tr>
+                        <td>40</td>
+                        <td>how-much-do-bongacams-models-make</td>
+                        <td>/blog/how-much-do-bongacams-models-make</td>
+                    </tr>
+                    <tr>
+                        <td>41</td>
+                        <td>how-much-do-cam-models-make</td>
+                        <td>/blog/how-much-do-cam-models-make</td>
+                    </tr>
+                    <tr>
+                        <td>42</td>
+                        <td>how-much-do-chaturbate-models-make</td>
+                        <td>/blog/how-much-do-chaturbate-models-make</td>
+                    </tr>
+                    <tr>
+                        <td>43</td>
+                        <td>how-much-do-myfreecams-models-make</td>
+                        <td>/blog/how-much-do-myfreecams-models-make</td>
+                    </tr>
+                    <tr>
+                        <td>44</td>
+                        <td>how-to-build-loyal-fans</td>
+                        <td>/blog/how-to-build-loyal-fans</td>
+                    </tr>
+                    <tr>
+                        <td>45</td>
+                        <td>how-to-connect-lovense-to-multiple-cam-sites</td>
+                        <td>/blog/how-to-connect-lovense-to-multiple-cam-sites</td>
+                    </tr>
+                    <tr>
+                        <td>46</td>
+                        <td>how-to-establish-yourself-on-bongacams</td>
+                        <td>/blog/how-to-establish-yourself-on-bongacams</td>
+                    </tr>
+                    <tr>
+                        <td>47</td>
+                        <td>how-to-find-your-cam-model-niche</td>
+                        <td>/blog/how-to-find-your-cam-model-niche</td>
+                    </tr>
+                    <tr>
+                        <td>48</td>
+                        <td>how-to-get-more-tips-on-myfreecams</td>
+                        <td>/blog/how-to-get-more-tips-on-myfreecams</td>
+                    </tr>
+                    <tr>
+                        <td>49</td>
+                        <td>how-to-get-more-viewers-as-a-cam-model</td>
+                        <td>/blog/how-to-get-more-viewers-as-a-cam-model</td>
+                    </tr>
+                    <tr>
+                        <td>50</td>
+                        <td>how-to-get-started-on-myfreecams-as-a-model</td>
+                        <td>/blog/how-to-get-started-on-myfreecams-as-a-model</td>
+                    </tr>
+                    <tr>
+                        <td>51</td>
+                        <td>how-to-get-views-on-chaturbate</td>
+                        <td>/blog/how-to-get-views-on-chaturbate</td>
+                    </tr>
+                    <tr>
+                        <td>52</td>
+                        <td>how-to-handle-a-private-show-while-multistreaming</td>
+                        <td>/blog/how-to-handle-a-private-show-while-multistreaming</td>
+                    </tr>
+                    <tr>
+                        <td>53</td>
+                        <td>how-to-increase-cam-earnings</td>
+                        <td>/blog/how-to-increase-cam-earnings</td>
+                    </tr>
+                    <tr>
+                        <td>54</td>
+                        <td>how-to-increase-chaturbate-tips</td>
+                        <td>/blog/how-to-increase-chaturbate-tips</td>
+                    </tr>
+                    <tr>
+                        <td>55</td>
+                        <td>how-to-make-money-on-chaturbate</td>
+                        <td>/blog/how-to-make-money-on-chaturbate</td>
+                    </tr>
+                    <tr>
+                        <td>56</td>
+                        <td>how-to-make-more-money-on-chaturbate</td>
+                        <td>/blog/how-to-make-more-money-on-chaturbate</td>
+                    </tr>
+                    <tr>
+                        <td>57</td>
+                        <td>how-to-manage-multiple-cam-chats-while-multistreaming</td>
+                        <td>/blog/how-to-manage-multiple-cam-chats-while-multistreaming</td>
+                    </tr>
+                    <tr>
+                        <td>58</td>
+                        <td>how-to-multistream-with-obs</td>
+                        <td>/blog/how-to-multistream-with-obs</td>
+                    </tr>
+                    <tr>
+                        <td>59</td>
+                        <td>how-to-pick-a-cam-name</td>
+                        <td>/blog/how-to-pick-a-cam-name</td>
+                    </tr>
+                    <tr>
+                        <td>60</td>
+                        <td>how-to-re-engage-whales-and-high-tipping-fans</td>
+                        <td>/blog/how-to-re-engage-whales-and-high-tipping-fans</td>
+                    </tr>
+                    <tr>
+                        <td>61</td>
+                        <td>how-to-set-up-chat-bots-on-bongacams</td>
+                        <td>/blog/how-to-set-up-chat-bots-on-bongacams</td>
+                    </tr>
+                    <tr>
+                        <td>62</td>
+                        <td>how-to-set-up-chat-bots-on-chaturbate</td>
+                        <td>/blog/how-to-set-up-chat-bots-on-chaturbate</td>
+                    </tr>
+                    <tr>
+                        <td>63</td>
+                        <td>how-to-set-up-private-and-brb-scenes-in-obs</td>
+                        <td>/blog/how-to-set-up-private-and-brb-scenes-in-obs</td>
+                    </tr>
+                    <tr>
+                        <td>64</td>
+                        <td>how-to-set-up-split-streaming-on-multiple-cam-sites</td>
+                        <td>/blog/how-to-set-up-split-streaming-on-multiple-cam-sites</td>
+                    </tr>
+                    <tr>
+                        <td>65</td>
+                        <td>how-to-stay-safe-as-a-cam-model</td>
+                        <td>/blog/how-to-stay-safe-as-a-cam-model</td>
+                    </tr>
+                    <tr>
+                        <td>66</td>
+                        <td>how-to-structure-a-4-hour-cam-show</td>
+                        <td>/blog/how-to-structure-a-4-hour-cam-show</td>
+                    </tr>
+                    <tr>
+                        <td>67</td>
+                        <td>how-to-track-cam-tips-automatically</td>
+                        <td>/blog/how-to-track-cam-tips-automatically</td>
+                    </tr>
+                    <tr>
+                        <td>68</td>
+                        <td>how-to-upload-csv-to-camcash</td>
+                        <td>/blog/how-to-upload-csv-to-camcash</td>
+                    </tr>
+                    <tr>
+                        <td>69</td>
+                        <td>how-touse-myfreecams-with-obs</td>
+                        <td>/blog/how-touse-myfreecams-with-obs</td>
+                    </tr>
+                    <tr>
+                        <td>70</td>
+                        <td>is-camming-legal</td>
+                        <td>/blog/is-camming-legal</td>
+                    </tr>
+                    <tr>
+                        <td>71</td>
+                        <td>live-mode-coaching-for-cam-models</td>
+                        <td>/blog/live-mode-coaching-for-cam-models</td>
+                    </tr>
+                    <tr>
+                        <td>72</td>
+                        <td>lovense-not-syncing-with-obs-or-cam-site</td>
+                        <td>/blog/lovense-not-syncing-with-obs-or-cam-site</td>
+                    </tr>
+                    <tr>
+                        <td>73</td>
+                        <td>mfc-share-guide-for-models</td>
+                        <td>/blog/mfc-share-guide-for-models</td>
+                    </tr>
+                    <tr>
+                        <td>74</td>
+                        <td>myfreecams-camscore-explained</td>
+                        <td>/blog/myfreecams-camscore-explained</td>
+                    </tr>
+                    <tr>
+                        <td>75</td>
+                        <td>obs-vs-lovense-stream-master-cam-models</td>
+                        <td>/blog/obs-vs-lovense-stream-master-cam-models</td>
+                    </tr>
+                    <tr>
+                        <td>76</td>
+                        <td>off-site-shows-for-cam-models</td>
+                        <td>/blog/off-site-shows-for-cam-models</td>
+                    </tr>
+                    <tr>
+                        <td>77</td>
+                        <td>onlyfans-for-cam-models-after-streaming</td>
+                        <td>/blog/onlyfans-for-cam-models-after-streaming</td>
+                    </tr>
+                    <tr>
+                        <td>78</td>
+                        <td>psychology-marketing-cam-101</td>
+                        <td>/blog/psychology-marketing-cam-101</td>
+                    </tr>
+                    <tr>
+                        <td>79</td>
+                        <td>revenue-per-hour-cam-model</td>
+                        <td>/blog/revenue-per-hour-cam-model</td>
+                    </tr>
+                    <tr>
+                        <td>80</td>
+                        <td>roll-the-dice-game-pack</td>
+                        <td>/blog/roll-the-dice-game-pack</td>
+                    </tr>
+                    <tr>
+                        <td>81</td>
+                        <td>sissy-training-obedience-bundle</td>
+                        <td>/blog/sissy-training-obedience-bundle</td>
+                    </tr>
+                    <tr>
+                        <td>82</td>
+                        <td>snap-shows-for-cam-models</td>
+                        <td>/blog/snap-shows-for-cam-models</td>
+                    </tr>
+                    <tr>
+                        <td>83</td>
+                        <td>sph-script-pack</td>
+                        <td>/blog/sph-script-pack</td>
+                    </tr>
+                    <tr>
+                        <td>84</td>
+                        <td>spin-the-wheel-cam-game</td>
+                        <td>/blog/spin-the-wheel-cam-game</td>
+                    </tr>
+                    <tr>
+                        <td>85</td>
+                        <td>vip-client-tracker</td>
+                        <td>/blog/vip-client-tracker</td>
+                    </tr>
+                    <tr>
+                        <td>86</td>
+                        <td>viral-cam-room-titles</td>
+                        <td>/blog/viral-cam-room-titles</td>
+                    </tr>
+                    <tr>
+                        <td>87</td>
+                        <td>what-cam-sites-allow-external-broadcasting</td>
+                        <td>/blog/what-cam-sites-allow-external-broadcasting</td>
+                    </tr>
+                    <tr>
+                        <td>88</td>
+                        <td>what-is-obs-virtual-camera-for-cam-models</td>
+                        <td>/blog/what-is-obs-virtual-camera-for-cam-models</td>
+                    </tr>
+                    <tr>
+                        <td>89</td>
+                        <td>what-to-do-when-cam-room-is-slow</td>
+                        <td>/blog/what-to-do-when-cam-room-is-slow</td>
+                    </tr>
+                    <tr>
+                        <td>90</td>
+                        <td>why-cam-income-is-inconsistent</td>
+                        <td>/blog/why-cam-income-is-inconsistent</td>
+                    </tr>
+                    <tr>
+                        <td>91</td>
+                        <td>why-cam-model-data-prevents-overspending</td>
+                        <td>/blog/why-cam-model-data-prevents-overspending</td>
+                    </tr>
+                    <tr>
+                        <td>92</td>
+                        <td>why-cam-streams-arent-making-money</td>
+                        <td>/blog/why-cam-streams-arent-making-money</td>
+                    </tr>
+                    <tr>
+                        <td>93</td>
+                        <td>why-fans-spend-on-cam-sites</td>
+                        <td>/blog/why-fans-spend-on-cam-sites</td>
+                    </tr>
+                    <tr>
+                        <td>94</td>
+                        <td>why-is-my-camera-black-on-chaturbate-obs</td>
+                        <td>/blog/why-is-my-camera-black-on-chaturbate-obs</td>
+                    </tr>
+                    <tr>
+                        <td>95</td>
+                        <td>why-youre-not-making-money-on-chaturbate</td>
+                        <td>/blog/why-youre-not-making-money-on-chaturbate</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            <p><strong>GlowMetrics Blog Inventory Report</strong></p>
+            <p>Generated: September 27, 2026 | Total Pages: 97 | Status: Active</p>
+            <p>This document is a complete listing of all blog pages in the GlowMetrics application.</p>
+        </footer>
+    </div>
+</body>
+</html>
