@@ -19,6 +19,7 @@ import { trackTrialEvent } from '../../lib/analytics-client'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import PlatformsIntelligence from './PlatformsIntelligence'
 import CommandCenter from './CommandCenter'
+import SubscriptionManager from './SubscriptionManager'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
@@ -4006,6 +4007,14 @@ const stopImportMessageRotation = () => {
             tips={tips}
             isPro={isPro}
             onOpenPlanner={() => handleTabChange('planner')}
+          />
+        )}
+
+        {activeTab === "subscription" && (
+          <SubscriptionManager
+            isPro={isPro}
+            subscriptionData={null}
+            onClose={() => handleTabChange('overview')}
           />
         )}
 
