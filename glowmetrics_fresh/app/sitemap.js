@@ -1,6 +1,6 @@
 export default function sitemap() {
   const base = 'https://www.camcashgrl.com'
-  const today = '2026-07-25'
+  const today = new Date().toISOString().split('T')[0]
 
   const staticPages = [
     { url: base,                                     priority: 1.0, changeFrequency: 'weekly' },
