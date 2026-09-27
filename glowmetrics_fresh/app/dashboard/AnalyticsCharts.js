@@ -132,12 +132,12 @@ function ColorLegend({ platforms }) {
   )
 }
 
-function MetricRelationshipsCard({ sessions }) {
+function MetricRelationshipsCard({ sessions = [] }) {
   const [pairId, setPairId] = useState("duration")
   const pair = RELATIONSHIP_PAIRS.find(p => p.id === pairId)
 
   const { points, platforms } = useMemo(() => {
-    const pool = pair.needsKnownDuration ? sessions.filter(s => !s.durationUnknown) : sessions
+    const pool = pair.needsKnownDuration ? (sessions || []).filter(s => !s.durationUnknown) : (sessions || [])
     const pts = pool.map(s => ({ x: pair.getX(s), y: s.totalUSD, platform: s.platform || "Unknown", startTime: s.startTime }))
     return { points: pts, platforms: [...new Set(pts.map(p => p.platform))] }
   }, [sessions, pairId])
@@ -226,9 +226,9 @@ function Histogram({ values, median, p75 }) {
   )
 }
 
-function PerformanceDistributionCard({ sessions }) {
+function PerformanceDistributionCard({ sessions = [] }) {
   const { values, median, p75 } = useMemo(() => {
-    const vals = sessions.filter(s => !s.durationUnknown && s.usdPerHour != null).map(s => s.usdPerHour).sort((a, b) => a - b)
+    const vals = (sessions || []).filter(s => !s.durationUnknown && s.usdPerHour != null).map(s => s.usdPerHour).sort((a, b) => a - b)
     return {
       values: vals,
       median: vals.length ? quantile(vals, 0.5) : null,
@@ -276,9 +276,9 @@ function outlierReason(s, medianDuration) {
   return null
 }
 
-function OutlierCard({ sessions }) {
+function OutlierCard({ sessions = [] }) {
   const outliers = useMemo(() => {
-    const timed = sessions.filter(s => !s.durationUnknown && s.usdPerHour != null)
+    const timed = (sessions || []).filter(s => !s.durationUnknown && s.usdPerHour != null)
     if (timed.length < OUTLIER_MIN_SESSIONS) return { ready: false, high: [], low: [] }
     const sortedVals = [...timed].map(s => s.usdPerHour).sort((a, b) => a - b)
     const q1 = quantile(sortedVals, 0.25)
@@ -394,12 +394,12 @@ function DeltaBadge({ current, prior, unit = "" }) {
   return <span style={{ color, fontSize: 12, fontWeight: 700 }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : "→"} {Math.abs(pct)}%</span>
 }
 
-function PeriodComparisonCard({ sessions }) {
+function PeriodComparisonCard({ sessions = [] }) {
   const { prior, current, ready } = useMemo(() => {
     const now = Date.now()
     const ms30 = 30 * 24 * 60 * 60 * 1000
-    const curSessions = sessions.filter(s => now - new Date(s.startTime).getTime() <= ms30)
-    const priorSessions = sessions.filter(s => {
+    const curSessions = (sessions || []).filter(s => now - new Date(s.startTime).getTime() <= ms30)
+    const priorSessions = (sessions || []).filter(s => {
       const age = now - new Date(s.startTime).getTime()
       return age > ms30 && age <= ms30 * 2
     })
@@ -448,13 +448,13 @@ function PeriodComparisonCard({ sessions }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 const CONFIDENCE_COLOR = { "Very Low": MUTED, "Low": GOLD, "Medium": CYAN, "High": GREEN }
 
-function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
-  const meaningfulTimed = meaningfulSessions.filter(s => !s.durationUnknown)
-  const streamedHours = meaningfulTimed.reduce((s, x) => s + x.durationHours, 0)
-  const lowSignalCount = allValidSessions.length - meaningfulSessions.length
-  const confidence = calculateConfidence(meaningfulSessions.length, streamedHours)
-  const meaningfulPct = allValidSessions.length > 0 ? Math.round((meaningfulSessions.length / allValidSessions.length) * 100) : 0
-  const knownDurationPct = meaningfulSessions.length > 0 ? Math.round((meaningfulTimed.length / meaningfulSessions.length) * 100) : 0
+function ReliabilityCard({ allValidSessions = [], meaningfulSessions = [] }) {
+  const meaningfulTimed = (meaningfulSessions || []).filter(s => !s.durationUnknown)
+  const streamedHours = meaningfulTimed.reduce((s, x) => s + (x.durationHours || 0), 0)
+  const lowSignalCount = (allValidSessions || []).length - (meaningfulSessions || []).length
+  const confidence = calculateConfidence((meaningfulSessions || []).length, streamedHours)
+  const meaningfulPct = (allValidSessions || []).length > 0 ? Math.round(((meaningfulSessions || []).length / (allValidSessions || []).length) * 100) : 0
+  const knownDurationPct = (meaningfulSessions || []).length > 0 ? Math.round((meaningfulTimed.length / (meaningfulSessions || []).length) * 100) : 0
 
   return (
     <div style={card()}>
@@ -469,14 +469,14 @@ function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
           {confidence.label}
         </div>
         <div style={{ color: MUTED, fontSize: 12 }}>
-          {meaningfulSessions.length} usable session{meaningfulSessions.length === 1 ? "" : "s"} · {streamedHours.toFixed(1)}h streamed with a known duration
+          {(meaningfulSessions || []).length} usable session{(meaningfulSessions || []).length === 1 ? "" : "s"} · {streamedHours.toFixed(1)}h streamed with a known duration
         </div>
       </div>
 
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={{ color: TEXT, fontSize: 12.5 }}>Meaningful sessions</span>
-          <span style={{ color: WHITE, fontSize: 12.5, fontWeight: 600 }}>{meaningfulSessions.length} of {allValidSessions.length} ({meaningfulPct}%)</span>
+          <span style={{ color: WHITE, fontSize: 12.5, fontWeight: 600 }}>{(meaningfulSessions || []).length} of {(allValidSessions || []).length} ({meaningfulPct}%)</span>
         </div>
         <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden", display: "flex" }}>
           <div style={{ width: `${meaningfulPct}%`, background: GREEN }} />
@@ -490,7 +490,7 @@ function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={{ color: TEXT, fontSize: 12.5 }}>Known session duration</span>
-          <span style={{ color: WHITE, fontSize: 12.5, fontWeight: 600 }}>{meaningfulTimed.length} of {meaningfulSessions.length} ({knownDurationPct}%)</span>
+          <span style={{ color: WHITE, fontSize: 12.5, fontWeight: 600 }}>{meaningfulTimed.length} of {(meaningfulSessions || []).length} ({knownDurationPct}%)</span>
         </div>
         <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden", display: "flex" }}>
           <div style={{ width: `${knownDurationPct}%`, background: CYAN }} />
