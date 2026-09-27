@@ -33,10 +33,11 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+          cache-dependency-path: 'glowmetrics_fresh/package-lock.json'
 
       - name: Install dependencies
         working-directory: ./glowmetrics_fresh
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run tests with coverage
         working-directory: ./glowmetrics_fresh
@@ -71,17 +72,26 @@ jobs:
       - name: Comment PR with results
         if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@v7
+        continue-on-error: true
         with:
           script: |
             const fs = require('fs');
-            const testResults = JSON.parse(fs.readFileSync('./glowmetrics_fresh/test-results/summary.json', 'utf8'));
+            const path = require('path');
+
+            const summaryPath = './glowmetrics_fresh/test-results/summary.json';
+            if (!fs.existsSync(summaryPath)) {
+              console.log('No test results found - tests may have failed to run');
+              return;
+            }
+
+            const testResults = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
 
             const message = `## Test Results
 
-            - **Tests Passed**: ${testResults.numPassedTests}/${testResults.numTotalTests}
-            - **Suites Passed**: ${testResults.numPassedTestSuites}/${testResults.numTotalTestSuites}
-            - **Coverage**: ${testResults.coverage.lines}% lines
-            - **Duration**: ${(testResults.testResults.reduce((a, r) => a + r.perfStats.end - r.perfStats.start, 0) / 1000).toFixed(2)}s
+            - **Tests Passed**: ${testResults.numPassedTests || 0}/${testResults.numTotalTests || 0}
+            - **Suites Passed**: ${testResults.numPassedTestSuites || 0}/${testResults.numTotalTestSuites || 0}
+            - **Coverage**: ${testResults.coverage?.lines || 0}% lines
+            - **Duration**: ${testResults.testResults ? (testResults.testResults.reduce((a, r) => a + (r.perfStats?.end - r.perfStats?.start || 0), 0) / 1000).toFixed(2) : 'N/A'}s
 
             ${testResults.numFailedTests > 0 ? `⚠️ **${testResults.numFailedTests} test(s) failed**` : '✅ All tests passed'}`;
 
