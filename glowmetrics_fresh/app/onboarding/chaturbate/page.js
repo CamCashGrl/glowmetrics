@@ -21,6 +21,7 @@ export default function ChaturbateOnboardingPage() {
   const [step, setStep] = useState(1) // 1 = Stats, 2 = Tips (CSV), 3 = Done
   const [broadcasterType, setBroadcasterType] = useState('female')
   const [username, setUsername] = useState('')
+  const [timezone, setTimezone] = useState('')
   const [statsToken, setStatsToken] = useState('')
   const [tokenHelpOpen, setTokenHelpOpen] = useState(false)
   const [subStep, setSubStep] = useState(1) // 1=broadcaster type, 2=username, 3=token
@@ -42,6 +43,15 @@ export default function ChaturbateOnboardingPage() {
       if (session?.user) setUser(session.user)
       setAuthLoading(false)
     })
+
+    // Auto-detect user's timezone
+    try {
+      const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      setTimezone(detectedTz)
+    } catch {
+      setTimezone('UTC')
+    }
+
     return () => subscription.unsubscribe()
   }, [])
 
@@ -64,6 +74,7 @@ export default function ChaturbateOnboardingPage() {
   function validateStep1() {
     const errs = {}
     if (!username.trim()) errs.username = 'Enter your Chaturbate username first.'
+    if (!timezone.trim()) errs.timezone = 'Select your timezone.'
     if (!statsToken.trim()) {
       errs.statsToken = 'Paste your Stats API token to continue, or upload a CSV instead.'
     } else if (statsToken.trim().startsWith('{') || statsToken.includes('"token_balance"')) {
@@ -92,6 +103,7 @@ export default function ChaturbateOnboardingPage() {
           chaturbate_stats_token: statsToken.trim(),
           chaturbate_token_type: 'stats',
           broadcaster_type: broadcasterType,
+          schedule: { timezone: timezone.trim() },
         })
         .eq('id', currentUser.id)
 
@@ -291,6 +303,23 @@ export default function ChaturbateOnboardingPage() {
           box-shadow: 0 0 0 3px rgba(0,212,200,0.1);
         }
         .ob-input.error { border-color: #e05252; }
+        .ob-input[type="text"]::-webkit-outer-spin-button,
+        .ob-input[type="text"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        select.ob-input {
+          background-color: #080b14;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7a9e' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 10px center;
+          padding-right: 30px;
+        }
+        select.ob-input option {
+          background: #0d1120;
+          color: #eef2ff;
+        }
+        select.ob-input option:checked {
+          background: rgba(0,212,200,0.2);
+          color: #eef2ff;
+        }
         .ob-helper {
           font-size: 12px;
           color: #4a5568;
@@ -586,11 +615,11 @@ export default function ChaturbateOnboardingPage() {
                 </>
               )}
 
-              {/* ── SUB-STEP 1b: Username ── */}
+              {/* ── SUB-STEP 1b: Username & Timezone ── */}
               {subStep === 2 && (
                 <>
                   <div className="ob-eyebrow">Step 1b of 3 · Connect Chaturbate</div>
-                  <div className="ob-heading">Your Chaturbate username</div>
+                  <div className="ob-heading">Your account info</div>
 
                   <div className="ob-field">
                     <label className="ob-label">Chaturbate username</label>
@@ -609,6 +638,41 @@ export default function ChaturbateOnboardingPage() {
                     {errors.username && <div className="ob-error-msg">{errors.username}</div>}
                   </div>
 
+                  <div className="ob-field">
+                    <label className="ob-label">Your timezone</label>
+                    <select
+                      className={`ob-input ${errors.timezone ? 'error' : ''}`}
+                      value={timezone}
+                      onChange={(e) => {
+                        setTimezone(e.target.value)
+                        if (errors.timezone) setErrors((p) => ({ ...p, timezone: null }))
+                      }}
+                      style={{ appearance: 'none', cursor: 'pointer' }}
+                    >
+                      <option value="">Select your timezone</option>
+                      <option value="America/New_York">America/New_York (Eastern)</option>
+                      <option value="America/Chicago">America/Chicago (Central)</option>
+                      <option value="America/Denver">America/Denver (Mountain)</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles (Pacific)</option>
+                      <option value="America/Anchorage">America/Anchorage (Alaska)</option>
+                      <option value="Pacific/Honolulu">Pacific/Honolulu (Hawaii)</option>
+                      <option value="Europe/London">Europe/London (GMT)</option>
+                      <option value="Europe/Paris">Europe/Paris (CET)</option>
+                      <option value="Europe/Berlin">Europe/Berlin (CET)</option>
+                      <option value="Europe/Moscow">Europe/Moscow (MSK)</option>
+                      <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                      <option value="Asia/Bangkok">Asia/Bangkok (ICT)</option>
+                      <option value="Asia/Hong_Kong">Asia/Hong_Kong (HKT)</option>
+                      <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
+                      <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                      <option value="Asia/Seoul">Asia/Seoul (KST)</option>
+                      <option value="Australia/Sydney">Australia/Sydney (AEDT)</option>
+                      <option value="Pacific/Auckland">Pacific/Auckland (NZDT)</option>
+                      <option value="UTC">UTC</option>
+                    </select>
+                    {errors.timezone && <div className="ob-error-msg">{errors.timezone}</div>}
+                  </div>
+
                   <button
                     className="ob-btn-primary"
                     onClick={() => {
@@ -616,7 +680,11 @@ export default function ChaturbateOnboardingPage() {
                         setErrors((p) => ({ ...p, username: 'Enter your Chaturbate username first.' }))
                         return
                       }
-                      setErrors((p) => ({ ...p, username: null }))
+                      if (!timezone.trim()) {
+                        setErrors((p) => ({ ...p, timezone: 'Select your timezone.' }))
+                        return
+                      }
+                      setErrors((p) => ({ ...p, username: null, timezone: null }))
                       setSubStep(3)
                     }}
                   >
