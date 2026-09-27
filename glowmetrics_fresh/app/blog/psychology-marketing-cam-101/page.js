@@ -1,5 +1,6 @@
 import ArticleLayout from '../../components/ArticleLayout'
 import Image from 'next/image'
+import CamGirl101CTA from './CamGirl101CTA'
 
 export const metadata = {
   title: 'Cam Girl 101: Psychology & Marketing Hacks for Max Earnings | CamCash',
@@ -132,9 +133,12 @@ export default function Page() {
       <div style={s.downloadBox}>
         <div style={s.downloadTitle}>Get Your Free Guide Now</div>
         <div style={s.downloadSub}>44 Pages of Psychology & Marketing Strategies</div>
-        <a href="/cam-girl-101-free.pdf" download style={s.downloadBtn}>
-          📥 Download Free PDF
-        </a>
+        <CamGirl101CTA
+          href="/cam-girl-101-free.pdf"
+          text="📥 Download Free PDF"
+          style={s.downloadBtn}
+          isEtsy={false}
+        />
       </div>
 
       <h2 style={s.h2}>The Three Pillars of Cam Model Success</h2>
@@ -236,9 +240,12 @@ export default function Page() {
         <div style={s.etsyText}>
           This blog covers the basics, but the complete <strong>Cam Girl 101: Psychology & Marketing Hacks</strong> guide has 44 pages of advanced strategies, templates, scripts, and detailed breakdowns. From menu psychology to room design positioning to advanced pricing models.
         </div>
-        <a href="https://www.etsy.com/listing/4583534851/cam-girl-101-psychology-marketing-hacks?ref=listings_manager_grid" target="_blank" rel="noopener noreferrer" style={s.etsyBtn}>
-          🛍️ Get Full Guide on Etsy
-        </a>
+        <CamGirl101CTA
+          href="https://www.etsy.com/listing/4583534851/cam-girl-101-psychology-marketing-hacks?ref=listings_manager_grid"
+          text="🛍️ Get Full Guide on Etsy"
+          style={s.etsyBtn}
+          isEtsy={true}
+        />
       </div>
 
       <div style={s.faqSection}>
@@ -257,12 +264,18 @@ export default function Page() {
           Download the free Cam Girl 101 mini guide now, then upgrade to the full 44-page system with advanced psychology strategies, pricing templates, and proven tactics used by the highest-earning models.
         </div>
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href="/cam-girl-101-free.pdf" download style={s.downloadBtn}>
-            📥 Free PDF
-          </a>
-          <a href="https://www.etsy.com/listing/4583534851/cam-girl-101-psychology-marketing-hacks?ref=listings_manager_grid" target="_blank" rel="noopener noreferrer" style={s.etsyBtn}>
-            Full Guide
-          </a>
+          <CamGirl101CTA
+            href="/cam-girl-101-free.pdf"
+            text="📥 Free PDF"
+            style={s.downloadBtn}
+            isEtsy={false}
+          />
+          <CamGirl101CTA
+            href="https://www.etsy.com/listing/4583534851/cam-girl-101-psychology-marketing-hacks?ref=listings_manager_grid"
+            text="Full Guide"
+            style={s.etsyBtn}
+            isEtsy={true}
+          />
         </div>
       </div>
     </ArticleLayout>
