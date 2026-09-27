@@ -83,7 +83,13 @@ export default function LivePage() {
   // doesn't need re-selecting every visit.
   const [liveTimezone, setLiveTimezone] = useState(() => {
     if (typeof window === 'undefined') return 'UTC';
-    return localStorage.getItem('cc_live_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const stored = localStorage.getItem('cc_live_timezone');
+    if (stored) return stored;
+    if (typeof Intl !== 'undefined') {
+      const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (resolved) return resolved;
+    }
+    return 'UTC';
   });
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone);
@@ -1044,9 +1050,9 @@ export default function LivePage() {
               <option value="goal">🎯 Goal Focus</option>
             </select>
             <select value={liveTimezone} onChange={e => setLiveTimezone(e.target.value)} title="Timezone for session start/end times" style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
-              {Array.from(new Set([liveTimezone, Intl.DateTimeFormat().resolvedOptions().timeZone,
+              {Array.from(new Set([liveTimezone, typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : null,
                 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Berlin'
-              ])).map(tz => <option key={tz} value={tz}>{tz}</option>)}
+              ].filter(tz => tz))).map(tz => <option key={tz} value={tz}>{tz}</option>)}
             </select>
             <Button as="a" href="/camcash-extension.zip" download="camcash-extension.zip" onClick={() => { setShowExtModal(true); setExtStep(0); }}
               style={{ padding: '7px 14px', fontSize: 12, whiteSpace: 'nowrap' }}>
