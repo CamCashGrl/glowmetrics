@@ -9,6 +9,24 @@ function getSupabase() {
   )
 }
 
+async function trackBlogView(slug, title) {
+  try {
+    const supabase = getSupabase()
+    await supabase.from('analytics_events').insert({
+      event_name: 'blog_page_viewed',
+      event_category: 'blog',
+      page_url: `https://www.camcashgrl.com/blog/${slug}`,
+      properties: {
+        blog_slug: slug,
+        blog_title: title,
+      },
+    })
+  } catch (err) {
+    // Silently fail on tracking errors to not break the page
+    console.error('Blog view tracking failed:', err.message)
+  }
+}
+
 export async function generateMetadata({ params }) {
   try {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -45,6 +63,9 @@ export default async function DynamicBlogPost({ params }) {
       .maybeSingle()
 
     if (!post) notFound()
+
+    // Track blog view
+    await trackBlogView(params.slug, post.title)
 
     const schema = {
       '@context': 'https://schema.org',

@@ -24,7 +24,7 @@ export default function ToolsPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: '24px', marginBottom: '48px' }}>
 
-          {/* Creator Profile Studio */}
+          {/* Cam Model Profile Builder */}
           <a href="/tools/profile-studio" style={{ textDecoration: 'none' }}>
             <div style={{
               background: 'linear-gradient(135deg, rgba(22,244,255,0.08), rgba(255,43,174,0.08))',
@@ -34,10 +34,10 @@ export default function ToolsPage() {
             }}>
               <div style={{ fontSize: '40px', marginBottom: '16px' }}>✍️</div>
               <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#f1f5f9', margin: '0 0 10px' }}>
-                Creator Profile Studio
+                Cam Model Profile Builder
               </h2>
               <p style={{ fontSize: '15px', color: '#94a3b8', lineHeight: '1.6', margin: '0 0 20px' }}>
-                Build a platform-ready cam bio and a fully editable, smartly priced tip menu — both personalized to your persona, boundaries, and goals.
+                Create a professional cam model profile and fully editable, smartly priced tip menu for Chaturbate, MyFreeCams, BongaCams & more — personalized to your persona and boundaries.
               </p>
               <div style={{ fontSize: '14px', fontWeight: '600', color: '#16F4FF' }}>
                 Try it free →
