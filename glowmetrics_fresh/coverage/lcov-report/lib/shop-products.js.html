@@ -1,0 +1,1348 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for lib/shop-products.js</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../prettify.css" />
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">lib</a> shop-products.js</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/9</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/4</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/3</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/6</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">// Pretty Profitz product data — pulled directly from live Etsy listings
+// (prettyprofitz.etsy.com) on 2026-07-26. Edit copy here; both /shop and
+// /shop/[slug] read from this single source.
+&nbsp;
+export const <span class="cstat-no" title="statement not covered" >PRODUCTS </span>= <span class="cstat-no" title="statement not covered" >[</span>
+  {
+    slug: "daddys-girl-roleplay-script-pack",
+    title: "Daddy's Girl Roleplay Script Pack | Adult Creator Prompts",
+    shortTitle: "Daddy's Girl Roleplay Bundle",
+    price: "$8.99",
+    etsyUrl: "https://www.etsy.com/listing/4544543970/daddys-girl-roleplay-script-pack-adult",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/0bea9e/8301249762/il_1080xN.8301249762_fhsh.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/e42ae4/8349145991/il_1080xN.8349145991_37vk.jpg",
+      "https://i.etsystatic.com/64033359/r/il/56a8e1/8301249596/il_1080xN.8301249596_adjm.jpg",
+      "https://i.etsystatic.com/64033359/r/il/b9a11d/8349146159/il_1080xN.8349146159_93u3.jpg",
+    ],
+    description: `Create smoother, more confident private sessions with this feminine Daddy's Girl cam script and prompt pack.
+&nbsp;
+This 32-page digital PDF includes a full start-to-finish session script, flirty opening lines, sweet praise, bratty prompts, viewer questions, closing lines, session recipes, worksheets, profile notes, and reusable planning pages.
+&nbsp;
+Perfect for adult cam creators who want a cute, playful, praise-focused roleplay without sounding repetitive.
+&nbsp;
+You'll receive: full 3-page session script, flirty/sweet/bratty/praise-focused dialogue, viewer response prompts, opening and closing lines, 5 ready-made session recipes, customization worksheets, viewer profile and session notes, large easy-to-read text, and an instant digital PDF download.
+&nbsp;
+For consensual, unrelated adults only. No physical item will be shipped. For personal creator use only; resale, sharing, and redistribution are prohibited.`,
+    seoKeywords: "Daddy's Girl roleplay script, cam script pack, adult creator prompts, cam model script",
+  },
+  {
+    slug: "playful-sph-cam-script-pack",
+    title: "Playful SPH Cam Script Pack | Adult Creator Teasing Guide",
+    shortTitle: "Playful SPH Cam Script Pack",
+    price: "$9.99",
+    etsyUrl: "https://www.etsy.com/listing/4541995234/playful-sph-cam-script-pack-adult",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/7a51f8/8331116443/il_1080xN.8331116443_pp31.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/2f7f18/8283196568/il_1080xN.8283196568_4fx9.jpg",
+      "https://i.etsystatic.com/64033359/r/il/65f88e/8283196570/il_1080xN.8283196570_7o4c.jpg",
+      "https://i.etsystatic.com/64033359/r/il/7748b0/8283196580/il_1080xN.8283196580_8asv.jpg",
+      "https://i.etsystatic.com/64033359/r/il/3bb58e/8331116433/il_1080xN.8331116433_ifnr.jpg",
+    ],
+    description: `Never run out of playful SPH lines during a private session again.
+&nbsp;
+The Playful SPH Cam Script Pack is a premium, full-session dialogue guide created for adult cam creators who want their teasing to feel natural, flirty, confident, and easy to personalize.
+&nbsp;
+This script focuses on playful small penis humiliation with a lighter, amused tone rather than harsh domination. Use the complete session flow as written or mix and match individual lines to create your own experience.
+&nbsp;
+What's Included: full SPH session flow from opening to closing, playful first reactions, giggly and flirty teasing lines, soft humiliation dialogue, sarcastic reassurance, viewer response prompts, playful nickname ideas, compliments mixed with teasing, mid-session escalation, final teasing and closing dialogue, multiple tone variations, consent and creator safety notes, session customization worksheet, personal session notes pages.
+&nbsp;
+Product Details: 38-page premium PDF, large easy-to-read text, dark charcoal and red workbook design, use digitally or print at home, instant digital download, no physical product will be shipped.
+&nbsp;
+Created for consenting adults and adult creators only. For personal creator use; may not be copied, shared, redistributed, resold, or repackaged.`,
+    seoKeywords: "SPH cam script, adult creator teasing guide, cam model script pack",
+  },
+  {
+    slug: "vip-client-tracker-1299",
+    title: "Cam Model VIP Client Tracker | Fillable PDF CRM, Planner",
+    shortTitle: "VIP Client Tracker ($12.99 tier)",
+    price: "$12.99",
+    etsyUrl: "https://www.etsy.com/listing/4541972932/cam-model-vip-client-tracker-fillable",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/03c614/8330941639/il_1080xN.8330941639_8h0k.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/be871a/8283029190/il_1080xN.8283029190_d74y.jpg",
+      "https://i.etsystatic.com/64033359/r/il/f14ded/8330948431/il_1080xN.8330948431_7i3m.jpg",
+      "https://i.etsystatic.com/64033359/r/il/2d5e2e/8283029178/il_1080xN.8283029178_gpw9.jpg",
+      "https://i.etsystatic.com/64033359/r/il/00cfb4/8330948399/il_1080xN.8330948399_go80.jpg",
+      "https://i.etsystatic.com/64033359/r/il/bf66bf/8283029200/il_1080xN.8283029200_rkbk.jpg",
+      "https://i.etsystatic.com/64033359/r/il/95dade/8283029198/il_1080xN.8283029198_l6i5.jpg",
+      "https://i.etsystatic.com/64033359/r/il/506727/8330948497/il_1080xN.8330948497_72wk.jpg",
+    ],
+    description: `Organize your top clients with the Pretty Profitz VIP Client Tracker, a 24-page fillable PDF workbook created for cam models, adult creators, and online content creators.
+&nbsp;
+Track VIP usernames, platforms, tips, spending, sessions, preferences, boundaries, follow-ups, inactive clients, and monthly activity in one easy-to-use system.
+&nbsp;
+Included: VIP Master List, Detailed Client Profiles, Preferences and Boundaries, 3 Tip and Spending History pages, 2 Session and Interaction Logs, 2 Follow-Up Planner pages, 3 Re-Engagement Tracker pages, Monthly VIP Overview with graphs, VIP Relationship Scorecard, Custom VIP Tier Builder, Notes, templates, and safety pages.
+&nbsp;
+Product details: 24-page fillable PDF, printable and reusable, instant digital download, no physical item included. Will fill bulk requests or personal requests — email or message to discuss.
+&nbsp;
+For personal business use only. May not be resold, shared, copied, or redistributed.`,
+    seoKeywords: "cam model VIP client tracker, creator CRM, cam model spending tracker",
+  },
+  {
+    slug: "vip-client-tracker-999",
+    title: "Cam Model VIP Client Tracker | Fillable PDF Workbook",
+    shortTitle: "VIP Client Tracker ($9.99 tier)",
+    price: "$9.99",
+    etsyUrl: "https://www.etsy.com/listing/4541204773/cam-model-vip-client-tracker-fillable",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/e2dc6d/8325215957/il_1080xN.8325215957_fxfr.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/de4f1d/8277296660/il_1080xN.8277296660_ql2i.jpg",
+      "https://i.etsystatic.com/64033359/r/il/003231/8277296664/il_1080xN.8277296664_dkkf.jpg",
+      "https://i.etsystatic.com/64033359/r/il/53c2d1/8277296668/il_1080xN.8277296668_pj6y.jpg",
+      "https://i.etsystatic.com/64033359/r/il/46da18/8277296684/il_1080xN.8277296684_lr48.jpg",
+      "https://i.etsystatic.com/64033359/r/il/97537f/8325215941/il_1080xN.8325215941_gw02.jpg",
+      "https://i.etsystatic.com/64033359/r/il/4022da/8325215979/il_1080xN.8325215979_qxlt.jpg",
+      "https://i.etsystatic.com/64033359/r/il/dfa915/8277296680/il_1080xN.8277296680_18k0.jpg",
+      "https://i.etsystatic.com/64033359/r/il/097686/8325215977/il_1080xN.8325215977_eb94.jpg",
+    ],
+    description: `Organize your highest-value clients with the Pretty Profitz VIP Client Tracker, a 17-page fillable PDF workbook created for cam models, cam girls, adult creators, and online content creators.
+&nbsp;
+This reusable client management workbook helps you track usernames, platforms, spending, tips, sessions, preferences, boundaries, follow-up dates, re-engagement ideas, VIP tiers, and monthly client activity in one place.
+&nbsp;
+Included: VIP Master List, Detailed Client Profiles, Preferences and Boundaries, Tip and Spending History, Session and Interaction Log, Follow-Up Planner, Re-Engagement Tracker, Monthly VIP Overview, VIP Relationship Scorecard, Custom VIP Tier Builder.
+&nbsp;
+Product details: 17-page fillable PDF, printable and reusable, instant digital download, no physical product included.
+&nbsp;
+Use usernames and creator-safe identifiers only. Always follow platform rules and protect private client information. For personal business use only.`,
+    seoKeywords: "cam model client tracker, spending tracker, follow-up planner, creator CRM",
+  },
+  {
+    slug: "cam-model-branding-kit",
+    title: "Cam Model Branding Kit Workbook, Adult Creator Brand Guide",
+    shortTitle: "Cam Model Branding Kit",
+    price: "$9.99",
+    etsyUrl: "https://www.etsy.com/listing/4541182089/cam-model-branding-kit-workbook-adult",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/c889ca/8325178355/il_1080xN.8325178355_degl.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/4a1e30/8325178421/il_1080xN.8325178421_4vlg.jpg",
+      "https://i.etsystatic.com/64033359/r/il/552d66/8277259966/il_1080xN.8277259966_mddf.jpg",
+      "https://i.etsystatic.com/64033359/r/il/db66fb/8277260280/il_1080xN.8277260280_bzvx.jpg",
+    ],
+    description: `Build a clear, confident, and recognizable cam-model brand with this 53+ page digital branding workbook.
+&nbsp;
+Created for cam models and adult content creators, this guide helps you define your persona, niche, audience, boundaries, visual identity, content strategy, offers, and brand goals.
+&nbsp;
+Includes: brand persona worksheets, niche and audience planning, boundaries and comfort-zone pages, visual identity and color planning, social media strategy, content planning, offer ideas, brand goals, privacy and anonymity guidance, printable workbook pages.
+&nbsp;
+Perfect for cam models, adult creators, content sellers, online entertainers, new creators, and creators planning a rebrand.
+&nbsp;
+Product Details: 53+ page PDF workbook, instant digital download, printable and reusable, no physical item shipped. Personal-use license only. Intended for adults 18+.`,
+    seoKeywords: "cam model branding kit, adult creator brand guide, cam model persona workbook",
+  },
+  {
+    slug: "good-morning-gfe-joi-script",
+    title: "Good Morning GFE JOI Script for Adult Creators",
+    shortTitle: "Good Morning GFE JOI Script",
+    price: "$7.99",
+    etsyUrl: "https://www.etsy.com/listing/4541140453/good-morning-gfe-joi-script-for-adult",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/87cc92/8276965006/il_1080xN.8276965006_m6nf.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/09c770/8324881181/il_1080xN.8324881181_a0kx.jpg",
+    ],
+    description: `Start his morning with a sweet girlfriend voice—and turn it into a dirty, guided experience he will remember all day.
+&nbsp;
+This Good Morning Girlfriend Experience JOI Script is written for verified adult creators who make custom videos, voice notes, PPV content, audio recordings, or personalized adult content.
+&nbsp;
+The script begins with warm, affectionate girlfriend energy before building into explicit instructions, dirty talk, teasing, edging, denial, praise, possessive commands, and a guided finish.
+&nbsp;
+What's included: complete 12–20 minute voice-ready script, soft girlfriend-style wake-up opening, explicit guided-touch instructions, dirty morning teasing, two build-and-edge sections, possessive commands and praise, permission-to-finish sequence, sweet girlfriend aftercare, hotter alternate lines, bratty/possessive/explicit/praise variations, customer-personalization worksheet, voice/pacing/recording guidance.
+&nbsp;
+Great for custom adult videos, personalized voice notes, PPV messages, GFE content, JOI recordings, audio scripts, subscription content, clip-store content, and cam-model custom orders.`,
+    seoKeywords: "GFE JOI script, adult creator voice script, cam model custom order script",
+  },
+  {
+    slug: "roll-the-dice-game-pack",
+    title: "Cam Model Roll-the-Dice Game Pack (Fillable PDF)",
+    shortTitle: "Roll The Dice Game Pack",
+    price: "$11.99",
+    etsyUrl: "https://www.etsy.com/listing/4541149618/cam-model-roll-the-dice-game-pack",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/d999e4/8324638981/il_1080xN.8324638981_3rhd.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/bc0361/8276815622/il_1080xN.8276815622_3fln.jpg",
+      "https://i.etsystatic.com/64033359/r/il/67940e/8276815626/il_1080xN.8276815626_4lhy.jpg",
+      "https://i.etsystatic.com/64033359/r/il/11d655/8324732787/il_1080xN.8324732787_oktu.jpg",
+      "https://i.etsystatic.com/64033359/r/il/cf8b36/8324732799/il_1080xN.8324732799_9pa9.jpg",
+      "https://i.etsystatic.com/64033359/r/il/f6fa3a/8276815642/il_1080xN.8276815642_o7v2.jpg",
+      "https://i.etsystatic.com/64033359/r/il/36e6c9/8276815632/il_1080xN.8276815632_f87s.jpg",
+      "https://i.etsystatic.com/64033359/r/il/0abba8/8276815692/il_1080xN.8276815692_nnp1.jpg",
+      "https://i.etsystatic.com/64033359/r/il/a04e52/8276815698/il_1080xN.8276815698_4s1e.jpg",
+    ],
+    description: `Make your cam room more interactive with this Roll-the-Dice Game Bundle for cam models and adult content creators. Perfect for stream sites without built-in dice games, or as an alternative when bots are running too many at once — also fun for date night.
+&nbsp;
+This digital bundle includes both versions of the Pretty Profitz Roll-the-Dice Pack: the new pink printable/fillable workbook, and the original Roll-the-Dice game pack.
+&nbsp;
+Use the ready-made dice games during live streams, themed shows, goal pushes, premium sessions, or slower room periods. Set a roll price, ask the viewer to tip, roll a standard six-sided die, and complete the result that matches the number.
+&nbsp;
+Version 1 (Pink Printable + Fillable Workbook): 10 coordinated workbook pages, how-to-use instructions, game setup worksheet, Everyday/Bratty/Non-Nude/Toy/Goal Boost/Premium Dice, blank custom dice-game template, fillable fields, US Letter size.
+&nbsp;
+Version 2 (Original Dice Game Pack): original Pretty Profitz dice-game design, ready-to-use prompts, multiple game styles, custom game option.
+&nbsp;
+Great for cam models, webcam performers, live-stream entertainers, themed stream nights, goal-based games, viewer engagement, and tip-menu activities. Intended for verified adults 18+.`,
+    seoKeywords: "cam model dice game, roll the dice cam room game, stream interactive game pack",
+  },
+  {
+    slug: "spin-the-wheel-template-pack",
+    title: "Editable Spin-the-Wheel Canva Template Pack | 8 Cam Room Wheel Designs",
+    shortTitle: "Spin The Wheel Template Pack",
+    price: "$9.99",
+    etsyUrl: "https://www.etsy.com/listing/4538921362/editable-spin-the-wheel-canva-template",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/3c0207/8307768195/il_1080xN.8307768195_8kcu.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/a7bafc/8307939649/il_1080xN.8307939649_jb9u.jpg",
+      "https://i.etsystatic.com/64033359/r/il/3ce897/8307939681/il_1080xN.8307939681_da5r.jpg",
+      "https://i.etsystatic.com/64033359/r/il/5c2d32/8307939669/il_1080xN.8307939669_db87.jpg",
+      "https://i.etsystatic.com/64033359/r/il/dc3597/8307944799/il_1080xN.8307944799_e67b.jpg",
+    ],
+    description: `Create branded spin-the-wheel games for your cam room without designing every wheel from scratch.
+&nbsp;
+This digital bundle includes 8 editable Canva wheel templates plus a downloadable PDF reference copy. Customize the wheel labels and wording in Canva, then export your finished designs as PNG, JPG, or PDF files.
+&nbsp;
+You will receive: editable Canva template link, PDF wheel pack and guide, and 8 spin-the-wheel designs — Everyday, Bratty, Soft Dom, Non-Nude, Toy, Premium, Goal, and Blank/Custom Wheel.
+&nbsp;
+How it works: download the files after purchase, open the included Canva-access PDF, click the template link and select "Use this template," edit the wheel labels and wording, download your completed designs as PNG, JPG, or PDF. A free Canva account can be used to access the templates.
+&nbsp;
+This is a digital product. No physical item will be shipped.`,
+    seoKeywords: "spin the wheel cam room template, Canva wheel template, cam model game template",
+  },
+  {
+    slug: "320-tip-menu-ideas",
+    title: "Cam Model Tip Menu Templates | 320 Ideas, Pricing, Tracker",
+    shortTitle: "320 Realistic Tip Menu Ideas",
+    price: "$10.99",
+    etsyUrl: "https://www.etsy.com/listing/4538766419/cam-model-tip-menu-templates-320-ideas",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/4a1b07/8258613836/il_1080xN.8258613836_s88w.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/a3c94e/8306529339/il_1080xN.8306529339_b50k.jpg",
+      "https://i.etsystatic.com/64033359/r/il/5a444f/8258613804/il_1080xN.8258613804_hm9l.jpg",
+      "https://i.etsystatic.com/64033359/r/il/e4f3fe/8258613828/il_1080xN.8258613828_pt6d.jpg",
+      "https://i.etsystatic.com/64033359/r/il/c4367c/8258613840/il_1080xN.8258613840_njn5.jpg",
+      "https://i.etsystatic.com/64033359/r/il/03af82/8258613826/il_1080xN.8258613826_rf88.jpg",
+      "https://i.etsystatic.com/64033359/r/il/2629b7/8306529419/il_1080xN.8306529419_qe9k.jpg",
+      "https://i.etsystatic.com/64033359/r/il/88c66c/8306529421/il_1080xN.8306529421_ag0i.jpg",
+    ],
+    description: `Create polished cam-room tip menus without starting from scratch.
+&nbsp;
+This digital bundle includes 20 editable Canva tip-menu templates plus a 30-page PDF guide with 320 realistic tip-menu ideas, worksheets, and planning tools.
+&nbsp;
+What's included: 20 editable Canva tip menus, 320 total tip-menu ideas, 30-page PDF bundle, blank token-price spaces, pricing worksheet, performance tracker, custom menu planner, and categories spanning everyday, toy, game, show-type, premium, and niche menus.
+&nbsp;
+How it works: download the files, open the START HERE PDF, click the Canva template link, choose "Use this template," edit the wording/prices/colors/logo/stage name, download your finished menus as PNG, JPG, or PDF. A free Canva account can be used.
+&nbsp;
+This is a digital product. The Canva templates are editable; the included PDF is a standard reference file, not a fillable form. Does not include automated tipping software or live integrations. For use by one creator in their own business.`,
+    seoKeywords: "cam room tip menu template, tip menu ideas, cam model pricing menu",
+  },
+  {
+    slug: "mistress-contract-128-rules",
+    title: "Mistress Contract &amp; 128 Slave Rules | Submissive Training Bundle",
+    shortTitle: "Mistress Contract – 128 Slave Rules",
+    price: "$11.99",
+    etsyUrl: "https://www.etsy.com/listing/4537363646/mistress-contract-128-slave-rules",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/84a3cc/8248104022/il_1080xN.8248104022_hopn.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/032b8b/8296018843/il_1080xN.8296018843_mzbh.jpg",
+      "https://i.etsystatic.com/64033359/r/il/04084f/8248104190/il_1080xN.8248104190_j932.jpg",
+      "https://i.etsystatic.com/64033359/r/il/1d9ed0/8248104016/il_1080xN.8248104016_cecu.jpg",
+      "https://i.etsystatic.com/64033359/r/il/36d171/8296018689/il_1080xN.8296018689_oxkd.jpg",
+    ],
+    description: `Create a clear, structured, and consensual Mistress/slave dynamic with this complete digital training workbook from Pretty Profitz.
+&nbsp;
+This 18-page PDF bundle is designed for consenting adults who want a more organized approach to submission, obedience, communication, service, boundaries, and accountability. It includes a customizable Mistress contract, 128 original slave rules, a limits and preferences worksheet, a 30-day slave training plan, tracking pages, a weekly review, and a completion certificate.
+&nbsp;
+The content emphasizes clear expectations, honest communication, privacy, safewords, hard limits, personal safety, wellbeing, and the right to pause or end the dynamic at any time.
+&nbsp;
+What's included: Read Me + Safety First guide, customizable Mistress Contract with continuation/custom-terms/signature pages, Limits &amp; Preferences Worksheet, 128 Rules for a Well-Trained Slave, 30-Day Slave Training Plan, Task/Offering/Obedience Tracker pages, Weekly Review worksheet, Certificate of Completion.
+&nbsp;
+This workbook does not create legal ownership, replace legal advice, or override consent, hard limits, personal safety, or either person's right to stop. It prohibits coercion, blackmail, doxxing, identity theft, unauthorized account access, threats, illegal activity, and involvement of non-consenting people. For consenting adults only.`,
+    seoKeywords: "Mistress contract template, submissive training workbook, femdom slave rules PDF",
+  },
+  {
+    slug: "bondage-for-beginners",
+    title: "Bondage for Beginners Guide | BDSM Safety Workbook",
+    shortTitle: "Bondage For Beginners",
+    price: "$11.99",
+    etsyUrl: "https://www.etsy.com/listing/4537346381/bondage-for-beginners-guide-bdsm-safety",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/bb2b56/8295998099/il_1080xN.8295998099_daoi.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/1c247a/8296243681/il_1080xN.8296243681_ijlj.jpg",
+      "https://i.etsystatic.com/64033359/r/il/280e16/8296243683/il_1080xN.8296243683_3jkc.jpg",
+      "https://i.etsystatic.com/64033359/r/il/50c63c/8248328776/il_1080xN.8248328776_3ctg.jpg",
+      "https://i.etsystatic.com/64033359/r/il/418063/8296243675/il_1080xN.8296243675_f2c0.jpg",
+      "https://i.etsystatic.com/64033359/r/il/f4aeb5/8296243685/il_1080xN.8296243685_mma9.jpg",
+    ],
+    description: `Curious about bondage but unsure where to begin? This Bondage for Beginners Guide and Printable Workbook provides a clear, approachable introduction to beginner restraint, rope safety, communication, consent, scene planning, and aftercare.
+&nbsp;
+This 21-page digital PDF combines educational guidance with practical worksheets you can print and complete with a consenting adult partner. It is designed for beginners who want to explore slowly, communicate clearly, and prioritize comfort, trust, and easy release.
+&nbsp;
+What's included: beginner bondage safety guidance, consent and negotiation tips, body-zone guidance and warning signs, beginner equipment and safety essentials, rope preparation and care information, four illustrated beginner knot/tie tutorials (overhand stopper knot, square knot, quick-release bow, loose single-column cuff), beginner-friendly scene ideas, check-in questions and nonverbal signals, aftercare guidance, pre-scene safety checklist, boundaries worksheet, scene-planning worksheet, post-scene reflection tracker, troubleshooting and emergency-release reminders.
+&nbsp;
+This guide does not teach suspension, breath restriction, neck restraint, hogties, or other advanced bondage practices. It is an educational beginner resource, not medical or legal advice or a replacement for qualified in-person training. Designed for consenting adults 18+.`,
+    seoKeywords: "bondage for beginners guide, BDSM safety workbook, rope knot tutorial PDF",
+  },
+  {
+    slug: "101-sexting-tips",
+    title: "101 Sexting Tips for Long Distance Relationships",
+    shortTitle: "101 Sexting Tips",
+    price: "$4.99",
+    etsyUrl: "https://www.etsy.com/listing/4537171402/101-sexting-tips-for-long-distance",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/8f2560/8246716744/il_1080xN.8246716744_1klf.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/580d8b/8247080684/il_1080xN.8247080684_6k9t.jpg",
+      "https://i.etsystatic.com/64033359/r/il/fdad0a/8247080690/il_1080xN.8247080690_cm6e.jpg",
+      "https://i.etsystatic.com/64033359/r/il/03c623/8294911653/il_1080xN.8294911653_a1ym.jpg",
+      "https://i.etsystatic.com/64033359/r/il/ab9996/8294911683/il_1080xN.8294911683_5q49.jpg",
+      "https://i.etsystatic.com/64033359/r/il/c37427/8246995678/il_1080xN.8246995678_qdhx.jpg",
+      "https://i.etsystatic.com/64033359/r/il/3b856f/8294911677/il_1080xN.8294911677_1hm4.jpg",
+      "https://i.etsystatic.com/64033359/r/il/0cbb73/8246995676/il_1080xN.8246995676_w399.jpg",
+    ],
+    description: `101 Sexting Tips for Long-Distance Relationships has over 50+ pages and is a playful, practical digital guide created for adult couples who want to keep the spark alive, build anticipation, communicate more confidently, and feel closer even when they are miles apart.
+&nbsp;
+This 61-page PDF includes 101 structured sexting tips, flirty conversation ideas, romantic prompts, voice-note suggestions, long-distance date-night ideas, privacy guidance, and printable relationship worksheets — designed to move beyond repetitive "I miss you" texts.
+&nbsp;
+Categories included: Building Anticipation, Flirty Openers, Romantic Sexting, Dirty Talk Confidence, Voice Notes and Audio, Photos and Visual Teasing, Roleplay and Fantasy, Long-Distance Date Nights, Keeping It Fresh, Consent Privacy and Boundaries, Reconnecting After a Dry Spell.
+&nbsp;
+Also includes a sexting comfort and boundaries worksheet, long-distance date-night planner, favorite prompts tracker, and connection check-in worksheet.
+&nbsp;
+This is a digital product only, intended for consenting adults 18+. Consent, privacy, and communication should always come first. Personal use only.`,
+    seoKeywords: "sexting tips guide, long distance relationship intimacy, couples sexting ideas PDF",
+  },
+  {
+    slug: "101-ways-train-sissy",
+    title: "101 Ways To Punish Your Sissy | Findom Guide",
+    shortTitle: "101 Ways To Train Your Sissy",
+    price: "$10.99",
+    etsyUrl: "https://www.etsy.com/listing/4537118216/101-ways-to-punish-your-sissy-findom",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/a0e8a9/8294496283/il_1080xN.8294496283_hm42.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/a6cae8/8294459449/il_1080xN.8294459449_lqvt.jpg",
+      "https://i.etsystatic.com/64033359/r/il/7f9b4b/8246542968/il_1080xN.8246542968_cz25.jpg",
+      "https://i.etsystatic.com/64033359/r/il/940a37/8246542956/il_1080xN.8246542956_9zw8.jpg",
+      "https://i.etsystatic.com/64033359/r/il/98ee9b/8246542910/il_1080xN.8246542910_ccgx.jpg",
+      "https://i.etsystatic.com/64033359/r/il/f7595e/8246542966/il_1080xN.8246542966_qkru.jpg",
+    ],
+    description: `101 seductive sissy punishment ideas for femdom, findom, feminization, obedience, humiliation and submissive service. Includes a 53-page PDF, 11 categories, and printable trackers.
+&nbsp;
+"101 Ways to Punish Your Sissy" is a seductive, dominant digital guide created for consenting adults exploring sissy training, feminization, financial domination, femdom, obedience, humiliation, service, brat correction, tease and denial, and structured power exchange. Every assignment is written in a direct, commanding Mistress voice with specific instructions, completion requirements, and an optional stricter variation.
+&nbsp;
+11 punishment categories: Financial Correction, Feminine Grooming and Presentation, Domestic Service, Writing and Repetition Assignments, Obedience and Protocol, Accountability and Habit Correction, Controlled Humiliation, Privilege Removal, Psychological Conditioning, Brat Correction, Worship and Service.
+&nbsp;
+Each punishment includes "Why You Earned It," "Your Punishment," "You Earn Release When," and an optional "Make It Meaner" variation.
+&nbsp;
+All activities must remain consensual and within clearly negotiated boundaries. Participants should discuss limits, financial budgets, privacy, safety, safewords, and stopping methods before beginning. Financial punishments should only use pre-agreed disposable income and never interfere with essential living expenses. Intended for consenting adults 18+.`,
+    seoKeywords: "sissy training guide, findom punishment ideas, femdom PDF guide",
+  },
+  {
+    slug: "how-to-train-paypig",
+    title: "How To Train Your PayPig Script (Plug And Play)",
+    shortTitle: "How To Train Your PayPig",
+    price: "$10.99",
+    etsyUrl: "https://www.etsy.com/listing/4536210508/how-to-train-your-paypig-script-plug-and",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/9fbcd4/8239578466/il_1080xN.8239578466_gm2t.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/6bdabb/8239579258/il_1080xN.8239579258_q6d4.jpg",
+      "https://i.etsystatic.com/64033359/r/il/da267f/8287488107/il_1080xN.8287488107_fbji.jpg",
+      "https://i.etsystatic.com/64033359/r/il/0de7e1/8239580330/il_1080xN.8239580330_1xsn.jpg",
+      "https://i.etsystatic.com/64033359/r/il/0a7daa/8239581198/il_1080xN.8239581198_33t7.jpg",
+    ],
+    description: `Stop freezing up and wondering what to say. This plug-and-play paypig training script gives dominant creators a complete, ready-to-use conversation flow for maintaining a cold, confident, financially entitled persona — including tribute prompts, expected responses, performance directions, customizable placeholders, and a condensed copy-and-paste chat version.
+&nbsp;
+Created for Findom creators, bratty dommes, financial dominants, and online creators who want stronger dialogue without writing every response from scratch.
+&nbsp;
+What you'll receive: complete paypig training script, ready-to-use dominant dialogue, opening/training/tribute/closing sequences, three customizable tribute stages, expected paypig responses, cold commanding performance directions, reusable message loops, customizable plug-and-play placeholders ([NAME], [TRIBUTE], [SECOND TRIBUTE], [FINAL TRIBUTE], [PAYMENT METHOD]), condensed copy-and-paste chat script, and a creator use license.
+&nbsp;
+This product is delivered as a locked, non-editable PDF — you may copy the script text into your own messages and replace the bracketed placeholders with your own details. No editable Canva template is included.
+&nbsp;
+For adult creators 18+. Personal creator use only; may not be resold, shared, or redistributed.`,
+    seoKeywords: "paypig training script, findom script PDF, financial domination dialogue",
+  },
+  {
+    slug: "500-cam-room-titles",
+    title: "500 High-Converting Cam Room Titles | Copy-Paste Ideas for Models",
+    shortTitle: "500 High-Converting Cam Room Titles",
+    price: "$3.99",
+    etsyUrl: "https://www.etsy.com/listing/4532348458/500-high-converting-cam-room-titles-copy",
+    coverImage: "https://i.etsystatic.com/64033359/r/il/ceefce/8210187028/il_1080xN.8210187028_npib.jpg",
+    galleryImages: [
+      "https://i.etsystatic.com/64033359/r/il/ba1a16/8258110905/il_1080xN.8258110905_6dct.jpg",
+      "https://i.etsystatic.com/64033359/r/il/5a9a0d/8258110929/il_1080xN.8258110929_mlyr.jpg",
+      "https://i.etsystatic.com/64033359/r/il/6b3bfb/8210186966/il_1080xN.8210186966_f4k5.jpg",
+    ],
+    description: `Make going live easier with 500 copy-and-paste cam room title ideas designed for cam models, livestream creators, and online performers.
+&nbsp;
+This digital guide gives you 500 ready-to-use room title ideas organized by vibe, goal, and stream style so you can quickly choose a title that matches your energy — no more staring at a blank title box before your show.
+&nbsp;
+What's included: 500 High-Converting Cam Room Titles PDF (organized by category), a Copy &amp; Paste Text File for quick use while setting up your room, Bonus Fill-in-the-Blank Formulas so you can build your own fresh titles anytime, and Quick Room Title Tips.
+&nbsp;
+Categories inside: Flirty &amp; Playful, Bratty &amp; Princess, Soft Girlfriend &amp; Cozy, Lovense &amp; Interactive, Tip Goal &amp; Token Goal, New Model &amp; Beginner-Friendly, Late-Night &amp; After-Dark, Luxury &amp; Premium, Slow Room Rescue, Fill-in-the-Blank Formulas.
+&nbsp;
+Perfect for cam models, new cam girls, livestream creators, and performers on Chaturbate, Stripchat, MyFreeCams, and BongaCams. Digital download; personal use only.`,
+    seoKeywords: "cam room titles, high converting stream titles, cam model title ideas",
+  },
+  {
+    slug: "chaturbate-earnings-tracker-bundle",
+    title: "Chaturbate Earnings Tracker Bundle | 44-Page Creator Toolkit",
+    shortTitle: "Chaturbate Earnings &amp; Growth Bundle",
+    price: "$14.99",
+    etsyUrl: "https://www.etsy.com/listing/4545112282/chaturbate-earnings-tracker-bundle-44",
+    coverImage: "/shop-images/16_Chaturbate_Earnings_Growth_Bundle_cover.jpg",
+    galleryImages: [
+      "/shop-images/16_Chaturbate_Bundle_Whats_Inside.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Stream_Tracking.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Tip_Menu_Goals.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Best_Time_Challenge.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Followup_Messages.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Checklists_Dashboard.jpg",
+      "/shop-images/16_Chaturbate_Bundle_Summary.jpg",
+    ],
+    description: `Track every stream, plan every goal, and finally see where your Chaturbate income is really coming from with this 44-page practical stream performance workbook.
+&nbsp;
+This bundle includes a 28-page earnings and performance workbook plus a 16-page premium growth-tool bonus section, built for Chaturbate creators who want to track, calculate, test, review, and plan instead of guessing.
+&nbsp;
+What's included: Daily Stream Log and Detailed Session Review pages for tokens, estimated USD, tips, unique tippers, and hourly pace; a Tip Menu Pricing Worksheet plus 50 ready-to-adapt room-goal ideas; a 14-Day Best-Time Streaming Challenge to test and compare your strongest schedule windows; 30 boundary-safe follow-up message starters for re-engaging fans without copy-and-paste spam; Pre-Stream, Room and Offer, and Business Plan checklists; a Monthly Creator Dashboard snapshot; and an Earnings Calculation Worksheet for estimated USD, USD/hour, and net profit.
+&nbsp;
+Product details: 44-page printable digital PDF, instant digital download, large easy-to-read text, reusable pages for every stream. No physical item will be shipped.
+&nbsp;
+For personal creator use only; may not be resold, shared, copied, or redistributed.`,
+    seoKeywords: "Chaturbate earnings tracker, cam model income tracker, stream performance workbook, cam model goal planner",
+  },
+];
+&nbsp;
+export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >getProductBySlug(</span></span>slug) {
+<span class="cstat-no" title="statement not covered" >  return PRODUCTS.find(<span class="fstat-no" title="function not covered" >(p</span>) =&gt; <span class="cstat-no" title="statement not covered" >p.slug === slug);</span></span>
+}
+&nbsp;
+// coverImage is either a full Etsy CDN URL or a local "/shop-images/..." path.
+// Schema.org markup requires an absolute URL either way, so only prepend the
+// site origin when the value isn't already absolute — otherwise we produce
+// "https://www.camcashgrl.comhttps://i.etsystatic.com/..." (invalid).
+export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >getAbsoluteImageUrl(</span></span>path) {
+<span class="cstat-no" title="statement not covered" >  if (!path) <span class="cstat-no" title="statement not covered" >return path;</span></span>
+<span class="cstat-no" title="statement not covered" >  return /^https?:\/\//i.test(path) ? path : `https://www.camcashgrl.com${path}`;</span>
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-09-27T23:32:19.258Z
+            </div>
+        <script src="../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../sorter.js"></script>
+        <script src="../block-navigation.js"></script>
+    </body>
+</html>
+    
