@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /login
+Disallow: /api/
+Disallow: /auth/
+Disallow: /onboarding
+Disallow: /live
+
+Sitemap: https://www.camcashgrl.com/sitemap.xml
+Crawl-delay: 0
