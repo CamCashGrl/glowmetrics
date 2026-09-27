@@ -17,6 +17,11 @@ export function initializeAnalytics() {
   currentPageStartTime = Date.now();
 
   // Track session start
+  let tz = 'UTC';
+  if (typeof Intl !== 'undefined') {
+    const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (resolved) tz = resolved;
+  }
   trackEvent('session', {
     sessionId,
     deviceType: getDeviceType(),
@@ -27,7 +32,7 @@ export function initializeAnalytics() {
     utmCampaign: getUtmParam('utm_campaign'),
     utmContent: getUtmParam('utm_content'),
     utmTerm: getUtmParam('utm_term'),
-    country: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    country: tz,
   });
 
   // Track page views
