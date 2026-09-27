@@ -137,13 +137,21 @@ export function parseRows(rawText,platformId){
   // never shows a row count the real import can't reproduce.
   const tokensLineRe=/^([\d,]+)\s+([\d,]+)$/
   const tokensSingleRe=/^([\d,]+)$/
-  const isMultiLine=lines.some(l=>tipFromRe.test(l))
+  const tipFromRe2=/^Tip From:\s*(.+)/i
+  const membershipRe=/^Fan Club Membership:\s*(.+)/i
+  const adminAdjustmentRe=/^Admin Adjustment:/i
+  const transferRe=/^Transfer tokens/i
+  const isMultiLine=lines.some(l=>tipFromRe.test(l)||membershipRe.test(l))
   if(isMultiLine){
     let i=0
     while(i<lines.length){
       const dateMatch=lines[i].match(dateLineRe)
       if(dateMatch){
-        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||'';const tipMatch=actionLine.match(tipFromRe)
+        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||''
+        // Skip admin adjustments and transfers
+        if(adminAdjustmentRe.test(actionLine)||transferRe.test(actionLine)){skipped++;i++;continue}
+        // Handle regular tips
+        const tipMatch=actionLine.match(tipFromRe2)
         if(ts&&tipMatch){
           const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note=''
           let tMatch=tokensLine.match(tokensLineRe)
@@ -155,6 +163,23 @@ export function parseRows(rawText,platformId){
           }
           const tokensRaw=tMatch?tMatch[1]:(singleMatch?singleMatch[1]:null)
           if(tokensRaw){const tokens=parseInt(tokensRaw.replace(/,/g,''),10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+        }else skipped++
+        i++
+      }else i++
+    }
+    // Now check for Fan Club Membership rows (different format: date, "Fan Club Membership: username", tokens)
+    i=0
+    while(i<lines.length){
+      const dateMatch=lines[i].match(dateLineRe)
+      if(dateMatch){
+        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||''
+        const memberMatch=actionLine.match(membershipRe)
+        if(ts&&memberMatch){
+          const username=memberMatch[1].trim();let tokensLine=lines[i+2]||''
+          let tMatch=tokensLine.match(tokensLineRe)
+          let singleMatch=!tMatch?tokensLine.match(tokensSingleRe):null
+          const tokensRaw=tMatch?tMatch[1]:(singleMatch?singleMatch[1]:null)
+          if(tokensRaw){const tokens=parseInt(tokensRaw.replace(/,/g,''),10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note:'Fan Club Membership'})}else skipped++}else skipped++
         }
         i++
       }else i++
@@ -162,33 +187,40 @@ export function parseRows(rawText,platformId){
     return{rows,skipped}
   }
   const headerKw=['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning','reference','private','voyeur','group','xfer','returned','fines','total','mfc','away','club','display','sort','period','payment','month','search']
+  const knownActionTypes=['tip received','tokens cashed out']
   for(const line of lines){
     const cols=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
     // Skip reference IDs (MFC format — long numeric first column)
     if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift()
     if(cols.length<2){skipped++;continue}
     const lower=cols.map(c=>c.toLowerCase())
-    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
+    // Header detection: skip lines where MOST columns (>80%) are header keywords,
+    // not just 2. This prevents data rows with keyword-containing notes from being
+    // false-positived as headers. A real header has almost all columns named.
+    const matchCount=lower.filter(c=>headerKw.some(k=>c.includes(k))).length
+    if(matchCount/cols.length>0.8)continue
     // Skip BongaCams paid chat rows from the free tips parser
     if(detectBCPaidRow(cols)){skipped++;continue}
     let ts=null,tsIdx=-1
     for(let i=0;i<cols.length;i++){const d=tryParseDate(cols[i]);if(d){ts=d;tsIdx=i;break}}
     if(!ts){skipped++;continue}
     const rest=cols.filter((_,i)=>i!==tsIdx)
-    let tokens=null,usd=null,username=null,note=''
+    let tokens=null,usd=null,username=null,note='',numericIdx=0
     for(const col of rest){
       const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,]/g,'')):NaN
       if(!isNaN(n)&&n>0){
-        if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
-        else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
-        else if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
-        // A whole-dollar payout (e.g. "9.00") parses to an integer and
-        // matched neither branch above once tokens was already found —
-        // silently dropping a real trusted payout in favor of a token-rate
-        // estimate. Once tokens is known and usd isn't, treat the next
-        // positive number as the real payout regardless of its integer-ness.
-        else if(tokens!==null&&usd===null)usd=n
+        // First numeric value = token change (tip amount)
+        if(tokens===null&&Number.isInteger(n)&&n>=1&&n<100000){tokens=n;numericIdx=1}
+        // For Chaturbate CSV format, the second numeric is the running balance (not USD),
+        // so skip it. USD is calculated from tokens*rate, never from a CSV column.
+        // For other formats (BongaCams, MFC), the second numeric might be USD.
+        // Since we're in a single loop, skip numeric values after tokens and let
+        // the USD fall back to calculation.
+        numericIdx++
       }else if(col.length>0&&!isFullyNumeric(col)){
+        const colLower=col.toLowerCase()
+        // Skip known action/transaction type strings (e.g., "Tip received", "Tokens cashed out")
+        if(knownActionTypes.some(k=>colLower===k))continue
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
       }
@@ -236,6 +268,7 @@ export function buildPreview(rawText,platformId,platformLabel){
   const topSpender=Object.entries(allRows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
   const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
   const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
+  const bestHourConfident=bestHour?new Set(allRows.filter(r=>r.ts.getHours()===parseInt(bestHour[0])).map(r=>r.ts.toDateString())).size>=2:false
   const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
   return{
     tipsDetected:rows.length,
@@ -247,6 +280,7 @@ export function buildPreview(rawText,platformId,platformLabel){
     dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
     bestHour:bestHour?fmtHour(bestHour[0]):null,
+    bestHourConfident,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
   }
 }

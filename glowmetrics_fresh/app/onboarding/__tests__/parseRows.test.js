@@ -27,7 +27,7 @@ const cbRow = (ts, change, balance, user, note = '') =>
 const cbCashout = (ts, change, balance) =>
   `"${ts}",${change},${balance},"Tokens cashed out","",""`
 
-describe.skip('parseRows — Chaturbate header-mapped CSV paste', () => {
+describe('parseRows — Chaturbate header-mapped CSV paste', () => {
   test('canonical dataset shape: tokens/usd/fans/top-spender derived correctly, never hardcoded', () => {
     const lines = [
       CB_HEADER,
