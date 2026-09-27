@@ -137,13 +137,21 @@ export function parseRows(rawText,platformId){
   // never shows a row count the real import can't reproduce.
   const tokensLineRe=/^([\d,]+)\s+([\d,]+)$/
   const tokensSingleRe=/^([\d,]+)$/
-  const isMultiLine=lines.some(l=>tipFromRe.test(l))
+  const tipFromRe2=/^Tip From:\s*(.+)/i
+  const membershipRe=/^Fan Club Membership:\s*(.+)/i
+  const adminAdjustmentRe=/^Admin Adjustment:/i
+  const transferRe=/^Transfer tokens/i
+  const isMultiLine=lines.some(l=>tipFromRe.test(l)||membershipRe.test(l))
   if(isMultiLine){
     let i=0
     while(i<lines.length){
       const dateMatch=lines[i].match(dateLineRe)
       if(dateMatch){
-        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||'';const tipMatch=actionLine.match(tipFromRe)
+        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||''
+        // Skip admin adjustments and transfers
+        if(adminAdjustmentRe.test(actionLine)||transferRe.test(actionLine)){skipped++;i++;continue}
+        // Handle regular tips
+        const tipMatch=actionLine.match(tipFromRe2)
         if(ts&&tipMatch){
           const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note=''
           let tMatch=tokensLine.match(tokensLineRe)
@@ -155,6 +163,23 @@ export function parseRows(rawText,platformId){
           }
           const tokensRaw=tMatch?tMatch[1]:(singleMatch?singleMatch[1]:null)
           if(tokensRaw){const tokens=parseInt(tokensRaw.replace(/,/g,''),10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+        }else skipped++
+        i++
+      }else i++
+    }
+    // Now check for Fan Club Membership rows (different format: date, "Fan Club Membership: username", tokens)
+    i=0
+    while(i<lines.length){
+      const dateMatch=lines[i].match(dateLineRe)
+      if(dateMatch){
+        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||''
+        const memberMatch=actionLine.match(membershipRe)
+        if(ts&&memberMatch){
+          const username=memberMatch[1].trim();let tokensLine=lines[i+2]||''
+          let tMatch=tokensLine.match(tokensLineRe)
+          let singleMatch=!tMatch?tokensLine.match(tokensSingleRe):null
+          const tokensRaw=tMatch?tMatch[1]:(singleMatch?singleMatch[1]:null)
+          if(tokensRaw){const tokens=parseInt(tokensRaw.replace(/,/g,''),10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note:'Fan Club Membership'})}else skipped++}else skipped++
         }
         i++
       }else i++
@@ -162,33 +187,40 @@ export function parseRows(rawText,platformId){
     return{rows,skipped}
   }
   const headerKw=['date','time','user','token','usd','tip','amount','note','message','from','type','stamp','earning','reference','private','voyeur','group','xfer','returned','fines','total','mfc','away','club','display','sort','period','payment','month','search']
+  const knownActionTypes=['tip received','tokens cashed out']
   for(const line of lines){
     const cols=line.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
     // Skip reference IDs (MFC format — long numeric first column)
     if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift()
     if(cols.length<2){skipped++;continue}
     const lower=cols.map(c=>c.toLowerCase())
-    if(lower.filter(c=>headerKw.some(k=>c.includes(k))).length>=2)continue
+    // Header detection: skip lines where MOST columns (>80%) are header keywords,
+    // not just 2. This prevents data rows with keyword-containing notes from being
+    // false-positived as headers. A real header has almost all columns named.
+    const matchCount=lower.filter(c=>headerKw.some(k=>c.includes(k))).length
+    if(matchCount/cols.length>0.8)continue
     // Skip BongaCams paid chat rows from the free tips parser
     if(detectBCPaidRow(cols)){skipped++;continue}
     let ts=null,tsIdx=-1
     for(let i=0;i<cols.length;i++){const d=tryParseDate(cols[i]);if(d){ts=d;tsIdx=i;break}}
     if(!ts){skipped++;continue}
     const rest=cols.filter((_,i)=>i!==tsIdx)
-    let tokens=null,usd=null,username=null,note=''
+    let tokens=null,usd=null,username=null,note='',numericIdx=0
     for(const col of rest){
       const n=isFullyNumeric(col)?parseFloat(col.replace(/[$,]/g,'')):NaN
       if(!isNaN(n)&&n>0){
-        if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
-        else if(!Number.isInteger(n)&&n<5000&&usd===null)usd=n
-        else if(Number.isInteger(n)&&n>=1&&n<100000&&tokens===null)tokens=n
-        // A whole-dollar payout (e.g. "9.00") parses to an integer and
-        // matched neither branch above once tokens was already found —
-        // silently dropping a real trusted payout in favor of a token-rate
-        // estimate. Once tokens is known and usd isn't, treat the next
-        // positive number as the real payout regardless of its integer-ness.
-        else if(tokens!==null&&usd===null)usd=n
+        // First numeric value = token change (tip amount)
+        if(tokens===null&&Number.isInteger(n)&&n>=1&&n<100000){tokens=n;numericIdx=1}
+        // For Chaturbate CSV format, the second numeric is the running balance (not USD),
+        // so skip it. USD is calculated from tokens*rate, never from a CSV column.
+        // For other formats (BongaCams, MFC), the second numeric might be USD.
+        // Since we're in a single loop, skip numeric values after tokens and let
+        // the USD fall back to calculation.
+        numericIdx++
       }else if(col.length>0&&!isFullyNumeric(col)){
+        const colLower=col.toLowerCase()
+        // Skip known action/transaction type strings (e.g., "Tip received", "Tokens cashed out")
+        if(knownActionTypes.some(k=>colLower===k))continue
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
       }
@@ -236,6 +268,7 @@ export function buildPreview(rawText,platformId,platformLabel){
   const topSpender=Object.entries(allRows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
   const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
   const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
+  const bestHourConfident=bestHour?new Set(allRows.filter(r=>r.ts.getHours()===parseInt(bestHour[0])).map(r=>r.ts.toDateString())).size>=2:false
   const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
   return{
     tipsDetected:rows.length,
@@ -247,6 +280,7 @@ export function buildPreview(rawText,platformId,platformLabel){
     dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
     bestHour:bestHour?fmtHour(bestHour[0]):null,
+    bestHourConfident,
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
   }
 }
@@ -610,8 +644,9 @@ export default function OnboardingPage(){
   const[booting,setBooting]=useState(true)
   const[userPlan,setUserPlan]=useState('free')
 
-  const[step,setStep]=useState('platform')
-  const[platformId,setPlatformId]=useState(null)
+  const[step,setStep]=useState('platforms')
+  const[selectedPlatforms,setSelectedPlatforms]=useState([])
+  const platformId=selectedPlatforms[0]||null
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
@@ -667,9 +702,24 @@ export default function OnboardingPage(){
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
   }
 
+  function togglePlatform(id){
+    setSelectedPlatforms(prev=>{
+      if(prev.includes(id))return prev.filter(p=>p!==id)
+      if(prev.length>=3)return prev
+      return [...prev,id]
+    })
+  }
+
+  function makePlatformPrimary(id){
+    setSelectedPlatforms(prev=>{
+      const filtered=prev.filter(p=>p!==id)
+      return [id,...filtered]
+    })
+  }
+
   function selectPlatform(id){
     if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
-    setPlatformId(id)
+    makePlatformPrimary(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
   }
 
@@ -862,47 +912,52 @@ export default function OnboardingPage(){
 
           {!['loading'].includes(step)&&(
             <header>
-              <OBLogo showSub={step==='platform'}/>
+              <OBLogo showSub={step==='platforms'}/>
               {showProgress&&<OBProgress current={stepNum}/>}
             </header>
           )}
 
           {/* ══ PLATFORM ══ */}
-          {step==='platform'&&(
+{step==='platforms'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platforms so CamCash can import your tip history and build your first insights.</p>
+                {selectedPlatforms.length>0&&<p style={{fontSize:12,color:'rgba(33,230,243,0.7)',marginTop:8}}>Selected: {selectedPlatforms.length} / 3</p>}
               </div>
               <div style={{marginBottom:22}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platforms</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
-                    const sel=platformId===key
+                    const selected=selectedPlatforms.includes(key)
+                    const isPrimary=selectedPlatforms[0]===key
                     return(
-                      <button key={key} onClick={()=>setPlatformId(key)} style={{
-                        flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
-                        background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
-                        border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
-                        boxShadow:sel?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
-                        cursor:'pointer',transition:'all 0.22s',position:'relative',
-                      }}
-                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
-                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
-                      >
-                        {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
-                        <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
-                        <div style={{fontSize:12,fontWeight:700,color:sel?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
-                      </button>
+                      <div key={key} style={{flex:1,position:'relative'}}>
+                        <button onClick={()=>togglePlatform(key)} style={{
+                          width:'100%',padding:'12px 8px',borderRadius:14,textAlign:'center',
+                          background:selected?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
+                          border:selected?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
+                          boxShadow:selected?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
+                          cursor:'pointer',transition:'all 0.22s',
+                        }}
+                        onMouseEnter={e=>{if(!selected){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
+                        onMouseLeave={e=>{if(!selected){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
+                        >
+                          {selected&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
+                          <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:selected?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
+                          {isPrimary&&<div style={{fontSize:9,fontWeight:700,color:CYAN,marginTop:4}}>Primary</div>}
+                        </button>
+                        {selected&&!isPrimary&&<button onClick={()=>makePlatformPrimary(key)} style={{fontSize:10,fontWeight:700,color:CYAN,background:'none',border:'none',cursor:'pointer',marginTop:6,width:'100%',padding:0}} onMouseEnter={e=>e.currentTarget.style.opacity='0.7'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>Make primary</button>}
+                      </div>
                     )
                   })}
                 </div>
               </div>
-              <OBBtn onClick={()=>selectPlatform(platformId)} disabled={!platformId} style={{marginBottom:10}}>{platformId ? `Continue with ${platform.label} →` : 'Select a platform to continue'}</OBBtn>
+              <OBBtn onClick={()=>selectedPlatforms.length>0&&selectPlatform(selectedPlatforms[0])} disabled={!selectedPlatforms.length} style={{marginBottom:10}}>{selectedPlatforms.length>0?`Continue with ${selectedPlatforms.length} platform${selectedPlatforms.length>1?'s':''} →`:'Select a platform to continue'}</OBBtn>
             </div>
           )}
-
           {/* ══ USERNAME ══ */}
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
