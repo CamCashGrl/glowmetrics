@@ -1247,7 +1247,11 @@ export function aggregateRows(tips, tz = null) {
       platformVelocity: {}, missedRevenueByPlatform: {}, platformMomentum: {},
       returningVsNew: null, topFanDependency: null,
       dependencyRisk: null, preTipBehavior: null, trueHourlyAvg: [],
-      platformRiskContext: {}
+      platformRiskContext: {},
+      meaningfulSessions: [],
+      allValidSessions: [],
+      meaningfulSessionCount: 0,
+      lowSignalSessionCount: 0,
     }
   }
 
