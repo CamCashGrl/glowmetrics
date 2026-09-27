@@ -644,8 +644,9 @@ export default function OnboardingPage(){
   const[booting,setBooting]=useState(true)
   const[userPlan,setUserPlan]=useState('free')
 
-  const[step,setStep]=useState('platform')
-  const[platformId,setPlatformId]=useState(null)
+  const[step,setStep]=useState('platforms')
+  const[selectedPlatforms,setSelectedPlatforms]=useState([])
+  const platformId=selectedPlatforms[0]||null
   const[cbUsername,setCbUsername]=useState('')
   const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
@@ -701,9 +702,24 @@ export default function OnboardingPage(){
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
   }
 
+  function togglePlatform(id){
+    setSelectedPlatforms(prev=>{
+      if(prev.includes(id))return prev.filter(p=>p!==id)
+      if(prev.length>=3)return prev
+      return [...prev,id]
+    })
+  }
+
+  function makePlatformPrimary(id){
+    setSelectedPlatforms(prev=>{
+      const filtered=prev.filter(p=>p!==id)
+      return [id,...filtered]
+    })
+  }
+
   function selectPlatform(id){
     if(userPlan!=='pro'&&importedPlatforms.length>0&&!importedPlatforms.includes(id)){setPendingPlatform(id);setShowUpsell(true);return}
-    setPlatformId(id)
+    makePlatformPrimary(id)
     if(id==='chaturbate')setStep('username');else setStep('paste')
   }
 
@@ -896,47 +912,52 @@ export default function OnboardingPage(){
 
           {!['loading'].includes(step)&&(
             <header>
-              <OBLogo showSub={step==='platform'}/>
+              <OBLogo showSub={step==='platforms'}/>
               {showProgress&&<OBProgress current={stepNum}/>}
             </header>
           )}
 
           {/* ══ PLATFORM ══ */}
-          {step==='platform'&&(
+{step==='platforms'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 1 of 3</div>
               <div style={{textAlign:'center',marginBottom:16}}>
                 <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Start tracking your streams</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platform so CamCash can import your tip history and build your first insights.</p>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Choose your platforms so CamCash can import your tip history and build your first insights.</p>
+                {selectedPlatforms.length>0&&<p style={{fontSize:12,color:'rgba(33,230,243,0.7)',marginTop:8}}>Selected: {selectedPlatforms.length} / 3</p>}
               </div>
               <div style={{marginBottom:22}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platform</div>
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platforms</div>
                 <div className="ob-plat-row" style={{display:'flex',gap:9}}>
                   {Object.entries(PLATFORMS).map(([key,p])=>{
-                    const sel=platformId===key
+                    const selected=selectedPlatforms.includes(key)
+                    const isPrimary=selectedPlatforms[0]===key
                     return(
-                      <button key={key} onClick={()=>setPlatformId(key)} style={{
-                        flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
-                        background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
-                        border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
-                        boxShadow:sel?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
-                        cursor:'pointer',transition:'all 0.22s',position:'relative',
-                      }}
-                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
-                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
-                      >
-                        {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
-                        <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
-                        <div style={{fontSize:12,fontWeight:700,color:sel?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
-                      </button>
+                      <div key={key} style={{flex:1,position:'relative'}}>
+                        <button onClick={()=>togglePlatform(key)} style={{
+                          width:'100%',padding:'12px 8px',borderRadius:14,textAlign:'center',
+                          background:selected?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
+                          border:selected?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
+                          boxShadow:selected?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
+                          cursor:'pointer',transition:'all 0.22s',
+                        }}
+                        onMouseEnter={e=>{if(!selected){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
+                        onMouseLeave={e=>{if(!selected){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
+                        >
+                          {selected&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
+                          <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:selected?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
+                          {isPrimary&&<div style={{fontSize:9,fontWeight:700,color:CYAN,marginTop:4}}>Primary</div>}
+                        </button>
+                        {selected&&!isPrimary&&<button onClick={()=>makePlatformPrimary(key)} style={{fontSize:10,fontWeight:700,color:CYAN,background:'none',border:'none',cursor:'pointer',marginTop:6,width:'100%',padding:0}} onMouseEnter={e=>e.currentTarget.style.opacity='0.7'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>Make primary</button>}
+                      </div>
                     )
                   })}
                 </div>
               </div>
-              <OBBtn onClick={()=>selectPlatform(platformId)} disabled={!platformId} style={{marginBottom:10}}>{platformId ? `Continue with ${platform.label} →` : 'Select a platform to continue'}</OBBtn>
+              <OBBtn onClick={()=>selectedPlatforms.length>0&&selectPlatform(selectedPlatforms[0])} disabled={!selectedPlatforms.length} style={{marginBottom:10}}>{selectedPlatforms.length>0?`Continue with ${selectedPlatforms.length} platform${selectedPlatforms.length>1?'s':''} →`:'Select a platform to continue'}</OBBtn>
             </div>
           )}
-
           {/* ══ USERNAME ══ */}
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
