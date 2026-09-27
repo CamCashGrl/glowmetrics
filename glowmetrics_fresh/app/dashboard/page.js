@@ -1483,7 +1483,13 @@ export default function Dashboard() {
   // app/live/page.js uses, so a choice made on either surface carries over.
   const [liveTimezone, setLiveTimezone] = useState(() => {
     if (typeof window === 'undefined') return 'UTC'
-    return localStorage.getItem('cc_live_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    const stored = localStorage.getItem('cc_live_timezone')
+    if (stored) return stored
+    if (typeof Intl !== 'undefined') {
+      const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (resolved) return resolved
+    }
+    return 'UTC'
   })
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone)
@@ -1901,7 +1907,11 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            let userTz = 'UTC'
+            if (typeof Intl !== 'undefined') {
+              const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
+              if (resolved) userTz = resolved
+            }
             const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31 })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
@@ -1956,7 +1966,11 @@ export default function Dashboard() {
             return prev // unchanged since the last engine run — skip the recompute
           }
           try {
-            const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+            let userTz = 'UTC'
+            if (typeof Intl !== 'undefined') {
+              const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
+              if (resolved) userTz = resolved
+            }
             const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31 })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
@@ -2075,7 +2089,11 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      const userTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
+      let userTz = 'UTC'
+      if (typeof Intl !== 'undefined') {
+        const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
+        if (resolved) userTz = resolved
+      }
       let allData = []
       let from = 0
       const PAGE = 1000
