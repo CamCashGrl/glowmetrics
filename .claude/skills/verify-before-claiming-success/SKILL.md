@@ -6,6 +6,26 @@
 
 ---
 
+## SETUP: Load Test Credentials (Do This First)
+
+**Before running any verification:**
+
+```bash
+# Load environment variables
+source .env.local
+
+# Verify credentials are loaded
+echo $TEST_ACCOUNT_EMAIL  # Should show: claudetest@camcash.com
+```
+
+**Test Account:**
+- Email: `claudetest@camcash.com`
+- Platform: Chaturbate (test account)
+- Status: Verified for testing
+- Usage: Live page verification only
+
+---
+
 ## VERIFICATION CHECKLIST BY TASK TYPE
 
 ### 🐛 Bug Fix Tasks
@@ -13,10 +33,12 @@
 **Before claiming "FIXED":**
 
 - [ ] **Build verification**: Run full build (`npm run build` or equivalent). Show build output confirming 0 errors.
-- [ ] **Local test account validation**: If user-facing feature, test with actual test account on dev/staging:
+- [ ] **Live test account validation**: Test with actual test account on LIVE production:
+  - Load `$DASHBOARD_URL` with test credentials
   - Reproduce original bug exactly as reported
   - Confirm bug no longer occurs
   - Take screenshot/recording showing before + after
+  - Check browser console for errors (F12 → Console tab)
 - [ ] **Related features check**: Test adjacent features that might break from the fix:
   - If you fixed dashboard error, test all dashboard components
   - If you fixed analytics tracking, test all event types in 3 platforms (Chaturbate/MFC/Bonga)
@@ -222,6 +244,96 @@ Screenshots: [mobile view, schema validation, lighthouse score]
 
 ---
 
+## HOW TO RUN LIVE VERIFICATION (Step-by-Step)
+
+### For Dashboard/Feature Bugs:
+
+```bash
+# 1. Load credentials
+source .env.local
+
+# 2. Open dashboard in browser (you'll need to do this manually or use automation)
+# Navigate to: $DASHBOARD_URL
+
+# 3. Log in with test credentials
+# Email: $TEST_ACCOUNT_EMAIL
+# Password: $TEST_ACCOUNT_PASSWORD
+
+# 4. Open browser DevTools (F12) → Console tab
+# Look for any errors (red text)
+# Should see: ✅ No errors
+
+# 5. Test the feature
+# Perform the action that triggered the original bug
+# Confirm: ✅ Bug no longer occurs
+
+# 6. Screenshot proof
+# Take screenshot showing:
+# - Successful login with test account
+# - Feature working correctly
+# - Console tab with no errors
+```
+
+### For Analytics/Metrics Verification:
+
+```bash
+# 1. Load credentials
+source .env.local
+
+# 2. Trigger a test event
+# Log in to dashboard with $TEST_ACCOUNT_EMAIL
+# Perform action that should trigger tracking
+
+# 3. Verify in database
+# Check analytics_events table for the event
+# Query: SELECT * FROM analytics_events WHERE user_email = 'claudetest@camcash.com' 
+#        ORDER BY created_at DESC LIMIT 5
+
+# 4. Validate event structure
+# Confirm event has:
+# - Correct eventType
+# - Correct user_id
+# - Correct timestamp
+# - All required fields present (no NULLs)
+
+# 5. Screenshot proof
+# Show database query result showing event fired correctly
+```
+
+### For Blog/Content Verification:
+
+```bash
+# 1. Load URLs
+source .env.local
+
+# 2. Test blog page rendering
+# Navigate to: $BLOG_BASE_URL/[page-slug]
+
+# 3. Manual checks
+# ✅ Page loads without errors (F12 → Console)
+# ✅ All images display correctly
+# ✅ All links work (click 3-5 random links)
+# ✅ Mobile responsive (toggle device mode in DevTools)
+# ✅ Text readable, no layout breaks
+
+# 4. Schema validation
+# View page source (Ctrl+U)
+# Search for: <script type="application/ld+json">
+# Copy the JSON to: https://validator.schema.org/
+# Confirm: ✅ No errors
+
+# 5. Analytics tracking (if applicable)
+# Open DevTools → Network tab
+# Click CTA button / tracking link
+# Confirm: ✅ Request sent to /api/analytics/track-event
+# Confirm: ✅ Response 200 (success)
+
+# 6. Screenshot proof
+# Show: mobile view, schema validation result, network request
+```
+
+---
+
 ## 🚨 CRITICAL DATA INTEGRITY CHECKS
 
 **For ANY task touching:**
@@ -338,6 +450,48 @@ Deployed to: main via PR #590"
 
 ---
 
+## MANUAL vs AUTOMATED VERIFICATION
+
+### Current Setup (Manual):
+- ✅ You request changes ("fix this bug", "optimize this blog")
+- ✅ I use this skill to test changes BEFORE saying "done"
+- ✅ I report verification results with screenshots/proof
+- ✅ You approve and I push to main
+
+**When does this happen?** Every task completion — you don't need to request it.
+
+### Optional: Automated Verification (GitHub Actions)
+- Could set up automated tests that run on every PR
+- Would run full test suite, schema validation, build checks automatically
+- Would prevent merge until tests pass
+- **Status:** Not currently set up — would require additional configuration
+
+---
+
+## VERIFICATION FLOW
+
+```
+User Request
+    ↓
+I build/code changes
+    ↓
+I RUN VERIFICATION (using this skill + test credentials)
+    ↓
+Tests pass? → Report results + proof
+         ↓ No
+         → Fix issue → Re-test → Report
+    ↓ Yes
+Push to branch
+    ↓
+You review
+    ↓
+Merge to main
+```
+
+---
+
 **Last Updated:** 2026-09-27
 **Project:** GlowMetrics (CamCash)
 **Criticality:** HIGH — Data integrity, user trust, metrics accuracy depend on rigorous verification
+**Test Account:** claudetest@camcash.com (loaded from .env.local, never committed)
+**Verification:** Manual + documented proof (automated testing available on request)
