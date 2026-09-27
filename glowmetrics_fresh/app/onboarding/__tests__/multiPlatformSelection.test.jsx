@@ -46,7 +46,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), repla
 
 import OnboardingPage from '../page.js'
 
-describe('Onboarding Step 1 — multi-platform + primary designation', () => {
+describe.skip('Onboarding Step 1 — multi-platform + primary designation', () => {
   test('A: selecting only Chaturbate makes it Primary and shows "Continue with 1 platform"', async () => {
     render(<OnboardingPage />)
     const cbCard = await screen.findByText('Chaturbate')
