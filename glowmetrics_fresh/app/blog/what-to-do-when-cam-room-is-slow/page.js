@@ -1,20 +1,21 @@
 import ArticleLayout from '../../components/ArticleLayout'
 
 export const metadata = {
-  title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
-  description: 'Cam room slow? Get 12 things to try right now, a quick way to tell a slow room from a dead one, and exactly how long to stay online before you log off.',
+  title: 'Cam Room Slow? 12 Things to Do Before You Log Off | CamCash',
+  description: 'Cam room slow? 12 immediate tactics, how to tell dead traffic from slow traffic, when to log off vs. keep trying, and how to fix a slow cam room strategically.',
+  keywords: 'cam room slow, slow cam room tips, what to do when cam room is slow, chaturbate room slow, camming slow room, cam room no tips, how to fix slow cam room',
   alternates: { canonical: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow' },
   openGraph: {
-    title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
-    description: 'What to do when camming is slow: 12 immediate tactics, how to diagnose a dead cam room, and when logging off is the right call.',
+    title: 'Cam Room Slow? 12 Things to Try Right Now',
+    description: '12 proven tactics for when your cam room goes slow. How to diagnose the real problem and when it\'s time to log off and try a better time slot.',
     url: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow',
     type: 'article',
-    images: [{ url: 'https://www.camcashgrl.com/og-image.png', width: 1200, height: 630 }],
+    images: [{ url: 'https://www.camcashgrl.com/og-earnings.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cam Room Slow? 12 Things to Do Before You Log Off',
-    description: '12 things to try when your cam room goes quiet, plus when to log off.',
+    title: 'Cam Room Slow? 12 Tactics That Work',
+    description: '12 immediate strategies when your cam room goes quiet. Plus: how to know when to keep trying vs log off.',
   },
 }
 
@@ -25,7 +26,7 @@ const schema = {
   description: 'Cam room slow? 12 things to try right now, how to tell a slow room from a dead one, and how long to stay online before you log off.',
   url: 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow',
   datePublished: '2026-07-29',
-  dateModified: '2026-07-29',
+  dateModified: '2026-09-27',
   author: { '@type': 'Person', name: 'Daphne Dawson', jobTitle: 'Cam Model and CamCash Founder' },
   publisher: { '@type': 'Organization', name: 'CamCash', url: 'https://www.camcashgrl.com' },
   mainEntityOfPage: { '@type': 'WebPage', '@id': 'https://www.camcashgrl.com/blog/what-to-do-when-cam-room-is-slow' },
@@ -41,6 +42,9 @@ const faqSchema = {
     { '@type': 'Question', name: 'Does changing categories help a slow cam room?', acceptedAnswer: { '@type': 'Answer', text: 'It can. Categories and tags control which browse lists your room appears in, so a category that no longer matches what you are actually doing can quietly cut off traffic. Switching to a more accurate, currently active category is one of the fastest ways to get more viewers while camming.' } },
     { '@type': 'Question', name: 'When should I log off and try again later?', acceptedAnswer: { '@type': 'Answer', text: 'Log off once you have tried one visible change, a small goal, and direct interaction, given each a real test window, and still see no movement in viewers or tips after 15 to 20 minutes. That is a dead cam room for this hour, not a personal failure, and your energy is better spent finding a stronger time slot.' } },
     { '@type': 'Question', name: 'How can I tell whether the problem is traffic or my room setup?', acceptedAnswer: { '@type': 'Answer', text: 'Check whether other models are also quiet at the same time — that points to platform-wide traffic. If other rooms are active and yours specifically is not, look at your title, category, and thumbnail first. Comparing the session against your own past sessions at the same hour is the clearest signal either way.' } },
+    { '@type': 'Question', name: 'Why do cam rooms suddenly get slow with no warning?', acceptedAnswer: { '@type': 'Answer', text: 'Sudden slowdowns are almost always traffic, not content. Common causes: time of day shift, your regulars offline, category saturation, stale title/thumbnail, or temporary platform traffic patterns. The key is diagnosing which one applies so you can fix it or decide to stop streaming this hour.' } },
+    { '@type': 'Question', name: 'What is the difference between a slow room and a dead room?', acceptedAnswer: { '@type': 'Answer', text: 'A slow room has viewers (3-8 people) but little tipping activity — this usually responds to a title change, new goal, or engagement. A dead room has almost no viewers and little movement despite your efforts — at that point, logging off and trying a better time slot is smarter than staying.' } },
+    { '@type': 'Question', name: 'Should I chat more or stay quiet when a cam room is slow?', acceptedAnswer: { '@type': 'Answer', text: 'Chat more. Silence amplifies slow rooms psychologically. Engage the viewers who are there, reintroduce your menu, reference the goal, greet new arrivals, ask questions. Viewers watch how you respond to slow stretches — staying engaged and positive often pulls borderline tippers into spending.' } },
   ],
 }
 
