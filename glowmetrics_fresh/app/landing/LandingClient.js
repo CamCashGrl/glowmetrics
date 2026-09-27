@@ -173,12 +173,12 @@ function AuthPanel({
         </div>
 
         <form onSubmit={handleAuth}>
-          <input type="email" placeholder="Email address" required
+          <input type="email" placeholder="Email address" required autoComplete="email"
             value={email} onChange={e => setEmail(e.target.value)} style={inputStyle}
             onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)"; TrackEvents.signupStarted(window?.location?.pathname) }}
             onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.10)"; e.target.style.boxShadow = "none" }}
           />
-          <input type="password" placeholder={isSignUp ? "Create a password" : "Password"} required
+          <input type="password" placeholder={isSignUp ? "Create a password" : "Password"} required autoComplete="current-password"
             value={password} onChange={e => setPassword(e.target.value)}
             style={{ ...inputStyle, marginBottom: isSignUp ? 4 : 0 }}
             onFocus={e => { e.target.style.borderColor = "rgba(22,244,255,0.6)"; e.target.style.boxShadow = "0 0 0 3px rgba(22,244,255,0.10)" }}
@@ -321,7 +321,7 @@ function LiveDemoPanel() {
                 background: i === stateIdx ? `${s.labelColor}18` : "transparent",
                 borderBottom: i === stateIdx ? `2px solid ${s.labelColor}` : "2px solid transparent",
                 color: i === stateIdx ? s.labelColor : T.textFaint,
-                border: "none", cursor: "pointer", transition: "all 0.2s", textTransform: "uppercase",
+                borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer", transition: "all 0.2s", textTransform: "uppercase",
               }}>{s.label}</button>
           ))}
         </div>
