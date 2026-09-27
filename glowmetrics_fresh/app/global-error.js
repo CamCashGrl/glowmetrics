@@ -76,7 +76,7 @@ export default function GlobalError({ error, reset }) {
             <div style={{ borderTop: '1px solid #2a2d3a', paddingTop: 16, marginTop: 8 }}>
               <p style={{ fontSize: 12, color: '#8D93AA', marginBottom: 12 }}>Still having issues?</p>
               <a
-                href="mailto:support@glowmetrics.com?subject=Bug Report - Site Error&body=I encountered an error on glowmetrics.com%0A%0AError details:%0A"
+                href="mailto:daphneoncam@gmail.com?subject=Bug Report - Site Error&body=I encountered an error on glowmetrics.com%0A%0AError details:%0A"
                 style={{
                   display: 'inline-block',
                   padding: '12px 24px',
