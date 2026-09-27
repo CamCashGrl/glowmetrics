@@ -335,10 +335,6 @@ const s = {
   promoBtnCam: { background: 'linear-gradient(135deg, #ef4444, #dc2626)', transition: 'all 0.3s ease' },
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> claude/epic-feynman-se9tyh
 export default function BongaCamsQueenOfQueensPage() {
   return (
     <ArticleLayout
@@ -697,30 +693,7 @@ export default function BongaCamsQueenOfQueensPage() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
-<<<<<<< HEAD
-        <div style={s.promoButtons}>
-          <a
-            href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnModel}}
-            
-          >
-            Interested in being a model?
-          </a>
-          <a
-            href="https://bongacams.com?fuid=166966512&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_viewer"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnCam}}
-            
-          >
-            Looking for a hot cam show?
-          </a>
-        </div>
-=======
         <PromoButtons styles={s} />
->>>>>>> claude/epic-feynman-se9tyh
       </div>
 
       <h2 style={s.h2}>Frequently Asked Questions</h2>
