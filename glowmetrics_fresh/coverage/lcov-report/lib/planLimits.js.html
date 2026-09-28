@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">18.75% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>3/16</span>
+                <span class='fraction'>0/16</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">23.07% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>3/13</span>
+                <span class='fraction'>0/13</span>
             </div>
         
             
@@ -129,12 +129,35 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -144,30 +167,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -187,12 +187,12 @@
 // Platform connection limits (Free vs Pro)
 // DB enforcer: supabase/migrations/20260910b_document_primary_and_streaming_platform_columns.sql
 // Free tier allows 3 platforms (1 Primary + 2 Secondary); Pro allows unlimited.
-export const <span class="cstat-no" title="statement not covered" >FREE_PLATFORM_LIMIT </span>= 3
+export const <span class="cstat-no" title="statement not covered" >FREE_PLATFORM_LIMIT </span>= <span class="cstat-no" title="statement not covered" >3</span>
 &nbsp;
 // Analysis window for Free tier
 // Free users see only the most recent 31 days per connected platform.
 // Pro users see full historical data.
-export const <span class="cstat-no" title="statement not covered" >FREE_ANALYSIS_WINDOW_DAYS </span>= 31
+export const <span class="cstat-no" title="statement not covered" >FREE_ANALYSIS_WINDOW_DAYS </span>= <span class="cstat-no" title="statement not covered" >31</span>
 &nbsp;
 // ── Plan classification ──────────────────────────────────────────────────────
 export function <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >isProPlan(</span></span>plan) {
@@ -225,7 +225,7 @@ export function <span class="cstat-no" title="statement not covered" ><span clas
 // ── Module data thresholds ───────────────────────────────────────────────────
 // Minimum data requirements to unlock each dashboard module.
 // Never reimplement these thresholds locally in components.
-export const <span class="cstat-no" title="statement not covered" >MODULE_DATA_THRESHOLDS </span>= {
+export const <span class="cstat-no" title="statement not covered" >MODULE_DATA_THRESHOLDS </span>= <span class="cstat-no" title="statement not covered" >{</span>
   bestStreamingTimes: { tips: 25, sessions: 3 },
   avgHourlyRate: { sessions: 3, streamMinutes: 60 },
   topFans: { tips: 10, fans: 5 },
@@ -244,7 +244,7 @@ export const <span class="cstat-no" title="statement not covered" >MODULE_DATA_T
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-27T23:32:19.258Z
+                at 2026-09-28T02:56:42.159Z
             </div>
         <script src="../prettify.js"></script>
         <script>
