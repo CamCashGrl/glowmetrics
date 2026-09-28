@@ -76,20 +76,23 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            const summaryPath = './glowmetrics_fresh/test-results/summary.json';
-            if (!fs.existsSync(summaryPath)) {
+            const resultsPath = './glowmetrics_fresh/test-results/results.json';
+            if (!fs.existsSync(resultsPath)) {
               console.log('No test results found - tests may have failed to run');
               return;
             }
 
-            const testResults = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            const testResults = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+
+            const totalDuration = testResults.testResults
+              ? (testResults.testResults.reduce((a, r) => a + (r.perfStats?.end - r.perfStats?.start || 0), 0) / 1000).toFixed(2)
+              : 'N/A';
 
             const message = `## Test Results
 
             - **Tests Passed**: ${testResults.numPassedTests || 0}/${testResults.numTotalTests || 0}
             - **Suites Passed**: ${testResults.numPassedTestSuites || 0}/${testResults.numTotalTestSuites || 0}
-            - **Coverage**: ${testResults.coverage?.lines || 0}% lines
-            - **Duration**: ${testResults.testResults ? (testResults.testResults.reduce((a, r) => a + (r.perfStats?.end - r.perfStats?.start || 0), 0) / 1000).toFixed(2) : 'N/A'}s
+            - **Duration**: ${totalDuration}s
 
             ${testResults.numFailedTests > 0 ? `⚠️ **${testResults.numFailedTests} test(s) failed**` : '✅ All tests passed'}`;
 
