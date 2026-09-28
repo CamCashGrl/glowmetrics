@@ -39,7 +39,9 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: ./glowmetrics_fresh
-        run: npm run test:ci
+        run: |
+          mkdir -p test-results
+          npm run test:ci
         env:
           NODE_ENV: test
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
