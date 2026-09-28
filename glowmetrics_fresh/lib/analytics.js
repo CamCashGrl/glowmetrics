@@ -600,7 +600,7 @@ function parseHeaderless(lines, platform, delimiter = ',') {
 // "Never merge fans across platforms by username alone" (formula-requirments
 // skill). A username is only unique within one platform.
 function fanKey(platform, username) {
-  return `${platform || 'Unknown'}:${(username || '').toLowerCase()}`
+  return `${platform || 'Unknown'}:${(username || '').trim().toLowerCase()}`
 }
 
 // ── FAN BEHAVIORAL VISITS ────────────────────────────────────────────────
