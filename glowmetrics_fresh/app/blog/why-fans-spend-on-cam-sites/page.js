@@ -258,7 +258,7 @@ export default function WhyFansSpendOnCamSites() {
         <li style={s.li}>Learn regular usernames — use them in conversation</li>
         <li style={s.li}>Remember preferences — "Oh you always love when I do X"</li>
         <li style={s.li}>Give specific shoutouts — not just "thanks for the tip," but "thanks [username], you always know what I like"</li>
-        <li style={s.li}}>Track birthdays/anniversaries — make regulars feel special on their day</li>
+        <li style={s.li}>Track birthdays/anniversaries — make regulars feel special on their day</li>
         <li style={s.li}>Create insider jokes — inside references make fans feel part of your inner circle</li>
       </ul>
 
