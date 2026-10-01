@@ -189,26 +189,23 @@ export async function POST(req) {
     // Permanent history (dashboard analytics) is a Pro feature — live coaching
     // and the live tip feed above are free on every supported platform, but
     // only paid plans get tips written into the historical `tips` table.
+    //
+    // That write is done by the database, not here: the AFTER INSERT trigger
+    // `sync_live_tip` on live_tips (function sync_live_tip_to_tips()) copies
+    // the tip into `tips` for any non-free, unexpired plan, with the correct
+    // USD and a near-duplicate guard. This route used to ALSO insert into
+    // `tips`, without USD — so every Pro live tip landed in history twice
+    // (once at its real USD, once at $0.00), doubling tip counts and token
+    // totals. The route now only reports whether the trigger will have saved
+    // it, using the same plan rule the trigger uses.
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('plan')
+      .select('plan, plan_expires_at')
       .eq('id', user.id)
       .maybeSingle();
-    const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
-
-    if (savedToHistory) {
-      const { error: historyError } = await supabaseAdmin.from('tips').insert({
-        user_id:   user.id,
-        username:  username.trim(),
-        tokens:    parseInt(amount, 10),
-        platform:  platform.toLowerCase(),
-        date_time: receivedAt,
-      });
-      if (historyError) {
-        console.warn('[LIVE] Failed to save tip to permanent history:', historyError);
-        await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'warning', `Failed to save to history: ${historyError.message}`, { platform, error_code: historyError.code });
-      }
-    }
+    const planActive = !!profile?.plan && profile.plan !== 'free'
+      && (!profile.plan_expires_at || new Date(profile.plan_expires_at).getTime() > Date.now());
+    const savedToHistory = planActive;
 
     return Response.json(
       { success: true, tip: data[0], savedToHistory, message: `Tip from ${username} synced` },

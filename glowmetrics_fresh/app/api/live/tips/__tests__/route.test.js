@@ -238,3 +238,53 @@ describe('lib/liveSession/status — DB to API status mapping', () => {
     expect(shape.shapeLiveSession(null)).toBeNull()
   })
 })
+
+// Regression: the route used to insert into `tips` itself on top of the
+// sync_live_tip DB trigger, so every Pro live tip was saved to history twice
+// (once at real USD, once at $0.00). History is now written only by the
+// trigger; the route must never touch `tips`.
+describe('POST /api/live/tips — permanent history is written once (by the DB trigger)', () => {
+  let calls
+
+  function mockWithPlan(profileRow) {
+    calls = []
+    return {
+      auth: { getUser: jest.fn(async () => ({ data: { user: { id: 'creator-1' } }, error: null })) },
+      from: jest.fn((table) => {
+        calls.push(table)
+        if (table === 'live_tips') return makeChain({ data: [{ id: 'tip-1' }], error: null })
+        if (table === 'profiles') return makeChain({ data: profileRow, error: null })
+        return makeChain({ data: null, error: null })
+      }),
+    }
+  }
+
+  async function postWithPlan(profileRow) {
+    jest.resetModules()
+    jest.doMock('@supabase/supabase-js', () => ({ createClient: jest.fn(() => mockWithPlan(profileRow)) }))
+    const { POST } = await import('../route.js')
+    const res = await POST({
+      headers: { get: (h) => (h === 'authorization' ? 'Bearer faketoken' : null) },
+      json: async () => ({ username: 'fan1', amount: 50, platform: 'chaturbate', timestamp: Date.now() }),
+    })
+    return res.json()
+  }
+
+  test('a Pro tip is reported as saved to history but the route never inserts into tips', async () => {
+    const body = await postWithPlan({ plan: 'pro', plan_expires_at: null })
+    expect(body.success).toBe(true)
+    expect(body.savedToHistory).toBe(true)
+    expect(calls).not.toContain('tips')
+  })
+
+  test('a free tip is not saved to history', async () => {
+    const body = await postWithPlan({ plan: 'free', plan_expires_at: null })
+    expect(body.savedToHistory).toBe(false)
+    expect(calls).not.toContain('tips')
+  })
+
+  test('an expired paid plan is not saved to history (matches the trigger rule)', async () => {
+    const body = await postWithPlan({ plan: 'pro', plan_expires_at: new Date(Date.now() - 86400000).toISOString() })
+    expect(body.savedToHistory).toBe(false)
+  })
+})
