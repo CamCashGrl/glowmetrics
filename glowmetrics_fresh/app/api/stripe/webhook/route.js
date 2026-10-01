@@ -48,8 +48,58 @@ export async function getUserById(supabase, userId) {
   return data.user
 }
 
-export async function resolveUser(supabase, { userId, email }) {
-  return (await getUserById(supabase, userId)) || getUserByEmail(supabase, email)
+// Exact lookup by the Stripe customer id already stored on the profile.
+// Subscriptions created before checkout started stamping metadata.userId
+// (e.g. niemeyerb101, Jul 2026) carry no userId at all, and the email
+// fallback below has failed for them in production ("could not resolve a
+// user", Sep 27 renewal). profiles.stripe_customer_id is written on the
+// first checkout.session.completed, so it is the reliable key for every
+// later event on that customer. Only ever matches a single profile.
+export async function getUserByStripeCustomerId(supabase, customerId) {
+  if (!customerId) return null
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('stripe_customer_id', customerId)
+    .limit(2)
+  if (error || !data || data.length !== 1) return null // none, or ambiguous
+  return getUserById(supabase, data[0].id)
+}
+
+// Resolution order: exact metadata userId -> exact stripe customer id ->
+// paginated email scan (last resort).
+export async function resolveUser(supabase, { userId, email, customerId }) {
+  return (await getUserById(supabase, userId))
+    || (await getUserByStripeCustomerId(supabase, customerId))
+    || getUserByEmail(supabase, email)
+}
+
+// Stripe API 2025-03-31+ (this account is on 2026-02-25.clover) moved
+// current_period_start/end off the Subscription object and onto each
+// subscription item. Reading only sub.current_period_* returned undefined,
+// so subscriptions.current_period_* was written as null for every
+// subscriber. Read the top-level value when present (older API versions),
+// otherwise the first item's.
+export function periodFor(sub) {
+  const item = sub?.items?.data?.[0]
+  const start = sub?.current_period_start ?? item?.current_period_start ?? null
+  const end = sub?.current_period_end ?? item?.current_period_end ?? null
+  return {
+    current_period_start: start ? new Date(start * 1000).toISOString() : null,
+    current_period_end: end ? new Date(end * 1000).toISOString() : null,
+  }
+}
+
+// Scheduled-cancellation details, recorded in subscription_events so a
+// "canceled but still in paid period / trial" state is visible without a
+// schema change.
+function cancellationFor(sub) {
+  return {
+    cancelAtPeriodEnd: !!sub?.cancel_at_period_end,
+    cancelAt: sub?.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null,
+    canceledAt: sub?.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
+    cancellationFeedback: sub?.cancellation_details?.feedback || null,
+  }
 }
 
 async function getEmailFromCustomer(customerId) {
@@ -192,7 +242,7 @@ export async function POST(request) {
       case 'checkout.session.completed': {
         const session = event.data.object
         const email = session.customer_details?.email || session.customer_email
-        const user = await resolveUser(supabase, { userId: session.metadata?.userId, email })
+        const user = await resolveUser(supabase, { userId: session.metadata?.userId, email, customerId: session.customer })
         if (!user) {
           await alertUnresolvedUser('checkout.session.completed', event, {
             userId: session.metadata?.userId, email, customerId: session.customer,
@@ -229,7 +279,7 @@ export async function POST(request) {
       case 'customer.subscription.created': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
-        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
+        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email, customerId: sub.customer })
         if (!user) {
           await alertUnresolvedUser('customer.subscription.created', event, {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
@@ -263,8 +313,7 @@ export async function POST(request) {
           plan_type: planTypeFor(sub),
           billing_cycle: billingCycleFor(sub),
           status: sub.status,
-          current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
-          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+          ...periodFor(sub),
         })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
@@ -272,7 +321,7 @@ export async function POST(request) {
           customerId: sub.customer,
           subscriptionId: sub.id,
           newPlan: 'pro',
-          details: { status: sub.status, trialEnd: sub.trial_end },
+          details: { status: sub.status, trialEnd: sub.trial_end, ...cancellationFor(sub) },
         })
 
         await sendResendNotification(
@@ -285,7 +334,7 @@ export async function POST(request) {
       case 'customer.subscription.deleted': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
-        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
+        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email, customerId: sub.customer })
         if (!user) {
           await alertUnresolvedUser('customer.subscription.deleted', event, {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
@@ -328,7 +377,7 @@ export async function POST(request) {
       case 'customer.subscription.updated': {
         const sub = event.data.object
         const email = await getEmailFromCustomer(sub.customer)
-        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email })
+        const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email, customerId: sub.customer })
         if (!user) {
           await alertUnresolvedUser('customer.subscription.updated', event, {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
@@ -363,8 +412,7 @@ export async function POST(request) {
           plan_type: plan === 'pro' ? planTypeFor(sub) : 'free',
           billing_cycle: plan === 'pro' ? billingCycleFor(sub) : null,
           status: sub.status,
-          current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
-          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+          ...periodFor(sub),
         })
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_updated', {
@@ -372,7 +420,7 @@ export async function POST(request) {
           customerId: sub.customer,
           subscriptionId: sub.id,
           newPlan: plan,
-          details: { status: sub.status, reason: event.data.previous_attributes },
+          details: { status: sub.status, reason: event.data.previous_attributes, ...cancellationFor(sub) },
         })
 
         if (plan === 'pro') {
