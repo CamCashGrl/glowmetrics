@@ -173,7 +173,6 @@ export default function Page() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
-        <PromoButtons styles={s} />
       </div>
 
       <div style={s.faq}>

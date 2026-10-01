@@ -16,8 +16,8 @@ function computePlatformCardStats(tips = [], sessions = [], platformName, window
   const platPaid = (paidSessions || []).filter(p => resolvePlatformName(p.platform) === resolvePlatformName(platformName))
 
   const allRevenue = [
-    ...platTips.map(t => ({ ...t, _source: 'tip' })),
-    ...platPaid.map(p => ({ ...p, _source: 'paid', date_time: p.date_time, dateRaw: p.date_time, usd: p.usd, tokens: p.tokens }))
+    ...platTips.map(t => ({ ...t, _source: 'tip', usd: parseFloat((parseFloat(t.usd) || 0).toFixed(2)) })),
+    ...platPaid.map(p => ({ ...p, _source: 'paid', date_time: p.date_time, dateRaw: p.date_time, usd: parseFloat((parseFloat(p.usd) || 0).toFixed(2)), tokens: p.tokens }))
   ]
 
   if (!allRevenue.length) {
@@ -39,7 +39,7 @@ function computePlatformCardStats(tips = [], sessions = [], platformName, window
   const recentStart = windowStart < from ? from : windowStart
   const recentRevenue = dated.filter(t => t._d >= recentStart)
 
-  const usd = parseFloat(recentRevenue.reduce((s, t) => s + (parseFloat(t.usd) || 0), 0).toFixed(2))
+  const usd = parseFloat(recentRevenue.reduce((s, t) => s + (t.usd || 0), 0).toFixed(2))
   const tipCount = recentRevenue.length
 
   const platSessions = (sessions || []).filter(s =>
@@ -76,7 +76,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-03T14:00:00Z', usd: 150, tokens: 3000, session_type: 'Private' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, paidSessions)
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, paidSessions, new Date('2026-09-05'))
 
       // Tips: 100 + 50 = 150
       // Paid: 150
@@ -107,7 +107,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'Chaturbate', date_time: '2026-09-01T10:00:00Z', usd: 200, tokens: 4000, session_type: 'Private' },
       ]
 
-      const bongaStats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, paidSessions)
+      const bongaStats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, paidSessions, new Date('2026-09-05'))
 
       // Should only include BongaCams tip (100), not Chaturbate paid session (200)
       expect(bongaStats.usd).toBe(100)
@@ -119,11 +119,11 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-02T10:00:00Z', usd: 0.005, tokens: 100, username: 'u2' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], new Date('2026-09-05'))
 
       // 99.995 rounds to 100.00, 0.005 rounds to 0.01, total = 100.01
       // But individual rounding: 100.00 + 0.01 = 100.01
-      expect(stats.usd).toBe(100.00)
+      expect(stats.usd).toBe(100.01)
     })
   })
 
@@ -138,7 +138,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-01T10:00:00Z', usd: 100, tokens: 2000, username: 'u1' },
       ]
 
-      const stats = computePlatformCardStats(tips, sessions, 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, sessions, 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], new Date('2026-09-05'))
 
       // Should count: 1 + 2 = 3 hours (exclude durationUnknown session)
       // NOT: 1 + 0 + 2 = 3 hours (would be same, but logic matters)
@@ -153,7 +153,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-01T10:00:00Z', usd: 100, tokens: 2000, username: 'u1' },
       ]
 
-      const stats = computePlatformCardStats(tips, sessions, 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, sessions, 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], new Date('2026-09-05'))
 
       // Should not compute $/hr when hours = 0
       expect(stats.hours).toBe(0)
@@ -234,7 +234,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-01T10:00:00Z', usd: 100, tokens: 2000, username: 'u1' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, undefined)
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, undefined, new Date('2026-09-05'))
 
       // Should treat as []
       expect(stats.usd).toBe(100)
@@ -249,7 +249,7 @@ describe('Data Consistency Validation', () => {
       ]
 
       // Assuming resolvePlatformName normalizes to canonical form
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], new Date('2026-09-05'))
 
       // Both should match if resolver is case-insensitive
       expect(stats.usd).toBeGreaterThanOrEqual(100)
@@ -289,7 +289,7 @@ describe('Data Consistency Validation', () => {
       const tips = [{ ...duplicateData, _source: 'tip' }]
       const paidSessions = [{ ...duplicateData, _source: 'paid' }]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, paidSessions)
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, paidSessions, new Date('2026-09-05'))
 
       // Would count as 200 (double) if system doesn't prevent duplicates
       expect(stats.usd).toBe(200)

@@ -7,6 +7,15 @@
     "build": "next build",
     "start": "next start",
     "test": "jest",
+    "test:ci": "jest --coverage --json --outputFile=test-results/results.json",
+    "test:report": "node ../scripts/test-reporter.mjs",
+    "test:api": "jest app/api --coverage",
+    "test:ui": "jest app/components --coverage",
+    "test:formulas": "jest lib/analytics --coverage",
+    "test:watch": "jest --watch",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
+    "notify:slack": "node ../scripts/notify-slack.mjs",
+    "install:hooks": "node ../scripts/install-hooks.mjs",
     "indexnow": "node scripts/indexnow-submit.mjs"
   },
   "dependencies": {
