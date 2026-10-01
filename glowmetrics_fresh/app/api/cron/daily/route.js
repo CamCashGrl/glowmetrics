@@ -36,10 +36,21 @@ export async function GET(req) {
     subscriptionDriftError = err.message
   }
 
+  let webhookFailures = null
+  let webhookFailuresError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/check-webhook-failures`)
+    webhookFailures = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to check webhook failures:', err.message)
+    webhookFailuresError = err.message
+  }
+
   return NextResponse.json({
-    success: !digestError && !goodwillExpiryError && !subscriptionDriftError,
+    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError,
     digest, digestError,
     goodwillExpiry, goodwillExpiryError,
     subscriptionDrift, subscriptionDriftError,
+    webhookFailures, webhookFailuresError,
   })
 }

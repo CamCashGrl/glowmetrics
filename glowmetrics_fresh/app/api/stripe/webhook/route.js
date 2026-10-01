@@ -170,6 +170,22 @@ async function logSubscriptionEvent(supabase, userId, eventType, details) {
   }
 }
 
+// Log webhook events to database for audit trail
+async function logWebhookEvent(supabase, event, status, errorMessage = null) {
+  try {
+    await supabase.from('webhook_events').insert({
+      stripe_event_id: event.id,
+      event_type: event.type,
+      status,
+      error_message: errorMessage,
+      event_data: event.data,
+      created_at: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('Failed to log webhook event:', e.message)
+  }
+}
+
 export async function POST(request) {
   const supabase = getSupabaseAdmin()
   const body = await request.text()
@@ -184,6 +200,7 @@ export async function POST(request) {
     )
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message)
+    await logWebhookEvent(null, { id: 'unknown', type: 'unknown', data: {} }, 'signature_failed', err.message)
     return NextResponse.json({ error: err.message }, { status: 400 })
   }
 
@@ -197,7 +214,9 @@ export async function POST(request) {
           await alertUnresolvedUser('checkout.session.completed', event, {
             userId: session.metadata?.userId, email, customerId: session.customer,
           })
-          break
+          await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
+          // Return 202 Accepted so Stripe will retry later with exponential backoff
+          return NextResponse.json({ error: 'Could not resolve user' }, { status: 202 })
         }
 
         // Whether this is trialing or already active gets set precisely by
@@ -212,8 +231,9 @@ export async function POST(request) {
         const ok = await updateProfile(supabase, user.id, update)
         if (!ok) {
           console.error(`Webhook checkout: failed to save customer ID for ${email}`)
-          // Log event but don't fail — we want Stripe to consider this successful
-          // even if our DB update has issues
+          await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
+          // Return retryable error so Stripe tries again
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 202 })
         }
 
         // subscription_started is logged by customer.subscription.created event (fired ~0.3s later)
@@ -234,7 +254,9 @@ export async function POST(request) {
           await alertUnresolvedUser('customer.subscription.created', event, {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
           })
-          break
+          await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
+          // Retry later
+          return NextResponse.json({ error: 'Could not resolve user' }, { status: 202 })
         }
 
         // Carry Stripe's actual status through (trialing/active/past_due/unpaid/...)
@@ -251,12 +273,14 @@ export async function POST(request) {
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
         }
 
-        const ok = await updateProfile(supabase, user.id, update)
-        if (!ok) {
+        const profileOk = await updateProfile(supabase, user.id, update)
+        if (!profileOk) {
           console.error(`Webhook subscription.created: failed to save subscription data for ${email}`)
+          await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 202 })
         }
 
-        await upsertSubscriptionRecord(supabase, user.id, {
+        const subsOk = await upsertSubscriptionRecord(supabase, user.id, {
           stripe_customer_id: sub.customer,
           stripe_subscription_id: sub.id,
           stripe_price_id: sub.items?.data?.[0]?.price?.id || null,
@@ -266,6 +290,11 @@ export async function POST(request) {
           current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
           current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
         })
+        if (!subsOk) {
+          console.error(`Webhook subscription.created: failed to upsert subscriptions record for ${email}`)
+          await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
+          return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: 202 })
+        }
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
           stripeEventId: event.id,
@@ -290,7 +319,9 @@ export async function POST(request) {
           await alertUnresolvedUser('customer.subscription.deleted', event, {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
           })
-          break
+          await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
+          // Retry later
+          return NextResponse.json({ error: 'Could not resolve user' }, { status: 202 })
         }
 
         const update = {
@@ -299,16 +330,23 @@ export async function POST(request) {
           trial_ends_at: null,
         }
 
-        const ok = await updateProfile(supabase, user.id, update)
-        if (!ok) {
+        const profileOk = await updateProfile(supabase, user.id, update)
+        if (!profileOk) {
           console.error(`Webhook subscription.deleted: failed to downgrade ${email}`)
+          await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to downgrade profile for ${email}`)
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 202 })
         }
 
-        await upsertSubscriptionRecord(supabase, user.id, {
+        const subsOk = await upsertSubscriptionRecord(supabase, user.id, {
           plan_type: 'free',
           billing_cycle: null,
           status: 'canceled',
         })
+        if (!subsOk) {
+          console.error(`Webhook subscription.deleted: failed to upsert subscriptions record for ${email}`)
+          await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
+          return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: 202 })
+        }
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_canceled', {
           stripeEventId: event.id,
@@ -333,7 +371,9 @@ export async function POST(request) {
           await alertUnresolvedUser('customer.subscription.updated', event, {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
           })
-          break
+          await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
+          // Retry later
+          return NextResponse.json({ error: 'Could not resolve user' }, { status: 202 })
         }
 
         // Carry Stripe's actual status through (see subscription.created above) —
@@ -351,12 +391,14 @@ export async function POST(request) {
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
         }
 
-        const ok = await updateProfile(supabase, user.id, update)
-        if (!ok) {
+        const profileOk = await updateProfile(supabase, user.id, update)
+        if (!profileOk) {
           console.error(`Webhook subscription.updated: failed to update ${email}`)
+          await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
+          return NextResponse.json({ error: 'Failed to update profile' }, { status: 202 })
         }
 
-        await upsertSubscriptionRecord(supabase, user.id, {
+        const subsOk = await upsertSubscriptionRecord(supabase, user.id, {
           stripe_customer_id: sub.customer,
           stripe_subscription_id: sub.id,
           stripe_price_id: sub.items?.data?.[0]?.price?.id || null,
@@ -366,6 +408,11 @@ export async function POST(request) {
           current_period_start: sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
           current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
         })
+        if (!subsOk) {
+          console.error(`Webhook subscription.updated: failed to upsert subscriptions record for ${email}`)
+          await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
+          return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: 202 })
+        }
 
         await logSubscriptionEvent(supabase, user.id, 'subscription_updated', {
           stripeEventId: event.id,
@@ -391,16 +438,18 @@ export async function POST(request) {
 
       default:
         console.warn(`Unhandled Stripe event type: ${event.type}`)
+        await logWebhookEvent(supabase, event, 'unhandled_event_type', `Unhandled event type: ${event.type}`)
         // Return success for unhandled events so Stripe doesn't retry
         break
     }
 
-    // ALWAYS return 200 success to acknowledge receipt and prevent Stripe retries
-    // Database errors are logged above but shouldn't block the webhook response
-    return NextResponse.json({ received: true })
+    // Log successful event processing
+    await logWebhookEvent(supabase, event, 'success', null)
+    return NextResponse.json({ received: true, status: 'success' })
   } catch (err) {
     console.error('Webhook handler error:', err)
-    // Still return 200 to prevent Stripe from retrying indefinitely
-    return NextResponse.json({ received: true, error: err.message })
+    await logWebhookEvent(supabase, event, 'handler_error', err.message)
+    // Return 202 Accepted so Stripe will retry if there's an unexpected error
+    return NextResponse.json({ error: err.message }, { status: 202 })
   }
 }
