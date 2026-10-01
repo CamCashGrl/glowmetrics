@@ -6,7 +6,7 @@ import { shapeLiveSession, sanitizedErrorResponse } from '../../../../lib/liveSe
 import { isEngineV2AllowedForUser } from '../../../../lib/liveSession/flag'
 import { corsHeaders } from '../../../../lib/liveSession/cors'
 
-const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
+import { UNRESOLVED_DB_STATUSES as UNRESOLVED_STATUSES } from '../../../../lib/liveSession/status'
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })

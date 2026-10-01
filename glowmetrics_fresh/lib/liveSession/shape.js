@@ -1,3 +1,5 @@
+import { toApiStatus } from './status'
+
 // Single shared computation of effective paused time and active duration
 // for a live_sessions row, used by every route that returns session data —
 // never reimplemented per-route.
@@ -24,6 +26,10 @@ export function shapeLiveSession(row) {
 
   return {
     ...row,
+    // Clients (website + extension) read the API status names; the raw DB
+    // value stays available as db_status. See lib/liveSession/status.js.
+    status: toApiStatus(row),
+    db_status: row.status,
     effective_paused_seconds: Math.round(effectivePausedSeconds),
     active_duration_seconds: Math.round(activeDurationSeconds),
   }

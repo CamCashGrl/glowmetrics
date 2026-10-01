@@ -10,7 +10,7 @@ export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
 }
 
-const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
+import { UNRESOLVED_DB_STATUSES as UNRESOLVED_STATUSES } from '../../../../lib/liveSession/status'
 
 function shapeCoachingEvent(row) {
   if (!row) return null
