@@ -693,7 +693,26 @@ export default function BongaCamsQueenOfQueensPage() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
-        <PromoButtons styles={s} />
+        <div style={s.promoButtons}>
+          <a
+            href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{...s.promoBtn, ...s.promoBtnModel}}
+
+          >
+            Interested in being a model?
+          </a>
+          <a
+            href="https://bongacams.com?fuid=166966512&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_viewer"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{...s.promoBtn, ...s.promoBtnCam}}
+
+          >
+            Looking for a hot cam show?
+          </a>
+        </div>
       </div>
 
       <h2 style={s.h2}>Frequently Asked Questions</h2>

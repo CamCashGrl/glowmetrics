@@ -1,0 +1,24 @@
+{
+  "description": "CamCash test automation and development settings",
+  "hooks": {
+    "on-save": "npm run test:quick --prefix glowmetrics_fresh 2>/dev/null || true",
+    "on-command": {
+      "test": "npm run test:ci --prefix glowmetrics_fresh && npm run test:report",
+      "test:api": "npm run test:api --prefix glowmetrics_fresh && npm run test:report",
+      "test:ui": "npm run test:ui --prefix glowmetrics_fresh && npm run test:report",
+      "test:formulas": "npm run test:formulas --prefix glowmetrics_fresh && npm run test:report"
+    }
+  },
+  "permissions": {
+    "allowed": [
+      "npm run test",
+      "npm run test:ci",
+      "npm run test:api",
+      "npm run test:ui",
+      "npm run test:formulas",
+      "npm run test:report",
+      "npm run test:watch",
+      "npm run test:debug"
+    ]
+  }
+}

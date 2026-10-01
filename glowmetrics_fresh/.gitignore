@@ -27,3 +27,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
+
+# test coverage & results (generated during test runs)
+coverage/
+test-results/
