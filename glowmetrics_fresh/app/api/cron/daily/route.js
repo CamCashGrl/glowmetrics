@@ -46,11 +46,44 @@ export async function GET(req) {
     webhookFailuresError = err.message
   }
 
+  let dailySummary = null
+  let dailySummaryError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/notify-daily-summary`)
+    dailySummary = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send daily summary:', err.message)
+    dailySummaryError = err.message
+  }
+
+  let trialAlerts = null
+  let trialAlertsError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/notify-trial-alerts`)
+    trialAlerts = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send trial alerts:', err.message)
+    trialAlertsError = err.message
+  }
+
+  let conversionReport = null
+  let conversionReportError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/notify-conversions`)
+    conversionReport = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send conversion report:', err.message)
+    conversionReportError = err.message
+  }
+
   return NextResponse.json({
-    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError,
+    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError && !dailySummaryError && !trialAlertsError && !conversionReportError,
     digest, digestError,
     goodwillExpiry, goodwillExpiryError,
     subscriptionDrift, subscriptionDriftError,
     webhookFailures, webhookFailuresError,
+    dailySummary, dailySummaryError,
+    trialAlerts, trialAlertsError,
+    conversionReport, conversionReportError,
   })
 }
