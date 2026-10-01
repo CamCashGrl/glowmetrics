@@ -29,10 +29,6 @@ const FAQS = [
 export const metadata = articleMeta({ title: TITLE, description: DESC, slug: SLUG })
 const schema = articleSchema({ title: TITLE, description: DESC, slug: SLUG, faqs: FAQS })
 
-<<<<<<< HEAD
-
-=======
->>>>>>> claude/epic-feynman-se9tyh
 export default function Page() {
   return (
     <ArticleLayout>
@@ -177,30 +173,6 @@ export default function Page() {
 
       <div style={s.promo}>
         <div style={s.promoTitle}>Ready to Join BongaCams?</div>
-<<<<<<< HEAD
-        <div style={s.promoButtons}>
-          <a
-            href="https://bongamodels.com?fuid=DaphneDawson&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_signup"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnModel}}
-            
-          >
-            Interested in being a model?
-          </a>
-          <a
-            href="https://bongacams.com?fuid=166966512&utm_source=camcashgrl&utm_medium=blog&utm_campaign=bongacams_viewer"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{...s.promoBtn, ...s.promoBtnCam}}
-            
-          >
-            Looking for a hot cam show?
-          </a>
-        </div>
-=======
-        <PromoButtons styles={s} />
->>>>>>> claude/epic-feynman-se9tyh
       </div>
 
       <div style={s.faq}>
