@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
 import { platformLimitMessage } from '../../../../lib/planLimits';
+import {
+  UNRESOLVED_DB_STATUSES,
+  TIP_ATTRIBUTABLE_DB_STATUSES,
+  isTipAttributable,
+} from '../../../../lib/liveSession/status';
 
 async function logLiveFailure(supabaseAdmin, userId, liveSessionId, failureType, severity, errorMessage, errorContext) {
   try {
@@ -107,7 +112,9 @@ export async function POST(req) {
     const deduplication_key = `${user.id}-${username.trim().toLowerCase()}-${amount}-${platform.toLowerCase()}-${tsMs}`;
 
     // Attribute this tip to the caller's current live_sessions row when it's
-    // 'active', or 'needs_resolution' — never while 'paused' or absent.
+    // live and active (DB: status 'live', live_substate not 'paused') or
+    // awaiting resolution (DB: 'inactive_warning') — never while paused or
+    // absent. Status values come from lib/liveSession/status.js.
     // needs_resolution is included because a tip landing during that window
     // is the strongest possible proof the stream never actually stopped: it
     // both cancels the pending "Are you still there?" auto-end (see
@@ -121,13 +128,13 @@ export async function POST(req) {
     try {
       const { data: activeSession } = await supabaseAdmin
         .from('live_sessions')
-        .select('id, status')
+        .select('id, status, live_substate')
         .eq('user_id', user.id)
-        .in('status', ['active', 'needs_resolution'])
+        .in('status', TIP_ATTRIBUTABLE_DB_STATUSES)
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (activeSession) live_session_id = activeSession.id;
+      if (isTipAttributable(activeSession)) live_session_id = activeSession.id;
     } catch (_) {
       // live_sessions lookup failed — tip is still saved, just unattributed.
     }
@@ -266,7 +273,7 @@ export async function GET(req) {
       .from('live_sessions')
       .select('id, tips_cleared_at')
       .eq('user_id', user.id)
-      .in('status', ['starting', 'active', 'paused', 'stopping', 'needs_resolution'])
+      .in('status', UNRESOLVED_DB_STATUSES)
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();

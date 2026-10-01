@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
+import { NEEDS_RESOLUTION_DB_STATUS } from '../../../../../lib/liveSession/status'
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
@@ -88,7 +89,8 @@ export async function POST(req) {
     const { data: current } = await supabase
       .from('live_sessions')
       .select('started_at')
-      .eq('status', 'needs_resolution')
+      .eq('user_id', user.id)
+      .eq('status', NEEDS_RESOLUTION_DB_STATUS)
       .maybeSingle()
     if (current && parsed.getTime() < new Date(current.started_at).getTime()) {
       return NextResponse.json({ error: 'endTime cannot be before the session started' }, { status: 400, headers: cors })
