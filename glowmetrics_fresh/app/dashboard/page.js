@@ -4031,6 +4031,7 @@ const stopImportMessageRotation = () => {
             analytics={analytics}
             tips={tips}
             isPro={isPro}
+            canonicalTiming={analytics?.canonicalTimePerformance}
             onOpenPlanner={() => handleTabChange('planner')}
           />
         )}

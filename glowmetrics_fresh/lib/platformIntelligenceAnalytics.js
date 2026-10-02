@@ -152,9 +152,39 @@ export function buildAllPlatformMetrics(analytics) {
 // active bucket and require at least 3 active buckets — never by raw total.
 // =============================================
 
-export function buildTimeIntelligence(analytics) {
+export function buildTimeIntelligence(analytics, canonicalTiming = null) {
   if (!analytics) return null
 
+  // Prefer canonical data when available, fall back to engine data for backward compatibility
+  if (canonicalTiming?.global?.bestWindow) {
+    const bw = canonicalTiming.global.bestWindow
+    const bestHour = bw.hour !== null ? { hour: bw.hour, avg: bw.earnings, label: formatHour(bw.hour) } : null
+    const bestDay = bw.day ? { day: bw.day, avg: bw.earnings } : null
+
+    // Build platformBestTimes from canonical byPlatform data
+    const platformBestTimes = {}
+    if (canonicalTiming.byPlatform) {
+      Object.entries(canonicalTiming.byPlatform).forEach(([platform, data]) => {
+        if (data.bestWindow) {
+          const bw = data.bestWindow
+          platformBestTimes[platform] = {
+            hour: bw.hour !== null ? { hour: bw.hour, avg: bw.earnings, label: formatHour(bw.hour) } : null,
+            bestDay: bw.day ? { day: bw.day, avg: bw.earnings } : null,
+          }
+        }
+      })
+    }
+
+    return {
+      bestHour,
+      bestDay,
+      platformBestTimes,
+      confidence: bw.confidence || { level: 'Low', label: 'Insufficient data' },
+      hasPattern: Boolean(bestHour || bestDay),
+    }
+  }
+
+  // Fallback to original engine data for backward compatibility
   const totalHours = (analytics.totalStreamMinutes || 0) / 60
   const confidence = calculateConfidence(analytics.meaningfulSessionCount || 0, totalHours)
 
@@ -165,8 +195,6 @@ export function buildTimeIntelligence(analytics) {
     bestDay: analytics.bestDay || null,
     platformBestTimes: analytics.platformBestTimes || {},
     confidence,
-    // The engine withholds bestHour/bestDay until a pattern is supportable, so
-    // their absence is the signal that there is nothing trustworthy to show.
     hasPattern: Boolean(analytics.bestHour || analytics.bestDay),
   }
 }

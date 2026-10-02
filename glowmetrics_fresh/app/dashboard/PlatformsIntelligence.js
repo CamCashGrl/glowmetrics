@@ -280,11 +280,11 @@ function DataCoverage({ coverage }) {
 // UNIFIED VIEW
 // ============================================
 
-function UnifiedView({ analytics, coverage, isPro, onOpenPlanner }) {
+function UnifiedView({ analytics, coverage, isPro, canonicalTiming, onOpenPlanner }) {
   const snapshot = useMemo(() => buildBusinessSnapshot(analytics), [analytics])
   const comparison = useMemo(() => buildPlatformComparison(analytics), [analytics])
   const efficiency = useMemo(() => buildEfficiencyComparison(analytics), [analytics])
-  const timeIntel = useMemo(() => buildTimeIntelligence(analytics), [analytics])
+  const timeIntel = useMemo(() => buildTimeIntelligence(analytics, canonicalTiming), [analytics, canonicalTiming])
   const fans = useMemo(() => buildFanRevenue(analytics, isPro), [analytics, isPro])
   const noticed = useMemo(() => buildCamCashNoticed(analytics), [analytics])
 
@@ -632,7 +632,7 @@ function SplitView({ analytics, platformName, isPro }) {
 // PAGE
 // ============================================
 
-export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, onOpenPlanner = null }) {
+export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, canonicalTiming = null, onOpenPlanner = null }) {
   const [view, setView] = useState('unified')
   const [selectedPlatform, setSelectedPlatform] = useState(null)
 
@@ -687,7 +687,7 @@ export default function PlatformsIntelligence({ analytics = null, tips = [], isP
           No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
         </Empty>
       ) : view === 'unified' ? (
-        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
+        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} canonicalTiming={canonicalTiming} onOpenPlanner={onOpenPlanner} />
       ) : (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
