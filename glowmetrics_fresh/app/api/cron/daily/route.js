@@ -76,8 +76,18 @@ export async function GET(req) {
     conversionReportError = err.message
   }
 
+  let emailFailures = null
+  let emailFailuresError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/check-email-failures`)
+    emailFailures = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to check email failures:', err.message)
+    emailFailuresError = err.message
+  }
+
   return NextResponse.json({
-    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError && !dailySummaryError && !trialAlertsError && !conversionReportError,
+    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError && !dailySummaryError && !trialAlertsError && !conversionReportError && !emailFailuresError,
     digest, digestError,
     goodwillExpiry, goodwillExpiryError,
     subscriptionDrift, subscriptionDriftError,
@@ -85,5 +95,6 @@ export async function GET(req) {
     dailySummary, dailySummaryError,
     trialAlerts, trialAlertsError,
     conversionReport, conversionReportError,
+    emailFailures, emailFailuresError,
   })
 }
