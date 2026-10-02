@@ -1234,17 +1234,31 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   return insights.sort((a, b) => a.priority - b.priority)
 }
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour) {
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour, hourAvgs = []) {
   const moves = []
   const now = Date.now()
-  if (bestHour) {
-    const bh = parseInt(bestHour.hour)
+
+  // Early signal: if no strong bestHour but some hourly data exists, show the best available
+  const hourToUse = bestHour || (hourAvgs && hourAvgs.length > 0 ? [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] : null)
+  const isEarlySignal = !bestHour && hourToUse
+
+  if (hourToUse) {
+    const bh = parseInt(hourToUse.hour)
     const currentHour = new Date().getUTCHours()
     const hoursUntil = (bh - currentHour + 24) % 24
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
-    if (hoursUntil === 0 || hoursUntil === 1) moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${bestHour.avg.toFixed(0)}/session at this hour`, priority: 0 })
-    else if (hoursUntil <= 2) moves.push({ icon: '⏰', color: '#22D3EE', text: `You're ${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} away from your peak time (${label}). Prep your room title and get ready — you avg $${bestHour.avg.toFixed(0)} at this hour`, priority: 1 })
-    else moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it. Your data shows $${bestHour.avg.toFixed(0)} avg per session at this hour`, priority: 2 })
+
+    if (isEarlySignal) {
+      // Early signal: weak data but showing best available hour
+      if (hoursUntil === 0 || hoursUntil === 1) moves.push({ icon: '📍', color: '#8B5CF6', text: `Go live NOW — ${label} looks promising (early signal). Early data shows $${hourToUse.avg.toFixed(0)}/session at this hour`, priority: 0 })
+      else if (hoursUntil <= 2) moves.push({ icon: '📍', color: '#8B5CF6', text: `${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} until ${label} (early signal). This is showing as your strongest window so far — $${hourToUse.avg.toFixed(0)}/session`, priority: 1 })
+      else moves.push({ icon: '📍', color: '#8B5CF6', text: `Early signal: ${label} looks like your best earning window so far. $${hourToUse.avg.toFixed(0)}/session. More data will confirm this.`, priority: 2 })
+    } else {
+      // Strong signal: confident pattern
+      if (hoursUntil === 0 || hoursUntil === 1) moves.push({ icon: '🔥', color: '#FB923C', text: `Go live NOW — ${label} is your peak earning time. Your data shows you average $${bestHour.avg.toFixed(0)}/session at this hour`, priority: 0 })
+      else if (hoursUntil <= 2) moves.push({ icon: '⏰', color: '#22D3EE', text: `You're ${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} away from your peak time (${label}). Prep your room title and get ready — you avg $${bestHour.avg.toFixed(0)} at this hour`, priority: 1 })
+      else moves.push({ icon: '🕐', color: '#22D3EE', text: `Your best earning time is ${label} — plan your next stream around it. Your data shows $${bestHour.avg.toFixed(0)} avg per session at this hour`, priority: 2 })
+    }
   }
   if (predictions?.tonightStream) {
     const { expected, range, returningTippers } = predictions.tonightStream
@@ -1368,7 +1382,7 @@ export function aggregateRows(tips, tz = null) {
   const predictions = predictRevenue(tips, meaningfulSessions)
   const whaleAlerts = generateWhaleAlerts(whales)
   const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour)
+  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour, hourAvgs)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }

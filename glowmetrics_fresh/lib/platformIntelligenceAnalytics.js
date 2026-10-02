@@ -116,6 +116,36 @@ export function buildEfficiencyComparison(analytics) {
     }))
 }
 
+// Comprehensive platform metrics — includes all platforms regardless of data sufficiency
+// Shows peak hours + $/hr for each platform, with data confidence labels
+export function buildAllPlatformMetrics(analytics) {
+  const platforms = analytics?.platforms || []
+  if (platforms.length === 0) return []
+
+  return platforms
+    .map(p => {
+      const peakHourData = analytics?.platformBestTimes?.[p.platform]
+      const hasRateData = p.rateHours > 0 && p.usdPerHour > 0
+      const hasPeakHour = peakHourData?.hour !== null && peakHourData?.hour !== undefined
+
+      return {
+        platform: p.platform,
+        earnings: round2(p.totalUSD || 0),
+        sessions: p.sessions || 0,
+        hours: parseFloat((p.hours || 0).toFixed(1)),
+        usdPerHour: hasRateData ? p.usdPerHour : 0,
+        rateHours: p.rateHours ?? 0,
+        peakHour: hasPeakHour ? parseInt(peakHourData.hour) : null,
+        tips: p.tips || 0,
+        // Data confidence indicators
+        hasRateData,
+        hasPeakHourData: hasPeakHour,
+        isEarlySignal: !hasRateData || p.rateHours < 2 // Less than 2 hours of rated data
+      }
+    })
+    .sort((a, b) => b.earnings - a.earnings)
+}
+
 // =============================================
 // WHEN YOU EARN BEST
 // Reuses the engine's bestHour/bestDay, which rank by median earnings per
