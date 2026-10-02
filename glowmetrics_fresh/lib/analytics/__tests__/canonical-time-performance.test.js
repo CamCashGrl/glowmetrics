@@ -280,10 +280,11 @@ describe('Canonical Historical Time-Performance Engine', () => {
       expect(hourData).toHaveProperty('confidence')
     })
 
-    test('empty tips array returns empty result', () => {
+    test('empty tips array returns null signals', () => {
       const result = computeHistoricalTimePerformance([], 'UTC', 3)
 
-      expect(result.global).toEqual({})
+      expect(result.global.bestWindow).toBeNull()
+      expect(result.global.earlySignal).toBeNull()
       expect(result.byPlatform).toEqual({})
     })
 
@@ -448,6 +449,90 @@ describe('Canonical Historical Time-Performance Engine', () => {
         const decimals = revStr.includes('.') ? revStr.split('.')[1].length : 0
         expect(decimals).toBeLessThanOrEqual(2)
       })
+    })
+  })
+
+  describe('CommandCenter integration (bestWindow + earlySignal)', () => {
+    test('qualified window includes hour, day, platform, rate, session count, tier', () => {
+      // Same day-of-week (Monday) repeated 3 times, all at hour 10
+      const tips = [
+        { date_time: '2026-09-07T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-14T10:00:00Z', usd: 150, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-21T10:00:00Z', usd: 120, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-07T02:00:00Z', usd: 50, platform: 'Chaturbate' },
+        { date_time: '2026-09-14T02:00:00Z', usd: 60, platform: 'Chaturbate' },
+        { date_time: '2026-09-21T02:00:00Z', usd: 55, platform: 'Chaturbate' },
+      ]
+
+      const result = computeHistoricalTimePerformance(tips, 'UTC', 3)
+      const window = result.global.bestWindow
+
+      expect(window).toBeDefined()
+      expect(window?.localHour).toBe(10)
+      expect(window?.localDay).toBe('Monday')
+      expect(window?.topPlatform).toBe('Chaturbate')
+      expect(window?.medianUsdPerHour).toBeGreaterThan(0)
+      expect(window?.sessionCount).toBeGreaterThan(0)
+      expect(['high', 'supported', 'promising']).toContain(window?.tier)
+      expect(window?.qualified).toBe(true)
+    })
+
+    test('early signal appears when no qualified window exists', () => {
+      const tips = [
+        { date_time: '2026-09-15T10:00:00Z', usd: 100, platform: 'Chaturbate' },
+        { date_time: '2026-09-15T12:00:00Z', usd: 50, platform: 'Chaturbate' },
+      ]
+
+      const result = computeHistoricalTimePerformance(tips, 'UTC', 3)
+      const window = result.global.bestWindow
+      const signal = result.global.earlySignal
+
+      expect(window).toBeNull()
+      expect(signal).toBeDefined()
+      expect(signal?.sessionCount).toBeGreaterThan(0)
+      expect(signal?.distinctDates).toBeLessThan(3)
+    })
+
+    test('no signal when insufficient data', () => {
+      const tips = []
+
+      const result = computeHistoricalTimePerformance(tips, 'UTC', 3)
+
+      expect(result.global.bestWindow).toBeNull()
+      expect(result.global.earlySignal).toBeNull()
+    })
+
+    test('bestWindow null when bestHour or bestDay unqualified', () => {
+      const tips = [
+        { date_time: '2026-09-15T10:00:00Z', usd: 100, platform: 'Chaturbate' },
+        { date_time: '2026-09-15T12:00:00Z', usd: 50, platform: 'Chaturbate' },
+      ]
+
+      const result = computeHistoricalTimePerformance(tips, 'UTC', 3)
+
+      // Both need to be qualified for bestWindow to exist
+      expect(result.global.bestWindow).toBeNull()
+    })
+
+    test('tier reflects confidence level', () => {
+      // High confidence: 7+ distinct calendar dates for same hour AND day
+      // Use same day of week (Monday) repeated 7 times, all at same hour
+      const highConfidence = [
+        { date_time: '2026-09-07T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-14T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-21T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-28T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-10-05T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-10-12T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-10-19T10:00:00Z', usd: 100, platform: 'Chaturbate' }, // Monday
+        { date_time: '2026-09-07T02:00:00Z', usd: 50, platform: 'Chaturbate' },
+        { date_time: '2026-09-14T02:00:00Z', usd: 50, platform: 'Chaturbate' },
+        { date_time: '2026-09-21T02:00:00Z', usd: 50, platform: 'Chaturbate' },
+      ]
+
+      const result = computeHistoricalTimePerformance(highConfidence, 'UTC', 3)
+      expect(result.global.bestWindow).toBeDefined()
+      expect(result.global.bestWindow?.tier).toBe('high')
     })
   })
 })

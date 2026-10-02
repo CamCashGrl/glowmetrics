@@ -2116,7 +2116,7 @@ export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
 // This replaces separate calculations in CommandCenter, Platforms, and StreamPlanner.
 // All time-based recommendations must consume this output.
 export function computeHistoricalTimePerformance(tips = [], tz = null, minQualifyingDates = 3) {
-  if (!tips.length) return { global: {}, byPlatform: {}, byPlatformDayHour: {} }
+  if (!tips.length) return { global: { bestWindow: null, earlySignal: null }, byPlatform: {} }
 
   let userTz = tz
   if (!userTz) {
@@ -2240,10 +2240,53 @@ export function computeHistoricalTimePerformance(tips = [], tz = null, minQualif
     .filter(d => d && d.qualified)
     .sort((a, b) => b.avgPerTip - a.avgPerTip)[0] || null
 
+  // Compute best window (day + hour combination) for CommandCenter hero
+  // Looks for the highest-revenue platform in the best-hour bucket
+  const bestWindow = (() => {
+    if (!bestHourGlobal || !bestDayGlobal) return null
+
+    const dayHourKey = `${bestDayGlobal.day}|${bestHourGlobal.hour}`
+    const platformInWindow = Object.entries(platformData)
+      .map(([p, pData]) => {
+        const hData = pData.hours[bestHourGlobal.hour]
+        return hData ? { platform: p, avgPerTip: hData.revenue / hData.tips, ...hData } : null
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.avgPerTip - a.avgPerTip)[0]
+
+    return {
+      localHour: bestHourGlobal.hour,
+      localDay: bestDayGlobal.day,
+      topPlatform: platformInWindow?.platform || null,
+      medianUsdPerHour: bestHourGlobal.avgPerTip,
+      sessionCount: bestHourGlobal.tips,
+      tier: bestHourGlobal.confidence === 'high' ? 'high' : bestHourGlobal.confidence === 'medium' ? 'supported' : 'promising',
+      distinctDates: bestHourGlobal.distinctDates,
+      qualified: true,
+    }
+  })()
+
+  // Early signal (insufficient data case) — use the best unqualified option
+  const earlySignal = (() => {
+    if (bestWindow) return null // We have a qualified window, no early signal needed
+
+    const allHours = Object.keys(hourData).map(qualifyHour).filter(h => h && h.distinctDates > 0).sort((a, b) => b.avgPerTip - a.avgPerTip)[0]
+    if (!allHours) return null
+
+    return {
+      localHour: allHours.hour,
+      localDay: bestDayGlobal?.day || 'Monday', // Use best day if available, else fallback
+      sessionCount: allHours.tips,
+      distinctDates: allHours.distinctDates,
+    }
+  })()
+
   return {
     global: {
       bestHour: bestHourGlobal,
       bestDay: bestDayGlobal,
+      bestWindow, // CommandCenter hero: the day+hour recommendation
+      earlySignal, // CommandCenter fallback: insufficient data case
       hourData: Object.keys(hourData).map(qualifyHour),
       dayData: Object.keys(dayData).map(qualifyDay),
       minQualifyingDates
