@@ -210,7 +210,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-02T10:00:00Z', usd: 100, tokens: 4000, username: 'u2' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], new Date('2026-09-05'))
 
       // null coerced to 0
       expect(stats.usd).toBe(100)
@@ -223,7 +223,7 @@ describe('Data Consistency Validation', () => {
         { platform: 'BongaCams', date_time: '2026-09-02T10:00:00Z', usd: 200, tokens: 4000, username: 'u2' },
       ]
 
-      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [])
+      const stats = computePlatformCardStats(tips, [], 'BongaCams', SNAPSHOT_WINDOW_DAYS, {}, [], new Date('2026-09-05'))
 
       // Null date filtered out during date parsing
       expect(stats.usd).toBe(200)
