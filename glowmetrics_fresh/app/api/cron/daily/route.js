@@ -86,8 +86,48 @@ export async function GET(req) {
     emailFailuresError = err.message
   }
 
+  let trialExpiry3Day = null
+  let trialExpiry3DayError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/send-trial-expiry-3day`)
+    trialExpiry3Day = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send trial expiry 3day emails:', err.message)
+    trialExpiry3DayError = err.message
+  }
+
+  let trialExpiry1Day = null
+  let trialExpiry1DayError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/send-trial-expiry-1day`)
+    trialExpiry1Day = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send trial expiry 1day emails:', err.message)
+    trialExpiry1DayError = err.message
+  }
+
+  let trialExpired = null
+  let trialExpiredError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/send-trial-expired`)
+    trialExpired = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send trial expired emails:', err.message)
+    trialExpiredError = err.message
+  }
+
+  let subscriptionTips = null
+  let subscriptionTipsError = null
+  try {
+    const res = await fetch(`${origin}/api/cron/send-subscription-tips`)
+    subscriptionTips = await res.json()
+  } catch (err) {
+    console.error('[cron/daily] Failed to send subscription tips:', err.message)
+    subscriptionTipsError = err.message
+  }
+
   return NextResponse.json({
-    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError && !dailySummaryError && !trialAlertsError && !conversionReportError && !emailFailuresError,
+    success: !digestError && !goodwillExpiryError && !subscriptionDriftError && !webhookFailuresError && !dailySummaryError && !trialAlertsError && !conversionReportError && !emailFailuresError && !trialExpiry3DayError && !trialExpiry1DayError && !trialExpiredError && !subscriptionTipsError,
     digest, digestError,
     goodwillExpiry, goodwillExpiryError,
     subscriptionDrift, subscriptionDriftError,
@@ -96,5 +136,9 @@ export async function GET(req) {
     trialAlerts, trialAlertsError,
     conversionReport, conversionReportError,
     emailFailures, emailFailuresError,
+    trialExpiry3Day, trialExpiry3DayError,
+    trialExpiry1Day, trialExpiry1DayError,
+    trialExpired, trialExpiredError,
+    subscriptionTips, subscriptionTipsError,
   })
 }
