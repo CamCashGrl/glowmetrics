@@ -600,7 +600,7 @@ function parseHeaderless(lines, platform, delimiter = ',') {
 // "Never merge fans across platforms by username alone" (formula-requirments
 // skill). A username is only unique within one platform.
 function fanKey(platform, username) {
-  return `${platform || 'Unknown'}:${(username || '').toLowerCase()}`
+  return `${platform || 'Unknown'}:${(username || '').trim().toLowerCase()}`
 }
 
 // ── FAN BEHAVIORAL VISITS ────────────────────────────────────────────────
@@ -804,7 +804,7 @@ function legacyChurnRiskShape(state) {
   }
 }
 
-export function identifyWhales(tips, meaningfulSessions = []) {
+export function identifyWhales(tips, meaningfulSessions = [], userTz = 'UTC') {
   const fanMap = {}
   tips.forEach(t => {
     const key = fanKey(t.platform, t.username)
@@ -855,7 +855,7 @@ export function identifyWhales(tips, meaningfulSessions = []) {
 
     const privateTips = f.tips.filter(t => t.tip_type?.toLowerCase().includes('private') || t.tip_note?.toLowerCase().includes('private'))
     const hourCounts = {}
-    f.tips.forEach(t => { const h = new Date(t.dateRaw || t.date_time).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+    f.tips.forEach(t => { const h = toLocalHour(t.dateRaw || t.date_time, userTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
     const mostActiveHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]
     const spendPercentile = Math.round((1 - percentileRank) * 100)
 

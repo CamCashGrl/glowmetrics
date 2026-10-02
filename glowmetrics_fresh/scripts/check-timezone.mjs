@@ -36,7 +36,7 @@ const PATTERN = /\.getUTC(Day|Hours)\s*\(\s*\)/g
 // Known, accepted sites as of this guard's introduction.
 const BASELINE = {
   'app/dashboard/page.js': 15,
-  'lib/analytics.js': 7,
+  'lib/analytics.js': 8,  // Reduced from 9: replaced getUTCHours() with toLocalHour() in identifyWhales()
   'app/dashboard/DashboardGrowthCharts.js': 2,
 }
 
