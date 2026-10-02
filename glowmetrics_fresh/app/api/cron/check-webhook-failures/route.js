@@ -3,12 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
-async function logEmail(emailType, recipient, subject, status, resendResponse, errorMessage) {
+async function logEmail(supabase, emailType, recipient, subject, status, resendResponse, errorMessage) {
   try {
     await supabase.from('email_logs').insert({
       email_type: emailType,
@@ -23,15 +18,15 @@ async function logEmail(emailType, recipient, subject, status, resendResponse, e
   }
 }
 
-async function sendAlert(emailType, subject, text) {
+async function sendAlert(supabase, emailType, subject, text) {
   if (!process.env.RESEND_API_KEY) {
     console.error('[sendAlert] RESEND_API_KEY not set')
-    await logEmail(emailType, 'daphneoncam@gmail.com', subject, 'failed', null, 'Missing RESEND_API_KEY')
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'failed', null, 'Missing RESEND_API_KEY')
     return false
   }
 
   try {
-    await logEmail(emailType, 'daphneoncam@gmail.com', subject, 'pending', null, null)
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'pending', null, null)
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -66,6 +61,10 @@ async function sendAlert(emailType, subject, text) {
 }
 
 export async function GET() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
 
   // Check for failures in the last 24 hours
   const { data: failures, error } = await supabase
