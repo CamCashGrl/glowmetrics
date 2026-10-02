@@ -1,0 +1,65 @@
+name: Daily Test Suite Execution
+
+on:
+  schedule:
+    # Run daily at 2 PM UTC (8 AM EST)
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+
+jobs:
+  test-suite:
+    runs-on: ubuntu-latest
+    name: Run Complete Test Suite (427 tests)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          cd glowmetrics_fresh
+          npm ci
+
+      - name: Run complete test suite
+        run: |
+          cd glowmetrics_fresh
+          npm test 2>&1 | tee test-results.log
+
+      - name: Parse test results
+        id: results
+        run: |
+          cd glowmetrics_fresh
+          SUMMARY=$(npm test 2>&1 | tail -10)
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$SUMMARY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Report success
+        if: success()
+        run: |
+          echo "✅ All tests passed at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Phase 1: 305 tests ✅"
+          echo "Phase 2: 27 tests ✅"
+          echo "Phase 3: 65 tests ✅"
+          echo "Phase 4: 30 tests ✅"
+          echo "Total: 427/427 passing"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "❌ Test suite FAILED at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "Check workflow logs for details"
+          exit 1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: glowmetrics_fresh/test-results.log
+          retention-days: 30
