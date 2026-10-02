@@ -3,23 +3,60 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-async function sendAlert(subject, text) {
+async function logEmail(supabase, emailType, recipient, subject, status, resendResponse, errorMessage) {
   try {
-    await fetch('https://api.resend.com/emails', {
+    await supabase.from('email_logs').insert({
+      email_type: emailType,
+      recipient,
+      subject,
+      status,
+      resend_response: resendResponse,
+      error_message: errorMessage,
+    })
+  } catch (err) {
+    console.error('[logEmail] Failed to log email:', err.message)
+  }
+}
+
+async function sendAlert(supabase, emailType, subject, text) {
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[sendAlert] RESEND_API_KEY not set')
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'failed', null, 'Missing RESEND_API_KEY')
+    return false
+  }
+
+  try {
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'pending', null, null)
+
+    const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'GlowMetrics <notifications@glowmetrics.co>',
+        from: 'GlowMetrics <noreply@camcashgrl.com>',
         to: 'daphneoncam@gmail.com',
         subject,
         text,
       }),
     })
+
+    const resendResponse = await response.json()
+
+    if (response.ok && resendResponse.id) {
+      await logEmail(emailType, 'daphneoncam@gmail.com', subject, 'sent', resendResponse, null)
+      console.log(`[sendAlert] Email sent successfully: ${resendResponse.id}`)
+      return true
+    } else {
+      await logEmail(emailType, 'daphneoncam@gmail.com', subject, 'failed', resendResponse, resendResponse.message || 'Unknown error')
+      console.error(`[sendAlert] Resend API error: ${resendResponse.message}`)
+      return false
+    }
   } catch (e) {
-    console.error('Failed to send alert email:', e.message)
+    await logEmail(emailType, 'daphneoncam@gmail.com', subject, 'failed', null, e.message)
+    console.error(`[sendAlert] Exception: ${e.message}`)
+    return false
   }
 }
 
@@ -68,7 +105,7 @@ export async function GET() {
   const alertSubject = `🚨 CRITICAL: ${failures.length} Stripe Webhook Failures in Last 24h`
   const alertText = `WARNING: Your Stripe webhook processing had failures in the last 24 hours.\n\nTotal Failures: ${failures.length}\n\nBreakdown:\n${failureDetails}\n\nCheck your webhook_events table for full details:\nSELECT * FROM webhook_events WHERE status != 'success' AND created_at >= NOW() - INTERVAL '24 hours' ORDER BY created_at DESC;`
 
-  await sendAlert(alertSubject, alertText)
+  await sendAlert('webhook_failures', alertSubject, alertText)
 
   console.log(`[cron/check-webhook-failures] found ${failures.length} failures, alert sent`)
   return NextResponse.json({ success: true, failures_found: failures.length, grouped: failuresByStatus })
