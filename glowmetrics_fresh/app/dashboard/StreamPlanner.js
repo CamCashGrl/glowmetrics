@@ -13,7 +13,7 @@ import {
 // (confidence in ONE hour-of-day/day-of-week bucket, not in the dataset as a
 // whole) and are left as-is; flagged in the report as a parallel formula
 // worth reconciling in a dedicated follow-up rather than blindly merged here.
-import { calculateConfidence } from "../../lib/analytics"
+import { calculateConfidence, toLocalHour, toLocalDow } from "../../lib/analytics"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -56,7 +56,8 @@ const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Group tips into sessions — tips within 4hr window = same session
-function groupIntoSessions(tips) {
+// Uses creator timezone for day/hour buckets to match analytics engine
+function groupIntoSessions(tips, tz = null) {
   if (!tips?.length) return []
   const sorted = [...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
   const raw = []
@@ -80,11 +81,10 @@ function groupIntoSessions(tips) {
     return {
       start: s.start, end: s.end, durationHrs, totalUsd, totalTokens,
       usdHr: totalUsd / durationHrs,
-      // Bucket in the creator's own clock. Session times only mean anything
-      // to them as local wall-clock time, and the analytics engine buckets
-      // the same way (toLocalDow/toLocalHour), so the planner and the rest of
-      // the dashboard name the same window identically.
-      day: s.start.getDay(), hour: s.start.getHours(),
+      // Bucket in the creator's own clock using timezone-aware conversion
+      // Matches analytics engine (toLocalDow/toLocalHour) for consistency
+      day: toLocalDow(s.start.toISOString(), tz),
+      hour: toLocalHour(s.start.toISOString(), tz),
       platform:  Object.entries(pc).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
       platforms: Object.keys(pc),
       tips: s.tips,
@@ -93,8 +93,8 @@ function groupIntoSessions(tips) {
 }
 
 // Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestDay, bestHour } }
-function platformEfficiency(tips) {
-  const sessions = groupIntoSessions(tips)
+function platformEfficiency(tips, tz = null) {
+  const sessions = groupIntoSessions(tips, tz)
   const acc = {}
   sessions.forEach((s) => {
     if (!s.platform) return
@@ -121,8 +121,8 @@ function platformEfficiency(tips) {
 }
 
 // Returns [{ day, hour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
-function bestWindows(tips) {
-  const sessions = groupIntoSessions(tips)
+function bestWindows(tips, tz = null) {
+  const sessions = groupIntoSessions(tips, tz)
   const firstSeen = {}
   ;[...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time)).forEach((t) => {
     const u = t.username || "unknown"
@@ -189,7 +189,8 @@ function untestedWindows(tips, allWindows) {
 }
 
 // Whale = 500+ tokens lifetime
-function detectWhales(tips) {
+// Uses creator timezone for best day/hour calculation
+function detectWhales(tips, tz = null) {
   const byUser = {}
   tips.forEach((t) => {
     const u = t.username || "unknown"
@@ -202,12 +203,11 @@ function detectWhales(tips) {
     const lastSeen    = new Date(Math.max(...u.tips.map((t) => new Date(t.date_time).getTime())))
     const slots = {}
     u.tips.forEach((t) => {
-      const dt = new Date(t.date_time)
-      const k  = `${dt.getDay()}-${dt.getHours()}`
+      const k  = `${toLocalDow(t.date_time, tz)}-${toLocalHour(t.date_time, tz)}`
       slots[k] = (slots[k] || 0) + 1
     })
     const top      = Object.entries(slots).sort((a, b) => b[1] - a[1])[0]
-    const [bd, bh] = top ? top[0].split("-").map(Number) : [0, 0]
+    const [bd, bh] = top ? top[0].split("-").map(v => isNaN(v) ? v : Number(v)) : [0, 0]
     const dates    = u.tips.map((t) => new Date(t.date_time)).sort((a, b) => a - b)
     const avgReturnDays = dates.length >= 2
       ? Math.round(dates.slice(1).reduce((s, d, i) => s + (d - dates[i]) / 86_400_000, 0) / (dates.length - 1))
@@ -945,7 +945,7 @@ function ProgressTab({ tips, windows, prefs }) {
 
 const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id:"progress", label:"Progress" }]
 
-function StreamPlannerContent({ tips, isPro }) {
+function StreamPlannerContent({ tips, isPro, tz = null, canonicalTiming = null }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -961,19 +961,19 @@ function StreamPlannerContent({ tips, isPro }) {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)) } catch {}
   }, [])
 
-  const windows = useMemo(() => bestWindows(tips),  [tips])
-  const whales  = useMemo(() => detectWhales(tips), [tips])
+  const windows = useMemo(() => bestWindows(tips, tz),  [tips, tz])
+  const whales  = useMemo(() => detectWhales(tips, tz), [tips, tz])
 
   // Overall confidence in the dataset as a whole (spec Step 3) — drives
   // whether a personalized Peak Earning Window claim is shown at all, using
   // the planner's own valid-session-count/streamed-hours inputs against the
   // single calculateConfidence() source of truth.
   const { level: confidenceLevel, label: confidenceLabel } = useMemo(() => {
-    const sessions = groupIntoSessions(tips)
+    const sessions = groupIntoSessions(tips, tz)
     const validSessions = sessions.filter((s) => s.tips.length >= 2)
     const streamedHours = validSessions.reduce((n, s) => n + (s.durationHrs || 0), 0)
     return calculateConfidence(validSessions.length, streamedHours)
-  }, [tips])
+  }, [tips, tz])
 
   const bestWindow = windows[0] || null
   const showPersonalizedPeak = (confidenceLevel === 'Medium' || confidenceLevel === 'High') && !!bestWindow
@@ -1035,7 +1035,7 @@ function StreamPlannerContent({ tips, isPro }) {
 // inside StreamPlannerContent (Very Low/Low/Medium/High) now decides what
 // personalized claim, if any, is shown — the Pro teaser only appears at
 // Medium confidence, next to a real (not fabricated) personalized result.
-export default function StreamPlanner({ tips = [], isPro = false }) {
+export default function StreamPlanner({ tips = [], isPro = false, tz = null, canonicalTiming = null }) {
   if (tips.length < 20) {
     return (
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -1050,5 +1050,5 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
     )
   }
 
-  return <StreamPlannerContent tips={tips} isPro={isPro} />
+  return <StreamPlannerContent tips={tips} isPro={isPro} tz={tz} canonicalTiming={canonicalTiming} />
 }
