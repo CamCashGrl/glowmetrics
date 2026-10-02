@@ -36,6 +36,13 @@ jobs:
           echo "failed=$FAILED" >> $GITHUB_OUTPUT
           echo "duration=$DURATION" >> $GITHUB_OUTPUT
 
+      - name: Check Slack configuration
+        run: |
+          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "⏭️ Slack webhook not configured — skipping notification"
+            exit 0
+          fi
+
       - name: Notify Slack on Failure
         uses: slackapi/slack-github-action@v1.25.0
         with:
