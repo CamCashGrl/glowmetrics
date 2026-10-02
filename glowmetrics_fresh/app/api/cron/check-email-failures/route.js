@@ -3,18 +3,31 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+async function logEmail(supabase, emailType, recipient, subject, status, resendResponse, errorMessage) {
+  try {
+    await supabase.from('email_logs').insert({
+      email_type: emailType,
+      recipient,
+      subject,
+      status,
+      resend_response: resendResponse,
+      error_message: errorMessage,
+    })
+  } catch (err) {
+    console.error('[logEmail] Failed to log email:', err.message)
+  }
+}
 
-async function sendAlert(subject, text) {
+async function sendAlert(supabase, emailType, subject, text) {
   if (!process.env.RESEND_API_KEY) {
     console.error('[sendAlert] RESEND_API_KEY not set')
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'failed', null, 'Missing RESEND_API_KEY')
     return false
   }
 
   try {
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'pending', null, null)
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -29,14 +42,30 @@ async function sendAlert(subject, text) {
       }),
     })
 
-    return response.ok
+    const resendResponse = await response.json()
+
+    if (response.ok && resendResponse.id) {
+      await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'sent', resendResponse, null)
+      console.log(`[sendAlert] Email sent successfully: ${resendResponse.id}`)
+      return true
+    } else {
+      await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'failed', resendResponse, resendResponse.message || 'Unknown error')
+      console.error(`[sendAlert] Resend API error: ${resendResponse.message}`)
+      return false
+    }
   } catch (e) {
+    await logEmail(supabase, emailType, 'daphneoncam@gmail.com', subject, 'failed', null, e.message)
     console.error(`[sendAlert] Exception: ${e.message}`)
     return false
   }
 }
 
 export async function GET() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data: failedEmails, error } = await supabase
@@ -80,6 +109,8 @@ export async function GET() {
   alertText += 'SELECT * FROM email_logs WHERE status=\'failed\' ORDER BY created_at DESC LIMIT 50;'
 
   const alertSent = await sendAlert(
+    supabase,
+    'email_failures',
     `🚨 Email Delivery Failures - ${new Date().toISOString().split('T')[0]}`,
     alertText
   )
