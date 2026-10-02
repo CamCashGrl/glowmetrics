@@ -812,13 +812,7 @@ export function identifyWhales(tips, meaningfulSessions = [], userTz = 'UTC') {
   const fanMap = {}
   tips.forEach(t => {
     const key = fanKey(t.platform, t.username)
-    if (!fanMap[key]) {
-      const normalized = (t.username || '')
-        .trim()
-        .toLowerCase()
-        .replace(/^@+/, '')
-      fanMap[key] = { username: normalized, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] }
-    }
+    if (!fanMap[key]) { fanMap[key] = { username: t.username, totalUSD: 0, totalTokens: 0, tipCount: 0, tips: [], platform: t.platform, tipNotes: [] } }
     fanMap[key].totalUSD += t.usd || 0
     fanMap[key].totalTokens += t.tokens || 0
     fanMap[key].tipCount += 1
