@@ -62,6 +62,36 @@
   // into it) counts once. Maps a counted line node -> its tip key (fan+amount).
   let countedLines = new WeakMap();
 
+  // FIX E1/E2: Track cross-batch remounts more carefully.
+  // When a removal and addition of the same key happen in DIFFERENT batches AND
+  // at the same DOM location, it's a remount (virtualized scroll, tab switch).
+  // But when the same key is added after a different location, it's a new tip.
+  // We track (batchId, key, location) tuples to distinguish these.
+  let lastMutationBatchId = 0;
+  const recentRemovals = []; // array of { batchId, key, target, prevSibling }
+
+  function trackRemoval(key, target, prevSibling) {
+    // Keep only recent removals (from the last 2 batches) to avoid unbounded growth
+    const keepBatchId = lastMutationBatchId - 1;
+    for (let i = recentRemovals.length - 1; i >= 0; i--) {
+      if (recentRemovals[i].batchId < keepBatchId) {
+        recentRemovals.splice(i, 1);
+      }
+    }
+    recentRemovals.push({ batchId: lastMutationBatchId, key, target, prevSibling });
+  }
+
+  function wasRecentlyRemovedAtSameSpot(key, target, prevSibling) {
+    // Check if this key was removed in a recent batch at the same DOM location.
+    // If so, it's a remount. If it was removed at a different location, it's a new tip.
+    for (const r of recentRemovals) {
+      if (r.key === key && r.target === target && r.prevSibling === prevSibling) {
+        return true; // Same location = remount
+      }
+    }
+    return false; // Different location or not recently removed
+  }
+
   // A single inserted node holding 2+ tip lines is a history replay or a
   // re-render of existing chat, not new tips arriving (platforms append live
   // messages one line at a time). Those lines are marked as seen, not counted.
@@ -174,12 +204,16 @@
   // Every distinct tip line inside `node`, each as the deepest element that
   // still holds the whole tip. A line <div><b>Bob</b> tipped 50 tokens</div>
   // is one entry (the div); a wrapper holding two such lines is two entries.
+  // Returns array of { el, tip, text, depthLimited? }.
   function tipLinesIn(node, depth = 0) {
     const clean = normalize(node.textContent);
     const tip = parseTip(clean);
     if (!tip) return [];
     if (node.nodeType !== Node.ELEMENT_NODE || depth >= MAX_TIP_LINE_DEPTH) {
-      return [{ el: node, tip, text: clean }];
+      // FIX B1: Mark if we're returning due to depth limit. This ancestor
+      // shouldn't be marked as "counted" for future blocking purposes because
+      // we stopped descending artificially, not because we found the true tip.
+      return [{ el: node, tip, text: clean, depthLimited: depth >= MAX_TIP_LINE_DEPTH }];
     }
     const childLines = [];
     for (const child of node.children) {
@@ -205,13 +239,20 @@
   // that line, not a new tip. "Same spot" is what separates this from chat
   // trimming, where the oldest line leaves the top while a new line is
   // appended at the bottom.
+  // FIX E1/E2: Also track removed keys with location for cross-batch remount detection.
   function buildReplacementPools(mutations) {
     const pools = [];
     for (const mut of mutations) {
       if (!mut.removedNodes.length) continue;
       const keys = [];
       for (const removed of mut.removedNodes) collectCountedKeys(removed, keys);
-      if (keys.length) pools.push({ mut, keys });
+      if (keys.length) {
+        pools.push({ mut, keys });
+        // Track removal location for cross-batch remount detection (same key at same spot).
+        for (const key of keys) {
+          trackRemoval(key, mut.target, mut.previousSibling);
+        }
+      }
     }
     return pools;
   }
@@ -280,7 +321,9 @@
   function handleAddedNode(added, mut, pools) {
     if (added.nodeType !== Node.ELEMENT_NODE && added.nodeType !== Node.TEXT_NODE) return;
     const line = lineFor(added);
-    if (!line || isCountedOrInsideCounted(line)) return;
+    // FIX C1: Don't process if lineFor returns observedRoot itself or null.
+    // This prevents marking the entire chat container as "counted".
+    if (!line || line === observedRoot || isCountedOrInsideCounted(line)) return;
 
     const lines = tipLinesIn(line);
     if (lines.length >= MIN_TIP_LINES_FOR_BULK) {
@@ -290,12 +333,23 @@
     }
 
     if (lines.length === 1) {
-      const { el, tip, text } = lines[0];
+      const { el, tip, text, depthLimited } = lines[0];
       if (isCountedOrInsideCounted(el)) return;
       const key = tipKey(tip);
-      countedLines.set(el, key);
+      // FIX B1: Don't mark depth-limited tips as "counted for blocking" since
+      // we artificially stopped descending. A container at max depth might have
+      // real tips nested deeper that we couldn't see.
+      if (!depthLimited) countedLines.set(el, key);
       if (takeReplacement(pools, mut, key)) {
         debugLog('re-rendered line, not a new tip:', text);
+        return;
+      }
+      // FIX E1/E2: Check if this tip key was recently removed and is being re-added
+      // at the SAME DOM location. That's a remount (virtualized scroll, tab switch),
+      // not a new tip. If it's at a different location, it's a new tip (after trim).
+      const line = lineFor(added);
+      if (wasRecentlyRemovedAtSameSpot(key, mut.target, mut.previousSibling)) {
+        debugLog('remounted tip, already counted:', text);
         return;
       }
       emitTip(tip);
@@ -304,7 +358,11 @@
 
     const enter = parseEnter(normalize(line.textContent));
     if (enter) {
-      countedLines.set(line, `enter\u0000${enter.username.toLowerCase()}`);
+      // FIX A1/A2: Don't mark the container as counted when an enter message
+      // appears, or later tips in the same container will be silently dropped.
+      // Enter messages are sent to background (for the UI) but shouldn't block
+      // tips that come in the same container afterward.
+      // Only send the event, don't mark as counted.
       chrome.runtime.sendMessage({ action: 'entered', username: enter.username });
     }
   }
@@ -314,6 +372,8 @@
     if (observer) observer.disconnect();
     observedRoot = node;
     observer = new MutationObserver((mutations) => {
+      // FIX E1/E2: Increment batch ID so cross-batch remount detection works.
+      lastMutationBatchId++;
       const pools = buildReplacementPools(mutations);
       for (const mut of mutations) {
         for (const added of mut.addedNodes) handleAddedNode(added, mut, pools);
