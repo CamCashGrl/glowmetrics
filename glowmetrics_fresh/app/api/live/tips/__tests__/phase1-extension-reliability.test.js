@@ -160,7 +160,12 @@ describe('Phase 1: Extension Reliability + Persistent Tip Queue + Canonical Pers
   });
 
   async function setupAndImportRoute(options = {}) {
+    jest.resetModules();
     jest.doMock('@supabase/supabase-js', () => ({ createClient: jest.fn(() => mockSupabase(options)) }));
+    const { POST } = await import('../route.js');
+    return { POST };
+  }
+
   // ============================================================================
   // 1. MIGRATION SAFETY
   // ============================================================================
@@ -213,8 +218,7 @@ describe('Phase 1: Extension Reliability + Persistent Tip Queue + Canonical Pers
   // ============================================================================
 
   test('2.1: RPC security - rejects unauthenticated requests', async () => {
-    jest.doMock('@supabase/supabase-js', () => ({
-    const { POST } = await setupAndImportRoute();
+    const { POST } = await setupAndImportRoute({ noAuth: true });
     const req = {
       headers: { get: () => null },
       json: async () => ({
@@ -502,8 +506,7 @@ describe('Phase 1: Extension Reliability + Persistent Tip Queue + Canonical Pers
   });
 
   test('8.2: Canonical persistence - PRO user gets history', async () => {
-    jest.doMock('@supabase/supabase-js', () => ({
-    const { POST } = await setupAndImportRoute();
+    const { POST } = await setupAndImportRoute({ userPlan: 'pro' });
     const req = {
       headers: { get: (h) => (h === 'authorization' ? 'Bearer faketoken' : null) },
       json: async () => ({
