@@ -152,9 +152,45 @@ export function buildAllPlatformMetrics(analytics) {
 // active bucket and require at least 3 active buckets — never by raw total.
 // =============================================
 
-export function buildTimeIntelligence(analytics) {
+export function buildTimeIntelligence(analytics, canonicalTiming = null) {
   if (!analytics) return null
 
+  // Prefer canonical data when available, fall back to engine data for backward compatibility
+  if (canonicalTiming?.global?.bestWindow) {
+    const bw = canonicalTiming.global.bestWindow
+    const bestHour = bw.localHour !== null ? { hour: bw.localHour, avg: bw.medianUsdPerHour, label: formatHour(bw.localHour) } : null
+    const bestDay = bw.localDay ? { day: bw.localDay, avg: bw.medianUsdPerHour } : null
+
+    // Build platformBestTimes from canonical byPlatform data
+    const platformBestTimes = {}
+    if (canonicalTiming.byPlatform) {
+      Object.entries(canonicalTiming.byPlatform).forEach(([platform, data]) => {
+        if (data.bestHour) {
+          const h = data.bestHour
+          platformBestTimes[platform] = {
+            hour: { hour: h.hour, avg: h.avgPerTip, label: formatHour(h.hour) },
+            bestDay: null,
+          }
+        }
+        // Add best day if available from dayData
+        if (data.dayData && data.dayData.length > 0) {
+          if (!platformBestTimes[platform]) platformBestTimes[platform] = { hour: null, bestDay: null }
+          const bestDayData = data.dayData[0]
+          platformBestTimes[platform].bestDay = { day: bestDayData.day, avg: bestDayData.avgPerTip }
+        }
+      })
+    }
+
+    return {
+      bestHour,
+      bestDay,
+      platformBestTimes,
+      confidence: bw.tier ? { level: bw.tier === 'high' ? 'High' : 'Medium', label: bw.tier } : { level: 'Low', label: 'Insufficient data' },
+      hasPattern: Boolean(bestHour || bestDay),
+    }
+  }
+
+  // Fallback to original engine data for backward compatibility
   const totalHours = (analytics.totalStreamMinutes || 0) / 60
   const confidence = calculateConfidence(analytics.meaningfulSessionCount || 0, totalHours)
 
@@ -165,8 +201,6 @@ export function buildTimeIntelligence(analytics) {
     bestDay: analytics.bestDay || null,
     platformBestTimes: analytics.platformBestTimes || {},
     confidence,
-    // The engine withholds bestHour/bestDay until a pattern is supportable, so
-    // their absence is the signal that there is nothing trustworthy to show.
     hasPattern: Boolean(analytics.bestHour || analytics.bestDay),
   }
 }

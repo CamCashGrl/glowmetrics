@@ -204,9 +204,10 @@ export default function CommandCenter({
   onMessageFan,
 }) {
   // ── All values READ from the frozen layer. No local aggregation. ──
-  const bestWindow   = analytics?.canonicalBestTimes?.bestWindow || null
-  const earlySignal  = analytics?.canonicalBestTimes?.earlySignal || null
-  const grid         = analytics?.canonicalBestTimes?.grid || []
+  // Use canonical time-performance data (replaces dead canonicalBestTimes references)
+  const canonicalTiming = analytics?.canonicalTimePerformance?.global || {}
+  const bestWindow   = canonicalTiming.bestWindow || null
+  const earlySignal  = canonicalTiming.earlySignal || null
   const overlap      = analytics?.bestWindowFanOverlap || null
   const hourlyRate   = analytics?.estimatedHourlyRate ?? 0
   const totalUSD     = analytics?.totalUSD ?? 0

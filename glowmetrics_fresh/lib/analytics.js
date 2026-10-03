@@ -61,7 +61,7 @@ export function toLocalDow(dateStr, tz) {
   } catch { return new Date(dateStr).getUTCDay() }
 }
 
-function toLocalDateStr(dateStr, tz) {
+export function toLocalDateStr(dateStr, tz) {
   try {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: tz
@@ -2104,6 +2104,225 @@ export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
   }
 
   return windowed
+}
+
+// ── CANONICAL HISTORICAL TIME-PERFORMANCE ENGINE ─────────────────────────────────
+// Single source of truth for all time-based performance data:
+// - Platform/day/hour earnings
+// - Session counts
+// - Distinct calendar dates (for 3-day confidence rule)
+// - Qualification status (meets 3+ date requirement)
+//
+// This replaces separate calculations in CommandCenter, Platforms, and StreamPlanner.
+// All time-based recommendations must consume this output.
+export function computeHistoricalTimePerformance(tips = [], tz = null, minQualifyingDates = 3) {
+  if (!tips.length) return { global: { bestWindow: null, earlySignal: null }, byPlatform: {} }
+
+  let userTz = tz
+  if (!userTz) {
+    if (typeof Intl === 'undefined') return { global: {}, byPlatform: {}, byPlatformDayHour: {} }
+    userTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  }
+
+  // ── GLOBAL TIME-PERFORMANCE (all platforms, creator-local time) ──────────────────
+  const hourData = {} // { hour: { dates: Set, revenue: number, tips: number, sessions: Set } }
+  const dayData = {} // { dayName: { dates: Set, revenue: number, tips: number, sessions: Set } }
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+
+  // ── PLATFORM-SPECIFIC TIME-PERFORMANCE ─────────────────────────────────────────
+  const platformData = {} // { platform: { hours: {...}, days: {...}, totalRevenue, totalTips } }
+  const platformDayHourData = {} // { "platform|day|hour": { dates, revenue, sessions, qualified } }
+
+  tips.forEach(t => {
+    const dateStr = toLocalDateStr(t.dateRaw || t.date_time, userTz)
+    const hour = toLocalHour(t.dateRaw || t.date_time, userTz)
+    const dow = DAY_NAMES[toLocalDow(t.dateRaw || t.date_time, userTz)]
+    const platform = t.platform || 'Chaturbate'
+    const revenue = t.usd || 0
+
+    // Global aggregation
+    if (!hourData[hour]) hourData[hour] = { dates: new Set(), revenue: 0, tips: 0, sessions: new Set() }
+    hourData[hour].dates.add(dateStr)
+    hourData[hour].revenue += revenue
+    hourData[hour].tips += 1
+
+    if (!dayData[dow]) dayData[dow] = { dates: new Set(), revenue: 0, tips: 0, sessions: new Set() }
+    dayData[dow].dates.add(dateStr)
+    dayData[dow].revenue += revenue
+    dayData[dow].tips += 1
+
+    // Platform-specific
+    if (!platformData[platform]) {
+      platformData[platform] = { hours: {}, days: {}, totalRevenue: 0, totalTips: 0 }
+    }
+    platformData[platform].totalRevenue += revenue
+    platformData[platform].totalTips += 1
+
+    if (!platformData[platform].hours[hour]) {
+      platformData[platform].hours[hour] = { dates: new Set(), revenue: 0, tips: 0 }
+    }
+    platformData[platform].hours[hour].dates.add(dateStr)
+    platformData[platform].hours[hour].revenue += revenue
+    platformData[platform].hours[hour].tips += 1
+
+    if (!platformData[platform].days[dow]) {
+      platformData[platform].days[dow] = { dates: new Set(), revenue: 0, tips: 0 }
+    }
+    platformData[platform].days[dow].dates.add(dateStr)
+    platformData[platform].days[dow].revenue += revenue
+    platformData[platform].days[dow].tips += 1
+
+    // Platform + Day + Hour combination
+    const key = `${platform}|${dow}|${hour}`
+    if (!platformDayHourData[key]) {
+      platformDayHourData[key] = { dates: new Set(), revenue: 0, tips: 0, platform, day: dow, hour }
+    }
+    platformDayHourData[key].dates.add(dateStr)
+    platformDayHourData[key].revenue += revenue
+    platformDayHourData[key].tips += 1
+  })
+
+  // ── COMPUTE AVERAGES AND QUALIFICATION STATUS ──────────────────────────────────
+  const qualifyHour = (h) => {
+    const data = hourData[h]
+    if (!data) return null
+    const isQualified = data.dates.size >= minQualifyingDates
+    return {
+      hour: Number(h),
+      distinctDates: data.dates.size,
+      revenue: parseFloat(data.revenue.toFixed(2)),
+      tips: data.tips,
+      avgPerTip: parseFloat((data.revenue / data.tips).toFixed(2)),
+      qualified: isQualified,
+      confidence: isQualified ? (data.dates.size >= 7 ? 'high' : 'medium') : 'insufficient'
+    }
+  }
+
+  const qualifyDay = (d) => {
+    const data = dayData[d]
+    if (!data) return null
+    const isQualified = data.dates.size >= minQualifyingDates
+    return {
+      day: d,
+      distinctDates: data.dates.size,
+      revenue: parseFloat(data.revenue.toFixed(2)),
+      tips: data.tips,
+      avgPerTip: parseFloat((data.revenue / data.tips).toFixed(2)),
+      qualified: isQualified,
+      confidence: isQualified ? (data.dates.size >= 7 ? 'high' : 'medium') : 'insufficient'
+    }
+  }
+
+  const qualifyPlatformHour = (p, h) => {
+    const data = platformData[p]?.hours[h]
+    if (!data) return null
+    const isQualified = data.dates.size >= minQualifyingDates
+    return {
+      hour: Number(h),
+      distinctDates: data.dates.size,
+      revenue: parseFloat(data.revenue.toFixed(2)),
+      tips: data.tips,
+      avgPerTip: parseFloat((data.revenue / data.tips).toFixed(2)),
+      qualified: isQualified,
+      confidence: isQualified ? (data.dates.size >= 7 ? 'high' : 'medium') : 'insufficient'
+    }
+  }
+
+  // Best/worst global hours (qualified only)
+  const qualifiedHours = Object.keys(hourData)
+    .map(qualifyHour)
+    .filter(h => h && h.qualified)
+    .sort((a, b) => b.avgPerTip - a.avgPerTip)
+
+  const bestHourGlobal = qualifiedHours[0] || null
+  const bestDayGlobal = Object.keys(dayData)
+    .map(qualifyDay)
+    .filter(d => d && d.qualified)
+    .sort((a, b) => b.avgPerTip - a.avgPerTip)[0] || null
+
+  // Compute best window (day + hour combination) for CommandCenter hero
+  // Looks for the highest-revenue platform in the best-hour bucket
+  const bestWindow = (() => {
+    if (!bestHourGlobal || !bestDayGlobal) return null
+
+    const dayHourKey = `${bestDayGlobal.day}|${bestHourGlobal.hour}`
+    const platformInWindow = Object.entries(platformData)
+      .map(([p, pData]) => {
+        const hData = pData.hours[bestHourGlobal.hour]
+        return hData ? { platform: p, avgPerTip: hData.revenue / hData.tips, ...hData } : null
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.avgPerTip - a.avgPerTip)[0]
+
+    return {
+      localHour: bestHourGlobal.hour,
+      localDay: bestDayGlobal.day,
+      topPlatform: platformInWindow?.platform || null,
+      medianUsdPerHour: bestHourGlobal.avgPerTip,
+      sessionCount: bestHourGlobal.tips,
+      tier: bestHourGlobal.confidence === 'high' ? 'high' : bestHourGlobal.confidence === 'medium' ? 'supported' : 'promising',
+      distinctDates: bestHourGlobal.distinctDates,
+      qualified: true,
+    }
+  })()
+
+  // Early signal (insufficient data case) — use the best unqualified option
+  const earlySignal = (() => {
+    if (bestWindow) return null // We have a qualified window, no early signal needed
+
+    const allHours = Object.keys(hourData).map(qualifyHour).filter(h => h && h.distinctDates > 0).sort((a, b) => b.avgPerTip - a.avgPerTip)[0]
+    if (!allHours) return null
+
+    return {
+      localHour: allHours.hour,
+      localDay: bestDayGlobal?.day || 'Monday', // Use best day if available, else fallback
+      sessionCount: allHours.tips,
+      distinctDates: allHours.distinctDates,
+    }
+  })()
+
+  return {
+    global: {
+      bestHour: bestHourGlobal,
+      bestDay: bestDayGlobal,
+      bestWindow, // CommandCenter hero: the day+hour recommendation
+      earlySignal, // CommandCenter fallback: insufficient data case
+      hourData: Object.keys(hourData).map(qualifyHour),
+      dayData: Object.keys(dayData).map(qualifyDay),
+      minQualifyingDates
+    },
+    byPlatform: Object.keys(platformData).reduce((acc, p) => {
+      const pData = platformData[p]
+      const qualifiedPHours = Object.keys(pData.hours)
+        .map(h => qualifyPlatformHour(p, h))
+        .filter(h => h && h.qualified)
+        .sort((a, b) => b.avgPerTip - a.avgPerTip)
+
+      acc[p] = {
+        totalRevenue: parseFloat(pData.totalRevenue.toFixed(2)),
+        totalTips: pData.totalTips,
+        bestHour: qualifiedPHours[0] || null,
+        hourData: qualifiedPHours,
+        dayData: Object.keys(pData.days)
+          .map(d => {
+            const data = pData.days[d]
+            const isQualified = data.dates.size >= minQualifyingDates
+            return {
+              day: d,
+              distinctDates: data.dates.size,
+              revenue: parseFloat(data.revenue.toFixed(2)),
+              tips: data.tips,
+              avgPerTip: parseFloat((data.revenue / data.tips).toFixed(2)),
+              qualified: isQualified,
+              confidence: isQualified ? (data.dates.size >= 7 ? 'high' : 'medium') : 'insufficient'
+            }
+          })
+          .filter(d => d.qualified)
+          .sort((a, b) => b.avgPerTip - a.avgPerTip)
+      }
+      return acc
+    }, {})
+  }
 }
 
 // ── Window exclusion summary for teaser signal detection ──────────────────────────

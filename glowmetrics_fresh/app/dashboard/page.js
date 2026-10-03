@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, computeHistoricalTimePerformance } from "../../lib/analytics"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
@@ -2139,6 +2139,13 @@ export default function Dashboard() {
           // Apply 31-day rolling window for free users (per-platform, activity-anchored)
           const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31 })
           const result = runEngine(analysisTips, userTz)
+
+          // Compute canonical historical time-performance (single source of truth for all time-based analytics)
+          const canonicalTimePerformance = computeHistoricalTimePerformance(analysisTips, userTz, 3)
+
+          // Attach to analytics object so CommandCenter, Platforms, StreamPlanner all consume same source
+          result.canonicalTimePerformance = canonicalTimePerformance
+
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
@@ -4024,6 +4031,7 @@ const stopImportMessageRotation = () => {
             analytics={analytics}
             tips={tips}
             isPro={isPro}
+            canonicalTiming={analytics?.canonicalTimePerformance}
             onOpenPlanner={() => handleTabChange('planner')}
           />
         )}
@@ -6485,7 +6493,7 @@ const stopImportMessageRotation = () => {
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={analysisTips} isPro={isPro} />
+            : <StreamPlanner tips={analysisTips} isPro={isPro} tz={userTz} canonicalTiming={analytics?.canonicalTimePerformance} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
