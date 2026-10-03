@@ -56,6 +56,10 @@ async function restore() {
   if (data.session && data.user) {
     const token = typeof data.session === 'string' ? data.session : data.session?.access_token;
     if (token) session = { access_token: token, user: data.user };
+  } else {
+    // FIX R1/R1b: Sign-out clears storage but wasn't clearing in-memory session.
+    // Tips after sign-out would be credited to the old account if restored later.
+    session = null;
   }
 }
 
@@ -266,7 +270,12 @@ function withTipQueue(mutate) {
     await chrome.storage.local.set({ [TIP_QUEUE_KEY]: queue });
     return result;
   });
-  tipQueueChain = run.catch(() => {});
+  // FIX R5: Don't silently ignore storage errors with empty catch.
+  // Log them and re-throw so the caller can handle (retry with backoff, etc).
+  tipQueueChain = run.catch((e) => {
+    console.error('[CamCash] tip queue storage error:', e.message);
+    throw e;
+  });
   return run;
 }
 
@@ -302,7 +311,7 @@ function enqueueTip(payload, userId, displayKey) {
 // One send attempt. 401 gets one token refresh + immediate resend; after
 // that it stays retryable (the user may sign in again). 408/425/429/5xx and
 // network errors are retryable; any other 4xx is a permanent rejection.
-async function postQueuedTip(payload) {
+async function postQueuedTip(payload, expectedUserId) {
   // queuedMs is measured on this browser's clock alone (detection -> now),
   // so the server can place a delayed tip in time without trusting our clock.
   const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
@@ -322,7 +331,10 @@ async function postQueuedTip(payload) {
     res = await doPost();
     if (res.status === 401) {
       const refreshed = await refreshSession();
-      if (refreshed) res = await doPost();
+      // FIX R2: Only retry if we're still the same user. If another account
+      // signed in, we would send this tip with the wrong token.
+      if (refreshed && session?.user?.id === expectedUserId) res = await doPost();
+      else return { outcome: 'retry', reason: 'account mismatch on refresh' };
     }
   } catch (e) {
     return { outcome: 'retry', offline: true, reason: `network: ${e.message}` };
@@ -371,32 +383,60 @@ async function flushTipQueue() {
       const userId = session?.user?.id;
       if (!userId || Date.now() < flushPausedUntil) break;
 
-      const due = await withTipQueue((queue) => queue
-        .filter((i) => i.status === 'pending' && i.userId === userId && i.nextAttemptAt <= Date.now())
-        .sort((a, b) => a.createdAt - b.createdAt)
-        .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey, userId: i.userId })));
+      let due = [];
+      try {
+        due = await withTipQueue((queue) => {
+          const now = Date.now();
+          // FIX R3: Backward clock step could stall the queue forever.
+          // If nextAttemptAt is in the future by > 1 hour, reset it (likely a clock issue).
+          for (const item of queue) {
+            if (item.status === 'pending' && item.nextAttemptAt > now + 3600000) {
+              item.nextAttemptAt = now;
+            }
+          }
+          return queue
+            .filter((i) => i.status === 'pending' && i.userId === userId && i.nextAttemptAt <= now)
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey, userId: i.userId }));
+        });
+      } catch (e) {
+        // FIX R5: Storage error — don't loop immediately. Pause for 5s backoff.
+        console.error('[CamCash] flush paused due to storage error:', e.message);
+        flushPausedUntil = Date.now() + 5000;
+        break;
+      }
 
       for (const item of due) {
         if (session?.user?.id !== item.userId) break;
-        const result = await postQueuedTip(item.payload);
+        // FIX R2: Pass userId to postQueuedTip so 401 refresh validates we're still
+        // the right account. Otherwise if account B signs in while A's tip is in flight,
+        // refreshSession() reads B's token and sends A's tip with B's token.
+        const result = await postQueuedTip(item.payload, item.userId);
         let nextAttemptAt = 0;
-        await withTipQueue((queue) => {
-          const idx = queue.findIndex((i) => i.id === item.id);
-          if (idx === -1) return;
-          const cur = queue[idx];
-          cur.attempts += 1;
-          cur.lastAttemptAt = Date.now();
-          if (result.outcome === 'synced') { queue.splice(idx, 1); return; }
-          cur.lastError = result.reason;
-          if (result.outcome === 'failed') {
-            cur.status = 'failed';
-            console.error('[CamCash] tip permanently rejected:', item.id, result.reason);
-            pruneFailedTips(queue);
-            return;
-          }
-          cur.nextAttemptAt = Date.now() + retryDelayMs(cur.attempts);
-          nextAttemptAt = cur.nextAttemptAt;
-        });
+        try {
+          await withTipQueue((queue) => {
+            const idx = queue.findIndex((i) => i.id === item.id);
+            if (idx === -1) return;
+            const cur = queue[idx];
+            cur.attempts += 1;
+            cur.lastAttemptAt = Date.now();
+            if (result.outcome === 'synced') { queue.splice(idx, 1); return; }
+            cur.lastError = result.reason;
+            if (result.outcome === 'failed') {
+              cur.status = 'failed';
+              console.error('[CamCash] tip permanently rejected:', item.id, result.reason);
+              pruneFailedTips(queue);
+              return;
+            }
+            cur.nextAttemptAt = Date.now() + retryDelayMs(cur.attempts);
+            nextAttemptAt = cur.nextAttemptAt;
+          });
+        } catch (e) {
+          // FIX R5: Storage error mid-flush — pause and retry this tip later.
+          console.error('[CamCash] storage error updating queue:', e.message);
+          flushPausedUntil = Date.now() + 5000;
+          break;
+        }
         if (result.outcome === 'synced') await markDisplayRecordSynced(item.displayKey, result.data);
         // Offline or rate-limited: everything else would fail the same way,
         // so hold the whole queue until this item's retry time.
@@ -657,16 +697,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === TIP_QUEUE_ALARM) { await flushTipQueue(); return; }
   if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
-  if (alarm.name === 'live_heartbeat' && session) {
-    if (liveSession) {
-      await sendExtensionHeartbeat();
-      await fetchCoachingPrompt();
-    } else {
-      // No session currently tracked here — check whether one was started
-      // on another surface (the website) since we last knew. Without this,
-      // an extension that booted up before a website-started session began
-      // would never learn about it until its own restart or next login.
-      await restoreLiveSession();
+  if (alarm.name === 'live_heartbeat') {
+    // FIX R4: Await restorePromise so on cold start we have current session state,
+    // not stale. Otherwise heartbeat on restart reads old session or null.
+    await restorePromise;
+    if (session) {
+      if (liveSession) {
+        await sendExtensionHeartbeat();
+        await fetchCoachingPrompt();
+      } else {
+        // No session currently tracked here — check whether one was started
+        // on another surface (the website) since we last knew. Without this,
+        // an extension that booted up before a website-started session began
+        // would never learn about it until its own restart or next login.
+        await restoreLiveSession();
+      }
     }
   }
 });
