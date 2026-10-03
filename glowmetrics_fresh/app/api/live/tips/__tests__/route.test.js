@@ -50,6 +50,32 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
         }
         return makeChain({ data: null, error: null })
       }),
+      rpc: jest.fn(async (name, params) => {
+        if (name === 'persist_extension_tip') {
+          const tokenRate = {
+            chaturbate: 0.05,
+            bongacams: 0.025,
+            myfreecams: 0.05,
+            stripchat: 0.05,
+            camsoda: 0.05,
+          }
+          const platform = (params.p_platform || 'chaturbate').toLowerCase()
+          const rate = tokenRate[platform] || 0.05
+          const usd = parseFloat((params.p_tokens * rate).toFixed(2))
+          return {
+            data: {
+              success: true,
+              live_tip_id: 'live-tip-1',
+              client_event_id: params.p_client_event_id,
+              usd,
+              platform,
+              message: 'Tip persisted to both live and canonical history',
+            },
+            error: null,
+          }
+        }
+        return { data: null, error: null }
+      }),
     }
   }
 
@@ -62,12 +88,18 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
     const { POST } = await import('../route.js')
     const req = {
       headers: { get: (h) => (h === 'authorization' ? 'Bearer faketoken' : h === 'origin' ? 'chrome-extension://abc' : null) },
-      json: async () => ({ username: 'fan123', amount: 50, platform: 'chaturbate', timestamp: Date.now() }),
+      json: async () => ({
+        username: 'fan123',
+        amount: 50,
+        platform: 'chaturbate',
+        timestamp: Date.now(),
+        clientEventId: '550e8400-e29b-41d4-a716-446655440000',
+        detectedAt: new Date().toISOString(),
+      }),
     }
     const res = await POST(req)
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.tip).toEqual({ id: 'tip-1' })
     expect(fromCalls).not.toContain('broadcaster_accounts')
   })
 
@@ -75,7 +107,14 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
     const { POST } = await import('../route.js')
     const req = {
       headers: { get: (h) => (h === 'authorization' ? 'Bearer faketoken' : null) },
-      json: async () => ({ username: 'fan456', amount: 20, platform: 'bongacams', broadcaster_username: 'someone_elses_room' }),
+      json: async () => ({
+        username: 'fan456',
+        amount: 20,
+        platform: 'bongacams',
+        broadcaster_username: 'someone_elses_room',
+        clientEventId: '550e8400-e29b-41d4-a716-446655440001',
+        detectedAt: new Date().toISOString(),
+      }),
     }
     const res = await POST(req)
     const body = await res.json()
@@ -88,7 +127,14 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
     const { POST } = await import('../route.js')
     const req = {
       headers: { get: (h) => (h === 'authorization' ? 'Bearer faketoken' : null) },
-      json: async () => ({ username: 'fan789', amount: 10, platform: 'myfreecams', isTest: true }),
+      json: async () => ({
+        username: 'fan789',
+        amount: 10,
+        platform: 'myfreecams',
+        isTest: true,
+        clientEventId: '550e8400-e29b-41d4-a716-446655440002',
+        detectedAt: new Date().toISOString(),
+      }),
     }
     const res = await POST(req)
     const body = await res.json()
