@@ -11,9 +11,9 @@ BEGIN
   RAISE NOTICE 'PASS %', label;
 END $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION pg_temp.persist(u uuid, ev uuid, dk text, name text, tok int, usd numeric, plat text, at timestamptz)
+CREATE OR REPLACE FUNCTION pg_temp.persist(u uuid, ev uuid, dk text, name text, tok int, usd numeric, plat text, at timestamptz, qms bigint DEFAULT NULL)
 RETURNS jsonb AS $$
-  SELECT public.persist_extension_tip(u, ev, dk, name, tok, usd, plat, at);
+  SELECT public.persist_extension_tip(u, ev, dk, name, tok, usd, plat, at, qms);
 $$ LANGUAGE sql;
 
 SET client_min_messages = notice;
@@ -139,9 +139,64 @@ END $$;
 -- 12. Permissions: end users can never call it directly.
 DO $$
 BEGIN
-  PERFORM pg_temp.eq(has_function_privilege('authenticated', 'public.persist_extension_tip(uuid,uuid,text,text,integer,numeric,text,timestamptz)', 'EXECUTE'), false, '12a authenticated cannot execute');
-  PERFORM pg_temp.eq(has_function_privilege('anon', 'public.persist_extension_tip(uuid,uuid,text,text,integer,numeric,text,timestamptz)', 'EXECUTE'), false, '12b anon cannot execute');
-  PERFORM pg_temp.eq(has_function_privilege('service_role', 'public.persist_extension_tip(uuid,uuid,text,text,integer,numeric,text,timestamptz)', 'EXECUTE'), true, '12c service_role can execute');
+  PERFORM pg_temp.eq(has_function_privilege('authenticated', 'public.persist_extension_tip(uuid,uuid,text,text,integer,numeric,text,timestamptz,bigint)', 'EXECUTE'), false, '12a authenticated cannot execute');
+  PERFORM pg_temp.eq(has_function_privilege('anon', 'public.persist_extension_tip(uuid,uuid,text,text,integer,numeric,text,timestamptz,bigint)', 'EXECUTE'), false, '12b anon cannot execute');
+  PERFORM pg_temp.eq(has_function_privilege('service_role', 'public.persist_extension_tip(uuid,uuid,text,text,integer,numeric,text,timestamptz,bigint)', 'EXECUTE'), true, '12c service_role can execute');
+END $$;
+
+-- 13. The same clientEventId sent 10 times in a row: exactly 1 live + 1 canonical row.
+DO $$
+DECLARE u uuid := gen_random_uuid(); ev uuid := gen_random_uuid(); i int;
+BEGIN
+  INSERT INTO profiles VALUES (u, 'free', NULL);
+  FOR i IN 1..10 LOOP
+    PERFORM pg_temp.persist(u, ev, NULL, 'Retry', 100, 5.00, 'chaturbate', '2026-10-03 23:00:00.5+00', (i * 1000)::bigint);
+  END LOOP;
+  PERFORM pg_temp.eq((SELECT count(*) FROM live_tips WHERE user_id = u), 1::bigint, '13a 10 sends -> 1 live row');
+  PERFORM pg_temp.eq((SELECT count(*) FROM tips WHERE user_id = u), 1::bigint, '13b 10 sends -> 1 canonical row');
+  PERFORM pg_temp.eq((SELECT date_time FROM tips WHERE user_id = u), '2026-10-03 23:00:00.5+00'::timestamptz, '13c retries keep the original detection time');
+END $$;
+
+-- 14. A tip delayed in the extension queue is never credited to a session that started after it happened.
+DO $$
+DECLARE u uuid := gen_random_uuid(); s uuid := gen_random_uuid(); r jsonb;
+BEGIN
+  INSERT INTO profiles VALUES (u, 'free', NULL);
+  INSERT INTO live_sessions (id, user_id, status, started_at) VALUES (s, u, 'active', now() - interval '10 minutes');
+  r := pg_temp.persist(u, gen_random_uuid(), NULL, 'Late', 10, 0.50, 'chaturbate', now() - interval '20 minutes', 20 * 60 * 1000);
+  PERFORM pg_temp.eq(r->>'live_session_id', NULL::text, '14a tip queued 20 min (before a 10-min-old session) not credited to it');
+  PERFORM pg_temp.eq((SELECT count(*) FROM tips WHERE user_id = u AND username = 'Late'), 1::bigint, '14b late tip still saved to history');
+  r := pg_temp.persist(u, gen_random_uuid(), NULL, 'Recent', 10, 0.50, 'chaturbate', now() - interval '1 minute', 60 * 1000);
+  PERFORM pg_temp.eq((r->>'live_session_id')::uuid, s, '14c tip queued 1 min (inside the session) is credited');
+  r := pg_temp.persist(u, gen_random_uuid(), NULL, 'Now', 10, 0.50, 'chaturbate', now(), 0);
+  PERFORM pg_temp.eq((r->>'live_session_id')::uuid, s, '14d immediate tip is credited');
+  r := pg_temp.persist(u, gen_random_uuid(), 'k-legacy-attr', 'Old', 10, 0.50, 'chaturbate', now());
+  PERFORM pg_temp.eq((r->>'live_session_id')::uuid, s, '14e legacy (no queued_ms) keeps the original rule');
+  BEGIN
+    PERFORM pg_temp.persist(u, gen_random_uuid(), NULL, 'Neg', 10, 0.50, 'chaturbate', now(), -1);
+    RAISE EXCEPTION 'FAIL 14f: negative queued_ms accepted';
+  EXCEPTION WHEN SQLSTATE '22003' THEN RAISE NOTICE 'PASS 14f negative queued_ms rejected'; END;
+END $$;
+
+-- 15. Requested scenario: Alice $5, Bob $10, Bob $10 again (separate real tip), Alice $20,
+--     with an exact network retry of Bob's first tip and of Alice's last tip.
+DO $$
+DECLARE u uuid := gen_random_uuid(); s uuid := gen_random_uuid(); t timestamptz := now() - interval '3 minutes';
+  e1 uuid := gen_random_uuid(); e2 uuid := gen_random_uuid(); e3 uuid := gen_random_uuid(); e4 uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO profiles VALUES (u, 'free', NULL);
+  INSERT INTO live_sessions (id, user_id, status, started_at) VALUES (s, u, 'active', now() - interval '10 minutes');
+  PERFORM pg_temp.persist(u, e1, NULL, 'Alice', 100, 5.00,  'chaturbate', t, 0);
+  PERFORM pg_temp.persist(u, e2, NULL, 'Bob',   200, 10.00, 'chaturbate', t + interval '30 seconds', 0);
+  PERFORM pg_temp.persist(u, e2, NULL, 'Bob',   200, 10.00, 'chaturbate', t + interval '30 seconds', 5000);
+  PERFORM pg_temp.persist(u, e3, NULL, 'Bob',   200, 10.00, 'chaturbate', t + interval '31 seconds', 0);
+  PERFORM pg_temp.persist(u, e4, NULL, 'Alice', 400, 20.00, 'chaturbate', t + interval '60 seconds', 0);
+  PERFORM pg_temp.persist(u, e4, NULL, 'Alice', 400, 20.00, 'chaturbate', t + interval '60 seconds', 2000);
+  PERFORM pg_temp.eq((SELECT count(*) FROM tips WHERE user_id = u), 4::bigint, '15a 4 real tip events');
+  PERFORM pg_temp.eq((SELECT sum(usd) FROM tips WHERE user_id = u), 45.00::numeric, '15b total $45');
+  PERFORM pg_temp.eq((SELECT sum(usd) FROM tips WHERE user_id = u AND username = 'Alice'), 25.00::numeric, '15c Alice $25');
+  PERFORM pg_temp.eq((SELECT sum(usd) FROM tips WHERE user_id = u AND username = 'Bob'), 20.00::numeric, '15d Bob $20 (both identical tips)');
+  PERFORM pg_temp.eq((SELECT sum(usd) FROM live_tips WHERE user_id = u AND live_session_id = s), 45.00::numeric, '15e live session total $45');
 END $$;
 
 SELECT 'ALL PERSIST_EXTENSION_TIP SQL TESTS PASSED' AS result;

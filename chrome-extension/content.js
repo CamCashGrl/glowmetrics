@@ -52,9 +52,29 @@
 
   // ─── Tip detection state ────────────────────────────────────────────────────
   let observer  = null;
-  let seenMsgs  = new Set();
+  let observedRoot = null;
   let retryTimer = null;
   let broadcasterUsername = null;
+
+  // Dedup is per chat-line NODE, never per text: two separate lines that both
+  // read "Bob tipped 50 tokens" are two real tips and both count, while the
+  // same line node reported again (moved, re-attached, or more text appended
+  // into it) counts once. Maps a counted line node -> its tip key (fan+amount).
+  let countedLines = new WeakMap();
+
+  // A single inserted node holding 2+ tip lines is a history replay or a
+  // re-render of existing chat, not new tips arriving (platforms append live
+  // messages one line at a time). Those lines are marked as seen, not counted.
+  const MIN_TIP_LINES_FOR_BULK = 2;
+  const MAX_TIP_LINE_DEPTH = 8;
+
+  // Content script -> background delivery retries (service worker waking up
+  // or restarting). Same clientEventId every attempt; background dedups.
+  const DELIVERY_RETRY_MS = [500, 1000, 2000, 4000, 8000, 15000, 30000];
+
+  function debugLog(...args) {
+    try { if (localStorage.getItem('_cc_debug') === '1') console.log('[CamCash detect]', ...args); } catch (_) {}
+  }
 
   // ─── Broadcaster room detection (SECURITY FIX #285) ─────────────────────────
   // Detect the AUTHENTICATED CREATOR's username from the page to prevent
@@ -102,54 +122,201 @@
   detectBroadcasterUsername();
   setInterval(detectBroadcasterUsername, 5000);
 
-  function processText(text) {
-    if (!text || text.length < 5) return;
-    const clean = text.trim().replace(/\s+/g, ' ');
-    const key   = clean.toLowerCase();
-    if (seenMsgs.has(key)) return;
-    seenMsgs.add(key);
-    if (seenMsgs.size > 500) {
-      const arr = [...seenMsgs];
-      seenMsgs = new Set(arr.slice(arr.length - 200));
-    }
+  function normalize(text) {
+    return (text || '').trim().replace(/\s+/g, ' ');
+  }
 
+  function parseTip(clean) {
+    if (!clean || clean.length < 5) return null;
     const patterns = TIP_PATTERNS[platform] || TIP_PATTERNS.chaturbate;
     for (const pat of patterns) {
       const m = clean.match(pat);
       if (m) {
         const tokens = parseInt(m[2], 10);
         if (isNaN(tokens) || tokens <= 0) continue;
-        // SECURITY FIX #285: Include broadcaster_username so server can verify this is the user's own room
-        chrome.runtime.sendMessage({
-          action: 'tip',
-          username: m[1].trim(),
-          tokens,
-          platform,
-          broadcaster_username: broadcasterUsername,
-        });
-        return;
+        return { username: m[1].trim(), tokens };
       }
     }
+    return null;
+  }
 
+  function tipKey(tip) {
+    return `${tip.username.toLowerCase()}\u0000${tip.tokens}`;
+  }
+
+  function parseEnter(clean) {
+    if (!clean || clean.length < 5) return null;
     for (const pat of ENTER_PATTERNS) {
       const m = clean.match(pat);
-      if (m) {
-        chrome.runtime.sendMessage({ action: 'entered', username: m[1].trim() });
+      if (m) return { username: m[1].trim() };
+    }
+    return null;
+  }
+
+  // The element a newly added node belongs to: text appended into a line is
+  // judged as part of that whole line, not as a fragment on its own.
+  function lineFor(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const parent = node.parentElement;
+      if (!parent || parent === observedRoot) return node;
+      return parent;
+    }
+    return node.nodeType === Node.ELEMENT_NODE ? node : null;
+  }
+
+  function isCountedOrInsideCounted(node) {
+    for (let n = node; n && n !== observedRoot; n = n.parentNode) {
+      if (countedLines.has(n)) return true;
+    }
+    return false;
+  }
+
+  // Every distinct tip line inside `node`, each as the deepest element that
+  // still holds the whole tip. A line <div><b>Bob</b> tipped 50 tokens</div>
+  // is one entry (the div); a wrapper holding two such lines is two entries.
+  function tipLinesIn(node, depth = 0) {
+    const clean = normalize(node.textContent);
+    const tip = parseTip(clean);
+    if (!tip) return [];
+    if (node.nodeType !== Node.ELEMENT_NODE || depth >= MAX_TIP_LINE_DEPTH) {
+      return [{ el: node, tip, text: clean }];
+    }
+    const childLines = [];
+    for (const child of node.children) {
+      childLines.push(...tipLinesIn(child, depth + 1));
+    }
+    return childLines.length ? childLines : [{ el: node, tip, text: clean }];
+  }
+
+  // Keys of counted tip lines inside a removed subtree, read from each line's
+  // current text so badges/timestamps added after counting don't matter.
+  function collectCountedKeys(node, out) {
+    if (countedLines.has(node)) {
+      const tip = parseTip(normalize(node.textContent));
+      out.push(tip ? tipKey(tip) : countedLines.get(node));
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    for (const child of node.children) collectCountedKeys(child, out);
+  }
+
+  // A counted tip line removed and a line for the same fan+amount inserted at
+  // the same spot in the same mutation batch is the platform re-rendering
+  // that line, not a new tip. "Same spot" is what separates this from chat
+  // trimming, where the oldest line leaves the top while a new line is
+  // appended at the bottom.
+  function buildReplacementPools(mutations) {
+    const pools = [];
+    for (const mut of mutations) {
+      if (!mut.removedNodes.length) continue;
+      const keys = [];
+      for (const removed of mut.removedNodes) collectCountedKeys(removed, keys);
+      if (keys.length) pools.push({ mut, keys });
+    }
+    return pools;
+  }
+
+  function takeReplacement(pools, addMut, key) {
+    for (const pool of pools) {
+      const r = pool.mut;
+      const sameSpot = r === addMut || (
+        r.target === addMut.target &&
+        (r.previousSibling === addMut.previousSibling || r.nextSibling === addMut.nextSibling)
+      );
+      if (!sameSpot) continue;
+      const i = pool.keys.indexOf(key);
+      if (i !== -1) { pool.keys.splice(i, 1); return true; }
+    }
+    return false;
+  }
+
+  function newEventId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  }
+
+  // Background replies only after the tip is written to its persistent
+  // queue. No reply / lastError means the service worker wasn't reachable
+  // (starting up, restarting) — resend the SAME event until it is.
+  function deliverTip(msg, attempt = 0) {
+    try {
+      chrome.runtime.sendMessage(msg, (reply) => {
+        const err = chrome.runtime.lastError;
+        if (!err && reply) return;
+        if (attempt >= DELIVERY_RETRY_MS.length) {
+          debugLog('gave up delivering tip to background', msg.clientEventId, err?.message);
+          return;
+        }
+        setTimeout(() => deliverTip(msg, attempt + 1), DELIVERY_RETRY_MS[attempt]);
+      });
+    } catch (e) {
+      // Extension was reloaded/updated under this page; this script's
+      // context is gone and nothing can reach the new background from here.
+      debugLog('extension context unavailable, tip not delivered', msg.clientEventId, e.message);
+    }
+  }
+
+  function emitTip(tip) {
+    const msg = {
+      action: 'tip',
+      username: tip.username,
+      tokens: tip.tokens,
+      platform,
+      // SECURITY FIX #285: Include broadcaster_username so server can verify this is the user's own room
+      broadcaster_username: broadcasterUsername,
+      // Identity of THIS observed tip, fixed at detection and reused by every
+      // retry all the way to the server's idempotency check.
+      clientEventId: newEventId(),
+      detectedAt: new Date().toISOString(),
+    };
+    debugLog('tip', msg.username, msg.tokens, msg.clientEventId);
+    deliverTip(msg);
+  }
+
+  function handleAddedNode(added, mut, pools) {
+    if (added.nodeType !== Node.ELEMENT_NODE && added.nodeType !== Node.TEXT_NODE) return;
+    const line = lineFor(added);
+    if (!line || isCountedOrInsideCounted(line)) return;
+
+    const lines = tipLinesIn(line);
+    if (lines.length >= MIN_TIP_LINES_FOR_BULK) {
+      for (const l of lines) countedLines.set(l.el, tipKey(l.tip));
+      debugLog('bulk insert of', lines.length, 'tip lines treated as history/re-render, not counted');
+      return;
+    }
+
+    if (lines.length === 1) {
+      const { el, tip, text } = lines[0];
+      if (isCountedOrInsideCounted(el)) return;
+      const key = tipKey(tip);
+      countedLines.set(el, key);
+      if (takeReplacement(pools, mut, key)) {
+        debugLog('re-rendered line, not a new tip:', text);
         return;
       }
+      emitTip(tip);
+      return;
+    }
+
+    const enter = parseEnter(normalize(line.textContent));
+    if (enter) {
+      countedLines.set(line, `enter\u0000${enter.username.toLowerCase()}`);
+      chrome.runtime.sendMessage({ action: 'entered', username: enter.username });
     }
   }
 
   // ─── DOM observation ────────────────────────────────────────────────────────
   function observeNode(node) {
     if (observer) observer.disconnect();
+    observedRoot = node;
     observer = new MutationObserver((mutations) => {
+      const pools = buildReplacementPools(mutations);
       for (const mut of mutations) {
-        for (const added of mut.addedNodes) {
-          if (added.nodeType === Node.ELEMENT_NODE || added.nodeType === Node.TEXT_NODE) {
-            processText(added.textContent);
-          }
-        }
+        for (const added of mut.addedNodes) handleAddedNode(added, mut, pools);
       }
     });
     observer.observe(node, { childList: true, subtree: true });

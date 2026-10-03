@@ -66,7 +66,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { username, amount, platform, timestamp, isTest, clientEventId, detectedAt } = body;
+    const { username, amount, platform, timestamp, isTest, clientEventId, detectedAt, queuedMs } = body;
 
     if (!username || !amount || !platform) {
       const missingFields = [!username && 'username', !amount && 'amount', !platform && 'platform'].filter(Boolean).join(', ');
@@ -84,6 +84,16 @@ export async function POST(req) {
 
     if (clientEventId !== undefined && clientEventId !== null && !isUuid(clientEventId)) {
       return Response.json({ error: 'clientEventId must be a UUID' }, { status: 400, headers: cors });
+    }
+
+    // How long the tip waited in the extension's retry queue (extension
+    // clock only). Absent from legacy builds, which never queue.
+    let queuedMsValue = null;
+    if (queuedMs !== undefined && queuedMs !== null) {
+      if (!Number.isFinite(queuedMs) || queuedMs < 0) {
+        return Response.json({ error: 'queuedMs must be a non-negative number' }, { status: 400, headers: cors });
+      }
+      queuedMsValue = Math.round(queuedMs);
     }
 
     // Room-ownership verification (#285) is reverted here: the extension has
@@ -143,6 +153,7 @@ export async function POST(req) {
         p_usd: usd,
         p_platform: platform.toLowerCase(),
         p_event_at: new Date(eventAt).toISOString(),
+        p_queued_ms: queuedMsValue,
       }
     );
 

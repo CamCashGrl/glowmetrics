@@ -19,8 +19,16 @@
 --
 -- USD is computed by the route from lib/constants.js tokenRate() (single
 -- source of truth for platform rates) and passed in as p_usd.
+--
+-- p_queued_ms: how long the tip sat in the extension's retry queue before
+-- this send, measured entirely on the extension's own clock (so client clock
+-- skew cancels out). It places the event on the SERVER clock so a tip
+-- delayed by an outage is never credited to a session that started after it
+-- happened. NULL (legacy builds, which send immediately) keeps the original
+-- attribution rule unchanged.
 
 DROP FUNCTION IF EXISTS public.persist_extension_tip(uuid, text, integer, text, text, timestamptz, timestamptz);
+DROP FUNCTION IF EXISTS public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz);
 
 CREATE OR REPLACE FUNCTION public.persist_extension_tip(
   p_user_id uuid,
@@ -30,7 +38,8 @@ CREATE OR REPLACE FUNCTION public.persist_extension_tip(
   p_tokens integer,
   p_usd numeric,
   p_platform text,
-  p_event_at timestamptz
+  p_event_at timestamptz,
+  p_queued_ms bigint DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -63,6 +72,9 @@ BEGIN
   IF p_event_at IS NULL THEN
     RAISE EXCEPTION 'event time is required' USING ERRCODE = '22004';
   END IF;
+  IF p_queued_ms IS NOT NULL AND p_queued_ms < 0 THEN
+    RAISE EXCEPTION 'queued_ms must be >= 0' USING ERRCODE = '22003';
+  END IF;
 
   -- Serialize concurrent submissions of the same event (e.g. a retry that
   -- overlaps a slow first attempt) so the existence check below is reliable.
@@ -90,11 +102,15 @@ BEGIN
   END IF;
 
   -- Same attribution rule as the pre-Phase-1 route: the caller's most recent
-  -- 'active' or 'needs_resolution' session, never 'paused'.
+  -- 'active' or 'needs_resolution' session, never 'paused'. A queued tip is
+  -- only credited if that session had already started when the tip happened
+  -- (30s grace for request latency).
   SELECT id INTO v_session_id
   FROM public.live_sessions
   WHERE user_id = p_user_id
     AND status IN ('active', 'needs_resolution')
+    AND (p_queued_ms IS NULL
+         OR started_at <= now() - make_interval(secs => p_queued_ms / 1000.0) + interval '30 seconds')
   ORDER BY started_at DESC
   LIMIT 1;
 
@@ -142,7 +158,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz)
+REVOKE ALL ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz, bigint)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz)
+GRANT EXECUTE ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz, bigint)
   TO service_role;

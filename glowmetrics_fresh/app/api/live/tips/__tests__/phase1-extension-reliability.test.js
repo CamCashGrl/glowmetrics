@@ -142,6 +142,23 @@ describe('new extension payload (with clientEventId)', () => {
     expect(retry.body.duplicate).toBe(true)
   })
 
+  test('queuedMs from the extension queue is passed through for session attribution', async () => {
+    await post({ username: 'Bob', amount: 200, platform: 'chaturbate', clientEventId: EV, detectedAt: OLD_EXT_TS, queuedMs: 65000.4 })
+    expect(rpcCalls[0].p_queued_ms).toBe(65000)
+    expect(rpcCalls[0].p_event_at).toBe(OLD_EXT_TS)
+  })
+
+  test('legacy payloads send no queuedMs (original attribution rule)', async () => {
+    await post(oldExtensionPayload())
+    expect(rpcCalls[0].p_queued_ms).toBeNull()
+  })
+
+  test('negative or non-numeric queuedMs is rejected before any write', async () => {
+    expect((await post({ username: 'Bob', amount: 200, platform: 'chaturbate', clientEventId: EV, queuedMs: -5 })).status).toBe(400)
+    expect((await post({ username: 'Bob', amount: 200, platform: 'chaturbate', clientEventId: EV, queuedMs: 'soon' })).status).toBe(400)
+    expect(rpcCalls).toHaveLength(0)
+  })
+
   test('non-UUID clientEventId is rejected before any write', async () => {
     const { status } = await post({ username: 'Bob', amount: 200, platform: 'chaturbate', clientEventId: 'abc' })
     expect(status).toBe(400)

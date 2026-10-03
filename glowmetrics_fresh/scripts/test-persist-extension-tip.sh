@@ -20,7 +20,7 @@ U=00000000-0000-0000-0000-0000000000c1
 EV=cccccccc-0000-4000-8000-000000000001
 run -c "INSERT INTO profiles VALUES ('$U','free',NULL)"
 for i in $(seq 1 10); do
-  run -c "SELECT public.persist_extension_tip('$U','$EV',NULL,'Racer',100,5.00,'chaturbate','2026-10-03 22:00:00+00')" >/dev/null &
+  run -c "SELECT public.persist_extension_tip('$U','$EV',NULL,'Racer',100,5.00,'chaturbate','2026-10-03 22:00:00+00',0)" >/dev/null &
 done
 wait
 LIVE=$(run -tAc "SELECT count(*) FROM live_tips WHERE user_id='$U'")
