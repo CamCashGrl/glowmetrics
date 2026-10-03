@@ -158,19 +158,25 @@ export function buildTimeIntelligence(analytics, canonicalTiming = null) {
   // Prefer canonical data when available, fall back to engine data for backward compatibility
   if (canonicalTiming?.global?.bestWindow) {
     const bw = canonicalTiming.global.bestWindow
-    const bestHour = bw.hour !== null ? { hour: bw.hour, avg: bw.earnings, label: formatHour(bw.hour) } : null
-    const bestDay = bw.day ? { day: bw.day, avg: bw.earnings } : null
+    const bestHour = bw.localHour !== null ? { hour: bw.localHour, avg: bw.medianUsdPerHour, label: formatHour(bw.localHour) } : null
+    const bestDay = bw.localDay ? { day: bw.localDay, avg: bw.medianUsdPerHour } : null
 
     // Build platformBestTimes from canonical byPlatform data
     const platformBestTimes = {}
     if (canonicalTiming.byPlatform) {
       Object.entries(canonicalTiming.byPlatform).forEach(([platform, data]) => {
-        if (data.bestWindow) {
-          const bw = data.bestWindow
+        if (data.bestHour) {
+          const h = data.bestHour
           platformBestTimes[platform] = {
-            hour: bw.hour !== null ? { hour: bw.hour, avg: bw.earnings, label: formatHour(bw.hour) } : null,
-            bestDay: bw.day ? { day: bw.day, avg: bw.earnings } : null,
+            hour: { hour: h.hour, avg: h.avgPerTip, label: formatHour(h.hour) },
+            bestDay: null,
           }
+        }
+        // Add best day if available from dayData
+        if (data.dayData && data.dayData.length > 0) {
+          if (!platformBestTimes[platform]) platformBestTimes[platform] = { hour: null, bestDay: null }
+          const bestDayData = data.dayData[0]
+          platformBestTimes[platform].bestDay = { day: bestDayData.day, avg: bestDayData.avgPerTip }
         }
       })
     }
@@ -179,7 +185,7 @@ export function buildTimeIntelligence(analytics, canonicalTiming = null) {
       bestHour,
       bestDay,
       platformBestTimes,
-      confidence: bw.confidence || { level: 'Low', label: 'Insufficient data' },
+      confidence: bw.tier ? { level: bw.tier === 'high' ? 'High' : 'Medium', label: bw.tier } : { level: 'Low', label: 'Insufficient data' },
       hasPattern: Boolean(bestHour || bestDay),
     }
   }
