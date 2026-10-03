@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
 import { platformLimitMessage } from '../../../../lib/planLimits';
+import { legacyDeduplicationKey, uuidV5, isUuid } from '../../../../lib/liveTips/legacyEventId';
 
 async function logLiveFailure(supabaseAdmin, userId, liveSessionId, failureType, severity, errorMessage, errorContext) {
   try {
@@ -76,13 +77,13 @@ export async function POST(req) {
       );
     }
 
-    // Phase 1: clientEventId is required for idempotent deduplication
-    if (!clientEventId) {
-      await logLiveFailure(supabaseAdmin, user.id, null, 'data_fetch_error', 'error', 'Missing clientEventId for idempotent deduplication', { received_fields: Object.keys(body) });
-      return Response.json(
-        { error: 'Missing clientEventId for idempotent deduplication' },
-        { status: 400, headers: cors }
-      );
+    const tokens = parseInt(amount, 10);
+    if (!Number.isFinite(tokens) || tokens < 1) {
+      return Response.json({ error: 'amount must be a positive whole number of tokens' }, { status: 400, headers: cors });
+    }
+
+    if (clientEventId !== undefined && clientEventId !== null && !isUuid(clientEventId)) {
+      return Response.json({ error: 'clientEventId must be a UUID' }, { status: 400, headers: cors });
     }
 
     // Room-ownership verification (#285) is reverted here: the extension has
@@ -109,33 +110,46 @@ export async function POST(req) {
       );
     }
 
-    // Phase 1: Use the extension's original detection timestamp and client event ID
-    const receivedAt = timestamp || new Date().toISOString();
-    const detectedAtFinal = detectedAt || receivedAt;
+    // Event time = when the extension saw the tip. Legacy builds send it as
+    // `timestamp` (set once at detection, resent unchanged on their 401 retry);
+    // new builds send `detectedAt`. Only a caller sending neither falls back to
+    // now — identical to the pre-Phase-1 route's behavior for that case.
+    const eventAt = detectedAt || timestamp || new Date().toISOString();
+    if (Number.isNaN(new Date(eventAt).getTime())) {
+      return Response.json({ error: 'Invalid tip timestamp' }, { status: 400, headers: cors });
+    }
 
-    // TODO: Consolidate token rate logic — move from /lib/constants.js tokenRate()
-    // into persist_extension_tip() RPC or a shared server-side utility. Currently
-    // the RPC duplicates rates to ensure correctness, but this creates maintenance
-    // burden (two sources of truth). Decide ownership after Phase 1 stabilizes.
+    // Idempotency identity. New builds supply clientEventId. Legacy builds
+    // supply none, so derive one deterministically from the pre-Phase-1
+    // deduplication_key: the same legacy event (incl. a retry) always maps to
+    // the same id, while two real identical tips seen at different
+    // milliseconds map to different ids. Never a random server-side id.
+    const isLegacyPayload = !clientEventId;
+    const deduplicationKey = isLegacyPayload
+      ? legacyDeduplicationKey(user.id, username, amount, platform, eventAt)
+      : null;
+    const eventId = isLegacyPayload ? uuidV5(deduplicationKey) : clientEventId;
 
-    // Phase 1: Call persist_extension_tip() RPC for atomic, idempotent persistence
+    const usd = parseFloat((tokens * tokenRate(platform)).toFixed(2));
+
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
       'persist_extension_tip',
       {
-        p_client_event_id: clientEventId,
-        p_username: username,
-        p_tokens: parseInt(amount, 10),
-        p_platform: platform,
-        p_broadcaster_username: null, // Legacy field, not used
-        p_received_at: receivedAt,
-        p_detected_at: detectedAtFinal,
+        p_user_id: user.id,
+        p_client_event_id: eventId,
+        p_deduplication_key: deduplicationKey,
+        p_username: username.trim(),
+        p_tokens: tokens,
+        p_usd: usd,
+        p_platform: platform.toLowerCase(),
+        p_event_at: new Date(eventAt).toISOString(),
       }
     );
 
     if (rpcError || !rpcResult?.success) {
-      console.error('[LIVE] RPC error:', rpcError || rpcResult?.error);
-      const errorMessage = rpcResult?.error || rpcError?.message || 'Failed to persist tip';
-      const errorCode = rpcResult?.error_code || rpcError?.code || 'UNKNOWN';
+      const errorMessage = rpcError?.message || 'persist_extension_tip returned no result';
+      const errorCode = rpcError?.code || 'UNKNOWN';
+      console.error('[LIVE] persist_extension_tip error:', errorCode, errorMessage);
 
       if (errorMessage.includes('PLATFORM_LIMIT_REACHED')) {
         await logLiveFailure(supabaseAdmin, user.id, null, 'save_error', 'critical', 'Platform limit reached during live tip insertion', { platform, error_code: errorCode });
@@ -146,17 +160,12 @@ export async function POST(req) {
         }, { status: 402, headers: cors });
       }
 
-      if (errorCode === '28000') {
-        // Not authenticated
-        return Response.json({ error: 'Not authenticated' }, { status: 401, headers: cors });
-      }
-
-      await logLiveFailure(supabaseAdmin, user.id, null, 'save_error', 'error', `Failed to persist tip via RPC: ${errorMessage}`, { platform, error_code: errorCode, client_event_id: clientEventId });
+      await logLiveFailure(supabaseAdmin, user.id, null, 'save_error', 'error', `Failed to persist tip: ${errorMessage}`, { platform, error_code: errorCode, client_event_id: eventId, legacy_payload: isLegacyPayload });
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
-    // Phase 1: ALL users get canonical history now (not Pro-only)
-    // The RPC already inserted to tips table, so always mark as savedToHistory
+    // Every plan now gets canonical history: the RPC wrote the tips row in the
+    // same transaction as the live row (or both already existed on a retry).
     const savedToHistory = true;
 
     // Fetch the live_tip from the database to return in response
@@ -177,8 +186,12 @@ export async function POST(req) {
         success: true,
         tip: liveTip,
         savedToHistory,
+        duplicate: !!rpcResult.duplicate,
         clientEventId: rpcResult.client_event_id,
-        message: `Tip from ${username} synced to live and history`
+        liveSessionId: rpcResult.live_session_id || null,
+        message: rpcResult.duplicate
+          ? `Tip from ${username} already recorded`
+          : `Tip from ${username} synced to live and history`
       },
       { headers: cors }
     );
