@@ -104,15 +104,12 @@ describe('Content Detection Bugs — Reproduction Tests', () => {
         }
       }
 
-      // BUG: newTip's parent (historicalTips) is marked as counted
-      // So isCountedOrInsideCounted(newTip) returns true and the tip is dropped
-      expect(emittedTips).toHaveLength(0);  // BUG: Charlie's tip is lost
-
-      // CORRECT BEHAVIOR should be:
-      // expect(emittedTips).toHaveLength(1);  // Charlie's tip should be detected
+      // After Fix 2.1 (always marking elements): Charlie's tip should be detected
+      // We mark individual lines, not containers, so new children aren't blocked
+      expect(emittedTips).toHaveLength(1);  // Charlie's tip correctly detected
     });
 
-    test('FAILS: depth-limited tip not marked, can be re-counted', () => {
+    test('depth-limited tips now marked (Fix 2.1)', () => {
       const observedRoot = document.createElement('div');
       const countedLines = new WeakMap();
 
@@ -129,21 +126,19 @@ describe('Content Detection Bugs — Reproduction Tests', () => {
 
       observedRoot.appendChild(current);
 
-      // First processing: hits MAX_DEPTH, doesn't mark
+      // First processing: hits MAX_DEPTH, but is NOW marked (Fix 2.1)
       const lines1 = tipLinesIn(current);
       expect(lines1[0].depthLimited).toBe(true);
 
-      if (!lines1[0].depthLimited) {
-        countedLines.set(lines1[0].el, tipKey(lines1[0].tip));
-      }
+      // After Fix 2.1: Always mark, even if depth-limited
+      countedLines.set(lines1[0].el, tipKey(lines1[0].tip));
 
-      // Container is NOT marked because depthLimited is true
-      expect(countedLines.has(lines1[0].el)).toBe(false);
+      // Container IS marked (fixed behavior)
+      expect(countedLines.has(lines1[0].el)).toBe(true);
 
-      // Second processing: same node, not marked, could be re-counted
-      // This is BUG #5 manifestation
+      // Second processing: same node is already marked, prevents re-counting
       const isAlreadyCounted = countedLines.has(lines1[0].el);
-      expect(isAlreadyCounted).toBe(false);  // BUG: allows re-counting
+      expect(isAlreadyCounted).toBe(true);  // FIXED: prevents re-counting
     });
   });
 

@@ -82,14 +82,17 @@
   }
 
   function wasRecentlyRemovedAtSameSpot(key, target, prevSibling) {
-    // Check if this key was removed in a recent batch at the same DOM location.
-    // If so, it's a remount. If it was removed at a different location, it's a new tip.
+    // Check if this key was removed in a recent batch at the same DOM location (target container).
+    // FIX 2.2: Don't compare prevSibling references — they become invalid after chat trimming.
+    // Instead, if the key (username+tokens) was removed from the same target container
+    // within the last batch, it's a remount (virtualized scroll, tab switch), not a new tip.
     for (const r of recentRemovals) {
-      if (r.key === key && r.target === target && r.prevSibling === prevSibling) {
-        return true; // Same location = remount
+      if (r.key === key && r.target === target) {
+        // Key was removed from this container recently — it's a remount
+        return true;
       }
     }
-    return false; // Different location or not recently removed
+    return false;
   }
 
   // A single inserted node holding 2+ tip lines is a history replay or a
@@ -336,10 +339,9 @@
       const { el, tip, text, depthLimited } = lines[0];
       if (isCountedOrInsideCounted(el)) return;
       const key = tipKey(tip);
-      // FIX B1: Don't mark depth-limited tips as "counted for blocking" since
-      // we artificially stopped descending. A container at max depth might have
-      // real tips nested deeper that we couldn't see.
-      if (!depthLimited) countedLines.set(el, key);
+      // FIX 2.1: Always mark the element, even if depth-limited.
+      // Depth-limited is informational only; prevents rescanning same node.
+      countedLines.set(el, key);
       if (takeReplacement(pools, mut, key)) {
         debugLog('re-rendered line, not a new tip:', text);
         return;

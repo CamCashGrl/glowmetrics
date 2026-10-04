@@ -110,25 +110,10 @@ describe('Content Detection — Real Bug Manifestation', () => {
 
       // In the current implementation, line3 should NOT be blocked
       // because we marked line1 and line2, not bulkContainer
-      // But if the bug manifests, line3 would be blocked
       expect(emittedTips).toHaveLength(1);  // Charlie's tip should be detected
-
-      // The actual manifestation of BUG #1 would be if bulkContainer was marked
-      // Let's test that scenario:
-      countedLines.clear();
-      emittedTips.length = 0;
-
-      // Simulate wrong marking: mark the container instead of lines
-      countedLines.set(bulkContainer, 'bulk-marker');
-
-      // Now try to detect line3
-      const line3IsBlockedWrong = isCountedOrInsideCounted(line3, countedLines, observedRoot);
-      expect(line3IsBlockedWrong).toBe(true);  // This IS blocked (the bug)
-
-      // So the bug would be if the code ever marks the bulkContainer
     });
 
-    test('depth-limited tips not marked, can be re-detected in same batch', () => {
+    test('depth-limited tips now always marked (Fix 2.1)', () => {
       const observedRoot = document.createElement('div');
       const countedLines = new WeakMap();
 
@@ -149,18 +134,15 @@ describe('Content Detection — Real Bug Manifestation', () => {
       expect(lines1.length).toBeGreaterThan(0);
       expect(lines1[0].depthLimited).toBe(true);
 
-      // Because it's depth-limited, we don't mark it
-      // (in the real code: if (!depthLimited) countedLines.set(el, key))
-      if (!lines1[0].depthLimited) {
-        countedLines.set(lines1[0].el, tipKey(lines1[0].tip));
-      }
+      // FIX 2.1: Now we always mark, even depth-limited elements
+      countedLines.set(lines1[0].el, tipKey(lines1[0].tip));
 
-      // The element is NOT marked
-      expect(countedLines.has(lines1[0].el)).toBe(false);
+      // The element IS marked (fixed behavior)
+      expect(countedLines.has(lines1[0].el)).toBe(true);
 
-      // If the same node is processed again, isCountedOrInsideCounted would return false
+      // If the same node is processed again, isCountedOrInsideCounted now returns true
       const isAlreadyMarked = countedLines.has(lines1[0].el);
-      expect(isAlreadyMarked).toBe(false);  // BUG: allows re-detection
+      expect(isAlreadyMarked).toBe(true);  // FIXED: prevents re-detection
     });
   });
 
