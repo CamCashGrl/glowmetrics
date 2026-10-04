@@ -2120,6 +2120,13 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+      // CHECKPOINT 1: Immediately after Supabase tips fetch
+      console.log('[DASH TRACE] tips fetch', {
+        count: allData?.length,
+        targetRows: allData?.filter(t =>
+          ['gutteraide', 'ekkel92', 'demboner'].includes(t.username)
+        )
+      })
       // Fetch live tips and merge into main analytics dataset
       // Live tips (real-time earnings from extension) are as important as CSV tips
       let allLiveTips = []
@@ -2154,7 +2161,23 @@ export default function Dashboard() {
         try {
           // Apply 31-day rolling window for free users (per-platform, activity-anchored)
           const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31 })
+          // CHECKPOINT 2: Immediately before runEngine()
+          console.log('[DASH TRACE] before engine', {
+            count: analysisTips.length,
+            targetRows: analysisTips.filter(t =>
+              ['gutteraide', 'ekkel92', 'demboner'].includes(t.username)
+            ),
+            rawUsdSum: analysisTips.reduce(
+              (sum, t) => sum + (Number(t.usd) || 0),
+              0
+            )
+          })
           const result = runEngine(analysisTips, userTz)
+          // CHECKPOINT 3: Immediately after runEngine()
+          console.log('[DASH TRACE] engine output', {
+            totalUSD: result?.totalUSD,
+            totalTokens: result?.totalTokens
+          })
           setAnalytics(result)
           lastEngineTipsFingerprintRef.current = { length: allData.length, lastId: allData[allData.length - 1]?.id ?? null }
         } catch (engineErr) {
@@ -2396,6 +2419,8 @@ const stopImportMessageRotation = () => {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
+  // CHECKPOINT 4: Rendered value
+  console.log('[DASH TRACE] rendered total', { analytics_totalUSD: analytics?.totalUSD, displayValue: totalRevenue })
   // Estimated $/Hour — imported CSVs only carry tip timestamps, never real stream
   // start/end times, so this is inferred from the gap between a session's first
   // and last recorded tip. analytics.estimatedHourlyRate is the single source of
