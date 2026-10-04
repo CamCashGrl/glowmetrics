@@ -37,7 +37,6 @@ const TAB_LOADING = (
 const AnalyticsCharts = dynamic(() => import('./AnalyticsCharts'), { ssr: false, loading: () => TAB_LOADING })
 const StreamPlanner = dynamic(() => import('./StreamPlanner'), { ssr: false, loading: () => TAB_LOADING })
 const MoneyMap = dynamic(() => import('./MoneyMap'), { ssr: false, loading: () => TAB_LOADING })
-const PrivateSessions = dynamic(() => import('./PrivateSessions'), { ssr: false, loading: () => TAB_LOADING })
 const DashboardGrowthCharts = dynamic(() => import('./DashboardGrowthCharts'), { ssr: false })
 const TokenCalculator = dynamic(() => import('../guides/cam-model-token-calculator/TokenCalculatorClient'), { ssr: false, loading: () => TAB_LOADING })
 
@@ -6474,14 +6473,6 @@ const stopImportMessageRotation = () => {
         )}
 
         {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
-        {activeTab === 'private' && (
-          <PrivateSessions
-            paidSessions={paidSessions}
-            tipsTotalUSD={analytics?.totalUSD ?? null}
-            liveTotalUSD={liveTipsTotalUSD}
-            onViewFan={viewFanProfile}
-          />
-        )}
         {activeTab === 'planner' && (
           _plannerLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
