@@ -182,29 +182,8 @@ export async function POST(req) {
     // Permanent history (dashboard analytics) is a Pro feature — live coaching
     // and the live tip feed above are free on every supported platform, but
     // only paid plans get tips written into the historical `tips` table.
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('plan')
-      .eq('id', user.id)
-      .maybeSingle();
-    const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
-
-    if (savedToHistory) {
-      const { error: historyError } = await supabaseAdmin.from('tips').insert({
-        user_id:   user.id,
-        username:  username.trim(),
-        tokens:    parseInt(amount, 10),
-        platform:  platform.toLowerCase(),
-        date_time: receivedAt,
-      });
-      if (historyError) {
-        console.warn('[LIVE] Failed to save tip to permanent history:', historyError);
-        await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'warning', `Failed to save to history: ${historyError.message}`, { platform, error_code: historyError.code });
-      }
-    }
-
     return Response.json(
-      { success: true, tip: data[0], savedToHistory, message: `Tip from ${username} synced` },
+      { success: true, tip: data[0], message: `Tip from ${username} synced` },
       { headers: cors }
     );
 
