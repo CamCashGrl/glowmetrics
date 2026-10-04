@@ -243,13 +243,18 @@
   // trimming, where the oldest line leaves the top while a new line is
   // appended at the bottom.
   // FIX E1/E2: Also track removed keys with location for cross-batch remount detection.
+  // FIX 4.1: Don't create replacement pools for bulk removals (2+ tips).
+  // Bulk removals are history/re-renders, not individual tips being replaced.
+  // Matching new tips against bulk keys causes identical-tip dedup bug.
   function buildReplacementPools(mutations) {
     const pools = [];
     for (const mut of mutations) {
       if (!mut.removedNodes.length) continue;
       const keys = [];
       for (const removed of mut.removedNodes) collectCountedKeys(removed, keys);
-      if (keys.length) {
+      // FIX 4.1: Only create pool if single tip removed (1 key)
+      // Bulk removals (2+ keys) are history/ui-state, not tip replacements
+      if (keys.length === 1) {
         pools.push({ mut, keys });
         // Track removal location for cross-batch remount detection (same key at same spot).
         for (const key of keys) {
