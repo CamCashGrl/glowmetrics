@@ -2419,8 +2419,16 @@ const stopImportMessageRotation = () => {
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   const totalRevenue = analytics?.totalUSD || 0
-  // CHECKPOINT 4: Rendered value
-  console.log('[DASH TRACE] rendered total', { analytics_totalUSD: analytics?.totalUSD, displayValue: totalRevenue })
+  // Store data in window object for debugging
+  if (typeof window !== 'undefined') {
+    window.__dashboardDebug = {
+      analytics_totalUSD: analytics?.totalUSD,
+      totalRevenue,
+      allTipsCount: tips?.length,
+      analyticsKeys: analytics ? Object.keys(analytics) : [],
+      timestamp: new Date().toISOString()
+    }
+  }
   // Estimated $/Hour — imported CSVs only carry tip timestamps, never real stream
   // start/end times, so this is inferred from the gap between a session's first
   // and last recorded tip. analytics.estimatedHourlyRate is the single source of
