@@ -1643,6 +1643,29 @@ export default function Dashboard() {
     }
   }
 
+  // ── SINGLE NORMALIZER FOR ALL TIP SOURCES ──────────────────────────────────
+  // Ensures consistent object shape and stable _id across initial load, realtime,
+  // and extension sources. Critical for deduplication.
+  const normalizeLiveTip = (tip, deliveryPath = 'unknown') => {
+    const id = tip.id || tip._id
+    if (!id) {
+      console.warn('normalizeLiveTip: tip has no id', tip)
+      return null
+    }
+    return {
+      _id:              id,
+      _isHistory:       tip._isHistory ?? false,
+      username:         tip.username || 'Unknown',
+      tokens:           parseInt(tip.tokens) || 0,
+      usd:              parseFloat(tip.usd) || 0,
+      normalizedRevenue: parseFloat(tip.usd) || parseFloat(((tip.tokens || 0) * tokenRate(tip.platform)).toFixed(2)),
+      sourceUsed:       tip.source || tip.sourceUsed || 'unknown',
+      timestamp:        tip.timestamp instanceof Date ? tip.timestamp : new Date(tip.timestamp || tip.received_at || Date.now()),
+      platform:         tip.platform || 'Unknown',
+      deliveryPath,     // track how this event arrived: 'initial_load', 'realtime', 'extension'
+    }
+  }
+
   // Counter bump when new tips arrive
   useEffect(() => {
     if (newTipCount > prevTipCountRef.current) {
@@ -1667,21 +1690,15 @@ export default function Dashboard() {
       if (processedTipIds.current.has(dedupKey)) return
       processedTipIds.current.add(dedupKey)
 
-      const tokens  = parseInt(tipEvent.tokens) || 0
-      const usd     = parseFloat(tipEvent.usd)  || 0
-      const normalized = {
-        _id:              dedupKey,
-        _isHistory:       false,
-        username:         tipEvent.username,
-        tokens,
-        usd,
-        normalizedRevenue: usd > 0 ? usd : parseFloat((tokens * tokenRate(tipEvent.platform)).toFixed(2)),
-        sourceUsed:       usd > 0 ? 'usd' : 'tokens',
-        timestamp:        new Date(tipEvent.timestamp || Date.now()),
-        platform:         tipEvent.platform || 'Unknown',
-        source:           'extension',
-      }
-      setLiveEvents(prev => [...prev, normalized])
+      const normalized = normalizeLiveTip({ ...tipEvent, id: tipEvent.id || dedupKey }, 'extension')
+      if (!normalized) return
+
+      console.debug('[liveEvents] extension tip', { revenue: normalized.normalizedRevenue, total: liveEvents.length + 1 })
+      setLiveEvents(prev => {
+        // Ensure no duplicate by ID
+        if (prev.some(e => e._id === normalized._id)) return prev
+        return [...prev, normalized]
+      })
       // Auto-activate live mode on first real tip
       setLiveActive(active => {
         if (!active) setLiveStartTime(prev => prev || new Date())
