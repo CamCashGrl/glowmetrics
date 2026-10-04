@@ -292,9 +292,9 @@ function enqueueTip(payload, userId, displayKey) {
     const now = Date.now();
     queue.push({
       id: payload.clientEventId,
-      // Only ever sent with this account's token — never re-attributed to a
-      // different account that signs in on the same browser later.
-      userId,
+      // clientEventId + detectedAt (original timestamp) are immutable idempotency keys.
+      // Queued tips are NOT locked to the CamCash account that queued them.
+      // If the user switches accounts, the queue flushes with the new account's token.
       payload,
       displayKey,
       status: 'pending',
@@ -311,7 +311,7 @@ function enqueueTip(payload, userId, displayKey) {
 // One send attempt. 401 gets one token refresh + immediate resend; after
 // that it stays retryable (the user may sign in again). 408/425/429/5xx and
 // network errors are retryable; any other 4xx is a permanent rejection.
-async function postQueuedTip(payload, expectedUserId) {
+async function postQueuedTip(payload) {
   // queuedMs is measured on this browser's clock alone (detection -> now),
   // so the server can place a delayed tip in time without trusting our clock.
   const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
@@ -331,10 +331,10 @@ async function postQueuedTip(payload, expectedUserId) {
     res = await doPost();
     if (res.status === 401) {
       const refreshed = await refreshSession();
-      // FIX R2: Only retry if we're still the same user. If another account
-      // signed in, we would send this tip with the wrong token.
-      if (refreshed && session?.user?.id === expectedUserId) res = await doPost();
-      else return { outcome: 'retry', reason: 'account mismatch on refresh' };
+      // Queued tips can flush under any authenticated account.
+      // clientEventId + detectedAt provide idempotency on the backend.
+      if (refreshed) res = await doPost();
+      else return { outcome: 'retry', reason: 'token refresh failed' };
     }
   } catch (e) {
     return { outcome: 'retry', offline: true, reason: `network: ${e.message}` };
@@ -395,9 +395,9 @@ async function flushTipQueue() {
             }
           }
           return queue
-            .filter((i) => i.status === 'pending' && i.userId === userId && i.nextAttemptAt <= now)
+            .filter((i) => i.status === 'pending' && i.nextAttemptAt <= now)
             .sort((a, b) => a.createdAt - b.createdAt)
-            .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey, userId: i.userId }));
+            .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey }));
         });
       } catch (e) {
         // FIX R5: Storage error — don't loop immediately. Pause for 5s backoff.
@@ -407,11 +407,9 @@ async function flushTipQueue() {
       }
 
       for (const item of due) {
-        if (session?.user?.id !== item.userId) break;
-        // FIX R2: Pass userId to postQueuedTip so 401 refresh validates we're still
-        // the right account. Otherwise if account B signs in while A's tip is in flight,
-        // refreshSession() reads B's token and sends A's tip with B's token.
-        const result = await postQueuedTip(item.payload, item.userId);
+        // Queued tips are not locked to the original CamCash account.
+        // Idempotency is guaranteed by clientEventId + detectedAt in persist_extension_tip.
+        const result = await postQueuedTip(item.payload);
         let nextAttemptAt = 0;
         try {
           await withTipQueue((queue) => {
@@ -455,7 +453,9 @@ async function scheduleTipQueueFlush() {
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
   const userId = session?.user?.id;
   const stored = await chrome.storage.local.get([TIP_QUEUE_KEY]);
-  const pending = (stored[TIP_QUEUE_KEY] || []).filter((i) => i.status === 'pending' && i.userId === userId);
+  // Queue flushes whenever ANY user is logged in, not just the user who queued the tips.
+  // Idempotency on backend ensures no duplicates across account switches.
+  const pending = (stored[TIP_QUEUE_KEY] || []).filter((i) => i.status === 'pending');
   if (!userId || pending.length === 0) {
     chrome.alarms.clear(TIP_QUEUE_ALARM);
     return;
