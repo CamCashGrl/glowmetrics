@@ -1559,6 +1559,7 @@ export default function Dashboard() {
   const firedAlertsLog     = useRef([])
   const phaseChangeLog     = useRef([])
   const streamHealthCacheRef = useRef({ value: null, deps: null })
+  const sessionPhaseCacheRef = useRef({ value: null, deps: null })
 
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
@@ -4876,7 +4877,15 @@ const stopImportMessageRotation = () => {
 
           // ── INTELLIGENCE LAYER — all analytics computed here, never inline ──
           const roomHealth      = computeRoomHealth(state)
-          const sessionPhase    = detectSessionPhase(state, prevPhaseRef.current)
+          // Memoize sessionPhase: only recalculate when key deps change (not on time progression)
+          const sessionPhaseDeps = state?.paceStatus + '|' + Math.round((state?.elapsedMins ?? 0) * 2) / 2 + '|' + state?.liveOnlyCount + '|' + Math.round((state?.tipsPerMinute ?? 0) * 2) / 2
+          let sessionPhase
+          if (sessionPhaseCacheRef.current.deps === sessionPhaseDeps) {
+            sessionPhase = sessionPhaseCacheRef.current.value
+          } else {
+            sessionPhase = detectSessionPhase(state, prevPhaseRef.current)
+            sessionPhaseCacheRef.current = { value: sessionPhase, deps: sessionPhaseDeps }
+          }
           const opportunityScore = computeOpportunityScore(state, roomHealth)
           // Memoize streamHealth: only recalculate when key deps change (not on time progression)
           const streamHealthDeps = state?.paceStatus + '|' + (roomHealth?.score ?? 0) + '|' + sessionPhase
