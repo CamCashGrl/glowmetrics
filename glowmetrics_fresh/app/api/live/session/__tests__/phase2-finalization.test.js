@@ -254,10 +254,110 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
     });
 
     it('should leave tip unattributed if multiple sessions match event_at (ambiguous)', async () => {
-      // This test requires historical bad data (overlapping sessions)
-      // In practice, insert two overlapping test sessions
-      // For now, this is a placeholder
-      expect(true).toBe(true); // Skip in normal test run
+      // Create two ended sessions with overlapping time windows
+      const baseTime = new Date();
+      const session1StartMs = baseTime.getTime() - 60 * 60 * 1000; // 1 hour ago
+      const session1EndMs = baseTime.getTime() - 30 * 60 * 1000; // 30 minutes ago
+      const session2StartMs = baseTime.getTime() - 45 * 60 * 1000; // 45 minutes ago
+      const session2EndMs = baseTime.getTime() - 15 * 60 * 1000; // 15 minutes ago
+
+      // Sessions overlap: session2 (45min-15min) overlaps with session1 (60min-30min)
+      // Overlap window: 45min to 30min ago
+
+      // Create and finalize session 1
+      const { data: session1 } = await supabaseAdmin.rpc(
+        'start_live_session',
+        { p_platform: 'Chaturbate' },
+        { headers: { 'x-user-id': testUserId } }
+      );
+
+      // Manually update session1 timestamps to create the overlap
+      await supabaseAdmin
+        .from('live_sessions')
+        .update({
+          started_at: new Date(session1StartMs).toISOString(),
+          ended_at: new Date(session1EndMs).toISOString(),
+          status: 'ended',
+        })
+        .eq('id', session1.id);
+
+      // Create and finalize session 2
+      const { data: session2 } = await supabaseAdmin.rpc(
+        'start_live_session',
+        { p_platform: 'Chaturbate' },
+        { headers: { 'x-user-id': testUserId } }
+      );
+
+      // Manually update session2 timestamps to create the overlap
+      await supabaseAdmin
+        .from('live_sessions')
+        .update({
+          started_at: new Date(session2StartMs).toISOString(),
+          ended_at: new Date(session2EndMs).toISOString(),
+          status: 'ended',
+        })
+        .eq('id', session2.id);
+
+      // Create a tip with event_at in the overlap window (40 minutes ago)
+      // This timestamp falls within both session1 (60min-30min) and session2 (45min-15min)
+      const ambiguousTipTime = new Date(baseTime.getTime() - 40 * 60 * 1000).toISOString();
+
+      const { data: tipData } = await supabaseAdmin.rpc(
+        'persist_extension_tip',
+        {
+          p_user_id: testUserId,
+          p_client_event_id: '77777777-7777-7777-7777-777777777777',
+          p_deduplication_key: 'test-tip-ambiguous-1',
+          p_username: 'tippera',
+          p_tokens: 50,
+          p_usd: 5.00,
+          p_platform: 'chaturbate',
+          p_event_at: ambiguousTipTime,
+        }
+      );
+
+      expect(tipData.success).toBe(true);
+      expect(tipData.live_session_id).toBeNull(); // Should NOT be assigned to either session
+
+      // Verify exactly one canonical tip exists
+      const { data: tips, error: tipsErr } = await supabaseAdmin
+        .from('tips')
+        .select('*')
+        .eq('user_id', testUserId)
+        .eq('deduplication_key', 'test-tip-ambiguous-1');
+      expect(tipsErr).toBeNull();
+      expect(tips.length).toBe(1);
+      expect(tips[0].live_session_id).toBeNull();
+
+      // Verify exactly one live_tip exists
+      const { data: liveTips, error: liveTipsErr } = await supabaseAdmin
+        .from('live_tips')
+        .select('*')
+        .eq('user_id', testUserId)
+        .eq('deduplication_key', 'test-tip-ambiguous-1');
+      expect(liveTipsErr).toBeNull();
+      expect(liveTips.length).toBe(1);
+      expect(liveTips[0].live_session_id).toBeNull();
+
+      // Verify ambiguity was logged
+      const { data: ambiguityLogs, error: logsErr } = await supabaseAdmin
+        .from('unattributed_tips_log')
+        .select('*')
+        .eq('user_id', testUserId)
+        .eq('deduplication_key', 'test-tip-ambiguous-1');
+      expect(logsErr).toBeNull();
+      expect(ambiguityLogs.length).toBeGreaterThan(0);
+      const logEntry = ambiguityLogs.find(l => l.reason && l.reason.includes('multiple'));
+      expect(logEntry).toBeDefined();
+
+      // No duplicate/zero-USD sibling should exist
+      const { data: siblings } = await supabaseAdmin
+        .from('tips')
+        .select('*')
+        .eq('user_id', testUserId)
+        .eq('deduplication_key', 'test-tip-ambiguous-1')
+        .eq('usd', 0);
+      expect(siblings.length).toBe(0);
     });
 
     it('should leave tip unattributed if no session matches event_at', async () => {
