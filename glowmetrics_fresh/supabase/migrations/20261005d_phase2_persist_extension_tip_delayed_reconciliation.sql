@@ -59,13 +59,8 @@ BEGIN
     RAISE EXCEPTION 'queued_ms must be >= 0' USING ERRCODE = '22003';
   END IF;
 
-  -- Acquire advisory lock (same as Phase 1)
-  PERFORM pg_advisory_xact_lock(
-    hashtextextended(
-      p_user_id::text || ':' || p_client_event_id::text,
-      0
-    )
-  );
+  -- Acquire user-level advisory lock (matches finalize_live_session for atomic boundary)
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0)::bigint);
 
   -- Phase 1 dedup check (unchanged)
   SELECT id, live_session_id
