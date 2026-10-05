@@ -1558,6 +1558,7 @@ export default function Dashboard() {
   const coachingCooldowns  = useRef({})
   const firedAlertsLog     = useRef([])
   const phaseChangeLog     = useRef([])
+  const streamHealthCacheRef = useRef({ value: null, deps: null })
 
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
@@ -4877,7 +4878,17 @@ const stopImportMessageRotation = () => {
           const roomHealth      = computeRoomHealth(state)
           const sessionPhase    = detectSessionPhase(state, prevPhaseRef.current)
           const opportunityScore = computeOpportunityScore(state, roomHealth)
-          const streamHealth    = computeStreamHealth(state, roomHealth, sessionPhase)
+          // Memoize streamHealth: only recalculate when key deps change (not on time progression)
+          const streamHealthDeps = state?.paceStatus + '|' + (roomHealth?.score ?? 0) + '|' + sessionPhase
+          let streamHealth
+          if (streamHealthCacheRef.current.deps === streamHealthDeps) {
+            streamHealth = streamHealthCacheRef.current.value
+          } else {
+            // Round timeSinceLastTip to 0.5s increments to prevent oscillation
+            const stateCopy = state ? { ...state, timeSinceLastTip: Math.round((state.timeSinceLastTip ?? 0) * 2) / 2 } : state
+            streamHealth = computeStreamHealth(stateCopy, roomHealth, sessionPhase)
+            streamHealthCacheRef.current = { value: streamHealth, deps: streamHealthDeps }
+          }
           const velocity        = computeRevenueVelocity(state?.currentUPM ?? 0, sessions, state?.elapsedMins)
           const comparison      = computeLiveComparison(state, sessions)
           const goalStrategy    = getGoalStrategy(state, roomHealth)
