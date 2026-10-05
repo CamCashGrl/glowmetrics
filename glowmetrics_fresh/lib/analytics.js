@@ -1773,7 +1773,7 @@ export function aggregateRows(tips, tz = null) {
   const UTC_DAYS_CANONICAL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
   meaningfulSessions.forEach(s => {
-    if (!s.startTime || s.durationUnknown) return
+    if (!s.startTime) return
     const h = toLocalHour(s.startTime, userTz)
     const dow = UTC_DAYS_CANONICAL[toLocalDow(s.startTime, userTz)]
     const dayHourKey = `${dow}__${h}`
