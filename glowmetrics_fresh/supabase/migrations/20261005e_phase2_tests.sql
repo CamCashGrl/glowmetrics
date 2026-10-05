@@ -1,0 +1,99 @@
+-- Phase 2: Integration tests for finalization and delayed-tip reconciliation
+--
+-- Test suite verifying:
+-- 1. Normal tip during active session
+-- 2. Tip immediately before Stop
+-- 3. Tip arriving while Stop waits (lock ordering)
+-- 4. Delayed tip from previous session after new session started
+-- 5. Duplicate delayed-tip retry (idempotency)
+-- 6. Overlapping sessions → ambiguous/unattributed
+-- 7. Stop once / Stop twice (idempotency)
+-- 8. Refresh/reconnect active session
+-- 9. Pause → resume → stop duration calculation
+-- 10. Zero-tip, one-tip, multiple-tipper sessions
+
+-- NOTE: These tests are illustrative SQL showing the expected behavior.
+-- In practice, use a proper testing framework (Jest with Supabase client SDK).
+-- This migration should NOT be applied to production; tests should run
+-- in a separate test suite.
+
+-- Example: Normal tip during active session
+-- Expected: tip assigned to live_session_id, included in final metrics
+--
+-- CREATE SESSION
+-- start_live_session() → session_id = S1, status = 'active'
+--
+-- SEND TIP at event_at = T1
+-- persist_extension_tip(event_at=T1) → finds S1 (active, event_at >= started_at)
+-- → assigns live_session_id = S1
+--
+-- STOP
+-- finalize_live_session() → S1 transitions active → finalizing → ended
+-- recalculate_session_final_metrics(S1) → queries live_tips WHERE live_session_id = S1
+-- → final_total_usd includes tip
+
+-- Example: Delayed tip from previous session after new session started
+-- Expected: tip assigned to correct previous session via event_at match
+--
+-- SESSION A (started 09:00, ended 10:00)
+-- Tip event_at = 09:59, but delivery delayed
+--
+-- SESSION B (started 10:05, active at delivery time)
+-- Tip arrives at server at 10:07
+--
+-- persist_extension_tip(event_at=09:59):
+--   finds no unresolved session OR event_at < B.started_at
+--   searches ended sessions: 09:00 <= 09:59 <= 10:00 ✓
+--   finds exactly 1 match: Session A
+--   assigns live_session_id = A
+--   recalculates A's final metrics
+--   Result: tip correctly attributed to A, not stolen by B
+
+-- Example: Overlapping sessions → ambiguous
+-- Expected: tip remains unattributed, logged
+--
+-- SESSION A (started 09:00, ended 10:30)  [historical bad data]
+-- SESSION B (started 09:30, ended 10:00)  [overlaps A]
+-- Tip event_at = 09:45, delivery delayed
+--
+-- persist_extension_tip(event_at=09:45):
+--   searches ended sessions: both match 09:30 <= 09:45 <= 10:00
+--   finds 2 matches: ambiguous
+--   leaves live_session_id = NULL
+--   logs to unattributed_tips_log
+
+-- Example: Stop once / Stop twice (idempotency)
+-- Expected: both calls return same finalized session
+--
+-- finalize_live_session() → finds unresolved session S1
+-- → transitions to ended
+-- → returns S1 with final_* fields
+--
+-- finalize_live_session() [called again]
+-- → finds no unresolved session
+-- → returns most recent ended session
+-- → same session returned with same final_* values
+
+-- Example: Pause → resume → stop duration
+-- Expected: final_duration_seconds excludes paused time
+--
+-- started_at = 09:00
+-- pause at 09:30 (30 min active)
+-- paused_at = 09:30
+-- resume at 09:45 (15 min paused)
+-- total_paused_seconds updated to 900 (15 min)
+-- status = active
+-- stop at 10:00 (15 min active)
+-- total_paused_seconds updated to 900 (no change, no open pause)
+--
+-- final_duration_seconds = (10:00 - 09:00) - 900
+--                        = 3600 - 900
+--                        = 2700 seconds (45 minutes)
+
+-- These are the expected behaviors. To run actual tests, use:
+-- - Jest with @supabase/supabase-js
+-- - Create test user, session, tips
+-- - Call RPCs and verify returned values
+-- - Check live_sessions.final_* columns after finalization
+-- - Verify live_tips.live_session_id assignments
+-- - Verify unattributed_tips_log entries for ambiguous tips
