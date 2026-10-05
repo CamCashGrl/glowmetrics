@@ -4867,7 +4867,7 @@ const stopImportMessageRotation = () => {
           const sessionPhase    = detectSessionPhase(state, prevPhaseRef.current)
           const opportunityScore = computeOpportunityScore(state, roomHealth)
           const streamHealth    = computeStreamHealth(state, roomHealth, sessionPhase)
-          const velocity        = computeRevenueVelocity(state?.currentUPM ?? 0, sessions)
+          const velocity        = computeRevenueVelocity(state?.currentUPM ?? 0, sessions, state?.elapsedMins)
           const comparison      = computeLiveComparison(state, sessions)
           const goalStrategy    = getGoalStrategy(state, roomHealth)
           const recoveryActions = getRecoveryActions(sessionPhase)

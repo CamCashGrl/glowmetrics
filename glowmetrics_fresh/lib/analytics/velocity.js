@@ -1,3 +1,5 @@
+const MIN_BASELINE_SESSIONS = 3
+
 const TREND_CONFIG = {
   excellent: { color: '#10b981' },
   good:      { color: '#22d3ee' },
@@ -12,21 +14,39 @@ const TREND_CONFIG = {
  *
  * @param {number} currentUPM — current USD/minute (from computeSessionState().currentUPM)
  * @param {Array}  sessions   — analytics.sessions array (each has totalUSD, durationMinutes, durationUnknown)
- * @returns {{ currentUPM, currentUPH, avgUPM, avgUPH, bestUPM, bestUPH, pctVsAvg, pctVsBest, label, trend, color }}
+ * @param {number} elapsedMinutes — (optional) current session elapsed time in minutes
+ * @returns {{ currentUPM, currentUPH, avgUPM, avgUPH, bestUPM, bestUPH, pctVsAvg, pctVsBest, label, trend, color, status }}
  */
-export function computeRevenueVelocity(currentUPM, sessions) {
+export function computeRevenueVelocity(currentUPM, sessions, elapsedMinutes) {
   const valid = (sessions || []).filter(s =>
     !s.durationUnknown && (s.totalUSD || 0) > 0 && (s.durationMinutes || 0) >= 15
   )
 
-  if (!valid.length || !currentUPM) {
+  if (valid.length < MIN_BASELINE_SESSIONS || !currentUPM) {
     return {
       currentUPM: currentUPM || 0,
       currentUPH: (currentUPM || 0) * 60,
       avgUPM: 0, avgUPH: 0, bestUPM: 0, bestUPH: 0,
       pctVsAvg: null, pctVsBest: null,
-      label: 'No baseline yet',
+      label: 'Not enough history yet',
       trend: 'unknown',
+      status: 'insufficient_history',
+      sampleSize: valid.length,
+      minSampleSize: MIN_BASELINE_SESSIONS,
+      color: TREND_CONFIG.unknown.color,
+    }
+  }
+
+  // Early-session guard: don't show velocity comparisons until session has stabilized
+  if (elapsedMinutes !== undefined && elapsedMinutes < 5) {
+    return {
+      currentUPM: currentUPM || 0,
+      currentUPH: (currentUPM || 0) * 60,
+      avgUPM: 0, avgUPH: 0, bestUPM: 0, bestUPH: 0,
+      pctVsAvg: null, pctVsBest: null,
+      label: 'Still warming up...',
+      trend: 'unknown',
+      status: 'warming_up',
       color: TREND_CONFIG.unknown.color,
     }
   }
