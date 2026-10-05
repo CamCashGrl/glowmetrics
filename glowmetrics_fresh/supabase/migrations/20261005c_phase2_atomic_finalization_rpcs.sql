@@ -230,7 +230,7 @@ CREATE OR REPLACE FUNCTION public.log_unattributed_tip_ambiguity(
 )
 RETURNS void
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $function$
 BEGIN
