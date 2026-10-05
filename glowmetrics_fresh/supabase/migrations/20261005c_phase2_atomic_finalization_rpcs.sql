@@ -240,4 +240,4 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.log_unattributed_tip_ambiguity(uuid, text, numeric, timestamptz, text) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.log_unattributed_tip_ambiguity(uuid, text, numeric, timestamptz, text) TO authenticated;

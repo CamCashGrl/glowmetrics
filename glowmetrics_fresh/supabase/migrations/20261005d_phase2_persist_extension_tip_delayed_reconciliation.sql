@@ -17,7 +17,7 @@ CREATE OR REPLACE FUNCTION public.persist_extension_tip(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path TO 'public'
 AS $function$
 DECLARE
