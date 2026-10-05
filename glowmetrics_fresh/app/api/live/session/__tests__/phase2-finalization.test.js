@@ -265,14 +265,16 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
       // Overlap window: 45min to 30min ago
 
       // Create and finalize session 1
-      const { data: session1 } = await supabaseAdmin.rpc(
+      const { data: session1, error: err1 } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(err1).toBeNull();
+      expect(session1).toBeDefined();
 
       // Manually update session1 timestamps to create the overlap
-      await supabaseAdmin
+      const { error: updateErr1 } = await supabaseAdmin
         .from('live_sessions')
         .update({
           started_at: new Date(session1StartMs).toISOString(),
@@ -280,16 +282,19 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           status: 'ended',
         })
         .eq('id', session1.id);
+      expect(updateErr1).toBeNull();
 
       // Create and finalize session 2
-      const { data: session2 } = await supabaseAdmin.rpc(
+      const { data: session2, error: err2 } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(err2).toBeNull();
+      expect(session2).toBeDefined();
 
       // Manually update session2 timestamps to create the overlap
-      await supabaseAdmin
+      const { error: updateErr2 } = await supabaseAdmin
         .from('live_sessions')
         .update({
           started_at: new Date(session2StartMs).toISOString(),
@@ -297,12 +302,13 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           status: 'ended',
         })
         .eq('id', session2.id);
+      expect(updateErr2).toBeNull();
 
       // Create a tip with event_at in the overlap window (40 minutes ago)
       // This timestamp falls within both session1 (60min-30min) and session2 (45min-15min)
       const ambiguousTipTime = new Date(baseTime.getTime() - 40 * 60 * 1000).toISOString();
 
-      const { data: tipData } = await supabaseAdmin.rpc(
+      const { data: tipData, error: tipErr } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -315,7 +321,7 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: ambiguousTipTime,
         }
       );
-
+      expect(tipErr).toBeNull();
       expect(tipData.success).toBe(true);
       expect(tipData.live_session_id).toBeNull(); // Should NOT be assigned to either session
 
