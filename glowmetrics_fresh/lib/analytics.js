@@ -1293,7 +1293,7 @@ export function aggregateRows(tips, tz = null) {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
-      bestDay: null, bestHour: null, platformBestTimes: {},
+      bestDay: null, bestHour: null, platformBestTimes: {}, canonicalBestTimes: { bestWindow: null, earlySignal: null, grid: [] },
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [], platformTipTypes: {},
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
@@ -1766,6 +1766,94 @@ export function aggregateRows(tips, tz = null) {
     }
   })
 
+  // ── CANONICAL BEST TIMES ──────────────────────────────────────────
+  // Finds the overall best day-hour window and which platform dominates it.
+  // This is the "YOUR NEXT BEST MOVE" recommendation data.
+  const dayHourUSD = {}, dayHourBuckets = {}, dayHourBucketAmts = {}
+  const UTC_DAYS_CANONICAL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+
+  meaningfulSessions.forEach(s => {
+    if (!s.startTime || s.durationUnknown) return
+    const h = toLocalHour(s.startTime, userTz)
+    const dow = UTC_DAYS_CANONICAL[toLocalDow(s.startTime, userTz)]
+    const dayHourKey = `${dow}__${h}`
+    const hBucket = Math.floor(new Date(s.startTime).getTime() / 3600000)
+    const usd = s.totalUSD || 0
+
+    if (!dayHourUSD[dayHourKey]) {
+      dayHourUSD[dayHourKey] = { usd: 0, buckets: new Set(), platforms: {}, sessionCount: 0 }
+      dayHourBucketAmts[dayHourKey] = {}
+    }
+    dayHourUSD[dayHourKey].usd += usd
+    dayHourUSD[dayHourKey].buckets.add(hBucket)
+    dayHourUSD[dayHourKey].sessionCount += 1
+    dayHourBucketAmts[dayHourKey][hBucket] = (dayHourBucketAmts[dayHourKey][hBucket] || 0) + usd
+    const plat = s.platform || 'Chaturbate'
+    dayHourUSD[dayHourKey].platforms[plat] = (dayHourUSD[dayHourKey].platforms[plat] || 0) + usd
+  })
+
+  // Find day-hour combinations with at least 3 distinct days (3+ data points)
+  const dayHourEntries = Object.entries(dayHourUSD)
+    .filter(([_, data]) => data.buckets.size >= 3)
+    .map(([key, data]) => {
+      const [dow, h] = key.split('__')
+      const medianUsdPerHour = parseFloat(calcMedian(Object.values(dayHourBucketAmts[key])).toFixed(2))
+      const topPlatform = Object.entries(data.platforms).length > 0
+        ? Object.entries(data.platforms).sort((a, b) => b[1] - a[1])[0][0]
+        : null
+      return {
+        key,
+        localDay: dow,
+        localHour: parseInt(h),
+        medianUsdPerHour,
+        sessionCount: data.buckets.size,
+        totalUSD: parseFloat(data.usd.toFixed(2)),
+        topPlatform,
+      }
+    })
+    .sort((a, b) => b.medianUsdPerHour - a.medianUsdPerHour)
+
+  // Determine confidence tier for the best window
+  const getTierForWindow = (sessionCount) => {
+    if (sessionCount >= 10) return 'strong'
+    if (sessionCount >= 7) return 'likely'
+    if (sessionCount >= 5) return 'medium'
+    return 'early'
+  }
+
+  // Only set bestWindow if pattern meets medium confidence threshold (5+ data points)
+  const MIN_CONFIDENCE_SESSIONS = 5
+  const bestWindow = dayHourEntries.length > 0 && dayHourEntries[0].sessionCount >= MIN_CONFIDENCE_SESSIONS ? {
+    localHour: dayHourEntries[0].localHour,
+    localDay: dayHourEntries[0].localDay,
+    medianUsdPerHour: dayHourEntries[0].medianUsdPerHour,
+    topPlatform: dayHourEntries[0].topPlatform,
+    sessionCount: dayHourEntries[0].sessionCount,
+    tier: getTierForWindow(dayHourEntries[0].sessionCount),
+  } : null
+
+  // Show early signal if best pattern has insufficient data for recommendation
+  const earlySignal = !bestWindow && dayHourEntries.length > 0 ? {
+    localHour: dayHourEntries[0].localHour,
+    localDay: dayHourEntries[0].localDay,
+    medianUsdPerHour: dayHourEntries[0].medianUsdPerHour,
+    topPlatform: dayHourEntries[0].topPlatform,
+    sessionCount: dayHourEntries[0].sessionCount,
+  } : null
+
+  // Grid data for hourly distribution chart
+  const gridData = hourAvgs.map(h => ({
+    hour: h.hour,
+    avg: h.avg,
+    count: h.count,
+  })).sort((a, b) => a.hour - b.hour)
+
+  const canonicalBestTimes = {
+    bestWindow,
+    earlySignal,
+    grid: gridData,
+  }
+
   return {
     totalUSD: parseFloat(totalUSD.toFixed(2)),
     totalTokens,
@@ -1774,7 +1862,7 @@ export function aggregateRows(tips, tz = null) {
     topTippers, platforms, sessions: meaningfulSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour, platformBestTimes,
+    bestDay, bestHour, platformBestTimes, canonicalBestTimes,
     monthlyData, bestMonth,
     tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
