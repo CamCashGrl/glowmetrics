@@ -379,7 +379,12 @@ export default function LivePage() {
     const events = engine.engineMode === 'v2'
       ? liveEvents.filter(e => e.live_session_id === engine.serverSession?.id)
       : liveEvents;
-    if (!events.length || !liveStartTime) return null;
+    if (!events.length || !liveStartTime) {
+      if (process.env.NODE_ENV === 'development' && liveActive) {
+        console.log(`[computeState] skip: events.length=${events.length}, liveStartTime=${!!liveStartTime}`);
+      }
+      return null;
+    }
     const nowMs   = Date.now();
     const startMs = new Date(liveStartTime).getTime();
     const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1);
@@ -417,6 +422,10 @@ export default function LivePage() {
       .slice(0, 3)
       .map(([username, revenue]) => ({ username, revenue: parseFloat(revenue.toFixed(2)) }));
     const topEntry = sortedTippers[0] || null;
+    const largestTip = liveOnly.length > 0
+      ? parseFloat(Math.max(...liveOnly.map(e => e.normalizedRevenue || 0)).toFixed(2))
+      : 0;
+    const uniqueTippersCount = Object.keys(tipperMap).length;
     return {
       totalRevenue:     parseFloat(totalRevenue.toFixed(2)),
       totalTokens,
@@ -427,6 +436,8 @@ export default function LivePage() {
       goalProgress,
       paceStatus:       pace,
       liveOnlyCount:    liveOnly.length,
+      uniqueTippersCount,
+      largestTip,
       topTipper:        topEntry,
       top3Tippers:      sortedTippers,
       firstHalfUPM:     parseFloat(fUPM.toFixed(3)),
@@ -716,7 +727,7 @@ export default function LivePage() {
   const sessionPhase   = detectSessionPhase(state, prevPhaseRef.current);
   const oppScore       = computeOpportunityScore(state, roomHealth);
   const streamHealth   = computeStreamHealth(state, roomHealth, sessionPhase);
-  const velocity       = computeRevenueVelocity(state?.currentUPM ?? 0, sessions);
+  const velocity       = computeRevenueVelocity(state?.currentUPM ?? 0, sessions, state?.elapsedMins);
   const comparison     = computeLiveComparison(state, sessions);
   const goalStrategy   = getGoalStrategy(state, roomHealth);
   const recoveryActions = getRecoveryActions(sessionPhase);
@@ -1404,11 +1415,15 @@ export default function LivePage() {
               {/* LEFT */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                {/* 2 stat cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                {/* 6 stat cards: Revenue, Avg Tip, Tips Count, Unique Tippers, Largest Tip, Top Tipper */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {[
                     { label: 'Revenue',  value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`,           color: C.green,      sub: velocity.label || null,         showSparkline: true },
                     { label: 'Avg Tip',  value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`,            color: C.gold,       sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
+                    { label: 'Tips',     value: `${state?.liveOnlyCount || 0}`,                            color: C.cyan,       sub: `${state?.uniqueTippersCount || 0} unique`,    showSparkline: false },
+                    { label: 'Largest Tip', value: `$${state?.largestTip?.toFixed(2) || '0.00'}`,           color: C.pink,       sub: null,                          showSparkline: false },
+                    { label: 'Unique Tippers', value: `${state?.uniqueTippersCount || 0}`,                  color: C.purple,     sub: null,                          showSparkline: false },
+                    { label: 'Top Tipper', value: state?.topTipper?.username || '—',                       color: C.muted,      sub: state?.topTipper ? `$${state.topTipper.revenue.toFixed(2)}` : null, showSparkline: false },
                   ].map(({ label, value, color, sub, showSparkline }) => (
                     <div key={label} className="cc-card" style={{ ...glassCard, borderRadius: 12, padding: 18, transition: 'box-shadow 0.2s ease', cursor: 'default' }}
                       onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 0 20px ${color}28`; }}
