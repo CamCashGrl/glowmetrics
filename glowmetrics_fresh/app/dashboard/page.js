@@ -5102,54 +5102,17 @@ const stopImportMessageRotation = () => {
                         ))}
                       </div>
 
-                      {/* PACE + GOAL */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                        <div style={{ borderRadius: 12, padding: '14px 18px', background: pace.bg, border: `1px solid ${pace.border}` }}>
-                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Pace</div>
-                          <div style={{ fontSize: 20, fontWeight: 800, color: pace.color }}>{pace.label}</div>
-                          {state?.firstHalfUPM > 0 && (
-                            <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>1st: ${state.firstHalfUPM.toFixed(2)}/m → 2nd: ${state.secondHalfUPM.toFixed(2)}/m</div>
-                          )}
+                      {/* GOAL */}
+                      <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Goal</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: (state?.goalProgress || 0) >= 100 ? C.green : C.white }}>{state?.goalProgress || 0}%</div>
                         </div>
-                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Goal</div>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: (state?.goalProgress || 0) >= 100 ? C.green : C.white }}>{state?.goalProgress || 0}%</div>
-                          </div>
-                          <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
-                            <div style={{ height: '100%', width: `${Math.min(state?.goalProgress || 0, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
-                          </div>
-                          {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
+                        <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
+                          <div style={{ height: '100%', width: `${Math.min(state?.goalProgress || 0, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
                         </div>
+                        {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
                       </div>
-
-                      {/* TIPPERS — running per-tipper totals, broken out by platform
-                          (a fan can tip on more than one platform, e.g. while
-                          multistreaming — this keeps that visible instead of
-                          merging it into one anonymous number) */}
-                      {state?.tippers?.length > 0 && (
-                        <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
-                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Tippers</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-                            {state.tippers.slice(0, 10).map(t => (
-                              <div key={t.username} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                                  <span style={{ fontSize: 12, color: C.white, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.username}</span>
-                                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                    {Object.entries(t.platforms).map(([platform, v]) => (
-                                      <span key={platform} title={`${v.tipCount} tip${v.tipCount === 1 ? '' : 's'} on ${platform}`}
-                                        style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: 'rgba(168,85,247,0.12)', color: C.muted, whiteSpace: 'nowrap' }}>
-                                        {platform} ${v.revenue.toFixed(2)}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                                <span style={{ fontSize: 12, fontWeight: 800, color: C.gold, flexShrink: 0 }}>${t.totalRevenue.toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
                       {/* TIP INPUT — collapsible */}
                       {liveActive && (
