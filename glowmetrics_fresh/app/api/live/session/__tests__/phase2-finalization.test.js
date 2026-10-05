@@ -69,27 +69,31 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
 
     it('should be idempotent on repeated Stop calls', async () => {
       // Start and finalize session
-      const { data: startData } = await supabaseAdmin.rpc(
+      const { data: startData, error: startErr } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(startErr).toBeNull();
+      expect(startData).toBeDefined();
       const sessionId = startData.id;
 
       // First stop
-      const { data: stop1Data } = await supabaseAdmin.rpc(
+      const { data: stop1Data, error: stop1Err } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: sessionId },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(stop1Err).toBeNull();
       expect(stop1Data.status).toBe('ended');
 
       // Second stop (repeated call)
-      const { data: stop2Data } = await supabaseAdmin.rpc(
+      const { data: stop2Data, error: stop2Err } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: sessionId },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(stop2Err).toBeNull();
       // Should return the same finalized session
       expect(stop2Data.id).toBe(sessionId);
       expect(stop2Data.status).toBe('ended');
@@ -98,39 +102,47 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
 
     it('should return exact session when p_session_id provided on repeat call', async () => {
       // Create and finalize two sessions
-      const { data: session1 } = await supabaseAdmin.rpc(
+      const { data: session1, error: err1 } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(err1).toBeNull();
+      expect(session1).toBeDefined();
 
       // Finalize session 1
-      await supabaseAdmin.rpc(
+      const { error: finErr1 } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: session1.id },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(finErr1).toBeNull();
 
       // Create session 2
-      const { data: session2 } = await supabaseAdmin.rpc(
+      const { data: session2, error: err2 } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(err2).toBeNull();
+      expect(session2).toBeDefined();
 
       // Finalize session 2
-      await supabaseAdmin.rpc(
+      const { error: finErr2 } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: session2.id },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(finErr2).toBeNull();
 
       // Call finalize on session 1 again (it's already ended)
-      const { data: result } = await supabaseAdmin.rpc(
+      const { data: result, error: resultErr } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: session1.id },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(resultErr).toBeNull();
+      expect(result).toBeDefined();
 
       // Should return session 1, NOT session 2
       expect(result.id).toBe(session1.id);
@@ -140,11 +152,13 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
   describe('persist_extension_tip with delayed reconciliation', () => {
     it('should assign tip to active session when event_at >= started_at', async () => {
       const now = new Date();
-      const { data: session } = await supabaseAdmin.rpc(
+      const { data: session, error: sessionErr } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(sessionErr).toBeNull();
+      expect(session).toBeDefined();
 
       // Tip with event_at during session
       const { data: tipData, error } = await supabaseAdmin.rpc(
@@ -161,6 +175,7 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
         }
       );
       expect(error).toBeNull();
+      expect(tipData).toBeDefined();
       expect(tipData.live_session_id).toBe(session.id);
     });
 
@@ -168,34 +183,39 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
       const baseTime = new Date('2024-01-01T10:00:00Z');
 
       // Session A: 10:00 - 10:30
-      const { data: sessionA } = await supabaseAdmin.rpc(
+      const { data: sessionA, error: errA } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(errA).toBeNull();
+      expect(sessionA).toBeDefined();
 
       // Manually set start/end times for testing (in real tests, use fixtures)
       // For now, assume timing works naturally
 
       // Finalize session A
-      await supabaseAdmin.rpc(
+      const { error: finErrA } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: sessionA.id },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(finErrA).toBeNull();
 
       // Session B: 10:35 - active
-      const { data: sessionB } = await supabaseAdmin.rpc(
+      const { data: sessionB, error: errB } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(errB).toBeNull();
+      expect(sessionB).toBeDefined();
 
       // Delayed tip with event_at from session A
       // In real test, use a timestamp that falls within A's window
       // This is a simplified test; actual test needs timestamp control
 
-      const { data: tipData } = await supabaseAdmin.rpc(
+      const { data: tipData, error: tipErr } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -208,6 +228,8 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: new Date(baseTime.getTime() + 15 * 60 * 1000).toISOString(), // 10:15 (during A)
         }
       );
+      expect(tipErr).toBeNull();
+      expect(tipData).toBeDefined();
 
       // Tip should be assigned to session A (the previous one with matching event_at)
       expect(tipData.live_session_id).toBe(sessionA.id);
@@ -370,7 +392,7 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
       // Event time from 1 hour ago, no matching sessions
       const oldTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-      const { data: tipData } = await supabaseAdmin.rpc(
+      const { data: tipData, error: tipErr } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -383,6 +405,8 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: oldTime,
         }
       );
+      expect(tipErr).toBeNull();
+      expect(tipData).toBeDefined();
 
       expect(tipData.live_session_id).toBeNull();
     });
@@ -390,13 +414,15 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
 
   describe('metric calculations', () => {
     it('should calculate correct metrics for single-tipper session', async () => {
-      const { data: session } = await supabaseAdmin.rpc(
+      const { data: session, error: sessionErr } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(sessionErr).toBeNull();
+      expect(session).toBeDefined();
 
-      await supabaseAdmin.rpc(
+      const { error: tipErr } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -409,12 +435,15 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: new Date().toISOString(),
         }
       );
+      expect(tipErr).toBeNull();
 
-      const { data: finalized } = await supabaseAdmin.rpc(
+      const { data: finalized, error: finalErr } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: session.id },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(finalErr).toBeNull();
+      expect(finalized).toBeDefined();
 
       expect(finalized.final_total_usd).toBe(10.00);
       expect(finalized.final_tokens).toBe(100);
@@ -427,14 +456,16 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
     });
 
     it('should calculate correct metrics for multiple-tipper session', async () => {
-      const { data: session } = await supabaseAdmin.rpc(
+      const { data: session, error: sessionErr } = await supabaseAdmin.rpc(
         'start_live_session',
         { p_platform: 'Chaturbate' },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(sessionErr).toBeNull();
+      expect(session).toBeDefined();
 
       // Tip 1: alice, $10
-      await supabaseAdmin.rpc(
+      const { error: tip1Err } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -447,9 +478,10 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: new Date().toISOString(),
         }
       );
+      expect(tip1Err).toBeNull();
 
       // Tip 2: bob, $15
-      await supabaseAdmin.rpc(
+      const { error: tip2Err } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -462,9 +494,10 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: new Date().toISOString(),
         }
       );
+      expect(tip2Err).toBeNull();
 
       // Tip 3: alice again, $5
-      await supabaseAdmin.rpc(
+      const { error: tip3Err } = await supabaseAdmin.rpc(
         'persist_extension_tip',
         {
           p_user_id: testUserId,
@@ -477,12 +510,15 @@ describe('Phase 2: Atomic Finalization & Delayed-Tip Reconciliation', () => {
           p_event_at: new Date().toISOString(),
         }
       );
+      expect(tip3Err).toBeNull();
 
-      const { data: finalized } = await supabaseAdmin.rpc(
+      const { data: finalized, error: finalErr } = await supabaseAdmin.rpc(
         'finalize_live_session',
         { p_session_id: session.id },
         { headers: { 'x-user-id': testUserId } }
       );
+      expect(finalErr).toBeNull();
+      expect(finalized).toBeDefined();
 
       expect(finalized.final_total_usd).toBe(30.00);
       expect(finalized.final_tokens).toBe(300);
