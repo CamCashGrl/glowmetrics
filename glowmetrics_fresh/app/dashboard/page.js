@@ -5189,51 +5189,6 @@ const stopImportMessageRotation = () => {
                     {/* RIGHT */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                      {/* STREAM HEALTH */}
-                      {liveActive && state && (
-                        <div style={{ ...glassCard, borderRadius: 14, padding: '16px 18px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 }}>Stream Health</div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                              <span style={{ fontSize: 26, fontWeight: 900, color: streamHealth.grade === 'A' ? C.green : streamHealth.grade === 'B' ? C.cyan : streamHealth.grade === 'C' ? C.gold : C.red }}>{streamHealth.grade}</span>
-                              <span style={{ fontSize: 11, color: C.muted }}>{streamHealth.score}/100</span>
-                            </div>
-                          </div>
-                          {[
-                            { label: 'Momentum',  value: streamHealth.components.momentum,   max: 30, color: C.green },
-                            { label: 'Engagement',value: streamHealth.components.engagement,  max: 30, color: C.cyan },
-                            { label: 'Velocity',  value: streamHealth.components.velocity,    max: 25, color: C.gold },
-                            { label: 'Recovery',  value: streamHealth.components.recovery,    max: 15, color: '#a855f7' },
-                          ].map(({ label, value, max, color }) => (
-                            <div key={label} style={{ marginBottom: 8 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                                <span style={{ fontSize: 10, color: C.muted }}>{label}</span>
-                                <span style={{ fontSize: 10, color, fontWeight: 700 }}>{value}/{max}</span>
-                              </div>
-                              <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${(value / max) * 100}%`, borderRadius: 2, background: color, transition: 'width 0.4s ease' }} />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* RECOVERY ACTIONS */}
-                      {liveActive && state && (sessionPhase === 'DECLINE' || sessionPhase === 'PLATEAU' || sessionPhase === 'RECOVERY') && (
-                        <div style={{ borderRadius: 14, padding: '16px 18px', background: sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.07)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.07)' : 'rgba(245,158,11,0.07)', border: `1px solid ${sessionPhase === 'DECLINE' ? 'rgba(248,113,113,0.3)' : sessionPhase === 'RECOVERY' ? 'rgba(168,85,247,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
-                          <div style={{ fontSize: 9, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>
-                            {sessionPhase === 'DECLINE' ? '🚨 Recovery Actions' : sessionPhase === 'RECOVERY' ? '🔄 Rebuilding' : '📊 Boost Tactics'}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {recoveryActions.map((action, i) => (
-                              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <span style={{ fontSize: 11, color: sessionPhase === 'DECLINE' ? C.red : sessionPhase === 'RECOVERY' ? '#a855f7' : C.gold, flexShrink: 0, fontWeight: 800 }}>{i + 1}.</span>
-                                <span style={{ fontSize: 11, color: C.white, lineHeight: 1.5 }}>{action}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
                       {/* OPPORTUNITY SIGNALS */}
                       {liveActive && state && opportunityScore.signals.length > 0 && (
