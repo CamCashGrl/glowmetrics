@@ -2129,34 +2129,18 @@ export default function Dashboard() {
           ['gutteraide', 'ekkel92', 'demboner'].includes(t.username)
         )
       })
-      // Fetch live tips and merge into main analytics dataset
-      // Live tips (real-time earnings from extension) are as important as CSV tips
-      let allLiveTips = []
+      // Track live tips total for Private Sessions page only
+      // Live tips are separate from main analytics; canonical tips table is
+      // the single source of truth for historical earnings analysis
       try {
         const { data: liveRows, error: liveErr } = await supabase
           .from("live_tips")
-          .select("*")
+          .select("id, usd")
           .eq("user_id", uid)
-          .order("received_at", { ascending: true })
         if (!liveErr && liveRows?.length) {
-          // Convert live_tips rows to same format as tips rows for analytics
-          allLiveTips = liveRows.map(lt => ({
-            ...lt,
-            date_time: lt.received_at, // normalize field name for analytics
-            source: 'live_mode' // mark as live for visibility
-          }))
-          // Track live tips total for Private Sessions page
-          setLiveTipsTotalUSD(allLiveTips.reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
+          setLiveTipsTotalUSD(liveRows.reduce((sum, r) => sum + (parseFloat(r.usd) || 0), 0))
         }
-      } catch (e) { /* non-fatal — analytics just excludes live tips */ }
-
-      // Merge live tips into main dataset for analytics
-      // Sort by date so runEngine sees chronological order
-      if (allLiveTips.length > 0) {
-        allData = [...allData, ...allLiveTips].sort((a, b) =>
-          new Date(a.date_time || a.received_at) - new Date(b.date_time || b.received_at)
-        )
-      }
+      } catch (e) { /* non-fatal — live tips total just won't display */ }
 
       if (allData.length) {
         setTips(allData)
