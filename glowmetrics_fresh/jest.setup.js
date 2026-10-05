@@ -1,6 +1,11 @@
 import '@testing-library/jest-dom'
 import fs from 'fs'
 import path from 'path'
+import fetch from 'node-fetch'
+
+if (!globalThis.fetch) {
+  globalThis.fetch = fetch
+}
 
 const LOG_DIR = path.join(process.cwd(), 'logs', 'tests')
 
