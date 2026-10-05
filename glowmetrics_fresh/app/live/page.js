@@ -169,6 +169,23 @@ export default function LivePage() {
       timestamp: ev.timestamp || ev.received_at || new Date() };
   }, [livePlatform]);
 
+  // Merge incoming events with existing, deduping by _id and maintaining sort order
+  const mergeLiveEvents = useCallback((incomingEvents) => {
+    setLiveEvents(prev => {
+      const idMap = new Map(prev.map(e => [e._id, e]));
+      incomingEvents.forEach(e => idMap.set(e._id, e));
+      const merged = Array.from(idMap.values());
+      merged.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const oldRevenue = prev.reduce((s, e) => s + (e.normalizedRevenue || 0), 0);
+      const newRevenue = merged.reduce((s, e) => s + (e.normalizedRevenue || 0), 0);
+      const eventCount = merged.length;
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[liveEvents] old=${oldRevenue.toFixed(2)} new=${newRevenue.toFixed(2)} count=${eventCount}`);
+      }
+      return merged;
+    });
+  }, []);
+
   useEffect(() => {
     // ?__demo=1 forces the unauthenticated demo view (used in preview modal)
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('__demo') === '1') {
@@ -193,7 +210,10 @@ export default function LivePage() {
               _id: t.id, _isHistory: true, sourceUsed: 'extension',
             }));
             normalized.forEach(e => processedTipIds.current.add(e._id));
-            setLiveEvents(normalized);
+            mergeLiveEvents(normalized);
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[liveEvents] source=initial_load count=${normalized.length}`);
+            }
             setTimeout(() => { isHydratingHistory.current = false; }, 200);
           }
         });
@@ -211,6 +231,9 @@ export default function LivePage() {
             _id: t.id, _isHistory: false, sourceUsed: 'extension',
           };
           setLiveEvents(prev => [...prev, ev]);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[liveEvents] source=realtime revenue=${ev.normalizedRevenue} from=${ev.username}`);
+          }
           setFlashTipId(t.id);
           if (liveActive && liveStartTime) {
             // auto-start session on first real tip if not already started
@@ -356,7 +379,12 @@ export default function LivePage() {
     const events = engine.engineMode === 'v2'
       ? liveEvents.filter(e => e.live_session_id === engine.serverSession?.id)
       : liveEvents;
-    if (!events.length || !liveStartTime) return null;
+    if (!events.length || !liveStartTime) {
+      if (process.env.NODE_ENV === 'development' && liveActive) {
+        console.log(`[computeState] skip: events.length=${events.length}, liveStartTime=${!!liveStartTime}`);
+      }
+      return null;
+    }
     const nowMs   = Date.now();
     const startMs = new Date(liveStartTime).getTime();
     const elapsedMins = Math.max((nowMs - startMs) / 60000, 0.1);
@@ -389,7 +417,15 @@ export default function LivePage() {
       else if (sUPM < fUPM * 0.75) pace = 'below';
       else                          pace = 'on_track';
     }
-    const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0];
+    const sortedTippers = Object.entries(tipperMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([username, revenue]) => ({ username, revenue: parseFloat(revenue.toFixed(2)) }));
+    const topEntry = sortedTippers[0] || null;
+    const largestTip = liveOnly.length > 0
+      ? parseFloat(Math.max(...liveOnly.map(e => e.normalizedRevenue || 0)).toFixed(2))
+      : 0;
+    const uniqueTippersCount = Object.keys(tipperMap).length;
     return {
       totalRevenue:     parseFloat(totalRevenue.toFixed(2)),
       totalTokens,
@@ -400,7 +436,10 @@ export default function LivePage() {
       goalProgress,
       paceStatus:       pace,
       liveOnlyCount:    liveOnly.length,
-      topTipper:        topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
+      uniqueTippersCount,
+      largestTip,
+      topTipper:        topEntry,
+      top3Tippers:      sortedTippers,
       firstHalfUPM:     parseFloat(fUPM.toFixed(3)),
       secondHalfUPM:    parseFloat(sUPM.toFixed(3)),
       currentUPM:       parseFloat((totalRevenue / elapsedMins).toFixed(3)),
@@ -688,7 +727,7 @@ export default function LivePage() {
   const sessionPhase   = detectSessionPhase(state, prevPhaseRef.current);
   const oppScore       = computeOpportunityScore(state, roomHealth);
   const streamHealth   = computeStreamHealth(state, roomHealth, sessionPhase);
-  const velocity       = computeRevenueVelocity(state?.currentUPM ?? 0, sessions);
+  const velocity       = computeRevenueVelocity(state?.currentUPM ?? 0, sessions, state?.elapsedMins);
   const comparison     = computeLiveComparison(state, sessions);
   const goalStrategy   = getGoalStrategy(state, roomHealth);
   const recoveryActions = getRecoveryActions(sessionPhase);
@@ -1376,13 +1415,15 @@ export default function LivePage() {
               {/* LEFT */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                {/* 4 stat cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                {/* 6 stat cards: Revenue, Avg Tip, Tips Count, Unique Tippers, Largest Tip, Top Tipper */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                   {[
                     { label: 'Revenue',  value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`,           color: C.green,      sub: velocity.label || null,         showSparkline: true },
-                    { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00',                color: C.cyan,       sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
                     { label: 'Avg Tip',  value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`,            color: C.gold,       sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
-                    { label: 'Rev/hr',   value: state?.elapsedMins >= 2 ? `$${velocity.currentUPH.toFixed(0)}` : 'calculating…',                      color: state?.elapsedMins >= 2 ? velocity.color : C.muted, sub: state?.elapsedMins >= 2 && comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : (state?.elapsedMins < 2 ? `wait ${(2 - state.elapsedMins).toFixed(1)}m` : null), showSparkline: false },
+                    { label: 'Tips',     value: `${state?.liveOnlyCount || 0}`,                            color: C.cyan,       sub: `${state?.uniqueTippersCount || 0} unique`,    showSparkline: false },
+                    { label: 'Largest Tip', value: `$${state?.largestTip?.toFixed(2) || '0.00'}`,           color: C.pink,       sub: null,                          showSparkline: false },
+                    { label: 'Unique Tippers', value: `${state?.uniqueTippersCount || 0}`,                  color: C.purple,     sub: null,                          showSparkline: false },
+                    { label: 'Top Tipper', value: state?.topTipper?.username || '—',                       color: C.muted,      sub: state?.topTipper ? `$${state.topTipper.revenue.toFixed(2)}` : null, showSparkline: false },
                   ].map(({ label, value, color, sub, showSparkline }) => (
                     <div key={label} className="cc-card" style={{ ...glassCard, borderRadius: 12, padding: 18, transition: 'box-shadow 0.2s ease', cursor: 'default' }}
                       onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 0 20px ${color}28`; }}
@@ -1400,25 +1441,16 @@ export default function LivePage() {
                   ))}
                 </div>
 
-                {/* Pace + Goal */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div style={{ borderRadius: 12, padding: '14px 18px', background: pace.bg, border: `1px solid ${pace.border}` }}>
-                    <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 }}>Pace</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: pace.color }}>{pace.label}</div>
-                    {state?.firstHalfUPM > 0 && (
-                      <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>1st: ${state.firstHalfUPM.toFixed(2)}/m → 2nd: ${state.secondHalfUPM.toFixed(2)}/m</div>
-                    )}
+                {/* Goal */}
+                <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Goal</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: (state?.goalProgress || 0) >= 100 ? C.green : C.white }}>{state?.goalProgress || 0}%</div>
                   </div>
-                  <div style={{ ...glassCard, borderRadius: 12, padding: '14px 18px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8 }}>Goal</div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: (state?.goalProgress || 0) >= 100 ? C.green : C.white }}>{state?.goalProgress || 0}%</div>
-                    </div>
-                    <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
-                      <div style={{ height: '100%', width: `${Math.min(state?.goalProgress || 0, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
-                    </div>
-                    {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
+                  <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 6 }}>
+                    <div style={{ height: '100%', width: `${Math.min(state?.goalProgress || 0, 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})`, transition: 'width 0.5s ease' }} />
                   </div>
+                  {liveGoalTokens > 0 && state && <div style={{ fontSize: 10, color: C.muted }}>{state.totalTokens} / {liveGoalTokens} tokens</div>}
                 </div>
 
                 {/* Platform Stats */}
@@ -1687,6 +1719,27 @@ export default function LivePage() {
                   </div>
                 )}
 
+                {/* Top 3 Tippers Leaderboard */}
+                {state?.top3Tippers && state.top3Tippers.length > 0 && (
+                  <div style={{ borderRadius: 14, padding: '16px 18px', background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.2)' }}>
+                    <div style={{ fontSize: 9, color: C.purple, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 12 }}>🏆 Top 3 Tippers</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {state.top3Tippers.map((tipper, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 10, borderBottom: idx < state.top3Tippers.length - 1 ? `1px solid rgba(255,255,255,0.06)` : 'none' }}>
+                          <div style={{ fontSize: 16, fontWeight: 900, color: idx === 0 ? C.gold : idx === 1 ? C.cyan : C.muted, minWidth: 24 }}>#{idx + 1}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{tipper.username}</div>
+                            <div style={{ fontSize: 10, color: C.muted }}>This session</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: C.cyan }}>${tipper.revenue.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Whale / Top Tipper Alert */}
                 {whaleAlert && (
                   <div style={{ borderRadius: 14, padding: '16px 18px', background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.3)' }}>
@@ -1728,51 +1781,6 @@ export default function LivePage() {
             {/* ── BOTTOM PANELS ─────────────────────────────────── */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginBottom: 28 }}>
 
-              {/* Session Timeline */}
-              {liveActive && (liveEvents.length > 0 || phaseChangeLog.current.length > 0) && (() => {
-                const tipEntries   = liveEvents.filter(e => !e._isHistory).map(e => ({ type: 'tip',   ts: new Date(e.timestamp).getTime(), icon: (e.normalizedRevenue || 0) >= 5 ? '🐋' : '💰', text: `${e.username} — ${e.tokens > 0 ? e.tokens + 't' : ''} $${(e.normalizedRevenue || 0).toFixed(2)}`, color: (e.normalizedRevenue || 0) >= 5 ? C.gold : C.green }));
-                const phaseEntries = phaseChangeLog.current.map(p => ({ type: 'phase', ts: p.ts, icon: p.icon, text: `Phase → ${p.label}`, color: C.cyan }));
-                const alertEntries = firedAlertsLog.current.slice(0, 6).map(a => ({ type: 'alert',   ts: a.ts, icon: a.icon, text: a.text, color: C.muted }));
-                const merged = [...tipEntries, ...phaseEntries, ...alertEntries].sort((a, b) => b.ts - a.ts).slice(0, 20);
-                return (
-                  <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                    <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>⏱ Session Timeline</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
-                      {merged.length === 0 ? (
-                        <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '12px 0' }}>Events will appear here as your session unfolds</div>
-                      ) : merged.map((entry, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 8px', borderRadius: 7, background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
-                          <span style={{ fontSize: 13, flexShrink: 0 }}>{entry.icon}</span>
-                          <span style={{ fontSize: 11, color: entry.color, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                          <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Alert History */}
-              {liveActive && firedAlertsLog.current.length > 0 && (
-                <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                  <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }}>
-                    {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
-                      <div key={`${entry.ts}-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 11, color: C.text, lineHeight: 1.4, marginBottom: 4 }}>{entry.text}</div>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <button onClick={() => respondToCoachingPrompt('performed')} style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 10, cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.target.style.background = 'rgba(16,185,129,0.35)'; }} onMouseLeave={e => { e.target.style.background = 'rgba(16,185,129,0.2)'; }}>✓ Done</button>
-                            <button onClick={() => respondToCoachingPrompt('skipped')} style={{ padding: '3px 10px', borderRadius: 5, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: C.muted, fontWeight: 700, fontSize: 10, cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => { e.target.style.background = 'rgba(255,255,255,0.15)'; }} onMouseLeave={e => { e.target.style.background = 'rgba(255,255,255,0.08)'; }}>Skip</button>
-                            <span style={{ fontSize: 9, color: C.dim, marginLeft: 'auto', whiteSpace: 'nowrap' }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
