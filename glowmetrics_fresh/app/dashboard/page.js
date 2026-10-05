@@ -2473,7 +2473,14 @@ const stopImportMessageRotation = () => {
   // a rate far above the one shown everywhere else. No rate is correct there.
   const platformRoiMap = {}
   ;(analytics?.platforms || []).forEach(p => {
-    platformRoiMap[p.platform] = platformVelocity[p.platform] ?? null
+    if (platformVelocity[p.platform] !== undefined) {
+      platformRoiMap[p.platform] = platformVelocity[p.platform]
+    } else if (p.hours && p.hours > 0) {
+      // Calculate ROI locally: total revenue / total hours streamed
+      platformRoiMap[p.platform] = (p.totalUSD || 0) / p.hours
+    } else {
+      platformRoiMap[p.platform] = null
+    }
   })
   const missedRevenueByPlat   = analytics?.missedRevenueByPlatform || {}
   const returningVsNew        = analytics?.returningVsNew        || null
