@@ -223,3 +223,6 @@ BEGIN
   );
 END;
 $function$;
+
+-- Required: Service-role (API layer) calls this RPC with validated user_id
+GRANT EXECUTE ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamp with time zone, bigint) TO service_role;
