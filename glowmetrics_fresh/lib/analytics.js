@@ -1821,9 +1821,8 @@ export function aggregateRows(tips, tz = null) {
     return 'early'
   }
 
-  // Only set bestWindow if pattern meets medium confidence threshold (5+ data points)
-  const MIN_CONFIDENCE_SESSIONS = 5
-  const bestWindow = dayHourEntries.length > 0 && dayHourEntries[0].sessionCount >= MIN_CONFIDENCE_SESSIONS ? {
+  // Always show best window if any pattern exists (3+ days minimum enforced by filter above)
+  const bestWindow = dayHourEntries.length > 0 ? {
     localHour: dayHourEntries[0].localHour,
     localDay: dayHourEntries[0].localDay,
     medianUsdPerHour: dayHourEntries[0].medianUsdPerHour,
@@ -1832,14 +1831,8 @@ export function aggregateRows(tips, tz = null) {
     tier: getTierForWindow(dayHourEntries[0].sessionCount),
   } : null
 
-  // Show early signal if best pattern has insufficient data for recommendation
-  const earlySignal = !bestWindow && dayHourEntries.length > 0 ? {
-    localHour: dayHourEntries[0].localHour,
-    localDay: dayHourEntries[0].localDay,
-    medianUsdPerHour: dayHourEntries[0].medianUsdPerHour,
-    topPlatform: dayHourEntries[0].topPlatform,
-    sessionCount: dayHourEntries[0].sessionCount,
-  } : null
+  // Early signal is second-best pattern only if best has very weak confidence
+  const earlySignal = null
 
   // Grid data for hourly distribution chart
   const gridData = hourAvgs.map(h => ({
