@@ -4592,6 +4592,14 @@ const stopImportMessageRotation = () => {
               else                          pace = 'on_track'
             }
             const topEntry = Object.entries(tipperMap).sort((a, b) => b[1] - a[1])[0]
+            const largestTip = liveOnly.length > 0
+              ? parseFloat(Math.max(...liveOnly.map(e => e.normalizedRevenue || 0)).toFixed(2))
+              : 0
+            const uniqueTippersCount = Object.keys(tipperMap).length
+            const top3Tippers = Object.entries(tipperMap)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 3)
+              .map(([username, revenue]) => ({ username, revenue: parseFloat(revenue.toFixed(2)) }))
             return {
               totalRevenue:    parseFloat(totalRevenue.toFixed(2)),
               totalTokens,
@@ -4602,7 +4610,10 @@ const stopImportMessageRotation = () => {
               goalProgress,
               paceStatus:      pace,
               liveOnlyCount:   liveOnly.length,
+              uniqueTippersCount,
+              largestTip,
               topTipper:       topEntry ? { username: topEntry[0], revenue: parseFloat(topEntry[1].toFixed(2)) } : null,
+              top3Tippers,
               firstHalfUPM:    parseFloat(fUPM.toFixed(3)),
               secondHalfUPM:   parseFloat(sUPM.toFixed(3)),
               currentUPM:      parseFloat((totalRevenue / elapsedMins).toFixed(3)),
@@ -4969,15 +4980,14 @@ const stopImportMessageRotation = () => {
                 </div>
               </div>
 
-              {/* ── KPI STRIP (Revenue | Tips | Tippers | Top Tip | Pace) ─────────────────────────────── */}
+              {/* ── KPI STRIP (Revenue | Tips | Tippers | Top Tip) ─────────────────────────────── */}
               {liveActive && state && (
                 <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
                   {[
                     { label: 'Revenue', value: `$${state.totalRevenue.toFixed(2)}`, color: C.green },
                     { label: 'Tips', value: state.liveOnlyCount.toString(), color: C.cyan },
-                    { label: 'Tippers', value: state.tippers.length.toString(), color: C.gold },
-                    { label: 'Top Tip', value: state.topTipper ? `$${state.topTipper.revenue.toFixed(2)}` : '—', color: C.pink },
-                    { label: 'Pace', value: `$${velocity.currentUPH.toFixed(0)}/hr`, color: velocity.color },
+                    { label: 'Unique Tippers', value: state.uniqueTippersCount.toString(), color: C.purple },
+                    { label: 'Largest Tip', value: `$${state.largestTip.toFixed(2)}`, color: C.pink },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ flex: '0 1 auto', borderRadius: 8, padding: '10px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</span>
@@ -5070,13 +5080,11 @@ const stopImportMessageRotation = () => {
                     {/* LEFT */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-                      {/* MONEY MOMENTUM — 4 stats */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                      {/* MONEY MOMENTUM — 2 stats */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                         {[
-                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: velocity.label || null, showSparkline: true },
-                          { label: 'Tips/min', value: state?.tipsPerMinute?.toFixed(2) || '0.00', color: C.cyan, sub: `${state?.liveOnlyCount || 0} tips live`, showSparkline: false },
+                          { label: 'Revenue', value: `$${state?.totalRevenue?.toFixed(2) || '0.00'}`, color: C.green, sub: null, showSparkline: true },
                           { label: 'Avg Tip', value: `$${state?.avgTipValue?.toFixed(2) || '0.00'}`, color: C.gold, sub: state?.topTipper ? `Top: ${state.topTipper.username}` : null, showSparkline: false },
-                          { label: 'Rev/hr', value: `$${velocity.currentUPH.toFixed(0)}`, color: velocity.color, sub: comparison.vsAvgPct !== null ? `${(comparison.vsAvgPct ?? 0) >= 0 ? '+' : ''}${comparison.vsAvgPct}% vs avg` : null, showSparkline: false },
                         ].map(({ label, value, color, sub, showSparkline }) => (
                           <div key={label} style={{ ...glassCard, borderRadius: 12, padding: '18px', transition: 'box-shadow 0.2s ease', cursor: 'default' }}
                             onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 0 20px ${color}28` }}
@@ -5282,50 +5290,26 @@ const stopImportMessageRotation = () => {
                     </div>
                   </div>
 
-                  {/* ── BOTTOM PANELS ─────────────────────────────────── */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
-
-                    {/* SESSION TIMELINE */}
-                    {liveActive && (liveEvents.length > 0 || phaseChangeLog.current.length > 0) && (() => {
-                      const tipEntries = liveEvents.filter(e => !e._isHistory).map(e => ({ type: 'tip', ts: new Date(e.timestamp).getTime(), icon: (e.normalizedRevenue || 0) >= 5 ? '🐋' : '💰', text: `${e.username} — ${e.tokens > 0 ? e.tokens + 't' : ''} $${(e.normalizedRevenue || 0).toFixed(2)}`, color: (e.normalizedRevenue || 0) >= 5 ? C.gold : C.green }))
-                      const phaseEntries = phaseChangeLog.current.map(p => ({ type: 'phase', ts: p.ts, icon: p.icon, text: `Phase → ${p.label}`, color: C.cyan }))
-                      const alertEntries = firedAlertsLog.current.slice(0, 6).map(a => ({ type: 'alert', ts: a.ts, icon: a.icon, text: a.text, color: C.muted }))
-                      const merged = [...tipEntries, ...phaseEntries, ...alertEntries].sort((a, b) => b.ts - a.ts).slice(0, 20)
-                      return (
-                        <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                          <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>⏱ Session Timeline</div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 240, overflowY: 'auto' }}>
-                            {merged.length === 0 ? (
-                              <div style={{ fontSize: 12, color: C.muted, textAlign: 'center', padding: '12px 0' }}>Events will appear here as your session unfolds</div>
-                            ) : merged.map((entry, i) => (
-                              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '5px 8px', borderRadius: 7, background: i === 0 ? 'rgba(255,255,255,0.04)' : 'transparent' }}>
-                                <span style={{ fontSize: 13, flexShrink: 0 }}>{entry.icon}</span>
-                                <span style={{ fontSize: 11, color: entry.color, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                                <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap' }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })()}
-
-                    {/* ALERT HISTORY */}
-                    {liveActive && firedAlertsLog.current.length > 0 && (
-                      <div style={{ ...glassCard, borderRadius: 14, padding: 18 }}>
-                        <div style={{ fontSize: 9, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 10 }}>📋 Alert History</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 240, overflowY: 'auto' }}>
-                          {firedAlertsLog.current.slice(0, 15).map((entry, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 8px', borderRadius: 7, background: 'rgba(255,255,255,0.02)' }}>
-                              <span style={{ fontSize: 13, flexShrink: 0, lineHeight: 1.4 }}>{entry.icon}</span>
-                              <span style={{ fontSize: 11, color: C.text, flex: 1, lineHeight: 1.4 }}>{entry.text}</span>
-                              <span style={{ fontSize: 9, color: C.muted, whiteSpace: 'nowrap', marginTop: 1 }}>{new Date(entry.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  {/* Top 3 Tippers Leaderboard */}
+                  {state?.top3Tippers && state.top3Tippers.length > 0 && (
+                    <div style={{ ...glassCard, borderRadius: 14, padding: '16px 18px' }}>
+                      <div style={{ fontSize: 9, color: C.purple, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700, marginBottom: 12 }}>🏆 Top 3 Tippers</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {state.top3Tippers.map((tipper, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 10, borderBottom: idx < state.top3Tippers.length - 1 ? `1px solid rgba(255,255,255,0.06)` : 'none' }}>
+                            <div style={{ fontSize: 16, fontWeight: 900, color: idx === 0 ? C.gold : idx === 1 ? C.cyan : C.muted, minWidth: 24 }}>#{idx + 1}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.white }}>{tipper.username}</div>
+                              <div style={{ fontSize: 10, color: C.muted }}>This session</div>
                             </div>
-                          ))}
-                        </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 13, fontWeight: 800, color: C.cyan }}>${tipper.revenue.toFixed(2)}</div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                  </div>
+                    </div>
+                  )}
 
                 </div>
               )}
