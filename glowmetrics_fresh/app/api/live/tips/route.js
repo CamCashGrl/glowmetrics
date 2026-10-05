@@ -182,10 +182,25 @@ export async function POST(req) {
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
-    // RPC returns { tips_row, live_tips_row } or { error }
-    // On success, data contains the created rows
+    // RPC returns { success, duplicate, live_tip_id, tip_id, live_session_id, client_event_id }
+    // success=false indicates validation failure; duplicate=true indicates retry of existing event
+    if (!data?.success) {
+      console.error('persist_extension_tip RPC returned success=false:', data);
+      await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'error', 'RPC persistence failed (validation)', { platform, username, rpc_data: data });
+      return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
+    }
+
+    // Duplicate event (retry of existing event_id or dedup_key) — return 200 with duplicate flag
+    if (data.duplicate) {
+      return Response.json(
+        { success: true, duplicate: true, live_tip_id: data.live_tip_id, message: `Tip from ${username} already received` },
+        { headers: cors }
+      );
+    }
+
+    // New event successfully persisted
     return Response.json(
-      { success: true, tip: data?.live_tips_row || data, message: `Tip from ${username} persisted` },
+      { success: true, duplicate: false, live_tip_id: data.live_tip_id, tip_id: data.tip_id, message: `Tip from ${username} persisted` },
       { headers: cors }
     );
 
