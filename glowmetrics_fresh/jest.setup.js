@@ -2,40 +2,51 @@ import '@testing-library/jest-dom'
 import fs from 'fs'
 import path from 'path'
 
-// Load environment variables from .env.local for tests
-const envPath = path.resolve(__dirname, '.env.local')
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf8')
-  envContent.split('\n').forEach(line => {
-    const match = line.match(/^([^=]+)=(.*)$/)
-    if (match && !line.startsWith('#')) {
-      process.env[match[1]] = match[2]
+const LOG_DIR = path.join(process.cwd(), 'logs', 'tests')
+
+beforeAll(() => {
+  if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR, { recursive: true })
+  }
+})
+
+// Suppress console errors/warnings in tests unless explicitly testing for them
+const originalError = console.error
+const originalWarn = console.warn
+
+beforeEach(() => {
+  console.error = jest.fn((...args) => {
+    if (
+      typeof args[0] === 'string' &&
+      (args[0].includes('Warning: ReactDOM.render') ||
+        args[0].includes('Not implemented: HTMLFormElement.prototype.submit'))
+    ) {
+      return
     }
+    originalError.call(console, ...args)
   })
-}
 
-// Mock Next.js router
-jest.mock('next/router', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    pathname: '/',
-    query: {},
-    asPath: '/',
-  }),
-}))
+  console.warn = jest.fn((...args) => {
+    if (
+      typeof args[0] === 'string' &&
+      args[0].includes('Warning:')
+    ) {
+      return
+    }
+    originalWarn.call(console, ...args)
+  })
+})
 
-// Mock Next.js navigation
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-  }),
-  usePathname: () => '/',
-  useSearchParams: () => new URLSearchParams(),
-}))
+afterEach(() => {
+  console.error = originalError
+  console.warn = originalWarn
+  jest.clearAllMocks()
+})
 
-// Suppress console errors during tests unless explicitly needed
-global.console = {
-  ...console,
-  error: jest.fn(),
-  warn: jest.fn(),
+global.matchMedia = global.matchMedia || function () {
+  return {
+    matches: false,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+  }
 }

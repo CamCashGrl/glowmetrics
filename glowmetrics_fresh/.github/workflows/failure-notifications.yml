@@ -1,0 +1,94 @@
+name: Test Failure Notifications
+
+on:
+  workflow_run:
+    workflows:
+      - 'Daily Test Suite Execution'
+      - 'Test Integrity Guard'
+      - 'Production Health Check'
+    types:
+      - completed
+
+jobs:
+  notify-on-failure:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    name: Send Failure Alert
+
+    steps:
+      - name: Download workflow artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+
+      - name: Parse workflow details
+        id: details
+        run: |
+          WORKFLOW=${{ github.event.workflow_run.name }}
+          BRANCH=${{ github.event.workflow_run.head_branch }}
+          COMMIT=${{ github.event.workflow_run.head_sha }}
+          AUTHOR=${{ github.event.workflow_run.actor }}
+          TIMESTAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+
+          echo "workflow=$WORKFLOW" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "commit=${COMMIT:0:8}" >> $GITHUB_OUTPUT
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+
+      - name: Create failure summary
+        id: summary
+        run: |
+          BODY="❌ **Test Failure Alert**
+
+**Workflow:** ${{ steps.details.outputs.workflow }}
+**Time:** ${{ steps.details.outputs.timestamp }}
+**Branch:** ${{ steps.details.outputs.branch }}
+**Commit:** ${{ steps.details.outputs.commit }}
+**Author:** ${{ steps.details.outputs.author }}
+
+**Action Required:**
+- View workflow logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+- Check test results in artifacts
+- All 427 tests must pass before deployment
+
+**Severity:** HIGH - Production quality check failed"
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub issue for failure
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const workflow = '${{ steps.details.outputs.workflow }}';
+            const commit = '${{ steps.details.outputs.commit }}';
+            const branch = '${{ steps.details.outputs.branch }}';
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `❌ ${workflow} Failed (${commit})`,
+              body: `${{ steps.summary.outputs.body }}`,
+              labels: ['test-failure', 'urgent'],
+              assignees: context.payload.workflow_run.actor ? [context.payload.workflow_run.actor] : []
+            });
+
+      - name: Send workflow notification
+        run: |
+          echo "✉️ Failure notification sent"
+          echo "📊 GitHub Issue created for tracking"
+          echo "🔗 Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+
+  notify-on-success:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    name: Send Success Confirmation
+
+    steps:
+      - name: Log success
+        run: |
+          echo "✅ ${{ github.event.workflow_run.name }} completed successfully"
+          echo "📅 Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          echo "🎯 All checks passing - production ready"
