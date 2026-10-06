@@ -741,6 +741,7 @@ jobs:
               // ============================================
               // Scenario 13: Post-stop tip behavior / no ended-session reconciliation
               // KNOWN DEFECT: Tips arriving after stop() are NOT reconciled into metrics
+              // persist_extension_tip() with no active session returns success=true but live_session_id=null
               // Platform: chaturbate, 100 tokens = $5.00
               // ============================================
               const s13 = await createTempTestUser("s13");
@@ -772,16 +773,15 @@ jobs:
                       p_event_at: pastEventTime,
                     });
 
-                    const tipWasRejected = delayedError && delayedError.message?.toLowerCase().includes("no.*session");
-                    const tipNotReconciled = !delayedError && delayedRpc && delayedRpc.success && delayedRpc.live_session_id === null;
+                    const tipWasOrphaned = !delayedError && delayedRpc && delayedRpc.success && delayedRpc.live_session_id === null;
 
                     const { data: sessionAfter } = await serviceRoleClient.from("live_sessions").select("session_earnings_usd, tip_count").eq("id", sessionId).single();
 
-                    if (tipWasRejected || tipNotReconciled) {
+                    if (tipWasOrphaned) {
                       const metricsUnchanged = sessionAfter.session_earnings_usd === metricsBeforeDelay.earnings && sessionAfter.tip_count === metricsBeforeDelay.tip_count;
-                      printResult("Post-stop tip behavior / no ended-session reconciliation", 13, metricsUnchanged, "Delayed tip does not change finalized metrics (KNOWN DEFECT)", metricsUnchanged ? "Defect confirmed: no reconciliation" : "Metrics changed unexpectedly");
+                      printResult("Post-stop tip behavior / no ended-session reconciliation", 13, metricsUnchanged, "Delayed tip inserted as orphaned (live_session_id=null), metrics unchanged (KNOWN DEFECT)", metricsUnchanged ? "Defect confirmed: orphaned with no reconciliation" : "Metrics changed unexpectedly");
                     } else {
-                      printResult("Post-stop tip behavior / no ended-session reconciliation", 13, false, "Delayed tip rejected or not reconciled", "Unexpected RPC behavior");
+                      printResult("Post-stop tip behavior / no ended-session reconciliation", 13, false, "Delayed tip is orphaned (live_session_id=null)", `Unexpected: ${delayedError?.message || "not orphaned"}`);
                     }
                   } else {
                     printResult("Post-stop tip behavior / no ended-session reconciliation", 13, false, "Stop succeeds", stopError?.message || "Unexpected");
@@ -792,33 +792,45 @@ jobs:
               }
 
               // ============================================
-              // Scenario 14: Overlapping ended sessions - each user has one
+              // Scenario 14: Sequential sessions - start new after stopping old
+              // Database constraint: one unresolved session per user at a time
               // ============================================
               const s14 = await createTempTestUser("s14");
               console.log(`\n📝 Created s14 (auth ID: ${s14.authUserId})`);
 
               {
-                const { data: sessions } = await serviceRoleClient.from("live_sessions").insert([
-                  { user_id: s14.authUserId, status: "active" },
-                  { user_id: s14.authUserId, status: "active" },
-                ]).select();
+                const { data: session1Data, error: session1Error } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert([{ user_id: s14.authUserId, status: "active" }])
+                  .select();
 
-                if (sessions && sessions.length === 2) {
-                  sessions.forEach(s => fixtures.sessionIds.add(s.id));
+                if (!session1Error && session1Data && session1Data.length > 0) {
+                  const session1Id = session1Data[0].id;
+                  fixtures.sessionIds.add(session1Id);
 
-                  const { error: fin1 } = await s14.client.rpc("stop_live_session");
-                  const { data: fin2Result, error: fin2 } = await s14.client.rpc("stop_live_session");
+                  const { error: stopError } = await s14.client.rpc("stop_live_session");
+                  if (!stopError) {
+                    const { data: session2Data, error: session2Error } = await serviceRoleClient
+                      .from("live_sessions")
+                      .insert([{ user_id: s14.authUserId, status: "active" }])
+                      .select();
 
-                  if (!fin1 && !fin2) {
-                    const { data: s1Status } = await serviceRoleClient.from("live_sessions").select("status").eq("id", sessions[0].id).single();
-                    const { data: s2Status } = await serviceRoleClient.from("live_sessions").select("status").eq("id", sessions[1].id).single();
-                    const bothEnded = s1Status?.status === "ended" && s2Status?.status === "ended";
-                    printResult("Overlapping ended sessions", 14, bothEnded, "Both sessions can be ended", bothEnded ? "Correct" : "Not both ended");
+                    if (!session2Error && session2Data && session2Data.length > 0) {
+                      const session2Id = session2Data[0].id;
+                      fixtures.sessionIds.add(session2Id);
+
+                      const { data: s1Status } = await serviceRoleClient.from("live_sessions").select("status").eq("id", session1Id).single();
+                      const { data: s2Status } = await serviceRoleClient.from("live_sessions").select("status").eq("id", session2Id).single();
+                      const sequentialCorrect = s1Status?.status === "ended" && s2Status?.status === "active";
+                      printResult("Sequential sessions - start new after stopping old", 14, sequentialCorrect, "First ended, second active (respects one-unresolved constraint)", sequentialCorrect ? "Correct" : "Status incorrect");
+                    } else {
+                      printResult("Sequential sessions - start new after stopping old", 14, false, "Second session created after first stopped", session2Error?.message || "Failed");
+                    }
                   } else {
-                    printResult("Overlapping ended sessions", 14, false, "Both sessions end", `Errors: fin1=${fin1?.message}, fin2=${fin2?.message}`);
+                    printResult("Sequential sessions - start new after stopping old", 14, false, "First session stopped", stopError?.message || "Unexpected");
                   }
                 } else {
-                  printResult("Overlapping ended sessions", 14, false, "Two sessions created", "Failed");
+                  printResult("Sequential sessions - start new after stopping old", 14, false, "First session created", session1Error?.message || "Unexpected");
                 }
               }
 
@@ -856,24 +868,27 @@ jobs:
                   ]);
 
                   if (results.every(r => r.status === "fulfilled")) {
-                    const tipData = results[0].value.data;
-                    const stopData = results[1].value.data;
+                    const persistResult = results[0].value;
+                    const stopResult = results[1].value;
 
-                    let raceOutcome = "";
-                    let tipIncluded = false;
+                    const persistError = persistResult.error;
+                    const stopError = stopResult.error;
+                    const tipData = persistResult.data;
+                    const stopData = stopResult.data;
 
-                    if (tipData?.success && stopData) {
+                    if (persistError || stopError) {
+                      printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, false, "Both RPC calls succeed without database error", `RPC error: persist=${persistError?.message}, stop=${stopError?.message}`);
+                    } else if (tipData?.success && stopData) {
                       fixtures.liveTipIds.add(tipData.live_tip_id);
                       fixtures.tipIds.add(tipData.tip_id);
-                      tipIncluded = stopData.tip_count >= 1;
-                      raceOutcome = tipIncluded ? "Tip WAS included in finalized metrics" : "Tip NOT included in finalized metrics (race lost)";
+                      const tipIncluded = stopData.tip_count >= 1;
+                      const raceOutcome = tipIncluded ? "Tip WAS included in finalized metrics" : "Tip NOT included in finalized metrics (race lost)";
+                      printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, true, "Both calls succeed; documents observed race outcome (no lock)", `PASS (observed): ${raceOutcome}`);
                     } else {
-                      raceOutcome = "RPC call failed unexpectedly";
+                      printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, false, "Both RPC calls execute successfully", "Unexpected response shape");
                     }
-
-                    printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, true, "Both calls complete; documents race outcome (no lock)", `PASS (observed): ${raceOutcome}`);
                   } else {
-                    printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, false, "Both concurrent operations complete", "One or both failed");
+                    printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, false, "Both concurrent operations complete", "One or both Promise rejected");
                   }
                 } else {
                   printResult("RACE DETECTION: Concurrent persist + stop (DEFECT DOCUMENTED)", 15, false, "Session created", sessionError?.message || "Unexpected");
