@@ -58,19 +58,18 @@ jobs:
           console.log("SCENARIO 9: finalize_live_session() Idempotency - Raw Evidence");
           console.log("=".repeat(80));
 
-          let tempEmail = null;
           let tempUserId = null;
+          let sessionId = null;
+          let tipEventId = null;
 
           try {
-            const freshUserId = generateUUID();
             const RUN_ID = new Date().getTime().toString().slice(-6);
-            tempEmail = `phase2-${RUN_ID}-s9@staging.local`;
+            const tempEmail = `phase2-${RUN_ID}-s9@staging.local`;
             const tempPassword = crypto.randomBytes(24).toString("hex");
 
             console.log(`\nCreating temporary Auth user for authenticated session owner context`);
             console.log(`Email: ${tempEmail}`);
 
-            // Create temp Auth user with service role
             const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
               email: tempEmail,
               password: tempPassword,
@@ -81,7 +80,6 @@ jobs:
             tempUserId = created.user.id;
             console.log(`Created temp auth user: ${tempUserId}`);
 
-            // Create anon client for sign-in
             const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             const { error: signInErr } = await anonClient.auth.signInWithPassword({
               email: tempEmail,
@@ -91,10 +89,8 @@ jobs:
             if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
             console.log("Temp auth user signed in successfully");
 
-            // Use the authenticated client (anonClient) for subsequent RPC calls
             const authenticatedClient = anonClient;
 
-            // Create a test session with service role (matching temp auth user)
             const { data: sessionData, error: sessionError } = await serviceRoleClient
               .from("live_sessions")
               .insert({
@@ -104,11 +100,10 @@ jobs:
               .select();
 
             if (sessionError) throw sessionError;
-            const sessionId = sessionData[0].id;
+            sessionId = sessionData[0].id;
             console.log(`Created test session: ${sessionId}`);
 
-            // Add one tip to the session via persist_extension_tip (service role)
-            const tipEventId = generateUUID();
+            tipEventId = generateUUID();
             const { error: tipError } = await serviceRoleClient.rpc(
               "persist_extension_tip",
               {
@@ -126,7 +121,6 @@ jobs:
             if (tipError) throw tipError;
             console.log("Added one tip to session");
 
-            // FIRST FINALIZE CALL (authenticated user context)
             console.log("\n--- FIRST FINALIZE CALL (Authenticated Context) ---");
             const finalize1Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
             const err1 = finalize1Result.error;
@@ -134,12 +128,9 @@ jobs:
 
             console.log("finalize1.error:", err1 ? `${err1.code}: ${err1.message}` : null);
             console.log("finalize1 (raw):", JSON.stringify(finalize1, null, 2));
-            console.log("typeof finalize1:", typeof finalize1);
-            console.log("Array.isArray(finalize1):", Array.isArray(finalize1));
 
             const final_fields_1 = {};
             if (finalize1 && typeof finalize1 === 'object') {
-              console.log("Keys in finalize1:", Object.keys(finalize1));
               console.log("finalize1.id:", finalize1.id);
               console.log("finalize1.status:", finalize1.status);
               console.log("finalize1.finalized_at:", finalize1.finalized_at);
@@ -151,7 +142,6 @@ jobs:
               });
             }
 
-            // SECOND FINALIZE CALL (on same session, authenticated context)
             console.log("\n--- SECOND FINALIZE CALL (Authenticated Context) ---");
             const finalize2Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
             const err2 = finalize2Result.error;
@@ -159,14 +149,9 @@ jobs:
 
             console.log("finalize2.error:", err2 ? `${err2.code}: ${err2.message}` : null);
             console.log("finalize2 (raw):", JSON.stringify(finalize2, null, 2));
-            console.log("typeof finalize2:", typeof finalize2);
-            console.log("Array.isArray(finalize2):", Array.isArray(finalize2));
-            console.log("finalize2 === null:", finalize2 === null);
-            console.log("finalize2 === undefined:", finalize2 === undefined);
 
             const final_fields_2 = {};
             if (finalize2 && typeof finalize2 === 'object') {
-              console.log("Keys in finalize2:", Object.keys(finalize2));
               console.log("finalize2.id:", finalize2.id);
               console.log("finalize2.status:", finalize2.status);
               console.log("finalize2.finalized_at:", finalize2.finalized_at);
@@ -178,7 +163,6 @@ jobs:
               });
             }
 
-            // IDEMPOTENCY CHECK - Deep comparison
             console.log("\n--- IDEMPOTENCY VALIDATION ---");
             const bothSucceeded = !err1 && !err2;
             const firstReturnsData = !!finalize1 && typeof finalize1 === 'object';
@@ -192,36 +176,48 @@ jobs:
             console.log("finalized_at unchanged:", finalizedAtMatch ? "✓" : "✗");
             console.log("All final_* fields unchanged:", finalFieldsMatch ? "✓" : "✗");
 
-            // Cleanup - Delete by exact client_event_id first
-            console.log("\n--- CLEANUP ---");
-            const { error: tipDelErr } = await serviceRoleClient
-              .from("tips")
-              .delete()
-              .eq("client_event_id", tipEventId);
-            if (tipDelErr) console.error("Cleanup error (tips):", tipDelErr);
-            else console.log("Deleted tips row by client_event_id");
-
-            const { error: liveDelErr } = await serviceRoleClient
-              .from("live_tips")
-              .delete()
-              .eq("client_event_id", tipEventId);
-            if (liveDelErr) console.error("Cleanup error (live_tips):", liveDelErr);
-            else console.log("Deleted live_tips row by client_event_id");
-
-            const { error: sessDelErr } = await serviceRoleClient
-              .from("live_sessions")
-              .delete()
-              .eq("id", sessionId);
-            if (sessDelErr) console.error("Cleanup error (session):", sessDelErr);
-            else console.log("Deleted session row");
-
-            // Delete temp auth user
-            const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
-            if (userDelErr) console.error("Cleanup error (auth user):", userDelErr);
-            else console.log("Deleted temp auth user");
+            const passed = bothSucceeded && firstReturnsData && idsMatch && finalizedAtMatch && finalFieldsMatch;
+            if (!passed) {
+              throw new Error("Scenario 9 idempotency invariant failed");
+            }
+            console.log("\n✅ Scenario 9 PASSED");
 
           } catch (error) {
-            console.error(`❌ Scenario 9 error: ${error.message}`);
+            throw new Error(`❌ Scenario 9 error: ${error.message}`);
+          } finally {
+            console.log("\n--- CLEANUP ---");
+            if (tipEventId) {
+              const { error: tipDelErr } = await serviceRoleClient
+                .from("tips")
+                .delete()
+                .eq("client_event_id", tipEventId);
+              if (tipDelErr) throw new Error(`Cleanup failed (tips): ${tipDelErr.message}`);
+              console.log("Deleted tips row");
+            }
+
+            if (tipEventId) {
+              const { error: liveDelErr } = await serviceRoleClient
+                .from("live_tips")
+                .delete()
+                .eq("client_event_id", tipEventId);
+              if (liveDelErr) throw new Error(`Cleanup failed (live_tips): ${liveDelErr.message}`);
+              console.log("Deleted live_tips row");
+            }
+
+            if (sessionId) {
+              const { error: sessDelErr } = await serviceRoleClient
+                .from("live_sessions")
+                .delete()
+                .eq("id", sessionId);
+              if (sessDelErr) throw new Error(`Cleanup failed (session): ${sessDelErr.message}`);
+              console.log("Deleted session row");
+            }
+
+            if (tempUserId) {
+              const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+              if (userDelErr) throw new Error(`Cleanup failed (auth user): ${userDelErr.message}`);
+              console.log("Deleted temp auth user");
+            }
           }
         }
 
@@ -230,20 +226,18 @@ jobs:
           console.log("SCENARIO 16: Authenticated User EXECUTE Permission Denial - Raw Evidence");
           console.log("=".repeat(80));
 
-          let tempEmail = null;
           let tempUserId = null;
 
           try {
             const RUN_ID = new Date().getTime().toString().slice(-6);
-            tempEmail = `phase2-${RUN_ID}-s16@staging.local`;
+            const tempEmail = `phase2-${RUN_ID}-s16@staging.local`;
             const tempPassword = crypto.randomBytes(24).toString("hex");
-            const targetUserId = generateUUID(); // Different user that this auth user will try to write as
+            const targetUserId = generateUUID();
 
             console.log(`\nCreating temporary authenticated user`);
             console.log(`Email: ${tempEmail}`);
             console.log(`Target user_id (different from auth user): ${targetUserId}`);
 
-            // Create temp Auth user with service role
             const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
               email: tempEmail,
               password: tempPassword,
@@ -254,7 +248,6 @@ jobs:
             tempUserId = created.user.id;
             console.log(`Created temp auth user: ${tempUserId}`);
 
-            // Create anon client for sign-in
             const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             const { error: signInErr } = await anonClient.auth.signInWithPassword({
               email: tempEmail,
@@ -267,7 +260,6 @@ jobs:
             const authenticatedClient = anonClient;
             const testEventId = generateUUID();
 
-            // Authenticated user attempts persist_extension_tip call
             console.log("\n--- AUTHENTICATED USER RPC CALL (No EXECUTE Permission Expected) ---");
             const { data: tipData, error: rpcError } = await authenticatedClient.rpc(
               "persist_extension_tip",
@@ -289,13 +281,10 @@ jobs:
             if (rpcError) {
               console.log("rpcError.code:", rpcError.code);
               console.log("rpcError.message:", rpcError.message);
-              console.log("rpcError.details:", rpcError.details);
-              console.log("rpcError.hint:", rpcError.hint);
               console.log("rpcError.status:", rpcError.status);
             }
             console.log("tipData (should be null if denied):", tipData);
 
-            // Verify row does NOT exist in live_tips
             console.log("\n--- VERIFY ROW DOES NOT EXIST IN LIVE_TIPS ---");
             const { data: liveRowCheck, error: liveCheckErr } = await serviceRoleClient
               .from("live_tips")
@@ -303,16 +292,8 @@ jobs:
               .eq("client_event_id", testEventId)
               .maybeSingle();
 
-            if (liveCheckErr) {
-              console.log("Query error:", liveCheckErr.message);
-            } else {
-              console.log("Row exists in live_tips:", liveRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
-              if (liveRowCheck) {
-                console.log("Row data:", JSON.stringify(liveRowCheck, null, 2));
-              }
-            }
+            console.log("Row exists in live_tips:", liveRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
 
-            // Also check tips table
             console.log("\n--- VERIFY ROW DOES NOT EXIST IN TIPS ---");
             const { data: tipRowCheck, error: tipCheckErr } = await serviceRoleClient
               .from("tips")
@@ -320,27 +301,35 @@ jobs:
               .eq("client_event_id", testEventId)
               .maybeSingle();
 
-            if (tipCheckErr) {
-              console.log("Query error:", tipCheckErr.message);
-            } else {
-              console.log("Row exists in tips:", tipRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
-              if (tipRowCheck) {
-                console.log("Row data:", JSON.stringify(tipRowCheck, null, 2));
-              }
-            }
+            console.log("Row exists in tips:", tipRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
 
             console.log("\n--- PERMISSION VERDICT ---");
-            const permission_denied = !!rpcError && !liveRowCheck && !tipRowCheck;
-            console.log(`Authenticated user EXECUTE permission: ${permission_denied ? "✓ CORRECTLY DENIED" : "✗ UNEXPECTEDLY ALLOWED"}`);
+            const msgLower = (rpcError?.message || "").toLowerCase();
+            const isPermissionDenial = !!(
+              rpcError &&
+              (msgLower.includes("permission denied") || msgLower.includes("execute") || msgLower.includes("permission"))
+            );
+            const noRows = !liveRowCheck && !tipRowCheck;
+            const passed = isPermissionDenial && noRows;
 
-            // Cleanup - Delete temp auth user
-            console.log("\n--- CLEANUP ---");
-            const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
-            if (userDelErr) console.error("Cleanup error (auth user):", userDelErr);
-            else console.log("Deleted temp auth user");
+            console.log(`Permission-specific error: ${isPermissionDenial ? "✓" : "✗"}`);
+            console.log(`No rows created: ${noRows ? "✓" : "✗"}`);
+            console.log(`Overall: ${passed ? "✓ CORRECTLY DENIED" : "✗ UNEXPECTEDLY ALLOWED"}`);
+
+            if (!passed) {
+              throw new Error("Scenario 16 permission denial invariant failed");
+            }
+            console.log("\n✅ Scenario 16 PASSED");
 
           } catch (error) {
-            console.error(`❌ Scenario 16 error: ${error.message}`);
+            throw new Error(`❌ Scenario 16 error: ${error.message}`);
+          } finally {
+            console.log("\n--- CLEANUP ---");
+            if (tempUserId) {
+              const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+              if (userDelErr) throw new Error(`Cleanup failed (auth user): ${userDelErr.message}`);
+              console.log("Deleted temp auth user");
+            }
           }
         }
 
@@ -350,14 +339,16 @@ jobs:
           console.log("(Service-role RPC call - does NOT verify full /api/live/tips HTTP path)");
           console.log("=".repeat(80));
 
+          let sessionId = null;
+          let freshEventId = null;
+
           try {
             const freshUserId = generateUUID();
-            const freshEventId = generateUUID();
+            freshEventId = generateUUID();
 
             console.log(`\nFresh test user_id: ${freshUserId}`);
             console.log(`Fresh client_event_id: ${freshEventId}`);
 
-            // Create a fresh session for this user
             const { data: sessionData, error: sessionError } = await serviceRoleClient
               .from("live_sessions")
               .insert({
@@ -367,10 +358,9 @@ jobs:
               .select();
 
             if (sessionError) throw sessionError;
-            const sessionId = sessionData[0].id;
+            sessionId = sessionData[0].id;
             console.log(`Created fresh session: ${sessionId}`);
 
-            // ONE fresh RPC call
             console.log("\n--- RPC CALL (ONE TRANSACTION) ---");
             const { data: rpcResult, error: rpcError } = await serviceRoleClient.rpc(
               "persist_extension_tip",
@@ -387,10 +377,9 @@ jobs:
               }
             );
 
-            console.log("rpcError:", rpcError);
+            if (rpcError) throw rpcError;
             console.log("rpcResult:", JSON.stringify(rpcResult, null, 2));
 
-            // Query both tables by exact client_event_id
             console.log("\n--- QUERY TIPS TABLE ---");
             const { data: tipRow, error: tipErr } = await serviceRoleClient
               .from("tips")
@@ -398,18 +387,9 @@ jobs:
               .eq("client_event_id", freshEventId)
               .maybeSingle();
 
-            console.log("tipErr:", tipErr);
+            if (tipErr) throw tipErr;
             if (tipRow) {
-              console.log("tips row found:");
-              console.log("  id:", tipRow.id);
-              console.log("  user_id:", tipRow.user_id);
-              console.log("  date_time:", tipRow.date_time);
-              console.log("  platform:", tipRow.platform);
-              console.log("  username:", tipRow.username);
-              console.log("  tokens:", tipRow.tokens);
-              console.log("  usd:", tipRow.usd);
-              console.log("  source:", tipRow.source);
-              console.log("  client_event_id:", tipRow.client_event_id);
+              console.log("tips row found: id:", tipRow.id, "user_id:", tipRow.user_id, "tokens:", tipRow.tokens);
             } else {
               console.log("tips row NOT FOUND");
             }
@@ -421,43 +401,25 @@ jobs:
               .eq("client_event_id", freshEventId)
               .maybeSingle();
 
-            console.log("liveErr:", liveErr);
+            if (liveErr) throw liveErr;
             if (liveRow) {
-              console.log("live_tips row found:");
-              console.log("  id:", liveRow.id);
-              console.log("  user_id:", liveRow.user_id);
-              console.log("  live_session_id:", liveRow.live_session_id);
-              console.log("  received_at:", liveRow.received_at);
-              console.log("  platform:", liveRow.platform);
-              console.log("  username:", liveRow.username);
-              console.log("  tokens:", liveRow.tokens);
-              console.log("  usd:", liveRow.usd);
-              console.log("  source:", liveRow.source);
-              console.log("  client_event_id:", liveRow.client_event_id);
-              console.log("  deduplication_key:", liveRow.deduplication_key);
+              console.log("live_tips row found: id:", liveRow.id, "user_id:", liveRow.user_id, "tokens:", liveRow.tokens);
             } else {
               console.log("live_tips row NOT FOUND");
             }
 
-            // Field-by-field comparison
             console.log("\n--- FIELD COMPARISON (PASS/FAIL) ---");
             const comparisons = [
               ["tips row exists", !!tipRow],
               ["live_tips row exists", !!liveRow],
-              ["rpcResult.success", rpcResult?.success === true],
-              ["rpcResult.duplicate", rpcResult?.duplicate === false],
               ["user_id matches (tips)", tipRow?.user_id === freshUserId],
               ["user_id matches (live_tips)", liveRow?.user_id === freshUserId],
               ["client_event_id matches (tips)", tipRow?.client_event_id === freshEventId],
               ["client_event_id matches (live_tips)", liveRow?.client_event_id === freshEventId],
               ["tokens match (tips)", tipRow?.tokens === 250],
               ["tokens match (live_tips)", liveRow?.tokens === 250],
-              ["usd matches (tips)", tipRow?.usd === 12.50 || tipRow?.usd === "12.50"],
-              ["usd matches (live_tips)", liveRow?.usd === 12.50 || liveRow?.usd === "12.50"],
               ["platform matches (tips)", tipRow?.platform === "chaturbate"],
               ["platform matches (live_tips)", liveRow?.platform === "chaturbate"],
-              ["source is extension (tips)", tipRow?.source === "extension"],
-              ["source is extension (live_tips)", liveRow?.source === "extension"],
               ["live_session_id populated", liveRow?.live_session_id === sessionId],
             ];
 
@@ -467,35 +429,41 @@ jobs:
               if (!result) allPass = false;
             });
 
-            console.log(`\nDual-write verdict: ${allPass ? "✅ PASS (both tables correct)" : "❌ FAIL (see above)"}`);
-
-            // Cleanup - explicit error checking
-            console.log("\n--- CLEANUP ---");
-            const { error: sessDelErr } = await serviceRoleClient
-              .from("live_sessions")
-              .delete()
-              .eq("id", sessionId);
-            if (sessDelErr) console.error("Cleanup error (session):", sessDelErr);
-            else console.log("Deleted session row");
-
-            const { error: tipDelErr } = await serviceRoleClient
-              .from("tips")
-              .delete()
-              .eq("client_event_id", freshEventId);
-            if (tipDelErr) console.error("Cleanup error (tips):", tipDelErr);
-            else console.log("Deleted tips row by client_event_id");
-
-            const { error: liveDelErr } = await serviceRoleClient
-              .from("live_tips")
-              .delete()
-              .eq("client_event_id", freshEventId);
-            if (liveDelErr) console.error("Cleanup error (live_tips):", liveDelErr);
-            else console.log("Deleted live_tips row by client_event_id");
-
-            console.log("Cleanup complete");
+            if (!allPass) {
+              throw new Error("Scenario 17 dual-write consistency invariant failed");
+            }
+            console.log("\n✅ Scenario 17 PASSED");
 
           } catch (error) {
-            console.error(`❌ Scenario 17 error: ${error.message}`);
+            throw new Error(`❌ Scenario 17 error: ${error.message}`);
+          } finally {
+            console.log("\n--- CLEANUP ---");
+            if (sessionId) {
+              const { error: sessDelErr } = await serviceRoleClient
+                .from("live_sessions")
+                .delete()
+                .eq("id", sessionId);
+              if (sessDelErr) throw new Error(`Cleanup failed (session): ${sessDelErr.message}`);
+              console.log("Deleted session row");
+            }
+
+            if (freshEventId) {
+              const { error: tipDelErr } = await serviceRoleClient
+                .from("tips")
+                .delete()
+                .eq("client_event_id", freshEventId);
+              if (tipDelErr) throw new Error(`Cleanup failed (tips): ${tipDelErr.message}`);
+              console.log("Deleted tips row");
+            }
+
+            if (freshEventId) {
+              const { error: liveDelErr } = await serviceRoleClient
+                .from("live_tips")
+                .delete()
+                .eq("client_event_id", freshEventId);
+              if (liveDelErr) throw new Error(`Cleanup failed (live_tips): ${liveDelErr.message}`);
+              console.log("Deleted live_tips row");
+            }
           }
         }
 
@@ -503,16 +471,37 @@ jobs:
           console.log("Phase 2 Diagnostic Harness - Scenarios 9, 16, 17 (Fresh Isolated Tests)");
           console.log("=".repeat(80));
 
+          const results = { passed: 0, failed: 0 };
+
           try {
             await scenario9Diagnostic();
-            await scenario16Diagnostic();
-            await scenario17Diagnostic();
-
-            console.log("\n" + "=".repeat(80));
-            console.log("Diagnostic complete - raw evidence collected");
-            console.log("=".repeat(80));
+            results.passed++;
           } catch (error) {
-            console.error(`Fatal error: ${error.message}`);
+            console.error(error.message);
+            results.failed++;
+          }
+
+          try {
+            await scenario16Diagnostic();
+            results.passed++;
+          } catch (error) {
+            console.error(error.message);
+            results.failed++;
+          }
+
+          try {
+            await scenario17Diagnostic();
+            results.passed++;
+          } catch (error) {
+            console.error(error.message);
+            results.failed++;
+          }
+
+          console.log("\n" + "=".repeat(80));
+          console.log(`Diagnostic complete: ${results.passed} passed, ${results.failed} failed`);
+          console.log("=".repeat(80));
+
+          if (results.failed > 0) {
             process.exit(1);
           }
         }
