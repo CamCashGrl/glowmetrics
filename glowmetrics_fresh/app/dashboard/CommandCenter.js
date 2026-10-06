@@ -74,11 +74,11 @@ const fmtHour = (h) => {
 const fmtWindow = (h) => `${fmtHour(h)} – ${fmtHour(h + 2)}`
 
 // Confidence vocabulary comes from the canonical tier, never invented.
-// bestTimes.js: <2 insufficient, 2–3 promising, 4–5 supported, 6+ high.
 const TIER_COPY = {
-  high:      "Strong pattern",
-  supported: "Supported pattern",
-  promising: "Pattern emerging",
+  strong:  "Strong pattern",
+  likely:  "Likely pattern",
+  medium:  "Supported pattern",
+  early:   "Early signal",
 }
 
 const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })

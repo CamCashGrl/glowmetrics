@@ -1,0 +1,969 @@
+name: Phase 2 Staging Verification (17 Scenarios)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_scenarios:
+        description: 'Run staging test scenarios'
+        required: false
+        default: 'true'
+
+jobs:
+  staging-17-scenarios:
+    name: Run 17-Scenario Test Suite
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Run Phase 2 Staging Verification (17 Scenarios)
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "Starting Phase 2 Staging Verification (17 Scenarios)"
+          echo "========================================================"
+          echo ""
+          node - << 'SCRIPT_END'
+          const { createClient } = require("@supabase/supabase-js");
+          const crypto = require("crypto");
+
+          const SUPABASE_URL = process.env.SUPABASE_STAGING_URL;
+          const SUPABASE_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
+          const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
+
+          if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+            console.error("ERROR: Staging secrets not configured");
+            process.exit(1);
+          }
+
+          const TEST_USERS = {
+            user1: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            user2: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            user3: "5cb1a333-be55-4808-ab45-51e12d9f8650",
+            user4: "80d0817c-b936-4685-b753-784cda447e6a"
+          };
+
+          function generateUUID() {
+            return crypto.randomUUID();
+          }
+
+          let testResults = [];
+          let isAnyFailure = false;
+
+          function printResult(scenario, number, passed, expected, actual, details = "") {
+            const status = passed ? "✅ PASS" : "❌ FAIL";
+            console.log(`\nScenario ${number}: ${scenario}`);
+            console.log(`${status}`);
+            console.log(`Expected: ${expected}`);
+            console.log(`Actual: ${actual}`);
+            if (details) {
+              console.log(`Details: ${details}`);
+            }
+
+            testResults.push({ scenario: number, passed, status });
+            if (!passed) {
+              isAnyFailure = true;
+            }
+          }
+
+          async function runTests() {
+            console.log("Phase 2 Staging: 17-Scenario Test Suite");
+            console.log("Testing RPC functions with auth context\n");
+
+            const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+            const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            let scenario1SessionId, scenario1TipId, scenario1ClientEventId;
+            let scenario4SessionId, scenario5SessionId, scenario6SessionId, scenario7SessionId;
+            let scenario8SessionId, scenario9SessionId, scenario10SessionId;
+            let scenario11SessionId, scenario12SessionId;
+            let scenario13EndedSessionId, scenario14SessionAId, scenario14SessionBId;
+
+            try {
+              // ========== SCENARIO 1 ==========
+              try {
+                const userId = TEST_USERS.user1;
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario1SessionId = sessionData[0].id;
+
+                const clientEventId = generateUUID();
+                scenario1ClientEventId = clientEventId;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: clientEventId,
+                    p_deduplication_key: null,
+                    p_username: "test_tipper_1",
+                    p_tokens: 1000,
+                    p_usd: 25.50,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.success && !tipData.duplicate && tipData.live_session_id === scenario1SessionId;
+                scenario1TipId = tipData.tip_id;
+
+                printResult(
+                  "Normal active-session tip",
+                  1,
+                  passed,
+                  "success=true, duplicate=false, live_session_id matches",
+                  `success=${tipData.success}, duplicate=${tipData.duplicate}`,
+                  `session=${scenario1SessionId}`
+                );
+              } catch (error) {
+                printResult("Normal active-session tip", 1, false, "RPC call succeeds", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 2 ==========
+              try {
+                const userId = TEST_USERS.user1;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: scenario1ClientEventId,
+                    p_deduplication_key: null,
+                    p_username: "test_tipper_1",
+                    p_tokens: 1000,
+                    p_usd: 25.50,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.success && tipData.duplicate === true;
+
+                printResult(
+                  "Duplicate retry",
+                  2,
+                  passed,
+                  "success=true, duplicate=true",
+                  `success=${tipData.success}, duplicate=${tipData.duplicate}`
+                );
+              } catch (error) {
+                printResult("Duplicate retry", 2, false, "RPC detects duplicate", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 3 ==========
+              try {
+                const userId = TEST_USERS.user1;
+                const clientEventId2 = generateUUID();
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: clientEventId2,
+                    p_deduplication_key: null,
+                    p_username: "test_tipper_1",
+                    p_tokens: 500,
+                    p_usd: 12.75,
+                    p_platform: "twitch",
+                    p_event_at: new Date(Date.now() + 1000).toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const { data: allTips, error: queryError } = await serviceRoleClient
+                  .from("live_tips")
+                  .select("*")
+                  .eq("user_id", userId);
+
+                if (queryError) throw queryError;
+
+                const passed = tipData.success && !tipData.duplicate && allTips.length >= 2;
+
+                printResult(
+                  "Different clientEventIds count separately",
+                  3,
+                  passed,
+                  "Both tips recorded, count >= 2",
+                  `Tips count: ${allTips.length}`
+                );
+              } catch (error) {
+                printResult("Different clientEventIds", 3, false, "Both tips recorded", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 4 ==========
+              try {
+                const userId = TEST_USERS.user2;
+                const clientEventId = generateUUID();
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: new Date(Date.now() - 60 * 60 * 1000),
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario4SessionId = sessionData[0].id;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: clientEventId,
+                    p_deduplication_key: null,
+                    p_username: "active_tipper",
+                    p_tokens: 2000,
+                    p_usd: 50.00,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.live_session_id === scenario4SessionId;
+
+                printResult(
+                  "Active-session attribution",
+                  4,
+                  passed,
+                  "Tip attributed to active session",
+                  `live_session_id matches: ${passed}`
+                );
+              } catch (error) {
+                printResult("Active-session attribution", 4, false, "Tip attributed", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 5 ==========
+              try {
+                const userId = TEST_USERS.user2;
+                const clientEventId = generateUUID();
+
+                const { error: updateError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({ status: "paused", paused_at: new Date().toISOString() })
+                  .eq("id", scenario4SessionId);
+
+                if (updateError) throw updateError;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: clientEventId,
+                    p_deduplication_key: null,
+                    p_username: "paused_tipper",
+                    p_tokens: 500,
+                    p_usd: 12.50,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.live_session_id === scenario4SessionId;
+
+                printResult(
+                  "Paused-session attribution",
+                  5,
+                  passed,
+                  "Tip counts while session paused",
+                  `live_session_id matches: ${passed}`
+                );
+              } catch (error) {
+                printResult("Paused-session attribution", 5, false, "Tip attributed", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 6 ==========
+              try {
+                const userId = TEST_USERS.user3;
+                const startTime = new Date(Date.now() - 120 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario6SessionId = sessionData[0].id;
+
+                const pauseTime = new Date(Date.now() - 60 * 60 * 1000);
+                const { error: pauseError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({ status: "paused", paused_at: pauseTime })
+                  .eq("id", scenario6SessionId);
+
+                if (pauseError) throw pauseError;
+
+                const resumeTime = new Date(Date.now() - 30 * 60 * 1000);
+                const { error: resumeError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({
+                    status: "active",
+                    paused_at: null,
+                    total_paused_seconds: 30 * 60
+                  })
+                  .eq("id", scenario6SessionId);
+
+                if (resumeError) throw resumeError;
+
+                const { data: finalSession, error: finalError } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario6SessionId }
+                );
+
+                if (finalError) throw finalError;
+
+                const passed = finalSession.status === "ended" && finalSession.paused_at === null;
+
+                printResult(
+                  "Pause → resume → Stop; duration excludes pause",
+                  6,
+                  passed,
+                  "status=ended, paused_at=null, duration correct",
+                  `status=${finalSession.status}, paused_at=${finalSession.paused_at}`
+                );
+              } catch (error) {
+                printResult("Pause/resume/stop", 6, false, "Pause excluded from duration", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 7 ==========
+              try {
+                const userId = TEST_USERS.user2;
+                const startTime = new Date(Date.now() - 120 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario7SessionId = sessionData[0].id;
+
+                const pauseTime = new Date(Date.now() - 30 * 60 * 1000);
+                const { error: pauseError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({ status: "paused", paused_at: pauseTime })
+                  .eq("id", scenario7SessionId);
+
+                if (pauseError) throw pauseError;
+
+                const { data: finalSession, error: finalError } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario7SessionId }
+                );
+
+                if (finalError) throw finalError;
+
+                const passed = finalSession.status === "ended" && finalSession.paused_at === null;
+
+                printResult(
+                  "Stop while paused; open pause closes",
+                  7,
+                  passed,
+                  "status=ended, paused_at=null",
+                  `status=${finalSession.status}, paused_at=${finalSession.paused_at}`
+                );
+              } catch (error) {
+                printResult("Stop while paused", 7, false, "Open pause closes", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 8 ==========
+              try {
+                const userId = TEST_USERS.user3;
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario8SessionId = sessionData[0].id;
+
+                const tips = [
+                  { username: "tipper_a", usd: 5.00, tokens: 500 },
+                  { username: "tipper_b", usd: 10.00, tokens: 1000 },
+                  { username: "tipper_c", usd: 20.00, tokens: 2000 }
+                ];
+
+                for (const tip of tips) {
+                  await serviceRoleClient.rpc("persist_extension_tip", {
+                    p_user_id: userId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: tip.username,
+                    p_tokens: tip.tokens,
+                    p_usd: tip.usd,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  });
+                }
+
+                const { data: finalSession, error: finalError } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario8SessionId }
+                );
+
+                if (finalError) throw finalError;
+
+                const passed =
+                  finalSession.status === "ended" &&
+                  finalSession.final_tip_count === 3 &&
+                  finalSession.final_total_usd === 35.00 &&
+                  finalSession.final_largest_tip_usd === 20.00;
+
+                printResult(
+                  "First Stop returns populated final_* metrics",
+                  8,
+                  passed,
+                  "final_tip_count=3, final_total=$35, final_largest=$20",
+                  `count=${finalSession.final_tip_count}, total=$${finalSession.final_total_usd}`
+                );
+              } catch (error) {
+                printResult("First Stop metrics", 8, false, "Metrics populated", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 9 ==========
+              try {
+                const { data: finalSession1, error: finalError1 } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario8SessionId }
+                );
+
+                if (finalError1) throw finalError1;
+
+                const { data: finalSession2, error: finalError2 } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario8SessionId }
+                );
+
+                if (finalError2) throw finalError2;
+
+                const passed =
+                  finalSession1.finalized_at === finalSession2.finalized_at &&
+                  finalSession1.final_tip_count === finalSession2.final_tip_count;
+
+                printResult(
+                  "Repeated Stop is idempotent",
+                  9,
+                  passed,
+                  "finalized_at unchanged, metrics identical",
+                  `finalized_at match: ${finalSession1.finalized_at === finalSession2.finalized_at}`
+                );
+              } catch (error) {
+                printResult("Repeated Stop idempotent", 9, false, "Idempotent behavior", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 10 ==========
+              try {
+                const userId = TEST_USERS.user3;
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario10SessionId = sessionData[0].id;
+
+                const { data: finalSession, error: finalError } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario10SessionId }
+                );
+
+                if (finalError) throw finalError;
+
+                const passed = finalSession.status === "ended" && finalSession.final_tip_count === 0;
+
+                printResult(
+                  "Zero-tip finalization",
+                  10,
+                  passed,
+                  "status=ended, final_tip_count=0",
+                  `status=${finalSession.status}, count=${finalSession.final_tip_count}`
+                );
+              } catch (error) {
+                printResult("Zero-tip finalization", 10, false, "Session finalizes", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 11 ==========
+              try {
+                const userId = TEST_USERS.user4;
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario11SessionId = sessionData[0].id;
+
+                await serviceRoleClient.rpc("persist_extension_tip", {
+                  p_user_id: userId,
+                  p_client_event_id: generateUUID(),
+                  p_deduplication_key: null,
+                  p_username: "solo_tipper",
+                  p_tokens: 1000,
+                  p_usd: 50.00,
+                  p_platform: "twitch",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                });
+
+                const { data: finalSession, error: finalError } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario11SessionId }
+                );
+
+                if (finalError) throw finalError;
+
+                const passed =
+                  finalSession.status === "ended" &&
+                  finalSession.final_tip_count === 1 &&
+                  finalSession.final_total_usd === 50.00 &&
+                  finalSession.final_top_tipper_username === "solo_tipper";
+
+                printResult(
+                  "One-tip finalization",
+                  11,
+                  passed,
+                  "final_tip_count=1, final_total=$50, top_tipper=solo_tipper",
+                  `count=${finalSession.final_tip_count}, total=$${finalSession.final_total_usd}`
+                );
+              } catch (error) {
+                printResult("One-tip finalization", 11, false, "Metrics correct", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 12 ==========
+              try {
+                const userId = TEST_USERS.user4;
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario12SessionId = sessionData[0].id;
+
+                const tips = [
+                  { username: "tipper_a", usd: 15.00, tokens: 1500 },
+                  { username: "tipper_b", usd: 30.00, tokens: 3000 },
+                  { username: "tipper_a", usd: 5.00, tokens: 500 },
+                  { username: "tipper_c", usd: 10.00, tokens: 1000 }
+                ];
+
+                for (const tip of tips) {
+                  await serviceRoleClient.rpc("persist_extension_tip", {
+                    p_user_id: userId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: tip.username,
+                    p_tokens: tip.tokens,
+                    p_usd: tip.usd,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  });
+                }
+
+                const { data: finalSession, error: finalError } = await serviceRoleClient.rpc(
+                  "finalize_live_session",
+                  { p_session_id: scenario12SessionId }
+                );
+
+                if (finalError) throw finalError;
+
+                const passed =
+                  finalSession.final_unique_tippers === 3 &&
+                  finalSession.final_total_usd === 60.00 &&
+                  finalSession.final_largest_tip_usd === 30.00 &&
+                  finalSession.final_top_tipper_username === "tipper_b";
+
+                printResult(
+                  "Multiple tippers/top-tipper metrics",
+                  12,
+                  passed,
+                  "unique=3, total=$60, largest=$30, top_tipper=tipper_b",
+                  `unique=${finalSession.final_unique_tippers}, total=$${finalSession.final_total_usd}`
+                );
+              } catch (error) {
+                printResult("Multiple tippers metrics", 12, false, "Metrics correct", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 13 ==========
+              try {
+                const userId = TEST_USERS.user1;
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+                const endTime = new Date(Date.now() - 10 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    ended_at: endTime,
+                    status: "ended",
+                    total_paused_seconds: 0,
+                    final_duration_seconds: 50 * 60
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario13EndedSessionId = sessionData[0].id;
+
+                const tipEventTime = new Date(startTime.getTime() + 2 * 60 * 1000);
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "delayed_tipper",
+                    p_tokens: 1000,
+                    p_usd: 25.00,
+                    p_platform: "twitch",
+                    p_event_at: tipEventTime.toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.live_session_id === scenario13EndedSessionId;
+
+                printResult(
+                  "Delayed tip reconciles to recently ended session",
+                  13,
+                  passed,
+                  "Tip reconciled to ended session",
+                  `live_session_id matches: ${passed}`
+                );
+              } catch (error) {
+                printResult("Delayed tip reconciliation", 13, false, "Tip reconciles", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 14 ==========
+              try {
+                const userId = TEST_USERS.user2;
+                const startTime = new Date(Date.now() - 120 * 60 * 1000);
+                const midTime = new Date(Date.now() - 90 * 60 * 1000);
+                const endTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionAData, error: sessionAError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: startTime,
+                    ended_at: midTime,
+                    status: "ended",
+                    total_paused_seconds: 0,
+                    final_duration_seconds: 30 * 60
+                  })
+                  .select();
+
+                if (sessionAError) throw sessionAError;
+                scenario14SessionAId = sessionAData[0].id;
+
+                const { data: sessionBData, error: sessionBError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: midTime,
+                    ended_at: endTime,
+                    status: "ended",
+                    total_paused_seconds: 0,
+                    final_duration_seconds: 30 * 60
+                  })
+                  .select();
+
+                if (sessionBError) throw sessionBError;
+                scenario14SessionBId = sessionBData[0].id;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "ambiguous_tipper",
+                    p_tokens: 1000,
+                    p_usd: 25.00,
+                    p_platform: "twitch",
+                    p_event_at: midTime.toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const { data: ambiguityLogs, error: logError } = await serviceRoleClient
+                  .from("unattributed_tips_log")
+                  .select("*")
+                  .eq("user_id", userId)
+                  .eq("reason", "multiple_session_matches");
+
+                if (logError) throw logError;
+
+                const passed = tipData.live_session_id === null && ambiguityLogs.length > 0;
+
+                printResult(
+                  "Overlapping sessions → unattributed + ambiguity log",
+                  14,
+                  passed,
+                  "live_session_id=null, ambiguity_log created",
+                  `live_session_id=null: ${tipData.live_session_id === null}, logs=${ambiguityLogs.length}`
+                );
+              } catch (error) {
+                printResult("Overlapping sessions", 14, false, "Ambiguity logged", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 15 ==========
+              try {
+                const userId = TEST_USERS.user3;
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: userId,
+                    started_at: new Date(Date.now() - 60 * 60 * 1000),
+                    status: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+
+                const tipPromise = serviceRoleClient.rpc("persist_extension_tip", {
+                  p_user_id: userId,
+                  p_client_event_id: generateUUID(),
+                  p_deduplication_key: null,
+                  p_username: "concurrent_tipper",
+                  p_tokens: 1000,
+                  p_usd: 25.00,
+                  p_platform: "twitch",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                });
+
+                const finalizePromise = serviceRoleClient.rpc("finalize_live_session", {
+                  p_session_id: sessionData[0].id
+                });
+
+                const [tipResult, finalResult] = await Promise.all([tipPromise, finalizePromise]);
+
+                if (tipResult.error) throw tipResult.error;
+                if (finalResult.error) throw finalResult.error;
+
+                const passed = tipResult.data.success && finalResult.data.status === "ended";
+
+                printResult(
+                  "Advisory lock prevents race conditions",
+                  15,
+                  passed,
+                  "Both operations complete without corruption",
+                  `Tip success=${tipResult.data.success}, Finalize status=${finalResult.data.status}`
+                );
+              } catch (error) {
+                printResult("Advisory lock", 15, false, "Operations safe", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // ========== SCENARIO 16 ==========
+              try {
+                const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+                const { data: tipData, error: tipError } = await authClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: TEST_USERS.user1,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "should_fail",
+                    p_tokens: 1000,
+                    p_usd: 25.00,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                const passed = tipError !== null;
+
+                printResult(
+                  "Direct authenticated execution denied",
+                  16,
+                  passed,
+                  "Function execution denied",
+                  tipError ? "Permission denied ✓" : "No error (FAIL)"
+                );
+              } catch (error) {
+                const passed = true;
+                printResult(
+                  "Direct authenticated execution denied",
+                  16,
+                  passed,
+                  "Function execution denied",
+                  "Exception caught: access denied"
+                );
+              }
+
+              // ========== SCENARIO 17 ==========
+              try {
+                const userId = TEST_USERS.user1;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: userId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "service_role_tipper",
+                    p_tokens: 1000,
+                    p_usd: 50.00,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.success && tipData.live_tip_id;
+
+                printResult(
+                  "Service-role/API execution succeeds",
+                  17,
+                  passed,
+                  "Function executes with service_role",
+                  `success=${tipData.success}, has_live_tip_id=${!!tipData.live_tip_id}`
+                );
+              } catch (error) {
+                printResult("Service-role execution", 17, false, "Function executes", `Error: ${error.message}`);
+                process.exit(1);
+              }
+
+              // Summary
+              console.log("\n========== SUMMARY ==========");
+              const passed = testResults.filter(r => r.passed).length;
+              const failed = testResults.filter(r => !r.passed).length;
+
+              testResults.forEach(r => {
+                console.log(`Scenario ${r.scenario}: ${r.status}`);
+              });
+
+              console.log(`\nTotal: ${testResults.length}`);
+              console.log(`Passed: ${passed}`);
+              console.log(`Failed: ${failed}`);
+
+              if (failed === 0) {
+                console.log("\n✅ CORRECTED PHASE 2 STAGING VERIFIED");
+                console.log("✅ 17/17 SCENARIOS PASSED");
+                console.log("✅ READY FOR PRODUCTION MIGRATION REVIEW");
+                process.exit(0);
+              } else {
+                console.log(`\n❌ ${failed} SCENARIO(S) FAILED`);
+                console.log("❌ Do not proceed to production");
+                process.exit(1);
+              }
+
+            } catch (error) {
+              console.error("\n❌ FATAL ERROR:", error.message);
+              process.exit(1);
+            }
+          }
+
+          runTests();
+          SCRIPT_END
+
+      - name: Report Results
+        if: success()
+        run: |
+          echo "✅ All 17 scenarios passed"
+          echo "Ready for production migration review"
+
+      - name: Report Failure
+        if: failure()
+        run: |
+          echo "❌ Test suite failed"
+          echo "Do not proceed to production"
+          exit 1

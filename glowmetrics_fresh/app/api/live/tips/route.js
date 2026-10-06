@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { tokenRate } from '../../../../lib/constants';
 import { platformLimitMessage } from '../../../../lib/planLimits';
+import { legacyDeduplicationKey, uuidV5, isUuid } from '../../../../lib/liveTips/legacyEventId';
 
 async function logLiveFailure(supabaseAdmin, userId, liveSessionId, failureType, severity, errorMessage, errorContext) {
   try {
@@ -65,7 +66,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { username, amount, platform, timestamp, isTest } = body;
+    const { username, amount, platform, timestamp, isTest, clientEventId, detectedAt, queuedMs } = body;
 
     if (!username || !amount || !platform) {
       const missingFields = [!username && 'username', !amount && 'amount', !platform && 'platform'].filter(Boolean).join(', ');
@@ -74,6 +75,25 @@ export async function POST(req) {
         { error: 'Missing required fields: username, amount, platform' },
         { status: 400, headers: cors }
       );
+    }
+
+    const tokens = parseInt(amount, 10);
+    if (!Number.isFinite(tokens) || tokens < 1) {
+      return Response.json({ error: 'amount must be a positive whole number of tokens' }, { status: 400, headers: cors });
+    }
+
+    if (clientEventId !== undefined && clientEventId !== null && !isUuid(clientEventId)) {
+      return Response.json({ error: 'clientEventId must be a UUID' }, { status: 400, headers: cors });
+    }
+
+    // How long the tip waited in the extension's retry queue (extension
+    // clock only). Absent from legacy builds, which never queue.
+    let queuedMsValue = null;
+    if (queuedMs !== undefined && queuedMs !== null) {
+      if (!Number.isFinite(queuedMs) || queuedMs < 0) {
+        return Response.json({ error: 'queuedMs must be a non-negative number' }, { status: 400, headers: cors });
+      }
+      queuedMsValue = Math.round(queuedMs);
     }
 
     // Room-ownership verification (#285) is reverted here: the extension has
@@ -100,111 +120,78 @@ export async function POST(req) {
       );
     }
 
-    // Use the tip's own timestamp (ms) so back-to-back tips from the same user
-    // with the same amount are only deduped if they share the exact same event time.
-    const receivedAt = timestamp || new Date().toISOString();
-    const tsMs = new Date(receivedAt).getTime();
-    const deduplication_key = `${user.id}-${username.trim().toLowerCase()}-${amount}-${platform.toLowerCase()}-${tsMs}`;
-
-    // Attribute this tip to the caller's current live_sessions row when it's
-    // 'active', or 'needs_resolution' — never while 'paused' or absent.
-    // needs_resolution is included because a tip landing during that window
-    // is the strongest possible proof the stream never actually stopped: it
-    // both cancels the pending "Are you still there?" auto-end (see
-    // sweep_stale_live_session()) and correctly counts toward the session if
-    // it later resolves back to active. A tip that arrives while paused
-    // still gets saved above (no income data is lost), it just isn't
-    // counted toward this session's analytics. Best-effort: a lookup
-    // failure must never block saving the tip itself, so it's wrapped
-    // separately from the main insert.
-    let live_session_id = null;
-    try {
-      const { data: activeSession } = await supabaseAdmin
-        .from('live_sessions')
-        .select('id, status')
-        .eq('user_id', user.id)
-        .in('status', ['active', 'needs_resolution'])
-        .order('started_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (activeSession) live_session_id = activeSession.id;
-    } catch (_) {
-      // live_sessions lookup failed — tip is still saved, just unattributed.
+    // Event time = when the extension saw the tip. Legacy builds send it as
+    // `timestamp` (set once at detection, resent unchanged on their 401 retry);
+    // new builds send `detectedAt`. Only a caller sending neither falls back to
+    // now — identical to the pre-Phase-1 route's behavior for that case.
+    const eventAt = detectedAt || timestamp || new Date().toISOString();
+    if (Number.isNaN(new Date(eventAt).getTime())) {
+      return Response.json({ error: 'Invalid tip timestamp' }, { status: 400, headers: cors });
     }
 
-    const tipData = {
-      user_id:  user.id,
-      username: username.trim(),
-      tokens:   parseInt(amount, 10),
-      usd:      parseFloat((parseInt(amount, 10) * tokenRate(platform)).toFixed(2)),
-      platform: platform.toLowerCase(),
-      source:   'extension',
-      received_at: receivedAt,
-      deduplication_key,
-      live_session_id,
-    };
+    // Idempotency identity. New builds supply clientEventId. Legacy builds
+    // supply none, so derive one deterministically from the pre-Phase-1
+    // deduplication_key: the same legacy event (incl. a retry) always maps to
+    // the same id, while two real identical tips seen at different
+    // milliseconds map to different ids. Never a random server-side id.
+    const isLegacyPayload = !clientEventId;
+    const deduplicationKey = isLegacyPayload
+      ? legacyDeduplicationKey(user.id, username, amount, platform, eventAt)
+      : null;
+    const eventId = isLegacyPayload ? uuidV5(deduplicationKey) : clientEventId;
 
-    const { data, error } = await supabaseAdmin
-      .from('live_tips')
-      .insert(tipData)
-      .select();
+    const usd = parseFloat((tokens * tokenRate(platform)).toFixed(2));
+
+    // Phase 2: Call persist_extension_tip() RPC to atomically persist both
+    // canonical tips + live_tips, with session attribution and delayed-tip
+    // reconciliation. This is the authoritative writer for all extension
+    // earnings, regardless of plan tier.
+    const { data, error } = await supabaseAdmin.rpc('persist_extension_tip', {
+      p_user_id: user.id,
+      p_client_event_id: eventId,
+      p_deduplication_key: deduplicationKey,
+      p_username: username.trim(),
+      p_tokens: tokens,
+      p_usd: usd,
+      p_platform: platform.toLowerCase(),
+      p_event_at: new Date(eventAt).toISOString(),
+      p_queued_ms: queuedMsValue,
+    });
 
     if (error) {
-      // A repeat submission of the exact same tip (same tipper, amount,
-      // platform, and millisecond) hits the deduplication_key unique
-      // constraint — that's the constraint doing its job, not a failure.
-      // Treat it as an idempotent no-op and return the row already saved
-      // by the original submission, instead of surfacing a 500.
-      if (error.code === '23505' && error.message?.includes('deduplication_key')) {
-        const { data: existing } = await supabaseAdmin
-          .from('live_tips')
-          .select()
-          .eq('deduplication_key', deduplication_key)
-          .maybeSingle();
-        return Response.json(
-          { success: true, tip: existing, savedToHistory: false, message: `Tip from ${username} already recorded` },
-          { headers: cors }
-        );
-      }
-      console.error('Supabase insert error:', error);
+      console.error('persist_extension_tip RPC error:', error);
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
-        await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'critical', 'Platform limit reached during live tip insertion', { platform, error_code: error.code, error_message: error.message });
+        await logLiveFailure(supabaseAdmin, user.id, null, 'save_error', 'critical', 'Platform limit reached during live tip insertion', { platform, error_code: error.code });
         return Response.json({
           error: platformLimitMessage(),
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402, headers: cors });
       }
-      await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'error', `Failed to insert live tip: ${error.message}`, { platform, error_code: error.code, username });
+
+      await logLiveFailure(supabaseAdmin, user.id, null, 'save_error', 'error', `Failed to persist tip: ${error.message}`, { platform, error_code: error.code, client_event_id: eventId, legacy_payload: isLegacyPayload });
       return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
-    // Permanent history (dashboard analytics) is a Pro feature — live coaching
-    // and the live tip feed above are free on every supported platform, but
-    // only paid plans get tips written into the historical `tips` table.
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('plan')
-      .eq('id', user.id)
-      .maybeSingle();
-    const savedToHistory = profile?.plan === 'pro' || profile?.plan === 'unlimited';
-
-    if (savedToHistory) {
-      const { error: historyError } = await supabaseAdmin.from('tips').insert({
-        user_id:   user.id,
-        username:  username.trim(),
-        tokens:    parseInt(amount, 10),
-        platform:  platform.toLowerCase(),
-        date_time: receivedAt,
-      });
-      if (historyError) {
-        console.warn('[LIVE] Failed to save tip to permanent history:', historyError);
-        await logLiveFailure(supabaseAdmin, user.id, live_session_id, 'save_error', 'warning', `Failed to save to history: ${historyError.message}`, { platform, error_code: historyError.code });
-      }
+    // RPC returns { success, duplicate, live_tip_id, tip_id, live_session_id, client_event_id }
+    // success=false indicates validation failure; duplicate=true indicates retry of existing event
+    if (!data?.success) {
+      console.error('persist_extension_tip RPC returned success=false:', data);
+      await logLiveFailure(supabaseAdmin, user.id, null, 'save_error', 'error', 'RPC persistence failed (validation)', { platform, username });
+      return Response.json({ error: 'Failed to save tip' }, { status: 500, headers: cors });
     }
 
+    // Duplicate event (retry of existing event_id or dedup_key) — return 200 with duplicate flag
+    if (data.duplicate) {
+      return Response.json(
+        { success: true, duplicate: true, live_tip_id: data.live_tip_id, message: `Tip from ${username} already received` },
+        { headers: cors }
+      );
+    }
+
+    // New event successfully persisted
     return Response.json(
-      { success: true, tip: data[0], savedToHistory, message: `Tip from ${username} synced` },
+      { success: true, duplicate: false, live_tip_id: data.live_tip_id, tip_id: data.tip_id, message: `Tip from ${username} persisted` },
       { headers: cors }
     );
 

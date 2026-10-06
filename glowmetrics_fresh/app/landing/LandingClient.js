@@ -772,7 +772,7 @@ export default function LandingClient() {
         'name': 'Is CamCash free to use?',
         'acceptedAnswer': {
           '@type': 'Answer',
-          'text': 'Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks 1 platform (live via the extension, or by uploading your tip data). Premium analytics and multi-platform tracking are optional upgrades.'
+          'text': 'Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks 1 platform with 31 days of rolling data (live via the extension, or by uploading your tip data). Premium analytics and multi-platform tracking are optional upgrades.'
         }
       },
       {
@@ -788,7 +788,7 @@ export default function LandingClient() {
         'name': 'Can I track more than one platform for free?',
         'acceptedAnswer': {
           '@type': 'Answer',
-          'text': 'The free tier tracks 1 platform at a time. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once.'
+          'text': 'The free tier tracks 1 platform at a time with 31 days of rolling data. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once.'
         }
       },
       {
@@ -986,9 +986,9 @@ export default function LandingClient() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks 1 platform (live via the extension, or by uploading your tip data). Premium analytics and multi-platform tracking are optional upgrades." },
+    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier tracks 1 platform with 31 days of rolling data (live via the extension, or by uploading your tip data). Premium analytics and multi-platform tracking are optional upgrades." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
-    { q: "Can I track more than one platform for free?", a: "The free tier tracks 1 platform at a time. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once." },
+    { q: "Can I track more than one platform for free?", a: "The free tier tracks 1 platform at a time with 31 days of rolling data per platform. If you work on more than one platform, the Standard plan ($19.99/month) unlocks tracking multiple platforms at once." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
 
@@ -1067,7 +1067,7 @@ export default function LandingClient() {
                 ["⚡", "Your best stream time, calculated from your real data"],
                 ["👑", "Top fan alerts — who to message and when"],
                 ["📊", "Platform ROI — where your time is actually worth more"],
-                ["🔓", "Free tier tracks 1 platform (extension or CSV upload) — $19.99/mo to track multiple"],
+                ["🔓", "Free tier tracks 1 platform with 31 days of rolling data (extension or CSV upload) — $19.99/mo to track multiple"],
               ].map(([icon, text]) => (
                 <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: T.textFaint }}>
                   <span style={{ fontSize: 14 }}>{icon}</span>
@@ -1148,7 +1148,7 @@ export default function LandingClient() {
               ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever for 1 platform. Standard is $19.99/mo (or $99/yr) and unlocks multi-platform tracking"],
+              ["Price", "Free forever for 1 platform (31 days of rolling data per platform). Standard is $19.99/mo (or $99/yr) and unlocks multi-platform tracking"],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>

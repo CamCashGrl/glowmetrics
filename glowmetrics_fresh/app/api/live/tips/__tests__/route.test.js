@@ -50,10 +50,29 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
         }
         return makeChain({ data: null, error: null })
       }),
+      rpc: jest.fn(async (name, params) => {
+        if (name === 'persist_extension_tip') {
+          return {
+            data: {
+              success: true,
+              duplicate: false,
+              live_tip_id: 'tip-1',
+              tip_id: 1,
+              live_session_id: null,
+              client_event_id: params.p_client_event_id,
+            },
+            error: null,
+          }
+        }
+        return { data: null, error: null }
+      }),
     }
   }
 
   beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://fake.supabase.co'
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'fake-anon-key'
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'fake-service-role-key'
     jest.resetModules()
     jest.doMock('@supabase/supabase-js', () => ({ createClient: jest.fn(() => mockSupabase()) }))
   })
@@ -67,7 +86,8 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
     const res = await POST(req)
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.tip).toEqual({ id: 'tip-1' })
+    expect(body.duplicate).toBe(false)
+    expect(body.live_tip_id).toBe('tip-1')
     expect(fromCalls).not.toContain('broadcaster_accounts')
   })
 
@@ -81,6 +101,8 @@ describe('POST /api/live/tips — real tip acceptance (regression for #285 locko
     const body = await res.json()
     expect(res.status ?? 200).not.toBe(403)
     expect(body.success).toBe(true)
+    expect(body.duplicate).toBe(false)
+    expect(body.live_tip_id).toBe('tip-1')
     expect(fromCalls).not.toContain('broadcaster_accounts')
   })
 
