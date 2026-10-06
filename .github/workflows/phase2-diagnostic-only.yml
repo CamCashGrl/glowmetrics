@@ -1,0 +1,398 @@
+name: Phase 2 Diagnostic - Scenarios 9, 16, 17 (Isolated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_diagnostics:
+        description: 'Run isolated diagnostic harness'
+        required: false
+        default: 'true'
+
+jobs:
+  diagnostic-scenarios:
+    name: Diagnostic - Scenarios 9, 16, 17 Only
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Run Diagnostic Harness (Scenarios 9, 16, 17)
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+        run: node - << 'DIAGNOSTIC_END'
+        const { createClient } = require("@supabase/supabase-js");
+        const crypto = require("crypto");
+
+        const SUPABASE_URL = process.env.SUPABASE_STAGING_URL;
+        const SUPABASE_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
+        const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
+
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+          console.error("ERROR: Staging secrets not configured");
+          process.exit(1);
+        }
+
+        const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        function generateUUID() {
+          return crypto.randomUUID();
+        }
+
+        async function scenario9Diagnostic() {
+          console.log("\n" + "=".repeat(80));
+          console.log("SCENARIO 9: stop_live_session() Idempotency - Raw Evidence");
+          console.log("=".repeat(80));
+
+          try {
+            const freshUserId = generateUUID();
+            console.log(`\nUsing fresh test user: ${freshUserId}`);
+
+            // Create a test session
+            const { data: sessionData, error: sessionError } = await serviceRoleClient
+              .from("live_sessions")
+              .insert({
+                user_id: freshUserId,
+                status: "active"
+              })
+              .select();
+
+            if (sessionError) throw sessionError;
+            const sessionId = sessionData[0].id;
+            console.log(`Created test session: ${sessionId}`);
+
+            // Add one tip to the session
+            const tipEventId = generateUUID();
+            const { error: tipError } = await serviceRoleClient.rpc(
+              "persist_extension_tip",
+              {
+                p_user_id: freshUserId,
+                p_client_event_id: tipEventId,
+                p_deduplication_key: null,
+                p_username: "s9_diag_tipper",
+                p_tokens: 100,
+                p_usd: 5.00,
+                p_platform: "twitch",
+                p_event_at: new Date().toISOString(),
+                p_queued_ms: null
+              }
+            );
+            if (tipError) throw tipError;
+            console.log("Added one tip to session");
+
+            // FIRST STOP CALL
+            console.log("\n--- FIRST STOP CALL ---");
+            const stop1Result = await serviceRoleClient.rpc("stop_live_session");
+            const err1 = stop1Result.error;
+            const stop1 = stop1Result.data;
+
+            console.log("stop1.error:", err1 ? `${err1.code}: ${err1.message}` : null);
+            console.log("stop1 (raw):", JSON.stringify(stop1, null, 2));
+            console.log("typeof stop1:", typeof stop1);
+            console.log("Array.isArray(stop1):", Array.isArray(stop1));
+            if (stop1 && typeof stop1 === 'object') {
+              console.log("Keys in stop1:", Object.keys(stop1));
+              console.log("stop1.id:", stop1.id);
+              console.log("stop1.status:", stop1.status);
+              console.log("stop1.session_earnings_usd:", stop1.session_earnings_usd);
+              console.log("stop1.tip_count:", stop1.tip_count);
+              console.log("stop1.unique_tipper_count:", stop1.unique_tipper_count);
+              console.log("stop1.largest_tip_usd:", stop1.largest_tip_usd);
+              console.log("stop1.average_tip_usd:", stop1.average_tip_usd);
+            }
+
+            // SECOND STOP CALL
+            console.log("\n--- SECOND STOP CALL ---");
+            const stop2Result = await serviceRoleClient.rpc("stop_live_session");
+            const err2 = stop2Result.error;
+            const stop2 = stop2Result.data;
+
+            console.log("stop2.error:", err2 ? `${err2.code}: ${err2.message}` : null);
+            console.log("stop2 (raw):", JSON.stringify(stop2, null, 2));
+            console.log("typeof stop2:", typeof stop2);
+            console.log("Array.isArray(stop2):", Array.isArray(stop2));
+            console.log("stop2 === null:", stop2 === null);
+            console.log("stop2 === undefined:", stop2 === undefined);
+            if (stop2 && typeof stop2 === 'object') {
+              console.log("Keys in stop2:", Object.keys(stop2));
+              console.log("stop2.id:", stop2.id);
+              console.log("stop2.status:", stop2.status);
+            }
+
+            // IDEMPOTENCY CHECK
+            console.log("\n--- IDEMPOTENCY VALIDATION ---");
+            const bothSucceeded = !err1 && !err2;
+            const firstReturnsData = !!stop1 && typeof stop1 === 'object';
+            const secondReturnsNull = stop2 === null;
+            const idsMatch = stop1?.id === stop2?.id;
+
+            console.log("No errors on both calls:", bothSucceeded ? "✓" : "✗");
+            console.log("First call returns data:", firstReturnsData ? "✓" : "✗");
+            console.log("Second call returns null:", secondReturnsNull ? "✓" : "✗");
+            console.log("IDs match (if both return data):", idsMatch || secondReturnsNull ? "✓" : "✗");
+
+            // Cleanup
+            await serviceRoleClient
+              .from("live_sessions")
+              .delete()
+              .eq("id", sessionId);
+            console.log("Cleaned up test session");
+
+          } catch (error) {
+            console.error(`❌ Scenario 9 error: ${error.message}`);
+          }
+        }
+
+        async function scenario16Diagnostic() {
+          console.log("\n" + "=".repeat(80));
+          console.log("SCENARIO 16: RLS Enforcement on Direct Authenticated Call - Raw Evidence");
+          console.log("=".repeat(80));
+
+          try {
+            const freshUserId = generateUUID();
+            const testEventId = generateUUID();
+
+            console.log(`\nFresh target user_id: ${freshUserId}`);
+            console.log(`Client event_id: ${testEventId}`);
+            console.log("Attempting authenticated user RPC call with different user_id (should fail RLS)");
+
+            // Attempt to insert as authenticated (anon) user trying to write as different user
+            const { data: tipData, error: deniedError } = await authClient.rpc(
+              "persist_extension_tip",
+              {
+                p_user_id: freshUserId,
+                p_client_event_id: testEventId,
+                p_deduplication_key: null,
+                p_username: "s16_auth_tipper",
+                p_tokens: 100,
+                p_usd: 5.00,
+                p_platform: "twitch",
+                p_event_at: new Date().toISOString(),
+                p_queued_ms: null
+              }
+            );
+
+            console.log("\n--- RPC RESULT ---");
+            console.log("deniedError object:", deniedError);
+            if (deniedError) {
+              console.log("deniedError.code:", deniedError.code);
+              console.log("deniedError.message:", deniedError.message);
+              console.log("deniedError.details:", deniedError.details);
+              console.log("deniedError.hint:", deniedError.hint);
+              console.log("deniedError.status:", deniedError.status);
+            }
+            console.log("tipData:", tipData);
+
+            // Verify row does NOT exist (RLS working)
+            console.log("\n--- VERIFY ROW DOES NOT EXIST (RLS WORKING) ---");
+            const { data: rowCheck, error: checkErr } = await serviceRoleClient
+              .from("live_tips")
+              .select("*")
+              .eq("client_event_id", testEventId)
+              .maybeSingle();
+
+            if (checkErr) {
+              console.log("Query error:", checkErr.message);
+            } else {
+              console.log("Row exists in live_tips:", rowCheck ? "YES (RLS FAILED)" : "NO (RLS WORKING)");
+              if (rowCheck) {
+                console.log("Row data:", JSON.stringify(rowCheck, null, 2));
+              }
+            }
+
+            console.log("\n--- RLS VERDICT ---");
+            const rls_working = !!deniedError && !rowCheck;
+            console.log(`RLS enforcement: ${rls_working ? "✓ WORKING (access denied)" : "✗ FAILED (unexpected access)"}`);
+
+          } catch (error) {
+            console.error(`❌ Scenario 16 error: ${error.message}`);
+          }
+        }
+
+        async function scenario17Diagnostic() {
+          console.log("\n" + "=".repeat(80));
+          console.log("SCENARIO 17: Dual Table Write Consistency - Fresh Transaction Evidence");
+          console.log("=".repeat(80));
+
+          try {
+            const freshUserId = generateUUID();
+            const freshEventId = generateUUID();
+
+            console.log(`\nFresh test user_id: ${freshUserId}`);
+            console.log(`Fresh client_event_id: ${freshEventId}`);
+
+            // Create a fresh session for this user
+            const { data: sessionData, error: sessionError } = await serviceRoleClient
+              .from("live_sessions")
+              .insert({
+                user_id: freshUserId,
+                status: "active"
+              })
+              .select();
+
+            if (sessionError) throw sessionError;
+            const sessionId = sessionData[0].id;
+            console.log(`Created fresh session: ${sessionId}`);
+
+            // ONE fresh RPC call
+            console.log("\n--- RPC CALL (ONE TRANSACTION) ---");
+            const { data: rpcResult, error: rpcError } = await serviceRoleClient.rpc(
+              "persist_extension_tip",
+              {
+                p_user_id: freshUserId,
+                p_client_event_id: freshEventId,
+                p_deduplication_key: null,
+                p_username: "s17_diag_tipper",
+                p_tokens: 250,
+                p_usd: 12.50,
+                p_platform: "chaturbate",
+                p_event_at: new Date().toISOString(),
+                p_queued_ms: null
+              }
+            );
+
+            console.log("rpcError:", rpcError);
+            console.log("rpcResult:", JSON.stringify(rpcResult, null, 2));
+
+            // Query both tables by exact client_event_id
+            console.log("\n--- QUERY TIPS TABLE ---");
+            const { data: tipRow, error: tipErr } = await serviceRoleClient
+              .from("tips")
+              .select("*")
+              .eq("client_event_id", freshEventId)
+              .maybeSingle();
+
+            console.log("tipErr:", tipErr);
+            if (tipRow) {
+              console.log("tips row found:");
+              console.log("  id:", tipRow.id);
+              console.log("  user_id:", tipRow.user_id);
+              console.log("  date_time:", tipRow.date_time);
+              console.log("  platform:", tipRow.platform);
+              console.log("  username:", tipRow.username);
+              console.log("  tokens:", tipRow.tokens);
+              console.log("  usd:", tipRow.usd);
+              console.log("  source:", tipRow.source);
+              console.log("  client_event_id:", tipRow.client_event_id);
+            } else {
+              console.log("tips row NOT FOUND");
+            }
+
+            console.log("\n--- QUERY LIVE_TIPS TABLE ---");
+            const { data: liveRow, error: liveErr } = await serviceRoleClient
+              .from("live_tips")
+              .select("*")
+              .eq("client_event_id", freshEventId)
+              .maybeSingle();
+
+            console.log("liveErr:", liveErr);
+            if (liveRow) {
+              console.log("live_tips row found:");
+              console.log("  id:", liveRow.id);
+              console.log("  user_id:", liveRow.user_id);
+              console.log("  live_session_id:", liveRow.live_session_id);
+              console.log("  received_at:", liveRow.received_at);
+              console.log("  platform:", liveRow.platform);
+              console.log("  username:", liveRow.username);
+              console.log("  tokens:", liveRow.tokens);
+              console.log("  usd:", liveRow.usd);
+              console.log("  source:", liveRow.source);
+              console.log("  client_event_id:", liveRow.client_event_id);
+              console.log("  deduplication_key:", liveRow.deduplication_key);
+            } else {
+              console.log("live_tips row NOT FOUND");
+            }
+
+            // Field-by-field comparison
+            console.log("\n--- FIELD COMPARISON (PASS/FAIL) ---");
+            const comparisons = [
+              ["tips row exists", !!tipRow],
+              ["live_tips row exists", !!liveRow],
+              ["rpcResult.success", rpcResult?.success === true],
+              ["rpcResult.duplicate", rpcResult?.duplicate === false],
+              ["user_id matches (tips)", tipRow?.user_id === freshUserId],
+              ["user_id matches (live_tips)", liveRow?.user_id === freshUserId],
+              ["client_event_id matches (tips)", tipRow?.client_event_id === freshEventId],
+              ["client_event_id matches (live_tips)", liveRow?.client_event_id === freshEventId],
+              ["tokens match (tips)", tipRow?.tokens === 250],
+              ["tokens match (live_tips)", liveRow?.tokens === 250],
+              ["usd matches (tips)", tipRow?.usd === 12.50 || tipRow?.usd === "12.50"],
+              ["usd matches (live_tips)", liveRow?.usd === 12.50 || liveRow?.usd === "12.50"],
+              ["platform matches (tips)", tipRow?.platform === "chaturbate"],
+              ["platform matches (live_tips)", liveRow?.platform === "chaturbate"],
+              ["source is extension (tips)", tipRow?.source === "extension"],
+              ["source is extension (live_tips)", liveRow?.source === "extension"],
+              ["live_session_id populated", liveRow?.live_session_id === sessionId],
+            ];
+
+            let allPass = true;
+            comparisons.forEach(([field, result]) => {
+              console.log(`  ${field}: ${result ? "✓ PASS" : "✗ FAIL"}`);
+              if (!result) allPass = false;
+            });
+
+            console.log(`\nDual-write verdict: ${allPass ? "✅ PASS (both tables correct)" : "❌ FAIL (see above)"}`);
+
+            // Cleanup
+            await serviceRoleClient
+              .from("live_sessions")
+              .delete()
+              .eq("id", sessionId);
+            await serviceRoleClient
+              .from("tips")
+              .delete()
+              .eq("client_event_id", freshEventId);
+            await serviceRoleClient
+              .from("live_tips")
+              .delete()
+              .eq("client_event_id", freshEventId);
+            console.log("Cleaned up fresh test fixtures");
+
+          } catch (error) {
+            console.error(`❌ Scenario 17 error: ${error.message}`);
+          }
+        }
+
+        async function main() {
+          console.log("Phase 2 Diagnostic Harness - Scenarios 9, 16, 17 (Fresh Isolated Tests)");
+          console.log("=".repeat(80));
+
+          try {
+            await scenario9Diagnostic();
+            await scenario16Diagnostic();
+            await scenario17Diagnostic();
+
+            console.log("\n" + "=".repeat(80));
+            console.log("Diagnostic complete - raw evidence collected");
+            console.log("=".repeat(80));
+          } catch (error) {
+            console.error(`Fatal error: ${error.message}`);
+            process.exit(1);
+          }
+        }
+
+        main();
+        DIAGNOSTIC_END
+
+      - name: HTTP 401 Environment Verification
+        run: |
+          echo "=== VERCEL STAGING ENVIRONMENT CHECK ==="
+          echo "To verify HTTP 401 root cause, compare these:"
+          echo "1. Project name: glowmetrics-ggsb"
+          echo "2. Expected staging project ref in NEXT_PUBLIC_SUPABASE_URL: qqvflqcxglkmeuahubwv"
+          echo "3. Check Vercel deployment variables match staging Supabase project"
+          echo "(Do not print secret values - use Vercel UI to verify)"
