@@ -1539,6 +1539,9 @@ export function aggregateRows(tips, tz = null) {
   const hourlyRateSessionCount = hourlyRateSessions.length
   const excludedUntimedSessionCount = meaningfulSessions.filter(s => !isHourlyRateEligible(s)).length
 
+  // Count unique fans (all distinct users who have tipped)
+  const uniqueFanCount = [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length
+
   // Same rate basis as platforms[].usdPerHour — these two must never disagree.
   const platformVelocity = {}
   Object.keys(platformMap).forEach(p => {
@@ -1723,6 +1726,78 @@ export function aggregateRows(tips, tz = null) {
 
   const momentum = { pct: momentumPct, label: momentumLabel, emoji: momentumEmoji, last30USD, prior30USD }
 
+  // ── BEST WINDOW FAN OVERLAP ────────────────────────────────────────────
+  // Find high-value fans who have been active in the best window (day + hour).
+  // This is only computed if we have a strong best window to compare against.
+  let bestWindowFanOverlap = null
+  if (bestHour && bestDay) {
+    const bestWindowTips = tips.filter(t => {
+      const h = toLocalHour(t.dateRaw || t.date_time, userTz)
+      const dow = UTC_DAYS[toLocalDow(t.dateRaw || t.date_time, userTz)]
+      return Math.abs(h - bestHour.hour) <= 1 && dow === bestDay.day
+    })
+    const bestWindowFans = [...new Set(bestWindowTips.map(t => (t.username || '').toLowerCase()))].length
+    if (bestWindowFans > 0) {
+      const bestWindowUSD = bestWindowTips.reduce((s, t) => s + (t.usd || 0), 0)
+      // Only show if high-value fans are active there
+      const highValueFans = whales.filter(w => {
+        return w.totalUSD >= 20 && bestWindowTips.some(t => (t.username || '').toLowerCase() === (w.username || '').toLowerCase())
+      })
+      if (highValueFans.length > 0) {
+        bestWindowFanOverlap = {
+          count: highValueFans.length,
+          totalUSD: parseFloat(highValueFans.reduce((s, w) => s + w.totalUSD, 0).toFixed(2))
+        }
+      }
+    }
+  }
+
+  // ── CANONICAL BEST TIMES (for CommandCenter hero section) ───────────────
+  // Builds the bestWindow/earlySignal object that CommandCenter reads.
+  // Converts UTC hours to local time + adds confidence tier.
+  const getTier = (sessionCount) => {
+    if (sessionCount >= 6) return 'high'
+    if (sessionCount >= 4) return 'supported'
+    if (sessionCount >= 3) return 'promising'
+    return null
+  }
+
+  const getTopPlatform = (day, hour, tz) => {
+    // Find which platform has the highest earnings in this day+hour bucket
+    const candidates = Object.entries(platformBestTimes)
+      .map(([p, data]) => {
+        const bestHourForDay = data.bestHourByDay?.[day]
+        if (!bestHourForDay || Math.abs(bestHourForDay.hour - hour) > 1) return null
+        return { platform: p, avg: bestHourForDay.avg }
+      })
+      .filter(x => x)
+      .sort((a, b) => b.avg - a.avg)
+    return candidates[0]?.platform || platforms[0]?.platform || null
+  }
+
+  let canonicalBestTimes = { bestWindow: null, earlySignal: null, grid: [] }
+
+  if (bestHour) {
+    const localHour = bestHour.hour
+    const dayOfWeek = bestDay ? bestDay.day : null
+    canonicalBestTimes.bestWindow = {
+      localHour,
+      localDay: dayOfWeek,
+      medianUsdPerHour: bestHour.avg,
+      sessionCount: bestHour.sessionCount || bestHour.count || 0,
+      tier: getTier(bestHour.sessionCount || bestHour.count || 0),
+      topPlatform: dayOfWeek ? getTopPlatform(dayOfWeek, localHour, userTz) : null,
+    }
+  } else if (hourAvgs && hourAvgs.length > 0) {
+    // Early signal: best available hour when no strong bestHour
+    const topHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0]
+    canonicalBestTimes.earlySignal = {
+      localHour: topHour.hour,
+      localDay: bestDay ? bestDay.day : 'Any day',
+      sessionCount: topHour.count || 0,
+    }
+  }
+
   // ── PLATFORM MOMENTUM ─────────────────────────────────────────────────
   // Per-platform version of the same last-30 vs prior-30 comparison, built
   // from the meaningful sessions' own tips so a platform's trend rests on the
@@ -1855,7 +1930,7 @@ export function aggregateRows(tips, tz = null) {
     topTippers, platforms, sessions: meaningfulSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour, platformBestTimes, canonicalBestTimes,
+    bestDay, bestHour, platformBestTimes, canonicalBestTimes, bestWindowFanOverlap,
     monthlyData, bestMonth,
     tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
@@ -1867,7 +1942,7 @@ export function aggregateRows(tips, tz = null) {
     meaningfulSessions, allValidSessions,
     meaningfulSessionCount: meaningfulSessions.length,
     lowSignalSessionCount: allValidSessions.length - meaningfulSessions.length,
-    momentum,
+    momentum, uniqueFanCount,
   }
 }
 
