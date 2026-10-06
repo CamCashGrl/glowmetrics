@@ -1798,6 +1798,13 @@ export function aggregateRows(tips, tz = null) {
     }
   }
 
+  // Populate grid data for hourly distribution chart
+  canonicalBestTimes.grid = hourAvgs.map(h => ({
+    hour: h.hour,
+    avg: h.avg,
+    count: h.count,
+  })).sort((a, b) => a.hour - b.hour)
+
   // ── PLATFORM MOMENTUM ─────────────────────────────────────────────────
   // Per-platform version of the same last-30 vs prior-30 comparison, built
   // from the meaningful sessions' own tips so a platform's trend rests on the
