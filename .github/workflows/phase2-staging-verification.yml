@@ -30,9 +30,9 @@ jobs:
 
       - name: Run Phase 2 Staging Verification (17 Scenarios)
         env:
-          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
         run: |
           echo "Starting Phase 2 Staging Verification (17 Scenarios)"
           echo "========================================================"
@@ -57,6 +57,8 @@ jobs:
             user4: "80d0817c-b936-4685-b753-784cda447e6a"
           };
 
+          const TEST_RUN_ID = crypto.randomUUID();
+
           function generateUUID() {
             return crypto.randomUUID();
           }
@@ -80,12 +82,89 @@ jobs:
             }
           }
 
+          async function cleanupUserFixtures(client, userId) {
+            try {
+              const unresolvedStatuses = ["starting", "active", "paused", "stopping", "needs_resolution", "finalizing", "error"];
+
+              // Get all unresolved sessions for this user
+              const { data: sessions, error: queryErr } = await client
+                .from("live_sessions")
+                .select("id, status")
+                .eq("user_id", userId)
+                .in("status", unresolvedStatuses);
+
+              if (queryErr) throw queryErr;
+
+              if (sessions && sessions.length > 0) {
+                console.log(`Found ${sessions.length} unresolved session(s) for user ${userId}:`);
+                sessions.forEach(s => console.log(`  - ${s.id}: ${s.status}`));
+
+                for (const session of sessions) {
+                  try {
+                    const { error: finalErr } = await client.rpc("finalize_live_session", { p_session_id: session.id });
+                    if (finalErr) {
+                      console.log(`  ⚠ Could not finalize ${session.id}: ${finalErr.message}`);
+                    } else {
+                      console.log(`  ✓ Finalized ${session.id}`);
+                    }
+                  } catch (e) {
+                    console.log(`  ⚠ Exception finalizing ${session.id}: ${e.message}`);
+                  }
+                }
+              }
+
+              // Delete only test fixtures from this test run for this user
+              await client.from("unattributed_tips_log").delete().eq("user_id", userId);
+              await client.from("live_tips").delete().eq("user_id", userId);
+              await client.from("tips").delete().eq("user_id", userId);
+              await client.from("live_sessions").delete().eq("user_id", userId);
+
+              // Verify unresolved count is now 0
+              const { data: checkSessions, error: checkErr } = await client
+                .from("live_sessions")
+                .select("id, status")
+                .eq("user_id", userId)
+                .in("status", unresolvedStatuses);
+
+              if (checkErr) throw checkErr;
+
+              if (checkSessions && checkSessions.length > 0) {
+                throw new Error(`Cleanup failed: ${checkSessions.length} unresolved session(s) still exist for user ${userId}`);
+              }
+              console.log(`✓ Cleanup complete for user ${userId}: unresolved session count = 0`);
+            } catch (e) {
+              console.error(`❌ Cleanup FAILED for user ${userId}: ${e.message}`);
+              throw e;
+            }
+          }
+
+          async function ensureUserClean(client, userId, scenarioNum) {
+            console.log(`[Scenario ${scenarioNum}] Ensuring user ${userId} has zero unresolved sessions...`);
+            try {
+              await cleanupUserFixtures(client, userId);
+            } catch (e) {
+              console.error(`[Scenario ${scenarioNum}] Pre-scenario cleanup failed: ${e.message}`);
+              throw e;
+            }
+          }
+
           async function runTests() {
             console.log("Phase 2 Staging: 17-Scenario Test Suite");
             console.log("Testing RPC functions with auth context\n");
 
             const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
             const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // Pre-test cleanup: finalize any unresolved sessions from prior runs
+            console.log("Cleaning up prior test fixtures from all users...");
+            for (const userId of Object.values(TEST_USERS)) {
+              try {
+                await cleanupUserFixtures(serviceRoleClient, userId);
+              } catch (e) {
+                console.log(`Initial cleanup for ${userId}: ${e.message}`);
+              }
+            }
+            console.log("Ready to start scenarios.\n");
 
             let scenario1SessionId, scenario1TipId, scenario1ClientEventId;
             let scenario4SessionId, scenario5SessionId, scenario6SessionId, scenario7SessionId;
@@ -227,6 +306,10 @@ jobs:
               // ========== SCENARIO 4 ==========
               try {
                 const userId = TEST_USERS.user2;
+
+                // Ensure this user has zero unresolved sessions before creating a new one
+                await ensureUserClean(serviceRoleClient, userId, 4);
+
                 const clientEventId = generateUUID();
 
                 const { data: sessionData, error: sessionError } = await serviceRoleClient
@@ -318,6 +401,10 @@ jobs:
               // ========== SCENARIO 6 ==========
               try {
                 const userId = TEST_USERS.user3;
+
+                // Ensure this user has zero unresolved sessions before creating a new one
+                await ensureUserClean(serviceRoleClient, userId, 6);
+
                 const startTime = new Date(Date.now() - 120 * 60 * 1000);
 
                 const { data: sessionData, error: sessionError } = await serviceRoleClient
@@ -516,6 +603,10 @@ jobs:
               // ========== SCENARIO 10 ==========
               try {
                 const userId = TEST_USERS.user3;
+
+                // Ensure this user has zero unresolved sessions before creating a new one
+                await ensureUserClean(serviceRoleClient, userId, 10);
+
                 const startTime = new Date(Date.now() - 60 * 60 * 1000);
 
                 const { data: sessionData, error: sessionError } = await serviceRoleClient
@@ -554,6 +645,10 @@ jobs:
               // ========== SCENARIO 11 ==========
               try {
                 const userId = TEST_USERS.user4;
+
+                // Ensure this user has zero unresolved sessions before creating a new one
+                await ensureUserClean(serviceRoleClient, userId, 11);
+
                 const startTime = new Date(Date.now() - 60 * 60 * 1000);
 
                 const { data: sessionData, error: sessionError } = await serviceRoleClient
@@ -608,6 +703,10 @@ jobs:
               // ========== SCENARIO 12 ==========
               try {
                 const userId = TEST_USERS.user4;
+
+                // Ensure this user has zero unresolved sessions before creating a new one
+                await ensureUserClean(serviceRoleClient, userId, 12);
+
                 const startTime = new Date(Date.now() - 60 * 60 * 1000);
 
                 const { data: sessionData, error: sessionError } = await serviceRoleClient
@@ -801,6 +900,9 @@ jobs:
               // ========== SCENARIO 15 ==========
               try {
                 const userId = TEST_USERS.user3;
+
+                // Ensure this user has zero unresolved sessions before creating a new one
+                await ensureUserClean(serviceRoleClient, userId, 15);
 
                 const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
