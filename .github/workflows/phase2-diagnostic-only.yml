@@ -58,15 +58,47 @@ jobs:
           console.log("SCENARIO 9: finalize_live_session() Idempotency - Raw Evidence");
           console.log("=".repeat(80));
 
+          let tempEmail = null;
+          let tempUserId = null;
+
           try {
             const freshUserId = generateUUID();
-            console.log(`\nUsing fresh test user: ${freshUserId}`);
+            const RUN_ID = new Date().getTime().toString().slice(-6);
+            tempEmail = `phase2-${RUN_ID}-s9@staging.local`;
+            const tempPassword = crypto.randomBytes(24).toString("hex");
 
-            // Create a test session with service role
+            console.log(`\nCreating temporary Auth user for authenticated session owner context`);
+            console.log(`Email: ${tempEmail}`);
+
+            // Create temp Auth user with service role
+            const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
+              email: tempEmail,
+              password: tempPassword,
+              email_confirm: true
+            });
+
+            if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
+            tempUserId = created.user.id;
+            console.log(`Created temp auth user: ${tempUserId}`);
+
+            // Create anon client for sign-in
+            const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { error: signInErr } = await anonClient.auth.signInWithPassword({
+              email: tempEmail,
+              password: tempPassword
+            });
+
+            if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
+            console.log("Temp auth user signed in successfully");
+
+            // Use the authenticated client (anonClient) for subsequent RPC calls
+            const authenticatedClient = anonClient;
+
+            // Create a test session with service role (matching temp auth user)
             const { data: sessionData, error: sessionError } = await serviceRoleClient
               .from("live_sessions")
               .insert({
-                user_id: freshUserId,
+                user_id: tempUserId,
                 status: "active"
               })
               .select();
@@ -75,12 +107,12 @@ jobs:
             const sessionId = sessionData[0].id;
             console.log(`Created test session: ${sessionId}`);
 
-            // Add one tip to the session via persist_extension_tip
+            // Add one tip to the session via persist_extension_tip (service role)
             const tipEventId = generateUUID();
             const { error: tipError } = await serviceRoleClient.rpc(
               "persist_extension_tip",
               {
-                p_user_id: freshUserId,
+                p_user_id: tempUserId,
                 p_client_event_id: tipEventId,
                 p_deduplication_key: null,
                 p_username: "s9_diag_tipper",
@@ -94,9 +126,9 @@ jobs:
             if (tipError) throw tipError;
             console.log("Added one tip to session");
 
-            // FIRST FINALIZE CALL (authenticated user context required)
-            console.log("\n--- FIRST FINALIZE CALL ---");
-            const finalize1Result = await authClient.rpc("finalize_live_session", { p_session_id: sessionId });
+            // FIRST FINALIZE CALL (authenticated user context)
+            console.log("\n--- FIRST FINALIZE CALL (Authenticated Context) ---");
+            const finalize1Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
             const err1 = finalize1Result.error;
             const finalize1 = finalize1Result.data;
 
@@ -111,7 +143,6 @@ jobs:
               console.log("finalize1.id:", finalize1.id);
               console.log("finalize1.status:", finalize1.status);
               console.log("finalize1.finalized_at:", finalize1.finalized_at);
-              // Capture all final_* fields
               Object.keys(finalize1).forEach(key => {
                 if (key.startsWith('final_')) {
                   final_fields_1[key] = finalize1[key];
@@ -120,9 +151,9 @@ jobs:
               });
             }
 
-            // SECOND FINALIZE CALL (on same session)
-            console.log("\n--- SECOND FINALIZE CALL ---");
-            const finalize2Result = await authClient.rpc("finalize_live_session", { p_session_id: sessionId });
+            // SECOND FINALIZE CALL (on same session, authenticated context)
+            console.log("\n--- SECOND FINALIZE CALL (Authenticated Context) ---");
+            const finalize2Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
             const err2 = finalize2Result.error;
             const finalize2 = finalize2Result.data;
 
@@ -139,7 +170,6 @@ jobs:
               console.log("finalize2.id:", finalize2.id);
               console.log("finalize2.status:", finalize2.status);
               console.log("finalize2.finalized_at:", finalize2.finalized_at);
-              // Capture all final_* fields
               Object.keys(finalize2).forEach(key => {
                 if (key.startsWith('final_')) {
                   final_fields_2[key] = finalize2[key];
@@ -162,12 +192,33 @@ jobs:
             console.log("finalized_at unchanged:", finalizedAtMatch ? "✓" : "✗");
             console.log("All final_* fields unchanged:", finalFieldsMatch ? "✓" : "✗");
 
-            // Cleanup
-            await serviceRoleClient
+            // Cleanup - Delete by exact client_event_id first
+            console.log("\n--- CLEANUP ---");
+            const { error: tipDelErr } = await serviceRoleClient
+              .from("tips")
+              .delete()
+              .eq("client_event_id", tipEventId);
+            if (tipDelErr) console.error("Cleanup error (tips):", tipDelErr);
+            else console.log("Deleted tips row by client_event_id");
+
+            const { error: liveDelErr } = await serviceRoleClient
+              .from("live_tips")
+              .delete()
+              .eq("client_event_id", tipEventId);
+            if (liveDelErr) console.error("Cleanup error (live_tips):", liveDelErr);
+            else console.log("Deleted live_tips row by client_event_id");
+
+            const { error: sessDelErr } = await serviceRoleClient
               .from("live_sessions")
               .delete()
               .eq("id", sessionId);
-            console.log("Cleaned up test session");
+            if (sessDelErr) console.error("Cleanup error (session):", sessDelErr);
+            else console.log("Deleted session row");
+
+            // Delete temp auth user
+            const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+            if (userDelErr) console.error("Cleanup error (auth user):", userDelErr);
+            else console.log("Deleted temp auth user");
 
           } catch (error) {
             console.error(`❌ Scenario 9 error: ${error.message}`);
@@ -176,22 +227,52 @@ jobs:
 
         async function scenario16Diagnostic() {
           console.log("\n" + "=".repeat(80));
-          console.log("SCENARIO 16: RLS Enforcement on Direct Authenticated Call - Raw Evidence");
+          console.log("SCENARIO 16: Authenticated User EXECUTE Permission Denial - Raw Evidence");
           console.log("=".repeat(80));
 
+          let tempEmail = null;
+          let tempUserId = null;
+
           try {
-            const freshUserId = generateUUID();
+            const RUN_ID = new Date().getTime().toString().slice(-6);
+            tempEmail = `phase2-${RUN_ID}-s16@staging.local`;
+            const tempPassword = crypto.randomBytes(24).toString("hex");
+            const targetUserId = generateUUID(); // Different user that this auth user will try to write as
+
+            console.log(`\nCreating temporary authenticated user`);
+            console.log(`Email: ${tempEmail}`);
+            console.log(`Target user_id (different from auth user): ${targetUserId}`);
+
+            // Create temp Auth user with service role
+            const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
+              email: tempEmail,
+              password: tempPassword,
+              email_confirm: true
+            });
+
+            if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
+            tempUserId = created.user.id;
+            console.log(`Created temp auth user: ${tempUserId}`);
+
+            // Create anon client for sign-in
+            const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { error: signInErr } = await anonClient.auth.signInWithPassword({
+              email: tempEmail,
+              password: tempPassword
+            });
+
+            if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
+            console.log("Temp auth user signed in successfully");
+
+            const authenticatedClient = anonClient;
             const testEventId = generateUUID();
 
-            console.log(`\nFresh target user_id: ${freshUserId}`);
-            console.log(`Client event_id: ${testEventId}`);
-            console.log("Attempting authenticated user RPC call with different user_id (should fail RLS)");
-
-            // Attempt to insert as authenticated (anon) user trying to write as different user
-            const { data: tipData, error: deniedError } = await authClient.rpc(
+            // Authenticated user attempts persist_extension_tip call
+            console.log("\n--- AUTHENTICATED USER RPC CALL (No EXECUTE Permission Expected) ---");
+            const { data: tipData, error: rpcError } = await authenticatedClient.rpc(
               "persist_extension_tip",
               {
-                p_user_id: freshUserId,
+                p_user_id: targetUserId,
                 p_client_event_id: testEventId,
                 p_deduplication_key: null,
                 p_username: "s16_auth_tipper",
@@ -204,36 +285,59 @@ jobs:
             );
 
             console.log("\n--- RPC RESULT ---");
-            console.log("deniedError object:", deniedError);
-            if (deniedError) {
-              console.log("deniedError.code:", deniedError.code);
-              console.log("deniedError.message:", deniedError.message);
-              console.log("deniedError.details:", deniedError.details);
-              console.log("deniedError.hint:", deniedError.hint);
-              console.log("deniedError.status:", deniedError.status);
+            console.log("rpcError object:", rpcError);
+            if (rpcError) {
+              console.log("rpcError.code:", rpcError.code);
+              console.log("rpcError.message:", rpcError.message);
+              console.log("rpcError.details:", rpcError.details);
+              console.log("rpcError.hint:", rpcError.hint);
+              console.log("rpcError.status:", rpcError.status);
             }
-            console.log("tipData:", tipData);
+            console.log("tipData (should be null if denied):", tipData);
 
-            // Verify row does NOT exist (RLS working)
-            console.log("\n--- VERIFY ROW DOES NOT EXIST (RLS WORKING) ---");
-            const { data: rowCheck, error: checkErr } = await serviceRoleClient
+            // Verify row does NOT exist in live_tips
+            console.log("\n--- VERIFY ROW DOES NOT EXIST IN LIVE_TIPS ---");
+            const { data: liveRowCheck, error: liveCheckErr } = await serviceRoleClient
               .from("live_tips")
               .select("*")
               .eq("client_event_id", testEventId)
               .maybeSingle();
 
-            if (checkErr) {
-              console.log("Query error:", checkErr.message);
+            if (liveCheckErr) {
+              console.log("Query error:", liveCheckErr.message);
             } else {
-              console.log("Row exists in live_tips:", rowCheck ? "YES (RLS FAILED)" : "NO (RLS WORKING)");
-              if (rowCheck) {
-                console.log("Row data:", JSON.stringify(rowCheck, null, 2));
+              console.log("Row exists in live_tips:", liveRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
+              if (liveRowCheck) {
+                console.log("Row data:", JSON.stringify(liveRowCheck, null, 2));
               }
             }
 
-            console.log("\n--- RLS VERDICT ---");
-            const rls_working = !!deniedError && !rowCheck;
-            console.log(`RLS enforcement: ${rls_working ? "✓ WORKING (access denied)" : "✗ FAILED (unexpected access)"}`);
+            // Also check tips table
+            console.log("\n--- VERIFY ROW DOES NOT EXIST IN TIPS ---");
+            const { data: tipRowCheck, error: tipCheckErr } = await serviceRoleClient
+              .from("tips")
+              .select("*")
+              .eq("client_event_id", testEventId)
+              .maybeSingle();
+
+            if (tipCheckErr) {
+              console.log("Query error:", tipCheckErr.message);
+            } else {
+              console.log("Row exists in tips:", tipRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
+              if (tipRowCheck) {
+                console.log("Row data:", JSON.stringify(tipRowCheck, null, 2));
+              }
+            }
+
+            console.log("\n--- PERMISSION VERDICT ---");
+            const permission_denied = !!rpcError && !liveRowCheck && !tipRowCheck;
+            console.log(`Authenticated user EXECUTE permission: ${permission_denied ? "✓ CORRECTLY DENIED" : "✗ UNEXPECTEDLY ALLOWED"}`);
+
+            // Cleanup - Delete temp auth user
+            console.log("\n--- CLEANUP ---");
+            const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+            if (userDelErr) console.error("Cleanup error (auth user):", userDelErr);
+            else console.log("Deleted temp auth user");
 
           } catch (error) {
             console.error(`❌ Scenario 16 error: ${error.message}`);
@@ -242,7 +346,8 @@ jobs:
 
         async function scenario17Diagnostic() {
           console.log("\n" + "=".repeat(80));
-          console.log("SCENARIO 17: Dual Table Write Consistency - Fresh Transaction Evidence");
+          console.log("SCENARIO 17: Dual Table Write Consistency - DB Trusted-Path Verification Only");
+          console.log("(Service-role RPC call - does NOT verify full /api/live/tips HTTP path)");
           console.log("=".repeat(80));
 
           try {
@@ -364,20 +469,30 @@ jobs:
 
             console.log(`\nDual-write verdict: ${allPass ? "✅ PASS (both tables correct)" : "❌ FAIL (see above)"}`);
 
-            // Cleanup
-            await serviceRoleClient
+            // Cleanup - explicit error checking
+            console.log("\n--- CLEANUP ---");
+            const { error: sessDelErr } = await serviceRoleClient
               .from("live_sessions")
               .delete()
               .eq("id", sessionId);
-            await serviceRoleClient
+            if (sessDelErr) console.error("Cleanup error (session):", sessDelErr);
+            else console.log("Deleted session row");
+
+            const { error: tipDelErr } = await serviceRoleClient
               .from("tips")
               .delete()
               .eq("client_event_id", freshEventId);
-            await serviceRoleClient
+            if (tipDelErr) console.error("Cleanup error (tips):", tipDelErr);
+            else console.log("Deleted tips row by client_event_id");
+
+            const { error: liveDelErr } = await serviceRoleClient
               .from("live_tips")
               .delete()
               .eq("client_event_id", freshEventId);
-            console.log("Cleaned up fresh test fixtures");
+            if (liveDelErr) console.error("Cleanup error (live_tips):", liveDelErr);
+            else console.log("Deleted live_tips row by client_event_id");
+
+            console.log("Cleanup complete");
 
           } catch (error) {
             console.error(`❌ Scenario 17 error: ${error.message}`);
