@@ -385,18 +385,34 @@ jobs:
 
             let sessionId = null;
             let freshEventId = null;
+            let tempUserId = null;
 
             try {
-              const freshUserId = generateUUID();
+              const RUN_ID = new Date().getTime().toString().slice(-6);
+              const tempEmail = `phase2-${RUN_ID}-s17@staging.local`;
+              const tempPassword = crypto.randomBytes(24).toString("hex");
+
+              console.log(`\nCreating temporary Auth user for Scenario 17`);
+              console.log(`Email: ${tempEmail}`);
+
+              const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
+                email: tempEmail,
+                password: tempPassword,
+                email_confirm: true
+              });
+
+              if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
+              tempUserId = created.user.id;
+              console.log(`Created temp auth user: ${tempUserId}`);
+
               freshEventId = generateUUID();
 
-              console.log(`\nFresh test user_id: ${freshUserId}`);
               console.log(`Fresh client_event_id: ${freshEventId}`);
 
               const { data: sessionData, error: sessionError } = await serviceRoleClient
                 .from("live_sessions")
                 .insert({
-                  user_id: freshUserId,
+                  user_id: tempUserId,
                   status: "active"
                 })
                 .select();
@@ -409,7 +425,7 @@ jobs:
               const { data: rpcResult, error: rpcError } = await serviceRoleClient.rpc(
                 "persist_extension_tip",
                 {
-                  p_user_id: freshUserId,
+                  p_user_id: tempUserId,
                   p_client_event_id: freshEventId,
                   p_deduplication_key: null,
                   p_username: "s17_diag_tipper",
@@ -462,7 +478,7 @@ jobs:
               console.log("\n--- FIELD COMPARISON (PASS/FAIL) ---");
               const comparisons = [
                 ["live_tips row exists", !!liveRow],
-                ["user_id matches (live_tips)", liveRow?.user_id === freshUserId],
+                ["user_id matches (live_tips)", liveRow?.user_id === tempUserId],
                 ["client_event_id matches (live_tips)", liveRow?.client_event_id === freshEventId],
                 ["tokens match (live_tips)", liveRow?.tokens === 250],
                 ["platform matches (live_tips)", liveRow?.platform === "chaturbate"],
@@ -471,7 +487,7 @@ jobs:
 
               if (!tipRowSkipped) {
                 comparisons.unshift(["tips row exists", !!tipRow]);
-                comparisons.push(["user_id matches (tips)", tipRow?.user_id === freshUserId]);
+                comparisons.push(["user_id matches (tips)", tipRow?.user_id === tempUserId]);
                 comparisons.push(["client_event_id matches (tips)", tipRow?.client_event_id === freshEventId]);
                 comparisons.push(["tokens match (tips)", tipRow?.tokens === 250]);
                 comparisons.push(["platform matches (tips)", tipRow?.platform === "chaturbate"]);
@@ -531,6 +547,15 @@ jobs:
                   cleanupIssues.push(`live_tips cleanup: ${liveDelErr.message}`);
                 } else {
                   console.log("Deleted live_tips row");
+                }
+              }
+
+              if (tempUserId) {
+                const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+                if (userDelErr) {
+                  cleanupIssues.push(`auth user cleanup: ${userDelErr.message}`);
+                } else {
+                  console.log("Deleted temp auth user");
                 }
               }
 
