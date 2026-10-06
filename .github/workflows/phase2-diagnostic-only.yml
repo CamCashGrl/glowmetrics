@@ -55,14 +55,14 @@ jobs:
 
         async function scenario9Diagnostic() {
           console.log("\n" + "=".repeat(80));
-          console.log("SCENARIO 9: stop_live_session() Idempotency - Raw Evidence");
+          console.log("SCENARIO 9: finalize_live_session() Idempotency - Raw Evidence");
           console.log("=".repeat(80));
 
           try {
             const freshUserId = generateUUID();
             console.log(`\nUsing fresh test user: ${freshUserId}`);
 
-            // Create a test session
+            // Create a test session with service role
             const { data: sessionData, error: sessionError } = await serviceRoleClient
               .from("live_sessions")
               .insert({
@@ -75,7 +75,7 @@ jobs:
             const sessionId = sessionData[0].id;
             console.log(`Created test session: ${sessionId}`);
 
-            // Add one tip to the session
+            // Add one tip to the session via persist_extension_tip
             const tipEventId = generateUUID();
             const { error: tipError } = await serviceRoleClient.rpc(
               "persist_extension_tip",
@@ -94,56 +94,73 @@ jobs:
             if (tipError) throw tipError;
             console.log("Added one tip to session");
 
-            // FIRST STOP CALL
-            console.log("\n--- FIRST STOP CALL ---");
-            const stop1Result = await serviceRoleClient.rpc("stop_live_session");
-            const err1 = stop1Result.error;
-            const stop1 = stop1Result.data;
+            // FIRST FINALIZE CALL (authenticated user context required)
+            console.log("\n--- FIRST FINALIZE CALL ---");
+            const finalize1Result = await authClient.rpc("finalize_live_session", { p_session_id: sessionId });
+            const err1 = finalize1Result.error;
+            const finalize1 = finalize1Result.data;
 
-            console.log("stop1.error:", err1 ? `${err1.code}: ${err1.message}` : null);
-            console.log("stop1 (raw):", JSON.stringify(stop1, null, 2));
-            console.log("typeof stop1:", typeof stop1);
-            console.log("Array.isArray(stop1):", Array.isArray(stop1));
-            if (stop1 && typeof stop1 === 'object') {
-              console.log("Keys in stop1:", Object.keys(stop1));
-              console.log("stop1.id:", stop1.id);
-              console.log("stop1.status:", stop1.status);
-              console.log("stop1.session_earnings_usd:", stop1.session_earnings_usd);
-              console.log("stop1.tip_count:", stop1.tip_count);
-              console.log("stop1.unique_tipper_count:", stop1.unique_tipper_count);
-              console.log("stop1.largest_tip_usd:", stop1.largest_tip_usd);
-              console.log("stop1.average_tip_usd:", stop1.average_tip_usd);
+            console.log("finalize1.error:", err1 ? `${err1.code}: ${err1.message}` : null);
+            console.log("finalize1 (raw):", JSON.stringify(finalize1, null, 2));
+            console.log("typeof finalize1:", typeof finalize1);
+            console.log("Array.isArray(finalize1):", Array.isArray(finalize1));
+
+            const final_fields_1 = {};
+            if (finalize1 && typeof finalize1 === 'object') {
+              console.log("Keys in finalize1:", Object.keys(finalize1));
+              console.log("finalize1.id:", finalize1.id);
+              console.log("finalize1.status:", finalize1.status);
+              console.log("finalize1.finalized_at:", finalize1.finalized_at);
+              // Capture all final_* fields
+              Object.keys(finalize1).forEach(key => {
+                if (key.startsWith('final_')) {
+                  final_fields_1[key] = finalize1[key];
+                  console.log(`finalize1.${key}:`, finalize1[key]);
+                }
+              });
             }
 
-            // SECOND STOP CALL
-            console.log("\n--- SECOND STOP CALL ---");
-            const stop2Result = await serviceRoleClient.rpc("stop_live_session");
-            const err2 = stop2Result.error;
-            const stop2 = stop2Result.data;
+            // SECOND FINALIZE CALL (on same session)
+            console.log("\n--- SECOND FINALIZE CALL ---");
+            const finalize2Result = await authClient.rpc("finalize_live_session", { p_session_id: sessionId });
+            const err2 = finalize2Result.error;
+            const finalize2 = finalize2Result.data;
 
-            console.log("stop2.error:", err2 ? `${err2.code}: ${err2.message}` : null);
-            console.log("stop2 (raw):", JSON.stringify(stop2, null, 2));
-            console.log("typeof stop2:", typeof stop2);
-            console.log("Array.isArray(stop2):", Array.isArray(stop2));
-            console.log("stop2 === null:", stop2 === null);
-            console.log("stop2 === undefined:", stop2 === undefined);
-            if (stop2 && typeof stop2 === 'object') {
-              console.log("Keys in stop2:", Object.keys(stop2));
-              console.log("stop2.id:", stop2.id);
-              console.log("stop2.status:", stop2.status);
+            console.log("finalize2.error:", err2 ? `${err2.code}: ${err2.message}` : null);
+            console.log("finalize2 (raw):", JSON.stringify(finalize2, null, 2));
+            console.log("typeof finalize2:", typeof finalize2);
+            console.log("Array.isArray(finalize2):", Array.isArray(finalize2));
+            console.log("finalize2 === null:", finalize2 === null);
+            console.log("finalize2 === undefined:", finalize2 === undefined);
+
+            const final_fields_2 = {};
+            if (finalize2 && typeof finalize2 === 'object') {
+              console.log("Keys in finalize2:", Object.keys(finalize2));
+              console.log("finalize2.id:", finalize2.id);
+              console.log("finalize2.status:", finalize2.status);
+              console.log("finalize2.finalized_at:", finalize2.finalized_at);
+              // Capture all final_* fields
+              Object.keys(finalize2).forEach(key => {
+                if (key.startsWith('final_')) {
+                  final_fields_2[key] = finalize2[key];
+                  console.log(`finalize2.${key}:`, finalize2[key]);
+                }
+              });
             }
 
-            // IDEMPOTENCY CHECK
+            // IDEMPOTENCY CHECK - Deep comparison
             console.log("\n--- IDEMPOTENCY VALIDATION ---");
             const bothSucceeded = !err1 && !err2;
-            const firstReturnsData = !!stop1 && typeof stop1 === 'object';
-            const secondReturnsNull = stop2 === null;
-            const idsMatch = stop1?.id === stop2?.id;
+            const firstReturnsData = !!finalize1 && typeof finalize1 === 'object';
+            const idsMatch = finalize1?.id === finalize2?.id;
+            const finalizedAtMatch = finalize1?.finalized_at === finalize2?.finalized_at;
+            const finalFieldsMatch = JSON.stringify(final_fields_1) === JSON.stringify(final_fields_2);
 
             console.log("No errors on both calls:", bothSucceeded ? "✓" : "✗");
             console.log("First call returns data:", firstReturnsData ? "✓" : "✗");
-            console.log("Second call returns null:", secondReturnsNull ? "✓" : "✗");
-            console.log("IDs match (if both return data):", idsMatch || secondReturnsNull ? "✓" : "✗");
+            console.log("Session IDs match:", idsMatch ? "✓" : "✗");
+            console.log("finalized_at unchanged:", finalizedAtMatch ? "✓" : "✗");
+            console.log("All final_* fields unchanged:", finalFieldsMatch ? "✓" : "✗");
 
             // Cleanup
             await serviceRoleClient
