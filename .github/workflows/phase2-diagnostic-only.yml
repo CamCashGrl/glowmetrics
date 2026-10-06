@@ -33,491 +33,492 @@ jobs:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
           SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
           SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
-        run: node - << 'DIAGNOSTIC_END'
-        const { createClient } = require("@supabase/supabase-js");
-        const crypto = require("crypto");
-
-        const SUPABASE_URL = process.env.SUPABASE_STAGING_URL;
-        const SUPABASE_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
-        const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
-
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
-          console.error("ERROR: Staging secrets not configured");
-          process.exit(1);
-        }
-
-        const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        function generateUUID() {
-          return crypto.randomUUID();
-        }
-
-        async function scenario9Diagnostic() {
-          console.log("\n" + "=".repeat(80));
-          console.log("SCENARIO 9: finalize_live_session() Idempotency - Raw Evidence");
-          console.log("=".repeat(80));
-
-          let tempUserId = null;
-          let sessionId = null;
-          let tipEventId = null;
-
-          try {
-            const RUN_ID = new Date().getTime().toString().slice(-6);
-            const tempEmail = `phase2-${RUN_ID}-s9@staging.local`;
-            const tempPassword = crypto.randomBytes(24).toString("hex");
-
-            console.log(`\nCreating temporary Auth user for authenticated session owner context`);
-            console.log(`Email: ${tempEmail}`);
-
-            const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
-              email: tempEmail,
-              password: tempPassword,
-              email_confirm: true
-            });
-
-            if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
-            tempUserId = created.user.id;
-            console.log(`Created temp auth user: ${tempUserId}`);
-
-            const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            const { error: signInErr } = await anonClient.auth.signInWithPassword({
-              email: tempEmail,
-              password: tempPassword
-            });
-
-            if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
-            console.log("Temp auth user signed in successfully");
-
-            const authenticatedClient = anonClient;
-
-            const { data: sessionData, error: sessionError } = await serviceRoleClient
-              .from("live_sessions")
-              .insert({
-                user_id: tempUserId,
-                status: "active"
-              })
-              .select();
-
-            if (sessionError) throw sessionError;
-            sessionId = sessionData[0].id;
-            console.log(`Created test session: ${sessionId}`);
-
-            tipEventId = generateUUID();
-            const { error: tipError } = await serviceRoleClient.rpc(
-              "persist_extension_tip",
-              {
-                p_user_id: tempUserId,
-                p_client_event_id: tipEventId,
-                p_deduplication_key: null,
-                p_username: "s9_diag_tipper",
-                p_tokens: 100,
-                p_usd: 5.00,
-                p_platform: "twitch",
-                p_event_at: new Date().toISOString(),
-                p_queued_ms: null
-              }
-            );
-            if (tipError) throw tipError;
-            console.log("Added one tip to session");
-
-            console.log("\n--- FIRST FINALIZE CALL (Authenticated Context) ---");
-            const finalize1Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
-            const err1 = finalize1Result.error;
-            const finalize1 = finalize1Result.data;
-
-            console.log("finalize1.error:", err1 ? `${err1.code}: ${err1.message}` : null);
-            console.log("finalize1 (raw):", JSON.stringify(finalize1, null, 2));
-
-            const final_fields_1 = {};
-            if (finalize1 && typeof finalize1 === 'object') {
-              console.log("finalize1.id:", finalize1.id);
-              console.log("finalize1.status:", finalize1.status);
-              console.log("finalize1.finalized_at:", finalize1.finalized_at);
-              Object.keys(finalize1).forEach(key => {
-                if (key.startsWith('final_')) {
-                  final_fields_1[key] = finalize1[key];
-                  console.log(`finalize1.${key}:`, finalize1[key]);
-                }
-              });
-            }
-
-            console.log("\n--- SECOND FINALIZE CALL (Authenticated Context) ---");
-            const finalize2Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
-            const err2 = finalize2Result.error;
-            const finalize2 = finalize2Result.data;
-
-            console.log("finalize2.error:", err2 ? `${err2.code}: ${err2.message}` : null);
-            console.log("finalize2 (raw):", JSON.stringify(finalize2, null, 2));
-
-            const final_fields_2 = {};
-            if (finalize2 && typeof finalize2 === 'object') {
-              console.log("finalize2.id:", finalize2.id);
-              console.log("finalize2.status:", finalize2.status);
-              console.log("finalize2.finalized_at:", finalize2.finalized_at);
-              Object.keys(finalize2).forEach(key => {
-                if (key.startsWith('final_')) {
-                  final_fields_2[key] = finalize2[key];
-                  console.log(`finalize2.${key}:`, finalize2[key]);
-                }
-              });
-            }
-
-            console.log("\n--- IDEMPOTENCY VALIDATION ---");
-            const bothSucceeded = !err1 && !err2;
-            const firstReturnsData = !!finalize1 && typeof finalize1 === 'object';
-            const idsMatch = finalize1?.id === finalize2?.id;
-            const finalizedAtMatch = finalize1?.finalized_at === finalize2?.finalized_at;
-            const finalFieldsMatch = JSON.stringify(final_fields_1) === JSON.stringify(final_fields_2);
-
-            console.log("No errors on both calls:", bothSucceeded ? "✓" : "✗");
-            console.log("First call returns data:", firstReturnsData ? "✓" : "✗");
-            console.log("Session IDs match:", idsMatch ? "✓" : "✗");
-            console.log("finalized_at unchanged:", finalizedAtMatch ? "✓" : "✗");
-            console.log("All final_* fields unchanged:", finalFieldsMatch ? "✓" : "✗");
-
-            const passed = bothSucceeded && firstReturnsData && idsMatch && finalizedAtMatch && finalFieldsMatch;
-            if (!passed) {
-              throw new Error("Scenario 9 idempotency invariant failed");
-            }
-            console.log("\n✅ Scenario 9 PASSED");
-
-          } catch (error) {
-            throw new Error(`❌ Scenario 9 error: ${error.message}`);
-          } finally {
-            console.log("\n--- CLEANUP ---");
-            if (tipEventId) {
-              const { error: tipDelErr } = await serviceRoleClient
-                .from("tips")
-                .delete()
-                .eq("client_event_id", tipEventId);
-              if (tipDelErr) throw new Error(`Cleanup failed (tips): ${tipDelErr.message}`);
-              console.log("Deleted tips row");
-            }
-
-            if (tipEventId) {
-              const { error: liveDelErr } = await serviceRoleClient
-                .from("live_tips")
-                .delete()
-                .eq("client_event_id", tipEventId);
-              if (liveDelErr) throw new Error(`Cleanup failed (live_tips): ${liveDelErr.message}`);
-              console.log("Deleted live_tips row");
-            }
-
-            if (sessionId) {
-              const { error: sessDelErr } = await serviceRoleClient
-                .from("live_sessions")
-                .delete()
-                .eq("id", sessionId);
-              if (sessDelErr) throw new Error(`Cleanup failed (session): ${sessDelErr.message}`);
-              console.log("Deleted session row");
-            }
-
-            if (tempUserId) {
-              const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
-              if (userDelErr) throw new Error(`Cleanup failed (auth user): ${userDelErr.message}`);
-              console.log("Deleted temp auth user");
-            }
-          }
-        }
-
-        async function scenario16Diagnostic() {
-          console.log("\n" + "=".repeat(80));
-          console.log("SCENARIO 16: Authenticated User EXECUTE Permission Denial - Raw Evidence");
-          console.log("=".repeat(80));
-
-          let tempUserId = null;
-
-          try {
-            const RUN_ID = new Date().getTime().toString().slice(-6);
-            const tempEmail = `phase2-${RUN_ID}-s16@staging.local`;
-            const tempPassword = crypto.randomBytes(24).toString("hex");
-            const targetUserId = generateUUID();
-
-            console.log(`\nCreating temporary authenticated user`);
-            console.log(`Email: ${tempEmail}`);
-            console.log(`Target user_id (different from auth user): ${targetUserId}`);
-
-            const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
-              email: tempEmail,
-              password: tempPassword,
-              email_confirm: true
-            });
-
-            if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
-            tempUserId = created.user.id;
-            console.log(`Created temp auth user: ${tempUserId}`);
-
-            const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            const { error: signInErr } = await anonClient.auth.signInWithPassword({
-              email: tempEmail,
-              password: tempPassword
-            });
-
-            if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
-            console.log("Temp auth user signed in successfully");
-
-            const authenticatedClient = anonClient;
-            const testEventId = generateUUID();
-
-            console.log("\n--- AUTHENTICATED USER RPC CALL (No EXECUTE Permission Expected) ---");
-            const { data: tipData, error: rpcError } = await authenticatedClient.rpc(
-              "persist_extension_tip",
-              {
-                p_user_id: targetUserId,
-                p_client_event_id: testEventId,
-                p_deduplication_key: null,
-                p_username: "s16_auth_tipper",
-                p_tokens: 100,
-                p_usd: 5.00,
-                p_platform: "twitch",
-                p_event_at: new Date().toISOString(),
-                p_queued_ms: null
-              }
-            );
-
-            console.log("\n--- RPC RESULT ---");
-            console.log("rpcError object:", rpcError);
-            if (rpcError) {
-              console.log("rpcError.code:", rpcError.code);
-              console.log("rpcError.message:", rpcError.message);
-              console.log("rpcError.status:", rpcError.status);
-            }
-            console.log("tipData (should be null if denied):", tipData);
-
-            console.log("\n--- VERIFY ROW DOES NOT EXIST IN LIVE_TIPS ---");
-            const { data: liveRowCheck, error: liveCheckErr } = await serviceRoleClient
-              .from("live_tips")
-              .select("*")
-              .eq("client_event_id", testEventId)
-              .maybeSingle();
-
-            if (liveCheckErr) {
-              throw new Error(`Scenario 16 live_tips verification query failed: ${liveCheckErr.message}`);
-            }
-            console.log("Row exists in live_tips:", liveRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
-
-            console.log("\n--- VERIFY ROW DOES NOT EXIST IN TIPS ---");
-            const { data: tipRowCheck, error: tipCheckErr } = await serviceRoleClient
-              .from("tips")
-              .select("*")
-              .eq("client_event_id", testEventId)
-              .maybeSingle();
-
-            if (tipCheckErr) {
-              throw new Error(`Scenario 16 tips verification query failed: ${tipCheckErr.message}`);
-            }
-            console.log("Row exists in tips:", tipRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
-
-            console.log("\n--- PERMISSION VERDICT ---");
-            const msgLower = (rpcError?.message || "").toLowerCase();
-            const isPermissionDenial = !!(
-              rpcError &&
-              (msgLower.includes("permission denied") || msgLower.includes("execute") || msgLower.includes("permission"))
-            );
-            const noRows = !liveRowCheck && !tipRowCheck;
-            const passed = isPermissionDenial && noRows;
-
-            console.log(`Permission-specific error: ${isPermissionDenial ? "✓" : "✗"}`);
-            console.log(`No rows created: ${noRows ? "✓" : "✗"}`);
-            console.log(`Overall: ${passed ? "✓ CORRECTLY DENIED" : "✗ UNEXPECTEDLY ALLOWED"}`);
-
-            if (!passed) {
-              throw new Error("Scenario 16 permission denial invariant failed");
-            }
-            console.log("\n✅ Scenario 16 PASSED");
-
-          } catch (error) {
-            throw new Error(`❌ Scenario 16 error: ${error.message}`);
-          } finally {
-            console.log("\n--- CLEANUP ---");
-            if (tempUserId) {
-              const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
-              if (userDelErr) throw new Error(`Cleanup failed (auth user): ${userDelErr.message}`);
-              console.log("Deleted temp auth user");
-            }
-          }
-        }
-
-        async function scenario17Diagnostic() {
-          console.log("\n" + "=".repeat(80));
-          console.log("SCENARIO 17: Dual Table Write Consistency - DB Trusted-Path Verification Only");
-          console.log("(Service-role RPC call - does NOT verify full /api/live/tips HTTP path)");
-          console.log("=".repeat(80));
-
-          let sessionId = null;
-          let freshEventId = null;
-
-          try {
-            const freshUserId = generateUUID();
-            freshEventId = generateUUID();
-
-            console.log(`\nFresh test user_id: ${freshUserId}`);
-            console.log(`Fresh client_event_id: ${freshEventId}`);
-
-            const { data: sessionData, error: sessionError } = await serviceRoleClient
-              .from("live_sessions")
-              .insert({
-                user_id: freshUserId,
-                status: "active"
-              })
-              .select();
-
-            if (sessionError) throw sessionError;
-            sessionId = sessionData[0].id;
-            console.log(`Created fresh session: ${sessionId}`);
-
-            console.log("\n--- RPC CALL (ONE TRANSACTION) ---");
-            const { data: rpcResult, error: rpcError } = await serviceRoleClient.rpc(
-              "persist_extension_tip",
-              {
-                p_user_id: freshUserId,
-                p_client_event_id: freshEventId,
-                p_deduplication_key: null,
-                p_username: "s17_diag_tipper",
-                p_tokens: 250,
-                p_usd: 12.50,
-                p_platform: "chaturbate",
-                p_event_at: new Date().toISOString(),
-                p_queued_ms: null
-              }
-            );
-
-            if (rpcError) throw rpcError;
-            console.log("rpcResult:", JSON.stringify(rpcResult, null, 2));
-
-            console.log("\n--- QUERY TIPS TABLE ---");
-            const { data: tipRow, error: tipErr } = await serviceRoleClient
-              .from("tips")
-              .select("*")
-              .eq("client_event_id", freshEventId)
-              .maybeSingle();
-
-            if (tipErr) {
-              throw new Error(`Scenario 17 tips verification query failed: ${tipErr.message}`);
-            }
-            if (tipRow) {
-              console.log("tips row found: id:", tipRow.id, "user_id:", tipRow.user_id, "tokens:", tipRow.tokens);
-            } else {
-              console.log("tips row NOT FOUND");
-            }
-
-            console.log("\n--- QUERY LIVE_TIPS TABLE ---");
-            const { data: liveRow, error: liveErr } = await serviceRoleClient
-              .from("live_tips")
-              .select("*")
-              .eq("client_event_id", freshEventId)
-              .maybeSingle();
-
-            if (liveErr) {
-              throw new Error(`Scenario 17 live_tips verification query failed: ${liveErr.message}`);
-            }
-            if (liveRow) {
-              console.log("live_tips row found: id:", liveRow.id, "user_id:", liveRow.user_id, "tokens:", liveRow.tokens);
-            } else {
-              console.log("live_tips row NOT FOUND");
-            }
-
-            console.log("\n--- FIELD COMPARISON (PASS/FAIL) ---");
-            const comparisons = [
-              ["tips row exists", !!tipRow],
-              ["live_tips row exists", !!liveRow],
-              ["user_id matches (tips)", tipRow?.user_id === freshUserId],
-              ["user_id matches (live_tips)", liveRow?.user_id === freshUserId],
-              ["client_event_id matches (tips)", tipRow?.client_event_id === freshEventId],
-              ["client_event_id matches (live_tips)", liveRow?.client_event_id === freshEventId],
-              ["tokens match (tips)", tipRow?.tokens === 250],
-              ["tokens match (live_tips)", liveRow?.tokens === 250],
-              ["platform matches (tips)", tipRow?.platform === "chaturbate"],
-              ["platform matches (live_tips)", liveRow?.platform === "chaturbate"],
-              ["live_session_id populated", liveRow?.live_session_id === sessionId],
-            ];
-
-            let allPass = true;
-            comparisons.forEach(([field, result]) => {
-              console.log(`  ${field}: ${result ? "✓ PASS" : "✗ FAIL"}`);
-              if (!result) allPass = false;
-            });
-
-            if (!allPass) {
-              throw new Error("Scenario 17 dual-write consistency invariant failed");
-            }
-            console.log("\n✅ Scenario 17 PASSED");
-
-          } catch (error) {
-            throw new Error(`❌ Scenario 17 error: ${error.message}`);
-          } finally {
-            console.log("\n--- CLEANUP ---");
-            if (sessionId) {
-              const { error: sessDelErr } = await serviceRoleClient
-                .from("live_sessions")
-                .delete()
-                .eq("id", sessionId);
-              if (sessDelErr) throw new Error(`Cleanup failed (session): ${sessDelErr.message}`);
-              console.log("Deleted session row");
-            }
-
-            if (freshEventId) {
-              const { error: tipDelErr } = await serviceRoleClient
-                .from("tips")
-                .delete()
-                .eq("client_event_id", freshEventId);
-              if (tipDelErr) throw new Error(`Cleanup failed (tips): ${tipDelErr.message}`);
-              console.log("Deleted tips row");
-            }
-
-            if (freshEventId) {
-              const { error: liveDelErr } = await serviceRoleClient
-                .from("live_tips")
-                .delete()
-                .eq("client_event_id", freshEventId);
-              if (liveDelErr) throw new Error(`Cleanup failed (live_tips): ${liveDelErr.message}`);
-              console.log("Deleted live_tips row");
-            }
-          }
-        }
-
-        async function main() {
-          console.log("Phase 2 Diagnostic Harness - Scenarios 9, 16, 17 (Fresh Isolated Tests)");
-          console.log("=".repeat(80));
-
-          const results = { passed: 0, failed: 0 };
-
-          try {
-            await scenario9Diagnostic();
-            results.passed++;
-          } catch (error) {
-            console.error(error.message);
-            results.failed++;
-          }
-
-          try {
-            await scenario16Diagnostic();
-            results.passed++;
-          } catch (error) {
-            console.error(error.message);
-            results.failed++;
-          }
-
-          try {
-            await scenario17Diagnostic();
-            results.passed++;
-          } catch (error) {
-            console.error(error.message);
-            results.failed++;
-          }
-
-          console.log("\n" + "=".repeat(80));
-          console.log(`Diagnostic complete: ${results.passed} passed, ${results.failed} failed`);
-          console.log("=".repeat(80));
-
-          if (results.failed > 0) {
+        run: |
+          node - << 'DIAGNOSTIC_END'
+          const { createClient } = require("@supabase/supabase-js");
+          const crypto = require("crypto");
+
+          const SUPABASE_URL = process.env.SUPABASE_STAGING_URL;
+          const SUPABASE_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
+          const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
+
+          if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+            console.error("ERROR: Staging secrets not configured");
             process.exit(1);
           }
-        }
 
-        main();
-        DIAGNOSTIC_END
+          const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+          const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+          function generateUUID() {
+            return crypto.randomUUID();
+          }
+
+          async function scenario9Diagnostic() {
+            console.log("\n" + "=".repeat(80));
+            console.log("SCENARIO 9: finalize_live_session() Idempotency - Raw Evidence");
+            console.log("=".repeat(80));
+
+            let tempUserId = null;
+            let sessionId = null;
+            let tipEventId = null;
+
+            try {
+              const RUN_ID = new Date().getTime().toString().slice(-6);
+              const tempEmail = `phase2-${RUN_ID}-s9@staging.local`;
+              const tempPassword = crypto.randomBytes(24).toString("hex");
+
+              console.log(`\nCreating temporary Auth user for authenticated session owner context`);
+              console.log(`Email: ${tempEmail}`);
+
+              const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
+                email: tempEmail,
+                password: tempPassword,
+                email_confirm: true
+              });
+
+              if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
+              tempUserId = created.user.id;
+              console.log(`Created temp auth user: ${tempUserId}`);
+
+              const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+              const { error: signInErr } = await anonClient.auth.signInWithPassword({
+                email: tempEmail,
+                password: tempPassword
+              });
+
+              if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
+              console.log("Temp auth user signed in successfully");
+
+              const authenticatedClient = anonClient;
+
+              const { data: sessionData, error: sessionError } = await serviceRoleClient
+                .from("live_sessions")
+                .insert({
+                  user_id: tempUserId,
+                  status: "active"
+                })
+                .select();
+
+              if (sessionError) throw sessionError;
+              sessionId = sessionData[0].id;
+              console.log(`Created test session: ${sessionId}`);
+
+              tipEventId = generateUUID();
+              const { error: tipError } = await serviceRoleClient.rpc(
+                "persist_extension_tip",
+                {
+                  p_user_id: tempUserId,
+                  p_client_event_id: tipEventId,
+                  p_deduplication_key: null,
+                  p_username: "s9_diag_tipper",
+                  p_tokens: 100,
+                  p_usd: 5.00,
+                  p_platform: "twitch",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                }
+              );
+              if (tipError) throw tipError;
+              console.log("Added one tip to session");
+
+              console.log("\n--- FIRST FINALIZE CALL (Authenticated Context) ---");
+              const finalize1Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
+              const err1 = finalize1Result.error;
+              const finalize1 = finalize1Result.data;
+
+              console.log("finalize1.error:", err1 ? `${err1.code}: ${err1.message}` : null);
+              console.log("finalize1 (raw):", JSON.stringify(finalize1, null, 2));
+
+              const final_fields_1 = {};
+              if (finalize1 && typeof finalize1 === 'object') {
+                console.log("finalize1.id:", finalize1.id);
+                console.log("finalize1.status:", finalize1.status);
+                console.log("finalize1.finalized_at:", finalize1.finalized_at);
+                Object.keys(finalize1).forEach(key => {
+                  if (key.startsWith('final_')) {
+                    final_fields_1[key] = finalize1[key];
+                    console.log(`finalize1.${key}:`, finalize1[key]);
+                  }
+                });
+              }
+
+              console.log("\n--- SECOND FINALIZE CALL (Authenticated Context) ---");
+              const finalize2Result = await authenticatedClient.rpc("finalize_live_session", { p_session_id: sessionId });
+              const err2 = finalize2Result.error;
+              const finalize2 = finalize2Result.data;
+
+              console.log("finalize2.error:", err2 ? `${err2.code}: ${err2.message}` : null);
+              console.log("finalize2 (raw):", JSON.stringify(finalize2, null, 2));
+
+              const final_fields_2 = {};
+              if (finalize2 && typeof finalize2 === 'object') {
+                console.log("finalize2.id:", finalize2.id);
+                console.log("finalize2.status:", finalize2.status);
+                console.log("finalize2.finalized_at:", finalize2.finalized_at);
+                Object.keys(finalize2).forEach(key => {
+                  if (key.startsWith('final_')) {
+                    final_fields_2[key] = finalize2[key];
+                    console.log(`finalize2.${key}:`, finalize2[key]);
+                  }
+                });
+              }
+
+              console.log("\n--- IDEMPOTENCY VALIDATION ---");
+              const bothSucceeded = !err1 && !err2;
+              const firstReturnsData = !!finalize1 && typeof finalize1 === 'object';
+              const idsMatch = finalize1?.id === finalize2?.id;
+              const finalizedAtMatch = finalize1?.finalized_at === finalize2?.finalized_at;
+              const finalFieldsMatch = JSON.stringify(final_fields_1) === JSON.stringify(final_fields_2);
+
+              console.log("No errors on both calls:", bothSucceeded ? "✓" : "✗");
+              console.log("First call returns data:", firstReturnsData ? "✓" : "✗");
+              console.log("Session IDs match:", idsMatch ? "✓" : "✗");
+              console.log("finalized_at unchanged:", finalizedAtMatch ? "✓" : "✗");
+              console.log("All final_* fields unchanged:", finalFieldsMatch ? "✓" : "✗");
+
+              const passed = bothSucceeded && firstReturnsData && idsMatch && finalizedAtMatch && finalFieldsMatch;
+              if (!passed) {
+                throw new Error("Scenario 9 idempotency invariant failed");
+              }
+              console.log("\n✅ Scenario 9 PASSED");
+
+            } catch (error) {
+              throw new Error(`❌ Scenario 9 error: ${error.message}`);
+            } finally {
+              console.log("\n--- CLEANUP ---");
+              if (tipEventId) {
+                const { error: tipDelErr } = await serviceRoleClient
+                  .from("tips")
+                  .delete()
+                  .eq("client_event_id", tipEventId);
+                if (tipDelErr) throw new Error(`Cleanup failed (tips): ${tipDelErr.message}`);
+                console.log("Deleted tips row");
+              }
+
+              if (tipEventId) {
+                const { error: liveDelErr } = await serviceRoleClient
+                  .from("live_tips")
+                  .delete()
+                  .eq("client_event_id", tipEventId);
+                if (liveDelErr) throw new Error(`Cleanup failed (live_tips): ${liveDelErr.message}`);
+                console.log("Deleted live_tips row");
+              }
+
+              if (sessionId) {
+                const { error: sessDelErr } = await serviceRoleClient
+                  .from("live_sessions")
+                  .delete()
+                  .eq("id", sessionId);
+                if (sessDelErr) throw new Error(`Cleanup failed (session): ${sessDelErr.message}`);
+                console.log("Deleted session row");
+              }
+
+              if (tempUserId) {
+                const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+                if (userDelErr) throw new Error(`Cleanup failed (auth user): ${userDelErr.message}`);
+                console.log("Deleted temp auth user");
+              }
+            }
+          }
+
+          async function scenario16Diagnostic() {
+            console.log("\n" + "=".repeat(80));
+            console.log("SCENARIO 16: Authenticated User EXECUTE Permission Denial - Raw Evidence");
+            console.log("=".repeat(80));
+
+            let tempUserId = null;
+
+            try {
+              const RUN_ID = new Date().getTime().toString().slice(-6);
+              const tempEmail = `phase2-${RUN_ID}-s16@staging.local`;
+              const tempPassword = crypto.randomBytes(24).toString("hex");
+              const targetUserId = generateUUID();
+
+              console.log(`\nCreating temporary authenticated user`);
+              console.log(`Email: ${tempEmail}`);
+              console.log(`Target user_id (different from auth user): ${targetUserId}`);
+
+              const { data: created, error: createErr } = await serviceRoleClient.auth.admin.createUser({
+                email: tempEmail,
+                password: tempPassword,
+                email_confirm: true
+              });
+
+              if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
+              tempUserId = created.user.id;
+              console.log(`Created temp auth user: ${tempUserId}`);
+
+              const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+              const { error: signInErr } = await anonClient.auth.signInWithPassword({
+                email: tempEmail,
+                password: tempPassword
+              });
+
+              if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
+              console.log("Temp auth user signed in successfully");
+
+              const authenticatedClient = anonClient;
+              const testEventId = generateUUID();
+
+              console.log("\n--- AUTHENTICATED USER RPC CALL (No EXECUTE Permission Expected) ---");
+              const { data: tipData, error: rpcError } = await authenticatedClient.rpc(
+                "persist_extension_tip",
+                {
+                  p_user_id: targetUserId,
+                  p_client_event_id: testEventId,
+                  p_deduplication_key: null,
+                  p_username: "s16_auth_tipper",
+                  p_tokens: 100,
+                  p_usd: 5.00,
+                  p_platform: "twitch",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                }
+              );
+
+              console.log("\n--- RPC RESULT ---");
+              console.log("rpcError object:", rpcError);
+              if (rpcError) {
+                console.log("rpcError.code:", rpcError.code);
+                console.log("rpcError.message:", rpcError.message);
+                console.log("rpcError.status:", rpcError.status);
+              }
+              console.log("tipData (should be null if denied):", tipData);
+
+              console.log("\n--- VERIFY ROW DOES NOT EXIST IN LIVE_TIPS ---");
+              const { data: liveRowCheck, error: liveCheckErr } = await serviceRoleClient
+                .from("live_tips")
+                .select("*")
+                .eq("client_event_id", testEventId)
+                .maybeSingle();
+
+              if (liveCheckErr) {
+                throw new Error(`Scenario 16 live_tips verification query failed: ${liveCheckErr.message}`);
+              }
+              console.log("Row exists in live_tips:", liveRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
+
+              console.log("\n--- VERIFY ROW DOES NOT EXIST IN TIPS ---");
+              const { data: tipRowCheck, error: tipCheckErr } = await serviceRoleClient
+                .from("tips")
+                .select("*")
+                .eq("client_event_id", testEventId)
+                .maybeSingle();
+
+              if (tipCheckErr) {
+                throw new Error(`Scenario 16 tips verification query failed: ${tipCheckErr.message}`);
+              }
+              console.log("Row exists in tips:", tipRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
+
+              console.log("\n--- PERMISSION VERDICT ---");
+              const msgLower = (rpcError?.message || "").toLowerCase();
+              const isPermissionDenial = !!(
+                rpcError &&
+                (msgLower.includes("permission denied") || msgLower.includes("execute") || msgLower.includes("permission"))
+              );
+              const noRows = !liveRowCheck && !tipRowCheck;
+              const passed = isPermissionDenial && noRows;
+
+              console.log(`Permission-specific error: ${isPermissionDenial ? "✓" : "✗"}`);
+              console.log(`No rows created: ${noRows ? "✓" : "✗"}`);
+              console.log(`Overall: ${passed ? "✓ CORRECTLY DENIED" : "✗ UNEXPECTEDLY ALLOWED"}`);
+
+              if (!passed) {
+                throw new Error("Scenario 16 permission denial invariant failed");
+              }
+              console.log("\n✅ Scenario 16 PASSED");
+
+            } catch (error) {
+              throw new Error(`❌ Scenario 16 error: ${error.message}`);
+            } finally {
+              console.log("\n--- CLEANUP ---");
+              if (tempUserId) {
+                const { error: userDelErr } = await serviceRoleClient.auth.admin.deleteUser(tempUserId);
+                if (userDelErr) throw new Error(`Cleanup failed (auth user): ${userDelErr.message}`);
+                console.log("Deleted temp auth user");
+              }
+            }
+          }
+
+          async function scenario17Diagnostic() {
+            console.log("\n" + "=".repeat(80));
+            console.log("SCENARIO 17: Dual Table Write Consistency - DB Trusted-Path Verification Only");
+            console.log("(Service-role RPC call - does NOT verify full /api/live/tips HTTP path)");
+            console.log("=".repeat(80));
+
+            let sessionId = null;
+            let freshEventId = null;
+
+            try {
+              const freshUserId = generateUUID();
+              freshEventId = generateUUID();
+
+              console.log(`\nFresh test user_id: ${freshUserId}`);
+              console.log(`Fresh client_event_id: ${freshEventId}`);
+
+              const { data: sessionData, error: sessionError } = await serviceRoleClient
+                .from("live_sessions")
+                .insert({
+                  user_id: freshUserId,
+                  status: "active"
+                })
+                .select();
+
+              if (sessionError) throw sessionError;
+              sessionId = sessionData[0].id;
+              console.log(`Created fresh session: ${sessionId}`);
+
+              console.log("\n--- RPC CALL (ONE TRANSACTION) ---");
+              const { data: rpcResult, error: rpcError } = await serviceRoleClient.rpc(
+                "persist_extension_tip",
+                {
+                  p_user_id: freshUserId,
+                  p_client_event_id: freshEventId,
+                  p_deduplication_key: null,
+                  p_username: "s17_diag_tipper",
+                  p_tokens: 250,
+                  p_usd: 12.50,
+                  p_platform: "chaturbate",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                }
+              );
+
+              if (rpcError) throw rpcError;
+              console.log("rpcResult:", JSON.stringify(rpcResult, null, 2));
+
+              console.log("\n--- QUERY TIPS TABLE ---");
+              const { data: tipRow, error: tipErr } = await serviceRoleClient
+                .from("tips")
+                .select("*")
+                .eq("client_event_id", freshEventId)
+                .maybeSingle();
+
+              if (tipErr) {
+                throw new Error(`Scenario 17 tips verification query failed: ${tipErr.message}`);
+              }
+              if (tipRow) {
+                console.log("tips row found: id:", tipRow.id, "user_id:", tipRow.user_id, "tokens:", tipRow.tokens);
+              } else {
+                console.log("tips row NOT FOUND");
+              }
+
+              console.log("\n--- QUERY LIVE_TIPS TABLE ---");
+              const { data: liveRow, error: liveErr } = await serviceRoleClient
+                .from("live_tips")
+                .select("*")
+                .eq("client_event_id", freshEventId)
+                .maybeSingle();
+
+              if (liveErr) {
+                throw new Error(`Scenario 17 live_tips verification query failed: ${liveErr.message}`);
+              }
+              if (liveRow) {
+                console.log("live_tips row found: id:", liveRow.id, "user_id:", liveRow.user_id, "tokens:", liveRow.tokens);
+              } else {
+                console.log("live_tips row NOT FOUND");
+              }
+
+              console.log("\n--- FIELD COMPARISON (PASS/FAIL) ---");
+              const comparisons = [
+                ["tips row exists", !!tipRow],
+                ["live_tips row exists", !!liveRow],
+                ["user_id matches (tips)", tipRow?.user_id === freshUserId],
+                ["user_id matches (live_tips)", liveRow?.user_id === freshUserId],
+                ["client_event_id matches (tips)", tipRow?.client_event_id === freshEventId],
+                ["client_event_id matches (live_tips)", liveRow?.client_event_id === freshEventId],
+                ["tokens match (tips)", tipRow?.tokens === 250],
+                ["tokens match (live_tips)", liveRow?.tokens === 250],
+                ["platform matches (tips)", tipRow?.platform === "chaturbate"],
+                ["platform matches (live_tips)", liveRow?.platform === "chaturbate"],
+                ["live_session_id populated", liveRow?.live_session_id === sessionId],
+              ];
+
+              let allPass = true;
+              comparisons.forEach(([field, result]) => {
+                console.log(`  ${field}: ${result ? "✓ PASS" : "✗ FAIL"}`);
+                if (!result) allPass = false;
+              });
+
+              if (!allPass) {
+                throw new Error("Scenario 17 dual-write consistency invariant failed");
+              }
+              console.log("\n✅ Scenario 17 PASSED");
+
+            } catch (error) {
+              throw new Error(`❌ Scenario 17 error: ${error.message}`);
+            } finally {
+              console.log("\n--- CLEANUP ---");
+              if (sessionId) {
+                const { error: sessDelErr } = await serviceRoleClient
+                  .from("live_sessions")
+                  .delete()
+                  .eq("id", sessionId);
+                if (sessDelErr) throw new Error(`Cleanup failed (session): ${sessDelErr.message}`);
+                console.log("Deleted session row");
+              }
+
+              if (freshEventId) {
+                const { error: tipDelErr } = await serviceRoleClient
+                  .from("tips")
+                  .delete()
+                  .eq("client_event_id", freshEventId);
+                if (tipDelErr) throw new Error(`Cleanup failed (tips): ${tipDelErr.message}`);
+                console.log("Deleted tips row");
+              }
+
+              if (freshEventId) {
+                const { error: liveDelErr } = await serviceRoleClient
+                  .from("live_tips")
+                  .delete()
+                  .eq("client_event_id", freshEventId);
+                if (liveDelErr) throw new Error(`Cleanup failed (live_tips): ${liveDelErr.message}`);
+                console.log("Deleted live_tips row");
+              }
+            }
+          }
+
+          async function main() {
+            console.log("Phase 2 Diagnostic Harness - Scenarios 9, 16, 17 (Fresh Isolated Tests)");
+            console.log("=".repeat(80));
+
+            const results = { passed: 0, failed: 0 };
+
+            try {
+              await scenario9Diagnostic();
+              results.passed++;
+            } catch (error) {
+              console.error(error.message);
+              results.failed++;
+            }
+
+            try {
+              await scenario16Diagnostic();
+              results.passed++;
+            } catch (error) {
+              console.error(error.message);
+              results.failed++;
+            }
+
+            try {
+              await scenario17Diagnostic();
+              results.passed++;
+            } catch (error) {
+              console.error(error.message);
+              results.failed++;
+            }
+
+            console.log("\n" + "=".repeat(80));
+            console.log(`Diagnostic complete: ${results.passed} passed, ${results.failed} failed`);
+            console.log("=".repeat(80));
+
+            if (results.failed > 0) {
+              process.exit(1);
+            }
+          }
+
+          main();
+          DIAGNOSTIC_END
 
       - name: HTTP 401 Environment Verification
         run: |
