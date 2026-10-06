@@ -53,6 +53,7 @@ DECLARE
   v_live_tip_id uuid;
   v_tip_id bigint;
   v_seq integer := 1;
+  v_matching_sessions integer;
 BEGIN
   IF p_user_id IS NULL THEN
     RAISE EXCEPTION 'user_id is required' USING ERRCODE = '22004';
@@ -101,10 +102,7 @@ BEGIN
     );
   END IF;
 
-  -- Same attribution rule as the pre-Phase-1 route: the caller's most recent
-  -- 'active' or 'needs_resolution' session, never 'paused'. A queued tip is
-  -- only credited if that session had already started when the tip happened
-  -- (30s grace for request latency).
+  -- Phase 2: Step 1 - Try unresolved sessions (active, paused, needs_resolution)
   SELECT id INTO v_session_id
   FROM public.live_sessions
   WHERE user_id = p_user_id
@@ -113,6 +111,32 @@ BEGIN
          OR started_at <= now() - make_interval(secs => p_queued_ms / 1000.0) + interval '30 seconds')
   ORDER BY started_at DESC
   LIMIT 1;
+
+  -- Phase 2: Step 2 - If no unresolved, search recently-ended sessions (30-minute window)
+  IF v_session_id IS NULL THEN
+    -- Count matching ended sessions to detect ambiguity
+    SELECT COUNT(*) INTO v_matching_sessions
+    FROM public.live_sessions
+    WHERE user_id = p_user_id
+      AND status = 'ended'
+      AND started_at <= p_event_at
+      AND p_event_at <= ended_at
+      AND ended_at > now() - INTERVAL '30 minutes';
+
+    -- Get the most recent ended session if exactly one matches
+    IF v_matching_sessions = 1 THEN
+      SELECT id INTO v_session_id
+      FROM public.live_sessions
+      WHERE user_id = p_user_id
+        AND status = 'ended'
+        AND started_at <= p_event_at
+        AND p_event_at <= ended_at
+        AND ended_at > now() - INTERVAL '30 minutes'
+      LIMIT 1;
+    ELSIF v_matching_sessions > 1 THEN
+      v_session_id := NULL;
+    END IF;
+  END IF;
 
   -- Canonical history. tips_dedup_unique is (user_id, username_lower, tokens,
   -- usd_rounded, date_time, tip_seq): a different event with the identical
