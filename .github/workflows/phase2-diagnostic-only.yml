@@ -292,6 +292,9 @@ jobs:
               .eq("client_event_id", testEventId)
               .maybeSingle();
 
+            if (liveCheckErr) {
+              throw new Error(`Scenario 16 live_tips verification query failed: ${liveCheckErr.message}`);
+            }
             console.log("Row exists in live_tips:", liveRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
 
             console.log("\n--- VERIFY ROW DOES NOT EXIST IN TIPS ---");
@@ -301,6 +304,9 @@ jobs:
               .eq("client_event_id", testEventId)
               .maybeSingle();
 
+            if (tipCheckErr) {
+              throw new Error(`Scenario 16 tips verification query failed: ${tipCheckErr.message}`);
+            }
             console.log("Row exists in tips:", tipRowCheck ? "YES (PERMISSION FAILED)" : "NO (PERMISSION WORKING)");
 
             console.log("\n--- PERMISSION VERDICT ---");
@@ -387,7 +393,9 @@ jobs:
               .eq("client_event_id", freshEventId)
               .maybeSingle();
 
-            if (tipErr) throw tipErr;
+            if (tipErr) {
+              throw new Error(`Scenario 17 tips verification query failed: ${tipErr.message}`);
+            }
             if (tipRow) {
               console.log("tips row found: id:", tipRow.id, "user_id:", tipRow.user_id, "tokens:", tipRow.tokens);
             } else {
@@ -401,7 +409,9 @@ jobs:
               .eq("client_event_id", freshEventId)
               .maybeSingle();
 
-            if (liveErr) throw liveErr;
+            if (liveErr) {
+              throw new Error(`Scenario 17 live_tips verification query failed: ${liveErr.message}`);
+            }
             if (liveRow) {
               console.log("live_tips row found: id:", liveRow.id, "user_id:", liveRow.user_id, "tokens:", liveRow.tokens);
             } else {
