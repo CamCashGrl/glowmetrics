@@ -30,9 +30,9 @@ jobs:
 
       - name: Run Phase 2 Staging Verification (17 Scenarios)
         env:
-          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
         run: |
           echo "Starting Phase 2 Staging Verification (17 Scenarios)"
           echo "========================================================"
