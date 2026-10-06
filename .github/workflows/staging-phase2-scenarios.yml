@@ -80,12 +80,48 @@ jobs:
             }
           }
 
+          async function cleanupUserFixtures(client, userId) {
+            // Cleanup only test fixtures for this user, not unrelated data
+            try {
+              // Get all sessions for this user to finalize any unresolved ones
+              const { data: sessions } = await client
+                .from("live_sessions")
+                .select("id, status")
+                .eq("user_id", userId);
+
+              if (sessions) {
+                for (const session of sessions) {
+                  if (session.status !== "ended") {
+                    // Finalize unresolved sessions to avoid constraint violations
+                    await client.rpc("finalize_live_session", { p_session_id: session.id });
+                  }
+                }
+              }
+
+              // Delete test fixtures for this user
+              await client.from("unattributed_tips_log").delete().eq("user_id", userId);
+              await client.from("live_tips").delete().eq("user_id", userId);
+              await client.from("tips").delete().eq("user_id", userId);
+              await client.from("live_sessions").delete().eq("user_id", userId);
+            } catch (e) {
+              // Non-fatal cleanup errors - continue testing
+              console.log(`Cleanup note for user ${userId}: ${e.message}`);
+            }
+          }
+
           async function runTests() {
             console.log("Phase 2 Staging: 17-Scenario Test Suite");
             console.log("Testing RPC functions with auth context\n");
 
             const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
             const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // Pre-test cleanup: finalize any unresolved sessions from prior runs
+            console.log("Cleaning up prior test fixtures...");
+            for (const userId of Object.values(TEST_USERS)) {
+              await cleanupUserFixtures(serviceRoleClient, userId);
+            }
+            console.log("Ready to start scenarios.\n");
 
             let scenario1SessionId, scenario1TipId, scenario1ClientEventId;
             let scenario4SessionId, scenario5SessionId, scenario6SessionId, scenario7SessionId;
