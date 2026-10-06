@@ -229,11 +229,6 @@ jobs:
                 s1Result.passed = false;
                 s1Result.message = error.message;
                 printResult("Normal active-session tip", 1, false, "RPC call succeeds", `Error: ${error.message}`);
-              } finally {
-                if (s1UserId) {
-                  await cleanupUserFixtures(serviceRoleClient, s1UserId);
-                  await cleanupTempAuthUser(serviceRoleClient, s1UserId);
-                }
               }
 
               // ========== SCENARIO 2 ==========
@@ -322,6 +317,12 @@ jobs:
                 printResult("Different clientEventIds", 3, false, "Both tips recorded", `Error: ${error.message}`);
               }
 
+              // Scenarios 1→2→3 cleanup (grouped lifecycle)
+              if (s1UserId) {
+                await cleanupUserFixtures(serviceRoleClient, s1UserId);
+                await cleanupTempAuthUser(serviceRoleClient, s1UserId);
+              }
+
               // ========== SCENARIO 4 ==========
               let s4UserId = null;
               let s4Result = { passed: false, message: "Not executed" };
@@ -376,11 +377,6 @@ jobs:
                 s4Result.passed = false;
                 s4Result.message = error.message;
                 printResult("Active-session attribution", 4, false, "Tip attributed", `Error: ${error.message}`);
-              } finally {
-                if (s4UserId) {
-                  await cleanupUserFixtures(serviceRoleClient, s4UserId);
-                  await cleanupTempAuthUser(serviceRoleClient, s4UserId);
-                }
               }
 
               // ========== SCENARIO 5 ==========
@@ -428,6 +424,12 @@ jobs:
                 s5Result.passed = false;
                 s5Result.message = error.message;
                 printResult("Paused-session attribution", 5, false, "Tip attributed", `Error: ${error.message}`);
+              }
+
+              // Scenarios 4→5 cleanup (grouped lifecycle)
+              if (s4UserId) {
+                await cleanupUserFixtures(serviceRoleClient, s4UserId);
+                await cleanupTempAuthUser(serviceRoleClient, s4UserId);
               }
 
               // ========== SCENARIO 6 ==========
