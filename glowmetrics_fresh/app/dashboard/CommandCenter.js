@@ -206,6 +206,7 @@ export default function CommandCenter({
   // ── All values READ from the frozen layer. No local aggregation. ──
   const bestWindow   = analytics?.canonicalBestTimes?.bestWindow || null
   const earlySignal  = analytics?.canonicalBestTimes?.earlySignal || null
+  const fallbackWindow = analytics?.canonicalBestTimes?.fallbackWindow || null
   const grid         = analytics?.canonicalBestTimes?.grid || []
   const overlap      = analytics?.bestWindowFanOverlap || null
   const hourlyRate   = analytics?.estimatedHourlyRate ?? 0
@@ -217,6 +218,11 @@ export default function CommandCenter({
   const missedByPlat = analytics?.missedRevenue?.cumulative_by_platform || {}
   const whales       = analytics?.whales || []
   const platforms    = analytics?.platforms || []
+
+  // Cascade: always render some recommendation (strong > early > fallback)
+  const recommendation = bestWindow || earlySignal || fallbackWindow
+  const confidenceLevel = bestWindow ? bestWindow.tier : (earlySignal ? 'early' : 'experimental')
+  const hasRecommendation = !!recommendation
 
   // Platform with the largest measured best-window rate gap — same ranking
   // the Missed Revenue card uses.
@@ -256,6 +262,11 @@ export default function CommandCenter({
   const hasWindow = !!bestWindow
   const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
 
+  // Confidence copy changes based on which recommendation tier matched
+  const confidenceCopy = bestWindow ? TIER_COPY[bestWindow.tier] || "Pattern"
+                       : earlySignal ? "Early signal"
+                       : "Experimental window"
+
   // Hourly distribution for the evidence bar chart — read straight off the
   // canonical grid, summed per local hour. Presentational shaping of an
   // existing canonical array, not a new metric.
@@ -267,7 +278,7 @@ export default function CommandCenter({
         <div>
           <div style={{ fontSize: 27, fontWeight: 800, color: C.white, letterSpacing: "-0.025em" }}>👋 {greeting}</div>
           <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
-            {hasWindow ? "Here's how to make more money today." : "Here's what your data says so far."}
+            {hasRecommendation ? "Here's how to make more money today." : "Here's what your data says so far."}
           </div>
         </div>
       </div>
@@ -279,10 +290,10 @@ export default function CommandCenter({
         border: hasWindow ? "1px solid rgba(34,211,238,0.28)" : `1px solid ${C.border}`,
         borderRadius: 22, padding: 38, position: "relative", overflow: "hidden",
       }}>
-        {hasWindow && <div style={{ position: "absolute", right: -70, top: -70, width: 300, height: 300, borderRadius: "50%", background: "rgba(34,211,238,0.12)", filter: "blur(80px)", pointerEvents: "none" }} />}
+        {hasRecommendation && <div style={{ position: "absolute", right: -70, top: -70, width: 300, height: 300, borderRadius: "50%", background: "rgba(34,211,238,0.12)", filter: "blur(80px)", pointerEvents: "none" }} />}
         <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 40, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 420px", minWidth: 0 }}>
-            <div style={{ ...label, fontSize: 12, color: hasWindow ? C.cyan : C.muted, marginBottom: 14 }}>Your next best move</div>
+            <div style={{ ...label, fontSize: 12, color: hasRecommendation ? C.cyan : C.muted, marginBottom: 14 }}>Your next best move</div>
 
             {hasWindow ? (
               <>
@@ -306,15 +317,22 @@ export default function CommandCenter({
                   {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical hour</>}.
                 </div>
               </>
+            ) : earlySignal ? (
+              <>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
+                  A pattern is starting to form
+                </div>
+                <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 480 }}>
+                  {earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is your strongest so far, but only {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} back it up. A few more streams will confirm or replace it.
+                </div>
+              </>
             ) : (
               <>
                 <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
-                  {earlySignal ? "A pattern is starting to form" : "Not enough history for a reliable window yet"}
+                  Try streaming {fmtWindow(fallbackWindow.localHour)}
                 </div>
                 <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 480 }}>
-                  {earlySignal
-                    ? <>{earlySignal.localDay}s around {fmtWindow(earlySignal.localHour)} is your strongest so far, but only {earlySignal.sessionCount} session{earlySignal.sessionCount === 1 ? "" : "s"} back it up. A few more streams will confirm or replace it.</>
-                    : <>CamCash needs a handful of qualifying sessions before it can tell a real earning window apart from one good night. Keep importing and this fills in.</>}
+                  You haven't streamed in many different hours yet, but {fallbackWindow.localDay}s {fmtWindow(fallbackWindow.localHour)} looks promising. Plan a few streams here to test it out — more data will make this stronger.
                 </div>
               </>
             )}
