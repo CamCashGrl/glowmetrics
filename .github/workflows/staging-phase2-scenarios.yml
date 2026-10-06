@@ -104,8 +104,9 @@ jobs:
 
             fixtures.authUserIds.add(authData.user.id);
 
-            // Create authenticated client for this user
-            const { data: signInData, error: signInError } = await anonClient.auth.signInWithPassword({
+            // Create fresh authenticated client for this user
+            const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { data: signInData, error: signInError } = await userClient.auth.signInWithPassword({
               email,
               password,
             });
@@ -113,12 +114,6 @@ jobs:
             if (signInError) {
               throw new Error(`Failed to sign in test user ${suffix}: ${signInError.message}`);
             }
-
-            const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            userClient.auth.session = () => ({
-              access_token: signInData.session.access_token,
-              user: signInData.user,
-            });
 
             return {
               authUserId: authData.user.id,
@@ -133,36 +128,12 @@ jobs:
 
             try {
               // Delete child rows first (foreign key dependencies)
-              if (fixtures.clientEventIds.size > 0) {
-                const { error } = await serviceRoleClient
-                  .from("client_events")
-                  .delete()
-                  .in("id", [...fixtures.clientEventIds]);
-                if (error) throw new Error(`Failed to delete client_events: ${error.message}`);
-              }
-
-              if (fixtures.ambiguityLogIds.size > 0) {
-                const { error } = await serviceRoleClient
-                  .from("ambiguity_log")
-                  .delete()
-                  .in("id", [...fixtures.ambiguityLogIds]);
-                if (error) throw new Error(`Failed to delete ambiguity_log: ${error.message}`);
-              }
-
               if (fixtures.liveTipIds.size > 0) {
                 const { error } = await serviceRoleClient
                   .from("live_tips")
                   .delete()
                   .in("id", [...fixtures.liveTipIds]);
                 if (error) throw new Error(`Failed to delete live_tips: ${error.message}`);
-              }
-
-              if (fixtures.tipIds.size > 0) {
-                const { error } = await serviceRoleClient
-                  .from("tips")
-                  .delete()
-                  .in("id", [...fixtures.tipIds]);
-                if (error) throw new Error(`Failed to delete tips: ${error.message}`);
               }
 
               if (fixtures.sessionIds.size > 0) {
@@ -191,116 +162,122 @@ jobs:
           async function runScenarios() {
             try {
               // ============================================
-              // Scenarios 1-3: Shared temp user (s1)
+              // Scenario 1: Normal tip persistence
               // ============================================
               const s1 = await createTempTestUser("s1");
               console.log(`\n📝 Created s1 (auth ID: ${s1.authUserId})`);
 
-              // Scenario 1: Basic session creation
               {
-                const { data, error } = await s1.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s1.authUserId }])
-                  .select();
-
-                if (!error && data && data.length > 0) {
-                  fixtures.sessionIds.add(data[0].id);
-                  printResult("Basic session creation", 1, true, "Session created", `Session ID: ${data[0].id}`);
-                } else {
-                  printResult("Basic session creation", 1, false, "Session created", error ? error.message : "No data returned");
-                }
-              }
-
-              // Scenario 2: Multi-session per user
-              {
-                const { data, error } = await s1.client
-                  .from("live_sessions")
-                  .insert([{ user_id: s1.authUserId }, { user_id: s1.authUserId }])
-                  .select();
-
-                if (!error && data && data.length === 2) {
-                  data.forEach(session => fixtures.sessionIds.add(session.id));
-                  printResult("Multi-session per user", 2, true, "2 sessions created", `Created ${data.length} sessions`);
-                } else {
-                  printResult("Multi-session per user", 2, false, "2 sessions created", error ? error.message : "Unexpected response");
-                }
-              }
-
-              // Scenario 3: Session with tips
-              {
-                const { data: sessionData, error: sessionError } = await s1.client
-                  .from("live_sessions")
-                  .insert([{ user_id: s1.authUserId }])
+                  .insert([{ user_id: s1.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: tipData, error: tipError } = await s1.client
+                  // Insert tip via authenticated user client (normal path)
+                  const { data: tipResult, error: tipError } = await s1.client
                     .from("live_tips")
-                    .insert([
-                      { session_id: sessionId, amount_usd: 10, tip_type: "cash" },
-                      { session_id: sessionId, amount_usd: 15, tip_type: "card" },
-                    ])
+                    .insert([{ session_id: sessionId, amount_usd: 25.00, tip_type: "card", event_at: new Date().toISOString() }])
                     .select();
 
-                  if (!tipError && tipData && tipData.length === 2) {
-                    tipData.forEach(tip => fixtures.liveTipIds.add(tip.id));
-                    const totalUsd = tipData.reduce((sum, tip) => sum + tip.amount_usd, 0);
-                    printResult("Session with tips", 3, totalUsd === 25, "Total USD 25", `Total USD: ${totalUsd}`);
+                  if (!tipError && tipResult && tipResult.length === 1) {
+                    fixtures.liveTipIds.add(tipResult[0].id);
+                    printResult("Normal tip persistence", 1, tipResult[0].amount_usd === 25.00, "Tip persisted with correct amount", `Amount: ${tipResult[0].amount_usd}`);
                   } else {
-                    printResult("Session with tips", 3, false, "2 tips inserted", tipError ? tipError.message : "Unexpected response");
+                    printResult("Normal tip persistence", 1, false, "Tip persisted", tipError ? tipError.message : "No data returned");
                   }
                 } else {
-                  printResult("Session with tips", 3, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Normal tip persistence", 1, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenarios 4-5: Shared temp user (s4)
+              // Scenario 2: Duplicate retry dedupe
+              // ============================================
+              const s2 = await createTempTestUser("s2");
+              console.log(`\n📝 Created s2 (auth ID: ${s2.authUserId})`);
+
+              {
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert([{ user_id: s2.authUserId, status: "active" }])
+                  .select();
+
+                if (!sessionError && sessionData && sessionData.length > 0) {
+                  const sessionId = sessionData[0].id;
+                  fixtures.sessionIds.add(sessionId);
+
+                  const clientEventId = crypto.randomUUID();
+                  const tipData = { session_id: sessionId, amount_usd: 10.00, tip_type: "cash", client_event_id: clientEventId, event_at: new Date().toISOString() };
+
+                  // First insert
+                  const { data: tip1, error: err1 } = await s2.client.from("live_tips").insert([tipData]).select();
+                  if (tip1 && tip1.length > 0) {
+                    fixtures.liveTipIds.add(tip1[0].id);
+                  }
+
+                  // Retry with same client_event_id (should dedupe)
+                  const { data: tip2, error: err2 } = await s2.client.from("live_tips").insert([tipData]).select();
+
+                  const deduped = !err2 && (!tip2 || tip2.length === 0);
+                  printResult("Duplicate retry dedupe", 2, deduped, "Duplicate rejected/deduped", deduped ? "Retry correctly rejected" : "Unexpected duplicate acceptance");
+                } else {
+                  printResult("Duplicate retry dedupe", 2, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                }
+              }
+
+              // ============================================
+              // Scenario 3: Two identical tips, different clientEventIds
+              // ============================================
+              const s3 = await createTempTestUser("s3");
+              console.log(`\n📝 Created s3 (auth ID: ${s3.authUserId})`);
+
+              {
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert([{ user_id: s3.authUserId, status: "active" }])
+                  .select();
+
+                if (!sessionError && sessionData && sessionData.length > 0) {
+                  const sessionId = sessionData[0].id;
+                  fixtures.sessionIds.add(sessionId);
+
+                  const tipInserts = [
+                    { session_id: sessionId, amount_usd: 50.00, tip_type: "card", client_event_id: crypto.randomUUID(), event_at: new Date().toISOString() },
+                    { session_id: sessionId, amount_usd: 50.00, tip_type: "card", client_event_id: crypto.randomUUID(), event_at: new Date().toISOString() },
+                  ];
+
+                  const { data: tips, error: tipError } = await s3.client.from("live_tips").insert(tipInserts).select();
+
+                  if (!tipError && tips && tips.length === 2) {
+                    tips.forEach(tip => fixtures.liveTipIds.add(tip.id));
+                    const bothExist = tips[0].client_event_id !== tips[1].client_event_id && tips[0].amount_usd === tips[1].amount_usd;
+                    printResult("Two identical tips, different clientEventIds", 3, bothExist, "Both tips created with different IDs", "Both tips persisted correctly");
+                  } else {
+                    printResult("Two identical tips, different clientEventIds", 3, false, "2 tips created", tipError ? tipError.message : "Unexpected response");
+                  }
+                } else {
+                  printResult("Two identical tips, different clientEventIds", 3, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                }
+              }
+
+              // ============================================
+              // Scenario 4: Active-session attribution
               // ============================================
               const s4 = await createTempTestUser("s4");
               console.log(`\n📝 Created s4 (auth ID: ${s4.authUserId})`);
 
-              // Scenario 4: Multiple tips in single session
               {
-                const { data: sessionData, error: sessionError } = await s4.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s4.authUserId }])
-                  .select();
-
-                if (!sessionError && sessionData && sessionData.length > 0) {
-                  const sessionId = sessionData[0].id;
-                  fixtures.sessionIds.add(sessionId);
-
-                  const tipInserts = Array.from({ length: 5 }, (_, i) => ({
-                    session_id: sessionId,
-                    amount_usd: (i + 1) * 5,
-                    tip_type: i % 2 === 0 ? "cash" : "card",
-                  }));
-
-                  const { data: tipData, error: tipError } = await s4.client
-                    .from("live_tips")
-                    .insert(tipInserts)
-                    .select();
-
-                  if (!tipError && tipData && tipData.length === 5) {
-                    tipData.forEach(tip => fixtures.liveTipIds.add(tip.id));
-                    printResult("Multiple tips in session", 4, true, "5 tips created", `Created ${tipData.length} tips`);
-                  } else {
-                    printResult("Multiple tips in session", 4, false, "5 tips created", tipError ? tipError.message : "Unexpected response");
-                  }
-                } else {
-                  printResult("Multiple tips in session", 4, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
-                }
-              }
-
-              // Scenario 5: Tip type validation
-              {
-                const { data: sessionData, error: sessionError } = await s4.client
-                  .from("live_sessions")
-                  .insert([{ user_id: s4.authUserId }])
+                  .insert([{ user_id: s4.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
@@ -309,482 +286,500 @@ jobs:
 
                   const { data: tipData, error: tipError } = await s4.client
                     .from("live_tips")
-                    .insert([{ session_id: sessionId, amount_usd: 20, tip_type: "card" }])
+                    .insert([{ session_id: sessionId, amount_usd: 15.00, tip_type: "cash", event_at: new Date().toISOString() }])
                     .select();
 
-                  if (!tipError && tipData && tipData.length > 0) {
+                  if (!tipError && tipData && tipData.length === 1) {
                     fixtures.liveTipIds.add(tipData[0].id);
-                    const isValidType = tipData[0].tip_type === "card";
-                    printResult("Tip type validation", 5, isValidType, "tip_type='card'", `tip_type='${tipData[0].tip_type}'`);
+                    const { data: finalSession } = await serviceRoleClient.from("live_sessions").select("final_tip_count").eq("id", sessionId).single();
+                    const stillActive = finalSession && finalSession.final_tip_count === null;
+                    printResult("Active-session attribution", 4, stillActive, "Session remains active, final_tip_count is null", stillActive ? "Correct" : "Unexpected finalization");
                   } else {
-                    printResult("Tip type validation", 5, false, "Tip created with type 'card'", tipError ? tipError.message : "Unexpected response");
+                    printResult("Active-session attribution", 4, false, "Tip inserted", tipError ? tipError.message : "No data");
                   }
                 } else {
-                  printResult("Tip type validation", 5, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Active-session attribution", 4, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 6: Fresh temp user (s6)
+              // Scenario 5: Paused-session attribution
+              // ============================================
+              const s5 = await createTempTestUser("s5");
+              console.log(`\n📝 Created s5 (auth ID: ${s5.authUserId})`);
+
+              {
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert([{ user_id: s5.authUserId, status: "active" }])
+                  .select();
+
+                if (!sessionError && sessionData && sessionData.length > 0) {
+                  const sessionId = sessionData[0].id;
+                  fixtures.sessionIds.add(sessionId);
+
+                  // Pause with authenticated user
+                  const { error: pauseError } = await s5.client.rpc("pause_live_session", { p_session_id: sessionId });
+
+                  if (!pauseError) {
+                    const { data: tipData, error: tipError } = await s5.client
+                      .from("live_tips")
+                      .insert([{ session_id: sessionId, amount_usd: 20.00, tip_type: "card", event_at: new Date().toISOString() }])
+                      .select();
+
+                    if (!tipError && tipData && tipData.length === 1) {
+                      fixtures.liveTipIds.add(tipData[0].id);
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("is_paused").eq("id", sessionId).single();
+                      const isPaused = session && session.is_paused === true;
+                      printResult("Paused-session attribution", 5, isPaused, "Tip attributed while paused, session still paused", isPaused ? "Correct" : "Not paused");
+                    } else {
+                      printResult("Paused-session attribution", 5, false, "Tip inserted while paused", tipError ? tipError.message : "No data");
+                    }
+                  } else {
+                    printResult("Paused-session attribution", 5, false, "Session paused", pauseError.message);
+                  }
+                } else {
+                  printResult("Paused-session attribution", 5, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                }
+              }
+
+              // ============================================
+              // Scenario 6: Pause/resume duration accounting
               // ============================================
               const s6 = await createTempTestUser("s6");
               console.log(`\n📝 Created s6 (auth ID: ${s6.authUserId})`);
 
-              // Scenario 6: Client event tracking
               {
-                const { data: sessionData, error: sessionError } = await s6.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s6.authUserId }])
+                  .insert([{ user_id: s6.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: eventData, error: eventError } = await s6.client
-                    .from("client_events")
-                    .insert([{ session_id: sessionId, event_type: "page_view", event_data: {} }])
-                    .select();
+                  // Pause session with authenticated user
+                  const { error: pauseError } = await s6.client.rpc("pause_live_session", { p_session_id: sessionId });
+                  if (!pauseError) {
+                    await new Promise(r => setTimeout(r, 500)); // Pause for 500ms
 
-                  if (!eventError && eventData && eventData.length > 0) {
-                    fixtures.clientEventIds.add(eventData[0].id);
-                    printResult("Client event tracking", 6, true, "Event created", `Event ID: ${eventData[0].id}`);
+                    // Resume session with authenticated user
+                    const { error: resumeError } = await s6.client.rpc("resume_live_session", { p_session_id: sessionId });
+                    if (!resumeError) {
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("total_paused_seconds").eq("id", sessionId).single();
+                      const hasPauseDuration = session && session.total_paused_seconds > 0;
+                      printResult("Pause/resume duration accounting", 6, hasPauseDuration, "total_paused_seconds > 0", `Paused for: ${session?.total_paused_seconds || 0}s`);
+                    } else {
+                      printResult("Pause/resume duration accounting", 6, false, "Session resumed", resumeError.message);
+                    }
                   } else {
-                    printResult("Client event tracking", 6, false, "Event created", eventError ? eventError.message : "Unexpected response");
+                    printResult("Pause/resume duration accounting", 6, false, "Session paused", pauseError.message);
                   }
                 } else {
-                  printResult("Client event tracking", 6, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Pause/resume duration accounting", 6, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 7: Fresh temp user (s7)
+              // Scenario 7: Stop while paused
               // ============================================
               const s7 = await createTempTestUser("s7");
               console.log(`\n📝 Created s7 (auth ID: ${s7.authUserId})`);
 
-              // Scenario 7: Ambiguity log creation
               {
-                const { data: sessionData, error: sessionError } = await s7.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s7.authUserId }])
+                  .insert([{ user_id: s7.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: logData, error: logError } = await s7.client
-                    .from("ambiguity_log")
-                    .insert([{ session_id: sessionId, ambiguity_type: "low_confidence" }])
-                    .select();
-
-                  if (!logError && logData && logData.length > 0) {
-                    fixtures.ambiguityLogIds.add(logData[0].id);
-                    printResult("Ambiguity log creation", 7, true, "Log entry created", `Log ID: ${logData[0].id}`);
+                  const { error: pauseError } = await s7.client.rpc("pause_live_session", { p_session_id: sessionId });
+                  if (!pauseError) {
+                    const { error: finalizeError } = await s7.client.rpc("finalize_live_session", { p_session_id: sessionId });
+                    if (!finalizeError) {
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("status").eq("id", sessionId).single();
+                      const isEnded = session && session.status === "ended";
+                      printResult("Stop while paused", 7, isEnded, "Session finalized to ended status", `Status: ${session?.status || "unknown"}`);
+                    } else {
+                      printResult("Stop while paused", 7, false, "Session finalized while paused", finalizeError.message);
+                    }
                   } else {
-                    printResult("Ambiguity log creation", 7, false, "Log entry created", logError ? logError.message : "Unexpected response");
+                    printResult("Stop while paused", 7, false, "Session paused", pauseError.message);
                   }
                 } else {
-                  printResult("Ambiguity log creation", 7, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Stop while paused", 7, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenarios 8-9: Shared temp user (s8)
+              // Scenario 8: First Stop final metrics
               // ============================================
               const s8 = await createTempTestUser("s8");
               console.log(`\n📝 Created s8 (auth ID: ${s8.authUserId})`);
 
-              // Scenario 8: Concurrent sessions per user
               {
-                const insertPromises = Array.from({ length: 3 }, () => ({
-                  user_id: s8.authUserId,
-                }));
-
-                const { data, error } = await s8.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert(insertPromises)
-                  .select();
-
-                if (!error && data && data.length === 3) {
-                  data.forEach(session => fixtures.sessionIds.add(session.id));
-                  printResult("Concurrent sessions per user", 8, true, "3 concurrent sessions", `Created ${data.length} sessions`);
-                } else {
-                  printResult("Concurrent sessions per user", 8, false, "3 concurrent sessions", error ? error.message : "Unexpected response");
-                }
-              }
-
-              // Scenario 9: Session finalization
-              {
-                const { data: sessionData, error: sessionError } = await s8.client
-                  .from("live_sessions")
-                  .insert([{ user_id: s8.authUserId }])
+                  .insert([{ user_id: s8.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: tipData, error: tipError } = await s8.client
-                    .from("live_tips")
-                    .insert([{ session_id: sessionId, amount_usd: 50, tip_type: "cash" }])
-                    .select();
+                  const { data: tips } = await s8.client.from("live_tips").insert([
+                    { session_id: sessionId, amount_usd: 10, tip_type: "cash", event_at: new Date().toISOString() },
+                    { session_id: sessionId, amount_usd: 15, tip_type: "card", event_at: new Date().toISOString() },
+                  ]).select();
 
-                  if (!tipError && tipData && tipData.length > 0) {
-                    fixtures.liveTipIds.add(tipData[0].id);
+                  if (tips && tips.length === 2) {
+                    tips.forEach(t => fixtures.liveTipIds.add(t.id));
 
-                    // Finalize using authenticated user client
-                    const { error: finalizeError } = await s8.client.rpc("finalize_live_session", {
-                      p_session_id: sessionId,
-                    });
-
+                    const { error: finalizeError } = await s8.client.rpc("finalize_live_session", { p_session_id: sessionId });
                     if (!finalizeError) {
-                      const { data: finalStatus } = await serviceRoleClient
-                        .from("live_sessions")
-                        .select("status")
-                        .eq("id", sessionId)
-                        .single();
-
-                      const isEnded = finalStatus && finalStatus.status === "ended";
-                      printResult("Session finalization", 9, isEnded, "Session status=ended", `Status: ${finalStatus ? finalStatus.status : "unknown"}`);
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("final_tip_count,final_total_usd,final_max_tip_usd").eq("id", sessionId).single();
+                      const metricsCorrect = session && session.final_tip_count === 2 && session.final_total_usd === 25 && session.final_max_tip_usd === 15;
+                      printResult("First Stop final metrics", 8, metricsCorrect, "final_tip_count=2, final_total_usd=25, final_max_tip_usd=15", metricsCorrect ? "All metrics correct" : "Metrics incorrect");
                     } else {
-                      printResult("Session finalization", 9, false, "Session finalized", finalizeError.message);
+                      printResult("First Stop final metrics", 8, false, "Session finalized", finalizeError.message);
                     }
                   } else {
-                    printResult("Session finalization", 9, false, "Tip created", tipError ? tipError.message : "Unexpected response");
+                    printResult("First Stop final metrics", 8, false, "Tips inserted", "Failed to insert tips");
                   }
                 } else {
-                  printResult("Session finalization", 9, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("First Stop final metrics", 8, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 10: Fresh temp user (s10)
+              // Scenario 9: Repeated Stop idempotency
+              // ============================================
+              const s9 = await createTempTestUser("s9");
+              console.log(`\n📝 Created s9 (auth ID: ${s9.authUserId})`);
+
+              {
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert([{ user_id: s9.authUserId, status: "active" }])
+                  .select();
+
+                if (!sessionError && sessionData && sessionData.length > 0) {
+                  const sessionId = sessionData[0].id;
+                  fixtures.sessionIds.add(sessionId);
+
+                  // First stop with authenticated user
+                  const { error: stop1 } = await s9.client.rpc("finalize_live_session", { p_session_id: sessionId });
+                  // Second stop (idempotent)
+                  const { error: stop2 } = await s9.client.rpc("finalize_live_session", { p_session_id: sessionId });
+
+                  const isIdempotent = !stop1 && !stop2;
+                  printResult("Repeated Stop idempotency", 9, isIdempotent, "Both finalizations succeed", isIdempotent ? "Idempotent" : "Second finalize failed");
+                } else {
+                  printResult("Repeated Stop idempotency", 9, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                }
+              }
+
+              // ============================================
+              // Scenario 10: Zero-tip session
               // ============================================
               const s10 = await createTempTestUser("s10");
               console.log(`\n📝 Created s10 (auth ID: ${s10.authUserId})`);
 
-              // Scenario 10: Large number of tips
               {
-                const { data: sessionData, error: sessionError } = await s10.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s10.authUserId }])
+                  .insert([{ user_id: s10.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const tipInserts = Array.from({ length: 50 }, (_, i) => ({
-                    session_id: sessionId,
-                    amount_usd: Math.random() * 100,
-                    tip_type: i % 2 === 0 ? "cash" : "card",
-                  }));
-
-                  const { data: tipData, error: tipError } = await s10.client
-                    .from("live_tips")
-                    .insert(tipInserts)
-                    .select();
-
-                  if (!tipError && tipData && tipData.length === 50) {
-                    tipData.forEach(tip => fixtures.liveTipIds.add(tip.id));
-                    printResult("Large number of tips", 10, true, "50 tips created", `Created ${tipData.length} tips`);
+                  const { error: finalizeError } = await s10.client.rpc("finalize_live_session", { p_session_id: sessionId });
+                  if (!finalizeError) {
+                    const { data: session } = await serviceRoleClient.from("live_sessions").select("final_tip_count,final_total_usd").eq("id", sessionId).single();
+                    const zeroMetrics = session && session.final_tip_count === 0 && session.final_total_usd === 0;
+                    printResult("Zero-tip session", 10, zeroMetrics, "final_tip_count=0, final_total_usd=0", zeroMetrics ? "Correct" : "Metrics incorrect");
                   } else {
-                    printResult("Large number of tips", 10, false, "50 tips created", tipError ? tipError.message : "Unexpected response");
+                    printResult("Zero-tip session", 10, false, "Session finalized", finalizeError.message);
                   }
                 } else {
-                  printResult("Large number of tips", 10, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Zero-tip session", 10, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 11: Fresh temp user (s11)
+              // Scenario 11: One-tip session
               // ============================================
               const s11 = await createTempTestUser("s11");
               console.log(`\n📝 Created s11 (auth ID: ${s11.authUserId})`);
 
-              // Scenario 11: Tip amount edge cases
               {
-                const { data: sessionData, error: sessionError } = await s11.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s11.authUserId }])
+                  .insert([{ user_id: s11.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: tipData, error: tipError } = await s11.client
-                    .from("live_tips")
-                    .insert([
-                      { session_id: sessionId, amount_usd: 0.01, tip_type: "card" },
-                      { session_id: sessionId, amount_usd: 9999.99, tip_type: "cash" },
-                    ])
-                    .select();
+                  const { data: tips } = await s11.client.from("live_tips").insert([
+                    { session_id: sessionId, amount_usd: 33.33, tip_type: "card", event_at: new Date().toISOString() },
+                  ]).select();
 
-                  if (!tipError && tipData && tipData.length === 2) {
-                    tipData.forEach(tip => fixtures.liveTipIds.add(tip.id));
-                    const hasMinMax = tipData.some(t => t.amount_usd === 0.01) && tipData.some(t => t.amount_usd === 9999.99);
-                    printResult("Tip amount edge cases", 11, hasMinMax, "Min/max amounts stored", "Amounts: 0.01 and 9999.99");
+                  if (tips && tips.length === 1) {
+                    fixtures.liveTipIds.add(tips[0].id);
+
+                    const { error: finalizeError } = await s11.client.rpc("finalize_live_session", { p_session_id: sessionId });
+                    if (!finalizeError) {
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("final_tip_count,final_total_usd,final_max_tip_usd").eq("id", sessionId).single();
+                      const oneMetrics = session && session.final_tip_count === 1 && Math.abs(session.final_total_usd - 33.33) < 0.01;
+                      printResult("One-tip session", 11, oneMetrics, "final_tip_count=1, final_total_usd≈33.33", oneMetrics ? "Correct" : "Metrics incorrect");
+                    } else {
+                      printResult("One-tip session", 11, false, "Session finalized", finalizeError.message);
+                    }
                   } else {
-                    printResult("Tip amount edge cases", 11, false, "2 tips created", tipError ? tipError.message : "Unexpected response");
+                    printResult("One-tip session", 11, false, "Tip inserted", "Failed");
                   }
                 } else {
-                  printResult("Tip amount edge cases", 11, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("One-tip session", 11, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 12: Fresh temp user (s12)
+              // Scenario 12: Multiple tippers/top tipper
               // ============================================
               const s12 = await createTempTestUser("s12");
               console.log(`\n📝 Created s12 (auth ID: ${s12.authUserId})`);
 
-              // Scenario 12: Session metadata
               {
-                const { data: sessionData, error: sessionError } = await s12.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s12.authUserId, metadata: { device: "mobile", os: "iOS" } }])
+                  .insert([{ user_id: s12.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
-                  fixtures.sessionIds.add(sessionData[0].id);
-                  const hasMetadata = sessionData[0].metadata && sessionData[0].metadata.device === "mobile";
-                  printResult("Session metadata", 12, hasMetadata, "Metadata stored correctly", `Metadata: ${JSON.stringify(sessionData[0].metadata)}`);
+                  const sessionId = sessionData[0].id;
+                  fixtures.sessionIds.add(sessionId);
+
+                  const { data: tips } = await s12.client.from("live_tips").insert([
+                    { session_id: sessionId, amount_usd: 5, tip_type: "cash", tipper_name: "Alice", event_at: new Date().toISOString() },
+                    { session_id: sessionId, amount_usd: 50, tip_type: "card", tipper_name: "Bob", event_at: new Date().toISOString() },
+                    { session_id: sessionId, amount_usd: 10, tip_type: "cash", tipper_name: "Charlie", event_at: new Date().toISOString() },
+                  ]).select();
+
+                  if (tips && tips.length === 3) {
+                    tips.forEach(t => fixtures.liveTipIds.add(t.id));
+
+                    const { error: finalizeError } = await s12.client.rpc("finalize_live_session", { p_session_id: sessionId });
+                    if (!finalizeError) {
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("final_tip_count,final_top_tipper,final_max_tip_usd").eq("id", sessionId).single();
+                      const multiTipper = session && session.final_tip_count === 3 && session.final_top_tipper === "Bob" && session.final_max_tip_usd === 50;
+                      printResult("Multiple tippers/top tipper", 12, multiTipper, "final_top_tipper=Bob, final_max_tip_usd=50", multiTipper ? "Correct" : "Metrics incorrect");
+                    } else {
+                      printResult("Multiple tippers/top tipper", 12, false, "Session finalized", finalizeError.message);
+                    }
+                  } else {
+                    printResult("Multiple tippers/top tipper", 12, false, "Tips inserted", "Failed");
+                  }
                 } else {
-                  printResult("Session metadata", 12, false, "Session with metadata created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Multiple tippers/top tipper", 12, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 13: Fresh temp user (s13)
+              // Scenario 13: Delayed tip reconciliation using immutable event_at
               // ============================================
               const s13 = await createTempTestUser("s13");
               console.log(`\n📝 Created s13 (auth ID: ${s13.authUserId})`);
 
-              // Scenario 13: Multiple event types
               {
-                const { data: sessionData, error: sessionError } = await s13.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s13.authUserId }])
+                  .insert([{ user_id: s13.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: eventData, error: eventError } = await s13.client
-                    .from("client_events")
-                    .insert([
-                      { session_id: sessionId, event_type: "page_view", event_data: {} },
-                      { session_id: sessionId, event_type: "button_click", event_data: { button: "submit" } },
-                      { session_id: sessionId, event_type: "form_submit", event_data: {} },
-                    ])
-                    .select();
+                  const pastEventTime = new Date(Date.now() - 30000).toISOString();
 
-                  if (!eventError && eventData && eventData.length === 3) {
-                    eventData.forEach(event => fixtures.clientEventIds.add(event.id));
-                    const eventTypes = new Set(eventData.map(e => e.event_type));
-                    const hasAllTypes = eventTypes.size === 3;
-                    printResult("Multiple event types", 13, hasAllTypes, "3 different event types", `Event types: ${[...eventTypes].join(", ")}`);
+                  // First stop with authenticated user
+                  const { error: stop1 } = await s13.client.rpc("finalize_live_session", { p_session_id: sessionId });
+                  if (!stop1) {
+                    // Insert tip after finalization (delayed reconciliation)
+                    const { data: delayedTip } = await s13.client.from("live_tips").insert([
+                      { session_id: sessionId, amount_usd: 7.77, tip_type: "cash", event_at: pastEventTime },
+                    ]).select();
+
+                    if (delayedTip && delayedTip.length > 0) {
+                      fixtures.liveTipIds.add(delayedTip[0].id);
+
+                      // Check if delayed tip updated finalized metrics
+                      const { data: session } = await serviceRoleClient.from("live_sessions").select("final_total_usd").eq("id", sessionId).single();
+                      const reconciled = session && Math.abs(session.final_total_usd - 7.77) < 0.01;
+                      printResult("Delayed tip reconciliation using immutable event_at", 13, reconciled, "Delayed tip reconciled into final_total_usd", reconciled ? "Correct" : "Not reconciled");
+                    } else {
+                      printResult("Delayed tip reconciliation using immutable event_at", 13, false, "Delayed tip inserted", "Failed");
+                    }
                   } else {
-                    printResult("Multiple event types", 13, false, "3 events created", eventError ? eventError.message : "Unexpected response");
+                    printResult("Delayed tip reconciliation using immutable event_at", 13, false, "First finalize succeeded", stop1.message);
                   }
                 } else {
-                  printResult("Multiple event types", 13, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Delayed tip reconciliation using immutable event_at", 13, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 14: Fresh temp user (s14)
+              // Scenario 14: Ambiguous overlapping ended sessions
               // ============================================
               const s14 = await createTempTestUser("s14");
               console.log(`\n📝 Created s14 (auth ID: ${s14.authUserId})`);
 
-              // Scenario 14: Tip retrieval and aggregation
               {
-                const { data: sessionData, error: sessionError } = await s14.client
-                  .from("live_sessions")
-                  .insert([{ user_id: s14.authUserId }])
-                  .select();
+                // Create two sessions with service role (trusted fixture path)
+                const { data: sessions } = await serviceRoleClient.from("live_sessions").insert([
+                  { user_id: s14.authUserId, status: "active" },
+                  { user_id: s14.authUserId, status: "active" },
+                ]).select();
 
-                if (!sessionError && sessionData && sessionData.length > 0) {
-                  const sessionId = sessionData[0].id;
-                  fixtures.sessionIds.add(sessionId);
+                if (sessions && sessions.length === 2) {
+                  sessions.forEach(s => fixtures.sessionIds.add(s.id));
 
-                  const { data: tipData, error: tipError } = await s14.client
-                    .from("live_tips")
-                    .insert([
-                      { session_id: sessionId, amount_usd: 5, tip_type: "cash" },
-                      { session_id: sessionId, amount_usd: 10, tip_type: "card" },
-                      { session_id: sessionId, amount_usd: 15, tip_type: "cash" },
-                    ])
-                    .select();
+                  // Finalize with authenticated user
+                  const { error: fin1 } = await s14.client.rpc("finalize_live_session", { p_session_id: sessions[0].id });
+                  const { error: fin2 } = await s14.client.rpc("finalize_live_session", { p_session_id: sessions[1].id });
 
-                  if (!tipError && tipData && tipData.length === 3) {
-                    tipData.forEach(tip => fixtures.liveTipIds.add(tip.id));
-
-                    const totalUsd = tipData.reduce((sum, tip) => sum + tip.amount_usd, 0);
-                    const cashTotal = tipData.filter(t => t.tip_type === "cash").reduce((sum, t) => sum + t.amount_usd, 0);
-
-                    const isCorrectTotal = totalUsd === 30 && cashTotal === 20;
-                    printResult("Tip retrieval and aggregation", 14, isCorrectTotal, "Total 30, Cash 20", `Total: ${totalUsd}, Cash: ${cashTotal}`);
+                  if (!fin1 && !fin2) {
+                    const { data: s1Status } = await serviceRoleClient.from("live_sessions").select("status").eq("id", sessions[0].id).single();
+                    const { data: s2Status } = await serviceRoleClient.from("live_sessions").select("status").eq("id", sessions[1].id).single();
+                    const bothEnded = s1Status?.status === "ended" && s2Status?.status === "ended";
+                    printResult("Ambiguous overlapping ended sessions", 14, bothEnded, "Both sessions finalized to ended", bothEnded ? "Correct" : "Not both ended");
                   } else {
-                    printResult("Tip retrieval and aggregation", 14, false, "3 tips created", tipError ? tipError.message : "Unexpected response");
+                    printResult("Ambiguous overlapping ended sessions", 14, false, "Both sessions finalized", "One or both failed");
                   }
                 } else {
-                  printResult("Tip retrieval and aggregation", 14, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Ambiguous overlapping ended sessions", 14, false, "Two sessions created", "Failed");
                 }
               }
 
               // ============================================
-              // Scenario 15: Fresh temp user (s15)
-              // CRITICAL: Advisory lock serialization test
+              // Scenario 15: persist_extension_tip() racing with finalize_live_session()
+              // CRITICAL: Advisory lock serialization test - uses service role RPC
               // ============================================
               const s15 = await createTempTestUser("s15");
               console.log(`\n📝 Created s15 (auth ID: ${s15.authUserId})`);
 
-              // Scenario 15: Advisory lock serialization
               {
-                const { data: sessionData, error: sessionError } = await s15.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s15.authUserId }])
+                  .insert([{ user_id: s15.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  const { data: tipData, error: tipError } = await s15.client
-                    .from("live_tips")
-                    .insert([{ session_id: sessionId, amount_usd: 25.00, tip_type: "card" }])
-                    .select();
+                  // Race: persist_extension_tip (service role RPC) vs finalize_live_session (auth user RPC)
+                  // Advisory lock should serialize these operations
+                  const results = await Promise.allSettled([
+                    serviceRoleClient.rpc("persist_extension_tip", { p_session_id: sessionId, p_amount_usd: 12.50, p_tip_type: "cash" }),
+                    s15.client.rpc("finalize_live_session", { p_session_id: sessionId }),
+                  ]);
 
-                  if (!tipError && tipData && tipData.length > 0) {
-                    fixtures.liveTipIds.add(tipData[0].id);
-
-                    // Attempt concurrent finalization (advisory lock should serialize)
-                    const results = await Promise.allSettled([
-                      s15.client.rpc("finalize_live_session", { p_session_id: sessionId }),
-                      s15.client.rpc("finalize_live_session", { p_session_id: sessionId }),
-                    ]);
-
-                    // At least one should succeed
-                    const anySuccess = results.some(r => r.status === "fulfilled" && !r.value.error);
-
-                    if (anySuccess) {
-                      // Verify final state: session ended, exactly 1 tip, total_usd = 25.00
-                      const { data: finalSession } = await serviceRoleClient
-                        .from("live_sessions")
-                        .select("status, final_tip_count, final_total_usd")
-                        .eq("id", sessionId)
-                        .single();
-
-                      if (finalSession) {
-                        const isCorrectState =
-                          finalSession.status === "ended" &&
-                          finalSession.final_tip_count === 1 &&
-                          finalSession.final_total_usd === 25.00;
-
-                        printResult(
-                          "Advisory lock serialization",
-                          15,
-                          isCorrectState,
-                          "Status=ended, final_tip_count=1, final_total_usd=25.00",
-                          `Status=${finalSession.status}, final_tip_count=${finalSession.final_tip_count}, final_total_usd=${finalSession.final_total_usd}`
-                        );
-                      } else {
-                        printResult("Advisory lock serialization", 15, false, "Session finalized with correct metrics", "Could not retrieve final session state");
-                      }
-                    } else {
-                      printResult("Advisory lock serialization", 15, false, "At least one finalize succeeded", "All attempts failed or errored");
-                    }
+                  if (results.every(r => r.status === "fulfilled")) {
+                    // Check that tip was persisted and metrics are correct
+                    const { data: finalSession } = await serviceRoleClient.from("live_sessions").select("status,final_tip_count,final_total_usd").eq("id", sessionId).single();
+                    const raceLocked = finalSession && finalSession.status === "ended" && finalSession.final_tip_count === 1 && Math.abs(finalSession.final_total_usd - 12.50) < 0.01;
+                    printResult("persist_extension_tip() racing with finalize_live_session()", 15, raceLocked, "Both operations succeed, metrics correct due to advisory lock", raceLocked ? "Lock serialized correctly" : "Metrics incorrect");
                   } else {
-                    printResult("Advisory lock serialization", 15, false, "Tip created", tipError ? tipError.message : "Unexpected response");
+                    printResult("persist_extension_tip() racing with finalize_live_session()", 15, false, "Both concurrent operations succeed", "One or both failed");
                   }
                 } else {
-                  printResult("Advisory lock serialization", 15, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("persist_extension_tip() racing with finalize_live_session()", 15, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 16: Fresh temp user (s16)
-              // CRITICAL: Permission denied test
+              // Scenario 16: Authenticated direct persistence denied
+              // CRITICAL: Permission enforcement test
               // ============================================
               const s16 = await createTempTestUser("s16");
+              const s16_other = await createTempTestUser("s16_other");
               console.log(`\n📝 Created s16 (auth ID: ${s16.authUserId})`);
+              console.log(`\n📝 Created s16_other (auth ID: ${s16_other.authUserId})`);
 
-              // Scenario 16: RLS permission enforcement
               {
-                const { data: sessionData, error: sessionError } = await s16.client
+                // Create session for s16 with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s16.authUserId }])
+                  .insert([{ user_id: s16.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  // Try to access another user's session (will be blocked by RLS)
-                  const { data: otherSession, error: otherError } = await s16.client
-                    .from("live_sessions")
-                    .select()
-                    .eq("user_id", s1.authUserId)
-                    .single();
+                  // Try to insert tip as different user (should fail due to RLS)
+                  const { error: deniedError } = await s16_other.client.from("live_tips").insert([
+                    { session_id: sessionId, amount_usd: 99.99, tip_type: "card", event_at: new Date().toISOString() },
+                  ]);
 
-                  // Should get permission denied error
-                  const isPermissionDenied =
-                    otherError &&
-                    (otherError.code === "PGRST301" || otherError.message.toLowerCase().includes("permission") || otherError.message.toLowerCase().includes("denied"));
-
-                  printResult(
-                    "RLS permission enforcement",
-                    16,
-                    isPermissionDenied,
-                    "Permission denied error",
-                    otherError ? `Error: ${otherError.code} - ${otherError.message}` : "No error (unexpected)"
-                  );
+                  const denied = deniedError && (deniedError.code === "PGRST301" || deniedError.message.toLowerCase().includes("permission"));
+                  printResult("Authenticated direct persistence denied", 16, denied, "Permission denied error", denied ? "Correctly denied" : "Unexpected access granted");
                 } else {
-                  printResult("RLS permission enforcement", 16, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Authenticated direct persistence denied", 16, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
               // ============================================
-              // Scenario 17: Fresh temp user (s17)
-              // CRITICAL: Service role bypass test
+              // Scenario 17: Trusted persistence path succeeds
+              // CRITICAL: Service role persistence test
               // ============================================
               const s17 = await createTempTestUser("s17");
               console.log(`\n📝 Created s17 (auth ID: ${s17.authUserId})`);
 
-              // Scenario 17: Service role capability
               {
-                const { data: sessionData, error: sessionError } = await s17.client
+                // Create session with service role (trusted fixture path)
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
                   .from("live_sessions")
-                  .insert([{ user_id: s17.authUserId }])
+                  .insert([{ user_id: s17.authUserId, status: "active" }])
                   .select();
 
                 if (!sessionError && sessionData && sessionData.length > 0) {
                   const sessionId = sessionData[0].id;
                   fixtures.sessionIds.add(sessionId);
 
-                  // Service role can access any session (no RLS)
-                  const { data: anySession, error: anyError } = await serviceRoleClient
-                    .from("live_sessions")
-                    .select()
-                    .eq("user_id", s1.authUserId)
-                    .single();
+                  // Service role can insert via trusted path (no RLS enforcement)
+                  const { data: tipData, error: tipError } = await serviceRoleClient.from("live_tips").insert([
+                    { session_id: sessionId, amount_usd: 44.44, tip_type: "card", event_at: new Date().toISOString() },
+                  ]).select();
 
-                  const canAccessOtherUser = !anyError && anySession;
-                  printResult(
-                    "Service role capability",
-                    17,
-                    canAccessOtherUser,
-                    "Service role can access any session",
-                    anyError ? `Error: ${anyError.message}` : "Successfully accessed other user's session"
-                  );
+                  if (!tipError && tipData && tipData.length > 0) {
+                    fixtures.liveTipIds.add(tipData[0].id);
+                    const tipInserted = tipData[0].amount_usd === 44.44;
+                    printResult("Trusted persistence path succeeds", 17, tipInserted, "Service role can bypass RLS and insert", "Tip successfully persisted via service role");
+                  } else {
+                    printResult("Trusted persistence path succeeds", 17, false, "Service role insert succeeds", tipError ? tipError.message : "No data returned");
+                  }
                 } else {
-                  printResult("Service role capability", 17, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
+                  printResult("Trusted persistence path succeeds", 17, false, "Session created", sessionError ? sessionError.message : "Unexpected response");
                 }
               }
 
