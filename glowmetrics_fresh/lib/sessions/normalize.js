@@ -17,6 +17,7 @@
 // added to tips.
 
 import { detectSessions, isValidSession } from '../analytics/sessions'
+import { freeWindowStartByPlatform } from '../analytics'
 
 export { isValidSession }
 
@@ -239,4 +240,45 @@ export function dailySessionStats({ tips = [], history = [], paidSessions = [], 
     bestPlatform: best ? best.platform : null,
     platforms,
   }
+}
+
+// ── TOTAL EARNED ────────────────────────────────────────────────────────
+// Canonical: Total Earned = public tip earnings + private earnings.
+//   public  = Σ canonical tips.usd in scope (the engine's totalUSD)
+//   private = Σ paid_sessions.usd (imported private/group/spy)
+//           + Σ closed live_private_intervals.estimated_earnings_usd of
+//             finalized Live shows (= Σ live_sessions.final_private_usd)
+// live_tips is never part of either term.
+
+// Private earnings as dated rows, one per paid session or Live private interval.
+export function privateEarningRows({ paidSessions = [], liveIntervals = [] } = {}) {
+  return [
+    ...paidSessions.map((p) => ({ date_time: p.date_time, platform: p.platform, usd: Number(p.usd) || 0, source: 'paid_session' })),
+    ...liveIntervals.map((i) => ({ date_time: i.ended_at, platform: i.platform, usd: Number(i.estimated_earnings_usd) || 0, source: 'live_private' })),
+  ].filter((r) => r.date_time && !isNaN(new Date(r.date_time).getTime()))
+}
+
+// windowStarts: optional { [platform]: Date } — the free-tier window computed
+// from the tips (freeWindowStartByPlatform), so private earnings are scoped to
+// exactly the same window as the public total. Platforms are matched
+// case-insensitively; a platform with private earnings but no tips is
+// windowed on its own latest private row, the same rule the tips use.
+export function totalEarned({ publicUSD = 0, privateRows = [], windowStarts = null, windowDays = 31 } = {}) {
+  let starts = null
+  if (windowStarts) {
+    starts = {}
+    for (const [p, d] of Object.entries(freeWindowStartByPlatform(privateRows, { windowDays }))) starts[norm(p)] = d
+    for (const [p, d] of Object.entries(windowStarts)) starts[norm(p)] = d
+  }
+  let privateUSD = 0
+  for (const r of privateRows) {
+    if (starts) {
+      const start = starts[norm(r.platform)]
+      if (!start || new Date(r.date_time) < start) continue
+    }
+    privateUSD += r.usd
+  }
+  const pub = money(publicUSD)
+  const priv = money(privateUSD)
+  return { publicUSD: pub, privateUSD: priv, totalUSD: money(pub + priv) }
 }

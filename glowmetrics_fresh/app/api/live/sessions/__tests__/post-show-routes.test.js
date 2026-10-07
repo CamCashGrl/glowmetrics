@@ -26,6 +26,7 @@ function chain(table) {
     is: jest.fn(() => c),
     order: jest.fn(() => c),
     limit: jest.fn((n) => { q.limit = n; return c }),
+    range: jest.fn((f, t) => { q.range = [f, t]; return c }),
     maybeSingle: jest.fn(async () => state.single[table] ?? { data: null, error: null }),
     then: (resolve) => resolve(state.rows[table] ?? { data: [], error: null }),
   }
@@ -79,6 +80,36 @@ describe('GET /api/live/sessions/recent', () => {
     state.user = null
     const { GET } = await import('../recent/route.js')
     expect((await GET(req('http://x/api/live/sessions/recent'))).status).toBe(401)
+  })
+})
+
+describe('GET /api/live/sessions/private-earnings', () => {
+  test('returns closed intervals of finalized shows only, own sessions only', async () => {
+    state.rows.live_sessions = { data: [{ id: SESSION.id }], error: null }
+    state.rows.live_private_intervals = { data: [INTERVAL], error: null }
+    const { GET } = await import('../private-earnings/route.js')
+    const res = await GET(req('http://x/api/live/sessions/private-earnings'))
+    expect(res.status).toBe(200)
+    expect((await res.json()).intervals).toEqual([INTERVAL])
+    const sess = state.queries.find((q) => q.table === 'live_sessions')
+    expect(sess.filters).toEqual(expect.arrayContaining([['eq', 'user_id', 'creator-1'], ['eq', 'status', 'ended'], ['not', 'finalized_at', 'is', null]]))
+    const iv = state.queries.find((q) => q.table === 'live_private_intervals')
+    expect(iv.filters).toEqual(expect.arrayContaining([['in', 'live_session_id', [SESSION.id]], ['not', 'ended_at', 'is', null]]))
+  })
+
+  test('no finalized shows → empty, no interval query', async () => {
+    state.rows.live_sessions = { data: [], error: null }
+    const { GET } = await import('../private-earnings/route.js')
+    const res = await GET(req('http://x/api/live/sessions/private-earnings'))
+    expect((await res.json()).intervals).toEqual([])
+    expect(state.queries.some((q) => q.table === 'live_private_intervals')).toBe(false)
+  })
+
+  test('401 without a user', async () => {
+    state.user = null
+    const { GET } = await import('../private-earnings/route.js')
+    const res = await GET(req('http://x/api/live/sessions/private-earnings'))
+    expect(res.status).toBe(401)
   })
 })
 

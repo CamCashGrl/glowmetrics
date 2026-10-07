@@ -2148,6 +2148,24 @@ export function computeSnapshotStats(rows, windowDays = 31) {
 // not calendar-anchored). Pro users see full history.
 // This is a DISPLAY/ANALYSIS window, not a storage limit: all rows are persisted,
 // only what the analysis consumes changes.
+// Start of the free-tier window per platform, anchored to that platform's
+// latest row. Shared by applyFreeAnalysisWindow and anything that must apply
+// the identical window to a different row set (e.g. private earnings).
+export function freeWindowStartByPlatform(rows = [], { windowDays = 31 } = {}) {
+  const latest = {}
+  for (const row of rows) {
+    const platform = row.platform || 'unknown'
+    const d = new Date(row.date_time || row.date || row.ts)
+    if (isNaN(d.getTime())) continue
+    if (!latest[platform] || d > latest[platform]) latest[platform] = d
+  }
+  const starts = {}
+  for (const platform in latest) {
+    starts[platform] = new Date(latest[platform].getTime() - (windowDays - 1) * 86400000)
+  }
+  return starts
+}
+
 export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
   if (!rows.length) return []
 

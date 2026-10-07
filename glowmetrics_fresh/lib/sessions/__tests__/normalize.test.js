@@ -134,3 +134,45 @@ describe('valid session rule', () => {
     expect(isValidSession({ durationMinutes: 90, tipCount: 1 })).toBe(false)
   })
 })
+
+describe('total earned = public + private', () => {
+  const { totalEarned, privateEarningRows } = require('../normalize')
+  const { freeWindowStartByPlatform, applyFreeAnalysisWindow } = require('../../analytics')
+
+  const paid = [{ date_time: '2026-10-01T10:00:00Z', platform: 'BongaCams', usd: 7 }]
+  const intervals = [{ ended_at: '2026-10-07T17:12:00Z', platform: 'chaturbate', estimated_earnings_usd: 0.66 }]
+
+  test('adds paid sessions and live private intervals to public tips', () => {
+    const rows = privateEarningRows({ paidSessions: paid, liveIntervals: intervals })
+    expect(rows).toHaveLength(2)
+    expect(totalEarned({ publicUSD: 10.5, privateRows: rows })).toEqual({ publicUSD: 10.5, privateUSD: 7.66, totalUSD: 18.16 })
+  })
+
+  test('no private earnings → total equals public', () => {
+    expect(totalEarned({ publicUSD: 42, privateRows: [] }).totalUSD).toBe(42)
+  })
+
+  test('free-tier window applies identically to private earnings', () => {
+    const tips = [
+      { date_time: '2026-10-07T10:00:00Z', platform: 'BongaCams', usd: 1 },
+      { date_time: '2026-08-01T10:00:00Z', platform: 'BongaCams', usd: 1 },
+    ]
+    const starts = freeWindowStartByPlatform(tips)
+    // Same cutoff applyFreeAnalysisWindow uses for the tips themselves.
+    expect(applyFreeAnalysisWindow(tips)).toHaveLength(1)
+    expect(starts.BongaCams.toISOString()).toBe('2026-09-07T10:00:00.000Z')
+    const rows = privateEarningRows({ paidSessions: [
+      { date_time: '2026-10-01T10:00:00Z', platform: 'bongacams', usd: 7 },  // inside
+      { date_time: '2026-08-15T10:00:00Z', platform: 'bongacams', usd: 50 }, // outside
+    ] })
+    expect(totalEarned({ publicUSD: 1, privateRows: rows, windowStarts: starts })).toEqual({ publicUSD: 1, privateUSD: 7, totalUSD: 8 })
+  })
+
+  test('private-only platform is windowed on its own latest row', () => {
+    const rows = privateEarningRows({ paidSessions: [
+      { date_time: '2026-10-01T10:00:00Z', platform: 'myfreecams', usd: 5 },
+      { date_time: '2026-07-01T10:00:00Z', platform: 'myfreecams', usd: 9 },
+    ] })
+    expect(totalEarned({ publicUSD: 0, privateRows: rows, windowStarts: {} }).privateUSD).toBe(5)
+  })
+})

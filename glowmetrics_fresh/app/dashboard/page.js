@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, freeWindowStartByPlatform } from "../../lib/analytics"
+import { totalEarned, privateEarningRows } from "../../lib/sessions/normalize"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
@@ -1483,6 +1484,18 @@ export default function Dashboard() {
   }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
   // Finalized shows from persisted data; refetched whenever a show finishes.
   const recentShows = useRecentShows(liveEngine.completedShowsVersion, { enabled: !!user })
+  // Closed private intervals of finalized Live shows — the Live term of
+  // Total Earned. Reloaded whenever a show finishes.
+  const [livePrivateIntervals, setLivePrivateIntervals] = useState([])
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/live/sessions/private-earnings', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d?.intervals) setLivePrivateIntervals(d.intervals) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [user, liveEngine.completedShowsVersion])
   // Opening Sessions shows every new show in full; after a moment on screen
   // they count as viewed for this account (all devices).
   const newShowIdsKey = recentShows.newIds.join(',')
@@ -2425,7 +2438,15 @@ const stopImportMessageRotation = () => {
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
-  const totalRevenue = analytics?.totalUSD || 0
+  // Total Earned = public tip earnings + private earnings (lib/sessions/normalize.js).
+  // Free tier: private earnings use the same per-platform window as the tips.
+  const earned = totalEarned({
+    publicUSD: analytics?.totalUSD || 0,
+    privateRows: privateEarningRows({ paidSessions, liveIntervals: livePrivateIntervals }),
+    windowStarts: isPro ? null : freeWindowStartByPlatform(tips),
+  })
+  const totalRevenue = analytics?.totalUSD || 0 // public tips only (shares, per-session averages)
+  const totalEarnedUSD = earned.totalUSD        // header / share card: public + private
   // Store data in window object for debugging
   if (typeof window !== 'undefined') {
     window.__dashboardDebug = {
@@ -3266,7 +3287,7 @@ const stopImportMessageRotation = () => {
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
-          const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+          const safeRevenue = (!isNaN(totalEarnedUSD) && isFinite(totalEarnedUSD)) ? totalEarnedUSD : 0
           return (
             <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
               <div style={{ display: 'flex', alignItems: 'center', height: 48, gap: 8 }}>
@@ -6959,7 +6980,7 @@ const stopImportMessageRotation = () => {
         const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
         const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
         const cardLines = [
-          `💰 Total Earned: $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `💰 Total Earned: $${totalEarnedUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           topFan ? `🏆 Top Fan: ${topFan.username} ($${topFan.totalUSD.toFixed(2)})` : null,
           bestDayLabel ? `📅 Best Day: ${bestDayLabel}s` : null,
           `👥 ${whales.length} total fans across ${platforms}`,
