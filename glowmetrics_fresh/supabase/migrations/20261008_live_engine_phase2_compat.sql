@@ -18,6 +18,8 @@
 --      [started_at, ended_at] contains the tip's event time, then that
 --      session is re-finalized. More than one match: the tip stays
 --      unattributed and is recorded in unattributed_tips_log.
+--   7. The one-running-session-per-user index covers starting/live/
+--      inactive_warning/ending (it listed the previous vocabulary).
 
 -- ── 5. final_* columns ───────────────────────────────────────────────────
 ALTER TABLE public.live_sessions
@@ -389,3 +391,14 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz, bigint) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.persist_extension_tip(uuid, uuid, text, text, integer, numeric, text, timestamptz, bigint) TO service_role;
+
+-- ── 7. one running session per user, in production's vocabulary ──────────
+-- live_sessions_one_unresolved_per_user still listed the previous statuses
+-- (starting/active/paused/stopping/needs_resolution), so only 'starting' was
+-- actually covered and a creator could hold two live sessions. The new index
+-- is built before the old one is dropped so uniqueness is never unenforced.
+-- start_live_session's unique_violation fallback works with either name.
+CREATE UNIQUE INDEX IF NOT EXISTS live_sessions_one_running_per_user
+  ON public.live_sessions (user_id)
+  WHERE status IN ('starting', 'live', 'inactive_warning', 'ending');
+DROP INDEX IF EXISTS public.live_sessions_one_unresolved_per_user;

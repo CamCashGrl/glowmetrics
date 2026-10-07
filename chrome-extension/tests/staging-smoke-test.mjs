@@ -445,6 +445,15 @@ async function runSmokeTest() {
       `First heartbeat moves it to live/active, got ${wentLive?.status}/${wentLive?.live_substate}`
     );
 
+    // One running session per creator: a second live row must be refused
+    // by live_sessions_one_running_per_user (any of starting/live/
+    // inactive_warning/ending).
+    const { data: dupRow, error: dupErr } = await adminClient
+      .from('live_sessions')
+      .insert({ user_id: tempUser.userId, status: 'live', live_substate: 'active', stream_platform: 'Chaturbate' })
+      .select('id');
+    assert(dupErr?.code === '23505', `Second running session for the same creator is rejected (23505), got ${dupErr ? dupErr.code : 'inserted ' + JSON.stringify(dupRow)}`);
+
     // Step 4: POST first tip (real event, not test)
     // Use Chaturbate ($0.05/token) so USD calculation is deterministic
     console.log('\nStep 4: POST first tip');
