@@ -1141,6 +1141,11 @@ jobs:
               }
 
               // ========== SCENARIO 14 ==========
+              // Contract: Two overlapping ended sessions both within 30-minute reconciliation window
+              // Session A: started 25 min ago, ended 10 min ago
+              // Session B: started 20 min ago, ended 5 min ago
+              // Tip event_at: 15 min ago (overlaps both sessions)
+              // Both sessions satisfy: started_at <= event_at <= ended_at
               let s14UserId = null;
               let s14Result = { passed: false, message: "Not executed" };
               try {
@@ -1148,19 +1153,21 @@ jobs:
                 s14UserId = tempUser.userId;
                 createdAuthUsers.push(s14UserId);
 
-                const startTime = new Date(Date.now() - 120 * 60 * 1000);
-                const midTime = new Date(Date.now() - 90 * 60 * 1000);
-                const endTime = new Date(Date.now() - 60 * 60 * 1000);
+                const sessionAStart = new Date(Date.now() - 25 * 60 * 1000);
+                const sessionAEnd = new Date(Date.now() - 10 * 60 * 1000);
+                const sessionBStart = new Date(Date.now() - 20 * 60 * 1000);
+                const sessionBEnd = new Date(Date.now() - 5 * 60 * 1000);
+                const tipEventAt = new Date(Date.now() - 15 * 60 * 1000);
 
                 const { data: sessionAData, error: sessionAError } = await serviceRoleClient
                   .from("live_sessions")
                   .insert({
                     user_id: s14UserId,
-                    started_at: startTime,
-                    ended_at: midTime,
+                    started_at: sessionAStart,
+                    ended_at: sessionAEnd,
                     status: "ended",
                     total_paused_seconds: 0,
-                    final_duration_seconds: 30 * 60
+                    final_duration_seconds: 15 * 60
                   })
                   .select();
 
@@ -1171,11 +1178,11 @@ jobs:
                   .from("live_sessions")
                   .insert({
                     user_id: s14UserId,
-                    started_at: midTime,
-                    ended_at: endTime,
+                    started_at: sessionBStart,
+                    ended_at: sessionBEnd,
                     status: "ended",
                     total_paused_seconds: 0,
-                    final_duration_seconds: 30 * 60
+                    final_duration_seconds: 15 * 60
                   })
                   .select();
 
@@ -1192,7 +1199,7 @@ jobs:
                     p_tokens: 1000,
                     p_usd: 25.00,
                     p_platform: "twitch",
-                    p_event_at: midTime.toISOString(),
+                    p_event_at: tipEventAt.toISOString(),
                     p_queued_ms: null
                   }
                 );
