@@ -48,6 +48,25 @@ const EXTRA_MSGS=['Importing additional tip history…','Merging with your dashb
 // BongaCams paid chat session types
 const BC_PAID_TYPES=['Private Chat','Full-Private Chat','Group Chat','Spy Mode']
 
+// Maps an import/upload error to a controlled category for analytics — never
+// send e.message here, since parser errors can echo back pasted content.
+function categorizeImportError(e){
+  if(e.name==='AbortError')return 'timeout'
+  if(e.code==='platform_limit_reached')return 'platform_limit'
+  if(e.code)return String(e.code)
+  const msg=(e.message||'').toLowerCase()
+  if(msg.includes('no tip rows')||msg.includes("couldn't find"))return 'empty_data'
+  if(msg.includes('format')||msg.includes('unsupported'))return 'unsupported_format'
+  if(msg.includes('not logged in'))return 'auth_error'
+  return 'unknown_error'
+}
+
+// Chaturbate private show pattern
+const CB_PRIVATE_SHOW_PATTERN = /^Private Show:/i
+
+// MyFreeCams private type
+const MFC_PRIVATE_TYPE = 'Private'
+
 // ── Parsers ────────────────────────────────────────────────────
 function tryParseDate(str){
   if(!str)return null;const s=str.trim()
@@ -101,6 +120,95 @@ function parseBCPaidSessions(rawText){
     }
     if(!ts||!username||tokens<1){skipped++;continue}
     sessions.push({ts,username,sessionType,tokens,usd:usd>0?usd:+(tokens*tokenRate('BongaCams')).toFixed(4)})
+  }
+  return{sessions,skipped}
+}
+
+// Parse Chaturbate private shows into paid_session objects
+function parseCBPrivateSessions(rawText){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  const sessions=[];let skipped=0
+  const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
+  const privateShowRe=/^Private Show:\s*(.+)/i
+  const tokensLineRe=/^(\d+)\s+(\d+)$/
+
+  let i=0
+  while(i<lines.length){
+    const dateMatch=lines[i].match(dateLineRe)
+    if(dateMatch){
+      const ts=tryParseDate(dateMatch[1])
+      const actionLine=lines[i+1]||''
+      const privateMatch=actionLine.match(privateShowRe)
+      if(ts&&privateMatch){
+        const username=privateMatch[1].trim()
+        const tokensLine=lines[i+2]||''
+        const tMatch=tokensLine.match(tokensLineRe)
+        if(tMatch){
+          const tokens=parseInt(tMatch[1],10)
+          if(tokens>=1){
+            const usd=+(tokens*TOKEN_RATES.chaturbate).toFixed(2)
+            sessions.push({ts,username,sessionType:'Private Show',tokens,usd})
+          }else skipped++
+        }else skipped++
+      }
+      i++
+    }else i++
+  }
+  return{sessions,skipped}
+}
+
+// Parse MyFreeCams private earnings into paid_session objects
+function parseMFCPrivateSessions(rawText){
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean)
+  const sessions=[];let skipped=0
+  const splitCols=l=>l.split(/\t|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.trim().replace(/^"|"$/g,''))
+  const shiftRefId=cols=>{if(cols[0]&&/^\d{8,}$/.test(cols[0].trim()))cols.shift();return cols}
+
+  const ROLE_KW={
+    timestamp:['timestamp','date/time','date','time'],
+    tokens:['token change','tokens','token amt'],
+    usd:['usd','payout','earnings','dollar','amount'],
+    type:['transaction type','type','action'],
+    username:['user','username','member','from','sender'],
+  }
+  const mapHeaderRow=cols=>{
+    const lower=cols.map(c=>c.toLowerCase().trim())
+    const map={};const claimed=new Set()
+    for(const role of['timestamp','tokens','usd','type','username']){
+      for(let i=0;i<lower.length;i++){
+        if(claimed.has(i))continue
+        if(ROLE_KW[role].some(k=>lower[i]===k||lower[i].includes(k))){map[role]=i;claimed.add(i);break}
+      }
+    }
+    return map
+  }
+
+  const firstCols=lines.length?splitCols(lines[0]):[]
+  const hasRefIdCol=firstCols[0]&&/^reference\s+id|ref\s*id/i.test(firstCols[0])
+  const headerCols=hasRefIdCol?firstCols.slice(1):firstCols
+  const headerMap=mapHeaderRow(headerCols)
+  const hasHeaderRow=headerMap.timestamp!==undefined&&headerMap.tokens!==undefined
+
+  for(const[idx,line]of lines.entries()){
+    if(hasHeaderRow&&idx===0)continue
+    const cols=hasRefIdCol?shiftRefId(splitCols(line)):splitCols(line)
+    if(cols.length<2){skipped++;continue}
+
+    if(hasHeaderRow){
+      const type=headerMap.type!==undefined?cols[headerMap.type]:''
+      if(!type||type.toLowerCase()!==MFC_PRIVATE_TYPE.toLowerCase()){skipped++;continue}
+      const ts=headerMap.timestamp!==undefined?tryParseDate(cols[headerMap.timestamp]):null
+      if(!ts){skipped++;continue}
+      const tokensRaw=headerMap.tokens!==undefined?parseFloat(String(cols[headerMap.tokens]).replace(/[$,]/g,'')):NaN
+      const tokens=Number.isFinite(tokensRaw)?Math.round(tokensRaw):null
+      if(!tokens||tokens<1){skipped++;continue}
+      const username=headerMap.username!==undefined?cols[headerMap.username].trim():''
+      const usdRaw=headerMap.usd!==undefined?parseFloat(String(cols[headerMap.usd]).replace(/[$,]/g,'')):NaN
+      const usd=Number.isFinite(usdRaw)&&usdRaw>0?usdRaw:+(tokens*TOKEN_RATES.myfreecams).toFixed(2)
+      sessions.push({ts,username:username||'anonymous',sessionType:'Private',tokens,usd})
+      continue
+    }
+    skipped++
   }
   return{sessions,skipped}
 }
@@ -242,10 +350,16 @@ function paidSessionsToCSVBlob(sessions){
 export function buildPreview(rawText,platformId,platformLabel){
   const{rows,skipped}=parseRows(rawText,platformId)
 
-  // Also detect paid sessions for BongaCams so we can show them in preview
+  // Detect paid sessions for all platforms
   let paidSessions=[]
   if(platformId==='bongacams'){
     const res=parseBCPaidSessions(rawText)
+    paidSessions=res.sessions
+  }else if(platformId==='chaturbate'){
+    const res=parseCBPrivateSessions(rawText)
+    paidSessions=res.sessions
+  }else if(platformId==='myfreecams'){
+    const res=parseMFCPrivateSessions(rawText)
     paidSessions=res.sessions
   }
 
