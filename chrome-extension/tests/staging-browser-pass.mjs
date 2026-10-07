@@ -213,6 +213,8 @@ async function main() {
     await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
     const card = page.getByTestId(`show-${sessionId}`);
     await card.waitFor({ state: 'visible' });
+    // Checked first: viewing Sessions for 3s acknowledges the show.
+    check('Marked NEW / just ended', (await card.getByTestId('new-badge').count()) === 1 && /NEW/.test(await card.getByTestId('new-badge').textContent()));
     await shot(page, '05-dashboard-sessions-new-show');
     const text = async (id) => ((await card.getByTestId(id).textContent()) || '').trim();
     const breakdown = row.final_platform_breakdown || {};
@@ -261,7 +263,6 @@ async function main() {
     check('MyFreeCams filter keeps the multi-platform Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 1);
     await page.getByTestId('filter-platform-all').click();
     await shot(page, '05b-dashboard-sessions-today');
-    check('Marked NEW / just ended', (await card.getByTestId('new-badge').count()) === 1 && /NEW/.test(await card.getByTestId('new-badge').textContent()));
     check('Total earnings', (await text('show-total')) === usd(row.final_total_usd), `${await text('show-total')} vs ${usd(row.final_total_usd)}`);
     check('Public earnings = $10.50', (await text('show-public')) === usd(row.final_public_usd) && usd(row.final_public_usd) === '$10.50', await text('show-public'));
     check('Private earnings', (await text('show-private')) === usd(row.final_private_usd) && usd(row.final_private_usd) === usd(intervals[0].estimated_earnings_usd), await text('show-private'));
