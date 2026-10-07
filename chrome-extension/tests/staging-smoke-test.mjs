@@ -96,12 +96,15 @@ function generateUUID() {
 }
 
 async function createTempAuthUser() {
+  // Use a fixed test user ID so it can be whitelisted in LIVE_ENGINE_V2_TEST_BYPASS_USER_IDS
+  const SMOKE_TEST_USER_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
   const RUN_ID = new Date().getTime().toString().slice(-6);
   const tempEmail = `smoke-${RUN_ID}-${crypto.randomBytes(4).toString('hex')}@staging.local`;
   const tempPassword = crypto.randomBytes(24).toString('hex');
 
   try {
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
+      user_id: SMOKE_TEST_USER_ID,
       email: tempEmail,
       password: tempPassword,
       email_confirm: true
