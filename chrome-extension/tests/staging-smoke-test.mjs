@@ -95,9 +95,42 @@ function generateUUID() {
   return crypto.randomUUID();
 }
 
+// Fixed so it can be whitelisted in LIVE_ENGINE_V2_TEST_BYPASS_USER_IDS; the
+// staging-only helper RPCs (staging-only/smoke-test-helpers.sql) refuse any other id.
+const SMOKE_TEST_USER_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+
+// Deletes live-session fixtures for the fixed test user, children first:
+// live_tips and live_session_pauses reference live_sessions without cascade.
+// Canonical tips are removed by the auth-user delete (tips.user_id is
+// ON DELETE CASCADE), so service_role needs no access to public.tips.
+async function deleteSessionFixtures(userId) {
+  const errors = [];
+  for (const table of ['live_tips', 'live_session_pauses', 'live_sessions']) {
+    const { error } = await adminClient.from(table).delete().eq('user_id', userId);
+    if (error) errors.push(`${table}: ${error.message}`);
+  }
+  return errors;
+}
+
+async function remainingTipsCount(userId) {
+  const { data, error } = await adminClient.rpc('staging_smoke_list_tips', { p_user_id: userId });
+  if (error) throw new Error(`staging_smoke_list_tips failed: ${error.message}`);
+  return (data || []).length;
+}
+
+// Removes leftovers from an earlier run that died before its own cleanup.
+// Only ever touches the fixed smoke-test user.
+async function preRunCleanup() {
+  const errors = await deleteSessionFixtures(SMOKE_TEST_USER_ID);
+  if (errors.length > 0) throw new Error(`Pre-run fixture cleanup failed: ${errors.join('; ')}`);
+  const { error: delErr } = await adminClient.auth.admin.deleteUser(SMOKE_TEST_USER_ID);
+  if (delErr && delErr.status !== 404) throw new Error(`Pre-run auth user cleanup failed: ${delErr.message}`);
+  const leftover = await remainingTipsCount(SMOKE_TEST_USER_ID);
+  if (leftover !== 0) throw new Error(`Pre-run cleanup left ${leftover} canonical tips rows`);
+  pass('Pre-run cleanup: no stale fixtures for fixed test user');
+}
+
 async function createTempAuthUser() {
-  // Use a fixed test user ID so it can be whitelisted in LIVE_ENGINE_V2_TEST_BYPASS_USER_IDS
-  const SMOKE_TEST_USER_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
   const RUN_ID = new Date().getTime().toString().slice(-6);
   const tempEmail = `smoke-${RUN_ID}-${crypto.randomBytes(4).toString('hex')}@staging.local`;
   const tempPassword = crypto.randomBytes(24).toString('hex');
@@ -146,33 +179,25 @@ async function deleteTempAuthUser(userId) {
 }
 
 async function cleanupUserData(userId) {
-  let cleanupErrors = [];
-
   try {
-    const { error: tipsErr } = await adminClient.from('live_tips').delete().eq('user_id', userId);
-    if (tipsErr) cleanupErrors.push(`live_tips: ${tipsErr.message}`);
+    const errors = await deleteSessionFixtures(userId);
+    if (errors.length > 0) {
+      fail(`Cleanup: Failed to delete test data for user ${userId}: ${errors.join('; ')}`);
+    } else {
+      pass(`Cleanup: Deleted live_tips, pauses, sessions for user ${userId}`);
+    }
   } catch (e) {
-    cleanupErrors.push(`live_tips exception: ${e.message}`);
+    fail(`Cleanup: exception deleting test data for user ${userId}: ${e.message}`);
   }
+}
 
+// Run after the auth user is deleted: its cascade must have removed the tips rows.
+async function verifyTipsCleaned(userId) {
   try {
-    const { error: canonicalErr } = await adminClient.from('tips').delete().eq('user_id', userId);
-    if (canonicalErr) cleanupErrors.push(`tips: ${canonicalErr.message}`);
+    const leftover = await remainingTipsCount(userId);
+    assert(leftover === 0, `Cleanup: canonical tips rows removed (remaining: ${leftover})`);
   } catch (e) {
-    cleanupErrors.push(`tips exception: ${e.message}`);
-  }
-
-  try {
-    const { error: sessionErr } = await adminClient.from('live_sessions').delete().eq('user_id', userId);
-    if (sessionErr) cleanupErrors.push(`live_sessions: ${sessionErr.message}`);
-  } catch (e) {
-    cleanupErrors.push(`live_sessions exception: ${e.message}`);
-  }
-
-  if (cleanupErrors.length > 0) {
-    fail(`Cleanup: Failed to delete test data for user ${userId}: ${cleanupErrors.join('; ')}`);
-  } else {
-    pass(`Cleanup: Deleted test data for user ${userId}`);
+    fail(`Cleanup: could not verify tips removal: ${e.message}`);
   }
 }
 
@@ -299,12 +324,8 @@ async function stopLiveSession(accessToken) {
       fail(`POST /api/live/session/stop failed: ${res.status}`);
       return null;
     }
-    const data = await res.json();
-    if (!data.session) {
-      fail(`POST /api/live/session/stop returned no session: ${JSON.stringify(data)}`);
-      return null;
-    }
-    return data.session;
+    // Full body, so callers can check both `session` and `alreadyStopped`.
+    return await res.json();
   } catch (e) {
     fail(`Stop live session error: ${e.message}`);
     return null;
@@ -326,12 +347,11 @@ async function queryLiveTips(userId) {
   }
 }
 
+// Canonical tips are read through the staging-only helper; service_role has
+// no SELECT on public.tips and must not be given one.
 async function queryTips(userId) {
   try {
-    const { data, error } = await adminClient
-      .from('tips')
-      .select('*')
-      .eq('user_id', userId);
+    const { data, error } = await adminClient.rpc('staging_smoke_list_tips', { p_user_id: userId });
 
     if (error) throw error;
     return data || [];
@@ -349,8 +369,11 @@ async function runSmokeTest() {
   console.log(`   Running ${new Date().toISOString()}\n`);
 
   try {
+    console.log('Step 0: Pre-run cleanup of stale fixtures');
+    await preRunCleanup();
+
     // Step 1: Create temporary staging Auth user
-    console.log('Step 1: Create temporary staging Auth user');
+    console.log('\nStep 1: Create temporary staging Auth user');
     tempUser = await createTempAuthUser();
     assert(tempUser && tempUser.userId, 'Temp user created with userId');
 
@@ -363,6 +386,7 @@ async function runSmokeTest() {
     console.log('\nStep 3: Start live session');
     liveSession = await startLiveSession(accessToken);
     assert(liveSession && liveSession.id, 'Live session created');
+    if (!liveSession) throw new Error('Cannot continue without a live session');
     assert(liveSession.status === 'active', `Session status is 'active', got '${liveSession.status}'`);
 
     // Step 4: POST first tip (real event, not test)
@@ -382,6 +406,10 @@ async function runSmokeTest() {
     assert(liveTips1.length === 1, `Exactly 1 live_tips row, got ${liveTips1.length}`);
     const tips1 = await queryTips(tempUser.userId);
     assert(tips1.length === 1, `Exactly 1 canonical tips row, got ${tips1.length}`);
+    assert(
+      tips1.length === 1 && tips1[0].client_event_id === firstClientEventId,
+      `Canonical tips row carries clientEventId ${firstClientEventId}`
+    );
 
     // Step 6: Retry same clientEventId (duplicate detection)
     console.log('\nStep 6: Test idempotency - retry same clientEventId');
@@ -396,7 +424,7 @@ async function runSmokeTest() {
     // Step 7: Pause session
     console.log('\nStep 7: Pause live session');
     const pausedSession = await pauseLiveSession(accessToken);
-    assert(pausedSession && pausedSession.status === 'paused', `Session paused, status: ${pausedSession.status}`);
+    assert(pausedSession && pausedSession.status === 'paused', `Session paused, status: ${pausedSession?.status}`);
 
     // Step 8: Send second tip while paused
     console.log('\nStep 8: POST second tip while paused');
@@ -412,102 +440,111 @@ async function runSmokeTest() {
     assert(liveTips2.length === 2, `Exactly 2 live_tips rows, got ${liveTips2.length}`);
     const tips2 = await queryTips(tempUser.userId);
     assert(tips2.length === 2, `Exactly 2 canonical tips rows, got ${tips2.length}`);
+    const tipEventIds = tips2.map((t) => t.client_event_id).sort();
+    deepEqual(tipEventIds, [firstClientEventId, secondClientEventId].sort(), 'Canonical tips rows are exactly the two sent clientEventIds');
 
     // Step 10: Resume session
     console.log('\nStep 10: Resume live session');
     const resumedSession = await resumeLiveSession(accessToken);
-    assert(resumedSession && resumedSession.status === 'active', `Session resumed, status: ${resumedSession.status}`);
+    assert(resumedSession && resumedSession.status === 'active', `Session resumed, status: ${resumedSession?.status}`);
 
-    // Step 11: Stop (finalize) session
+    // Step 11: Stop (finalize) session through the real API route
     console.log('\nStep 11: Stop (finalize) live session');
-    const stoppedSession = await stopLiveSession(accessToken);
-    assert(stoppedSession, 'Stop returned session data');
+    const stopBody1 = await stopLiveSession(accessToken);
+    const stoppedSession = stopBody1?.session ?? null;
+    assert(stoppedSession && stoppedSession.id === liveSession.id, `Stop returned the same session ${liveSession.id}`);
+    if (!stoppedSession) throw new Error('Cannot verify finalization without a stopped session');
+    assert(stopBody1.alreadyStopped === false, `First Stop reports alreadyStopped=false, got ${stopBody1.alreadyStopped}`);
     assert(stoppedSession.status === 'ended', `Session finalized, status: ${stoppedSession.status}`);
+    assert(stoppedSession.paused_at === null, `paused_at cleared, got ${stoppedSession.paused_at}`);
+    assert(stoppedSession.is_active === false, `is_active=false, got ${stoppedSession.is_active}`);
+    assert(stoppedSession.session_resolution_type === 'normal_stop', `session_resolution_type='normal_stop', got ${stoppedSession.session_resolution_type}`);
 
     // Step 12: Verify final metrics reflect both tips
+    // tipper_alice 1000 tokens × $0.05 = $50; tipper_bob 500 × $0.05 = $25.
     console.log('\nStep 12: Verify final metrics');
-    const finalMetrics = stoppedSession;
-    assert(finalMetrics.final_tip_count === 2, `Final tip count: 2, got ${finalMetrics.final_tip_count}`);
-    assert(finalMetrics.final_total_usd === 75, `Final USD (1000×0.05 + 500×0.05 = 50 + 25 = 75), got ${finalMetrics.final_total_usd}`);
-    assert(finalMetrics.final_unique_tippers === 2, `Final unique tippers: 2, got ${finalMetrics.final_unique_tippers}`);
-    assert(finalMetrics.final_tokens === 1500, `Final tokens: 1500, got ${finalMetrics.final_tokens}`);
+    const fm = stoppedSession;
+    assert(fm.final_tip_count === 2, `Final tip count: 2, got ${fm.final_tip_count}`);
+    assert(fm.final_total_usd === 75, `Final USD (1000×0.05 + 500×0.05 = 50 + 25 = 75), got ${fm.final_total_usd}`);
+    assert(fm.final_unique_tippers === 2, `Final unique tippers: 2, got ${fm.final_unique_tippers}`);
+    assert(fm.final_tokens === 1500, `Final tokens: 1500, got ${fm.final_tokens}`);
+    assert(fm.final_top_tipper_username === 'tipper_alice', `Top tipper: tipper_alice, got ${fm.final_top_tipper_username}`);
+    assert(fm.final_top_tipper_usd === 50, `Top tipper USD: 50, got ${fm.final_top_tipper_usd}`);
+    assert(fm.final_largest_tip_usd === 50, `Largest tip USD: 50, got ${fm.final_largest_tip_usd}`);
+    assert(fm.final_avg_tip_usd === 37.5, `Average tip USD: 37.5, got ${fm.final_avg_tip_usd}`);
+    assert(typeof fm.finalized_at === 'string' && fm.finalized_at.length > 0, `finalized_at set, got ${fm.finalized_at}`);
+    assert(fm.finalized_at === fm.ended_at, `finalized_at equals ended_at (one authoritative end time): ${fm.finalized_at} vs ${fm.ended_at}`);
 
-    // Store full metrics for idempotency comparison
-    const firstMetrics = {
-      final_tip_count: finalMetrics.final_tip_count,
-      final_total_usd: finalMetrics.final_total_usd,
-      final_tokens: finalMetrics.final_tokens,
-      final_unique_tippers: finalMetrics.final_unique_tippers,
-      final_top_tipper_username: finalMetrics.final_top_tipper_username,
-      final_top_tipper_usd: finalMetrics.final_top_tipper_usd,
-      final_largest_tip_usd: finalMetrics.final_largest_tip_usd,
-      final_avg_tip_usd: finalMetrics.final_avg_tip_usd,
-      final_usd_per_hour: finalMetrics.final_usd_per_hour,
-      final_duration_seconds: finalMetrics.final_duration_seconds,
-      finalized_at: finalMetrics.finalized_at,
-    };
+    const elapsedSec = Math.round((new Date(fm.ended_at).getTime() - new Date(fm.started_at).getTime()) / 1000);
+    const expectedDuration = Math.max(0, elapsedSec - fm.total_paused_seconds);
+    assert(
+      Number.isInteger(fm.final_duration_seconds) && Math.abs(fm.final_duration_seconds - expectedDuration) <= 1,
+      `final_duration_seconds excludes paused time: expected ~${expectedDuration} (elapsed ${elapsedSec}s − paused ${fm.total_paused_seconds}s), got ${fm.final_duration_seconds}`
+    );
+    if (fm.final_duration_seconds > 0) {
+      const expectedPerHour = Math.round((75 / fm.final_duration_seconds) * 3600 * 100) / 100;
+      assert(
+        typeof fm.final_usd_per_hour === 'number' && Math.abs(fm.final_usd_per_hour - expectedPerHour) <= 0.01,
+        `final_usd_per_hour: expected ${expectedPerHour}, got ${fm.final_usd_per_hour}`
+      );
+    } else {
+      assert(fm.final_usd_per_hour === null, `final_usd_per_hour is null for zero duration, got ${fm.final_usd_per_hour}`);
+    }
+
+    const METRIC_KEYS = [
+      'final_tip_count', 'final_total_usd', 'final_tokens', 'final_unique_tippers',
+      'final_top_tipper_username', 'final_top_tipper_usd', 'final_largest_tip_usd',
+      'final_avg_tip_usd', 'final_usd_per_hour', 'final_duration_seconds',
+      'finalized_at', 'ended_at', 'total_paused_seconds', 'status',
+    ];
+    const firstMetrics = Object.fromEntries(METRIC_KEYS.map((k) => [k, fm[k]]));
 
     // Step 13: Call Stop again (idempotency)
     console.log('\nStep 13: Stop again (idempotency check)');
-    const stoppedSessionAgain = await stopLiveSession(accessToken);
-    assert(stoppedSessionAgain, 'Second stop returned session data');
-    assert(stoppedSessionAgain.status === 'ended', `Session still ended, status: ${stoppedSessionAgain.status}`);
+    const stopBody2 = await stopLiveSession(accessToken);
+    const stoppedSessionAgain = stopBody2?.session ?? null;
+    assert(stopBody2 && stopBody2.alreadyStopped === true, `Repeated Stop reports alreadyStopped=true, got ${stopBody2?.alreadyStopped}`);
+    assert(stoppedSessionAgain && stoppedSessionAgain.id === liveSession.id, `Repeated Stop returns the same session ${liveSession.id}, got ${stoppedSessionAgain?.id}`);
+    assert(stoppedSessionAgain?.status === 'ended', `Session still ended, status: ${stoppedSessionAgain?.status}`);
 
-    // Step 14: Deep compare all metrics (should be identical)
+    // Step 14: Every metric must be present on the first Stop before
+    // "unchanged" means anything (null === null must not count as a pass).
     console.log('\nStep 14: Verify all metrics unchanged on second stop');
-    deepEqual(
-      stoppedSessionAgain.final_tip_count,
-      firstMetrics.final_tip_count,
-      'final_tip_count unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_total_usd,
-      firstMetrics.final_total_usd,
-      'final_total_usd unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_tokens,
-      firstMetrics.final_tokens,
-      'final_tokens unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_unique_tippers,
-      firstMetrics.final_unique_tippers,
-      'final_unique_tippers unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_top_tipper_username,
-      firstMetrics.final_top_tipper_username,
-      'final_top_tipper_username unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_top_tipper_usd,
-      firstMetrics.final_top_tipper_usd,
-      'final_top_tipper_usd unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_largest_tip_usd,
-      firstMetrics.final_largest_tip_usd,
-      'final_largest_tip_usd unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_avg_tip_usd,
-      firstMetrics.final_avg_tip_usd,
-      'final_avg_tip_usd unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_usd_per_hour,
-      firstMetrics.final_usd_per_hour,
-      'final_usd_per_hour unchanged'
-    );
-    deepEqual(
-      stoppedSessionAgain.final_duration_seconds,
-      firstMetrics.final_duration_seconds,
-      'final_duration_seconds unchanged'
-    );
+    const mustBePresent = METRIC_KEYS.filter((k) => !(k === 'final_usd_per_hour' && fm.final_duration_seconds === 0));
+    const missing = mustBePresent.filter((k) => firstMetrics[k] === null || firstMetrics[k] === undefined);
+    assert(missing.length === 0, `First Stop returned every final value (missing: ${missing.join(', ') || 'none'})`);
+    if (missing.length === 0 && stoppedSessionAgain) {
+      for (const key of METRIC_KEYS) {
+        deepEqual(stoppedSessionAgain[key], firstMetrics[key], `${key} unchanged on repeated Stop`);
+      }
+    } else {
+      fail('Skipped unchanged-metric comparison: first Stop values incomplete or repeated Stop returned no session');
+    }
+
+    // Step 15: The persisted row (not just the API response) holds the same values
+    console.log('\nStep 15: Verify persisted live_sessions row and pause history');
+    const { data: dbRow, error: dbRowErr } = await adminClient
+      .from('live_sessions')
+      .select(METRIC_KEYS.join(','))
+      .eq('id', liveSession.id)
+      .single();
+    assert(!dbRowErr && dbRow, `Read persisted live_sessions row${dbRowErr ? `: ${dbRowErr.message}` : ''}`);
+    if (dbRow) {
+      for (const key of METRIC_KEYS) {
+        // timestamps may be formatted differently between RPC and table reads
+        const a = key.endsWith('_at') && dbRow[key] ? new Date(dbRow[key]).getTime() : dbRow[key];
+        const b = key.endsWith('_at') && firstMetrics[key] ? new Date(firstMetrics[key]).getTime() : firstMetrics[key];
+        deepEqual(a, b, `Persisted ${key} matches Stop response`);
+      }
+    }
+    const { data: pauseRows, error: pauseErr } = await adminClient
+      .from('live_session_pauses')
+      .select('id,resumed_at,pause_duration_seconds')
+      .eq('session_id', liveSession.id);
+    assert(!pauseErr && Array.isArray(pauseRows) && pauseRows.length >= 1, `Pause history recorded (${pauseRows?.length ?? 0} rows)${pauseErr ? `: ${pauseErr.message}` : ''}`);
     assert(
-      stoppedSessionAgain.finalized_at === firstMetrics.finalized_at,
-      'finalized_at unchanged (idempotent)'
+      Array.isArray(pauseRows) && pauseRows.every((p) => p.resumed_at !== null && p.pause_duration_seconds !== null),
+      'Every pause history row is closed after Stop'
     );
 
   } catch (e) {
@@ -519,6 +556,7 @@ async function runSmokeTest() {
     if (tempUser) {
       await cleanupUserData(tempUser.userId);
       await deleteTempAuthUser(tempUser.userId);
+      await verifyTipsCleaned(tempUser.userId);
     }
   }
 
