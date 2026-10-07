@@ -165,8 +165,31 @@ async function main() {
     await shot(page, '05-dashboard-sessions-new-show');
     const text = async (id) => ((await card.getByTestId(id).textContent()) || '').trim();
     const breakdown = row.final_platform_breakdown || {};
-    check('Finished show is first in Latest live shows',
-      (await page.getByTestId('latest-shows').locator('[data-testid^="show-"]').first().getAttribute('data-testid')) === `show-${sessionId}`);
+    const history = page.getByTestId('session-history');
+    check('Finished show is first in Session History',
+      (await history.locator('[data-testid^="history-"]').first().getAttribute('data-testid')) === `history-live:${sessionId}`);
+    check('Live show carries the LIVE MODE badge',
+      (await page.getByTestId(`history-live:${sessionId}`).getByTestId('type-badge-live').count()) === 1);
+    check('No "No sessions yet" while a finalized show exists', (await page.getByTestId('history-empty').count()) === 0);
+    check('No separate Latest live shows area', (await page.getByTestId('latest-shows').count()) === 0);
+    // Today (creator-local): every tip of this fresh account belongs to the show.
+    const today = async (id) => ((await page.getByTestId(id).textContent()) || '').trim();
+    check('Today total = show total', (await today('today-total')) === usd(row.final_total_usd), await today('today-total'));
+    check('Today public = $10.50', (await today('today-public')) === '$10.50', await today('today-public'));
+    check('Today private = show private', (await today('today-private')) === usd(row.final_private_usd), await today('today-private'));
+    check('Today tips 3', (await today('today-tips')) === '3', await today('today-tips'));
+    check('Today unique tippers 3 (per platform)', (await today('today-unique')) === '3', await today('today-unique'));
+    check('Today completed sessions 1', (await today('today-completed')) === '1', await today('today-completed'));
+    for (const pf of ['chaturbate', 'bongacams', 'myfreecams']) {
+      check(`Today by Platform lists ${pf}`, (await page.getByTestId(`today-platform-${pf}`).count()) === 1);
+    }
+    await page.getByTestId('filter-type-free_chat').click();
+    check('Free chat filter hides the Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 0);
+    await page.getByTestId('filter-type-all').click();
+    await page.getByTestId('filter-platform-myfreecams').click();
+    check('MyFreeCams filter keeps the multi-platform Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 1);
+    await page.getByTestId('filter-platform-all').click();
+    await shot(page, '05b-dashboard-sessions-today');
     check('Marked NEW / just ended', (await card.getByTestId('new-badge').count()) === 1 && /NEW/.test(await card.getByTestId('new-badge').textContent()));
     check('Total earnings', (await text('show-total')) === usd(row.final_total_usd), `${await text('show-total')} vs ${usd(row.final_total_usd)}`);
     check('Public earnings = $10.50', (await text('show-public')) === usd(row.final_public_usd) && usd(row.final_public_usd) === '$10.50', await text('show-public'));

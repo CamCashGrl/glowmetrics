@@ -23,7 +23,8 @@ import SubscriptionManager from './SubscriptionManager'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
-import LatestShows, { LatestShowDelta } from './LatestShows'
+import { LatestShowDelta } from './LatestShows'
+import SessionsOverview from './SessionsOverview'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
@@ -5274,10 +5275,18 @@ const stopImportMessageRotation = () => {
         })()}
 
         {activeTab === "sessions" && (
-          <LatestShows shows={recentShows.shows} loading={recentShows.loading} error={recentShows.error} />
+          <SessionsOverview
+            tips={tips}
+            shows={recentShows.shows}
+            paidSessions={paidSessions}
+            tz={liveTimezone}
+            showsLoading={recentShows.loading}
+            showsError={recentShows.error}
+          />
         )}
 
-        {activeTab === "sessions" && (() => {
+        {/* Detailed tip-session breakdown; the empty state lives in SessionsOverview. */}
+        {activeTab === "sessions" && sessions.length > 0 && (() => {
           const displaySessions = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)
@@ -5426,8 +5435,8 @@ const stopImportMessageRotation = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                 <div>
-                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>Session Breakdown (detailed)</h2>
+                  <p style={{ fontSize: 13, color: C.muted }}>Timeline and coaching for each tip-based session. Estimated from tip timestamps.</p>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
                   <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
@@ -5458,7 +5467,7 @@ const stopImportMessageRotation = () => {
               )}
 
               {/* SESSION CARDS */}
-              {displaySessions.length === 0 && (
+              {displaySessions.length === 0 && sessions.length > 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🎥</div>
                   <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>{sessions.length > 0 ? 'No meaningful sessions match this filter' : 'No sessions yet'}</div>
