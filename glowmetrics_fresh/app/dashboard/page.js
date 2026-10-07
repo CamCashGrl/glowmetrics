@@ -1469,15 +1469,14 @@ export default function Dashboard() {
   // Real session engine (live_sessions table) — same hook /app/live/page.js
   // uses. Mirrors its status into the legacy liveActive/liveStartTime state
   // below so a session started from the extension (or any other surface)
-  // shows up here too, instead of only after a tip arrives. No-ops entirely
-  // for legacy (non-V2) accounts, since engineMode is locked once per mount.
+  // shows up here too, instead of only after a tip arrives. Same rule as
+  // app/live/page.js.
   const liveEngine = useLiveSessionEngine()
   useEffect(() => {
-    if (liveEngine.engineMode !== 'v2') return
     const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'active' || status === 'paused')
+    setLiveActive(status === 'live' || status === 'starting')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
-  }, [liveEngine.engineMode, liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
   // Timezone for the session start/duration readout — same localStorage key
   // app/live/page.js uses, so a choice made on either surface carries over.
   const [liveTimezone, setLiveTimezone] = useState(() => {

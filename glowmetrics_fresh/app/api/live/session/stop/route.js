@@ -20,5 +20,25 @@ export async function POST(req) {
     return NextResponse.json(body, { status, headers: cors })
   }
 
-  return NextResponse.json({ session: shapeLiveSession(data), alreadyStopped: !data }, { headers: cors })
+  // A plpgsql composite return of NULL ("nothing to stop") arrives as an
+  // object of null fields, not null.
+  if (data?.id) {
+    return NextResponse.json({ session: shapeLiveSession(data), alreadyStopped: false }, { headers: cors })
+  }
+
+  // Repeated Stop: return the same ended session, unchanged.
+  const { data: lastEnded, error: lookupError } = await supabase
+    .from('live_sessions')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('status', 'ended')
+    .order('ended_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (lookupError) {
+    const { status, body } = sanitizedErrorResponse(lookupError)
+    return NextResponse.json(body, { status, headers: cors })
+  }
+
+  return NextResponse.json({ session: shapeLiveSession(lastEnded), alreadyStopped: true }, { headers: cors })
 }
