@@ -1339,7 +1339,14 @@ jobs:
                 if (tipResult.error) throw tipResult.error;
                 if (finalResult.error) throw finalResult.error;
 
-                // Contract: After both settle, verify post-race database state
+                // Contract: After both settle, verify post-race database state.
+                // Stop's own return value is a snapshot from whichever side of
+                // the race it landed on; if it ended the session first, the tip
+                // reconciles afterwards and re-finalizes. The saved row is the truth.
+                const { data: settledRow, error: settledErr } = await serviceRoleClient
+                  .from("live_sessions").select("*").eq("id", s15SessionId).single();
+                if (settledErr) throw settledErr;
+                finalResult.data = settledRow;
                 const failures = [];
 
                 // Check session is ended

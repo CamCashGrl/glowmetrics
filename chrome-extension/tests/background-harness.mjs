@@ -186,9 +186,9 @@ async function main() {
     const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
     let currentStatus = null;
     state.fetchHandler = (url, opts) => {
-      if (url.includes('/api/live/session/start')) { currentStatus = 'active'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'active' } }) }; }
-      if (url.includes('/api/live/session/pause')) { currentStatus = 'paused'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'paused' } }) }; }
-      if (url.includes('/api/live/session/resume')) { currentStatus = 'active'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'active' } }) }; }
+      if (url.includes('/api/live/session/start')) { currentStatus = 'starting'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'starting' } }) }; }
+      if (url.includes('/api/live/session/pause')) { currentStatus = 'live'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'live', live_substate: 'paused' } }) }; }
+      if (url.includes('/api/live/session/resume')) { currentStatus = 'live'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'live', live_substate: 'active' } }) }; }
       if (url.includes('/api/live/session/stop')) { currentStatus = 'ended'; return { ok: true, json: async () => ({ session: { id: 's1', status: 'ended' } }) }; }
       if (url.includes('/api/live/session') && !url.includes('/start') && !url.includes('/pause') && !url.includes('/resume') && !url.includes('/stop')) {
         return { ok: true, json: async () => ({ session: null }) };
@@ -202,13 +202,13 @@ async function main() {
     await tick(30);
 
     const startRes = await new Promise((resolve) => state.onMessage({ action: 'live_start', platform: 'chaturbate' }, {}, resolve));
-    check('T4: live_start returns the new active session', startRes?.session?.status === 'active');
+    check('T4: live_start returns the new session in starting', startRes?.session?.status === 'starting');
 
     const pauseRes = await new Promise((resolve) => state.onMessage({ action: 'live_pause' }, {}, resolve));
-    check('T4: live_pause returns a paused session', pauseRes?.session?.status === 'paused');
+    check('T4: live_pause returns a paused session', pauseRes?.session?.status === 'live' && pauseRes?.session?.live_substate === 'paused');
 
     const resumeRes = await new Promise((resolve) => state.onMessage({ action: 'live_resume' }, {}, resolve));
-    check('T4: live_resume returns an active session again', resumeRes?.session?.status === 'active');
+    check('T4: live_resume returns an active session again', resumeRes?.session?.status === 'live' && resumeRes?.session?.live_substate === 'active');
 
     const stopRes = await new Promise((resolve) => state.onMessage({ action: 'live_stop' }, {}, resolve));
     check('T4: live_stop returns an ended session', stopRes?.session?.status === 'ended');
@@ -221,8 +221,8 @@ async function main() {
   {
     const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
     state.fetchHandler = (url) => {
-      if (url.includes('/api/live/session/start')) return { ok: true, json: async () => ({ session: { id: 's1', status: 'active' } }) };
-      if (url.includes('/api/live/session/extension-heartbeat')) return { ok: true, json: async () => ({ session: { id: 's1', status: 'active' } }) };
+      if (url.includes('/api/live/session/start')) return { ok: true, json: async () => ({ session: { id: 's1', status: 'starting' } }) };
+      if (url.includes('/api/live/session/extension-heartbeat')) return { ok: true, json: async () => ({ session: { id: 's1', status: 'live', live_substate: 'active' } }) };
       if (url.includes('/api/live/coaching')) return { ok: true, json: async () => ({ prompt: { id: 'e1', type: 'goal_hit', message: 'Nice!', compact_message: 'Nice!', title: 'Nice!', shown_at: new Date().toISOString() } }) };
       if (url.includes('/api/live/session') && !url.includes('start')) return { ok: true, json: async () => ({ session: null }) };
       if (url.includes('/rest/v1/profiles')) return { ok: true, json: async () => [{ plan: 'free' }] };
@@ -322,8 +322,11 @@ async function main() {
     state.fetchHandler = (url) => {
       if (url.includes('/api/live/session') && !url.includes('start') && !url.includes('heartbeat')) {
         return websiteHasStartedASession
-          ? { ok: true, json: async () => ({ session: { id: 'web-started-1', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 12 } }) }
+          ? { ok: true, json: async () => ({ session: { id: 'web-started-1', status: 'starting', started_at: new Date().toISOString(), active_duration_seconds: 0 } }) }
           : { ok: true, json: async () => ({ session: null }) };
+      }
+      if (url.includes('/api/live/session/extension-heartbeat')) {
+        return { ok: true, json: async () => ({ session: { id: 'web-started-1', status: 'live', live_substate: 'active', started_at: new Date().toISOString(), active_duration_seconds: 1 } }) };
       }
       if (url.includes('/api/live/coaching')) return { ok: true, json: async () => ({ prompt: null }) };
       if (url.includes('/rest/v1/profiles')) return { ok: true, json: async () => [{ plan: 'free' }] };
@@ -343,7 +346,7 @@ async function main() {
 
     const afterState = await new Promise((resolve) => state.onMessage({ action: 'live_get_state' }, {}, resolve));
     check('T9: next heartbeat tick discovers the website-started session', afterState.liveSession?.id === 'web-started-1');
-    check('T9: discovered session reflects the real status from the server', afterState.liveSession?.status === 'active');
+    check('T9: discovered session reflects the real status from the server', afterState.liveSession?.status === 'live' && afterState.liveSession?.live_substate === 'active');
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
