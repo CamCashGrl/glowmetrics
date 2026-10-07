@@ -173,8 +173,9 @@ async function main() {
     check('Private earnings', (await text('show-private')) === usd(row.final_private_usd) && usd(row.final_private_usd) === usd(intervals[0].estimated_earnings_usd), await text('show-private'));
     check('Total = public + private', Math.round(Number(row.final_total_usd) * 100) === Math.round(Number(row.final_public_usd) * 100) + Math.round(Number(row.final_private_usd) * 100));
     check('Tip count 3', (await text('show-tips')) === '3', await text('show-tips'));
-    check('Unique tippers 2', (await text('show-unique')) === '2', await text('show-unique'));
-    check('Top tipper BrowserAlice ($8.00)', (await text('show-top')) === 'BrowserAlice ($8.00)', await text('show-top'));
+    // BrowserAlice on Chaturbate and on MyFreeCams are two different fans.
+    check('Unique tippers 3 (no cross-platform merge)', (await text('show-unique')) === '3', await text('show-unique'));
+    check('Top tipper BrowserAlice ($5.00, Chaturbate only)', (await text('show-top')) === 'BrowserAlice ($5.00)', await text('show-top'));
     check('Largest tip $5.00', (await text('show-largest')) === '$5.00', await text('show-largest'));
     check('Duration matches the saved show', (await text('show-duration')) === fmtDuration(row.final_duration_seconds), `${await text('show-duration')} vs ${row.final_duration_seconds}s`);
     check('Private duration matches the saved show', (await text('show-private-time')) === fmtDuration(row.final_private_seconds), `${await text('show-private-time')} vs ${row.final_private_seconds}s`);

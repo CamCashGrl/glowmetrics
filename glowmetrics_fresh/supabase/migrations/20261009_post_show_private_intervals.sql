@@ -390,9 +390,11 @@ BEGIN
     EXTRACT(EPOCH FROM (v_row.ended_at - v_row.started_at))::integer - v_row.total_paused_seconds
   );
 
-  -- Legacy live summary columns (unchanged meaning).
+  -- Fans are keyed by platform + username everywhere below: the same
+  -- username on two platforms is two different fans (never merged).
+  -- Legacy live summary columns.
   SELECT
-    COUNT(*), COUNT(DISTINCT lower(username)),
+    COUNT(*), COUNT(DISTINCT (lower(platform), lower(username))),
     COALESCE(SUM(usd), 0), COALESCE(SUM(tokens), 0),
     COALESCE(MAX(usd), 0), COALESCE(AVG(usd), 0)
     INTO v_tip_count, v_unique_tippers, v_earnings, v_tokens, v_largest_tip, v_avg_tip
@@ -401,7 +403,7 @@ BEGIN
 
   -- Canonical public earnings: tips rows belonging to this session.
   SELECT
-    COUNT(*), COUNT(DISTINCT lower(username)),
+    COUNT(*), COUNT(DISTINCT (lower(platform), lower(username))),
     COALESCE(SUM(usd), 0), COALESCE(SUM(tokens), 0),
     COALESCE(MAX(usd), 0), COALESCE(AVG(usd), 0)
     INTO v_pub_count, v_pub_unique, v_pub_usd, v_pub_tokens, v_pub_largest, v_pub_avg
@@ -412,8 +414,8 @@ BEGIN
     INTO v_top_username, v_top_usd
     FROM public.tips
     WHERE live_session_id = p_session_id
-    GROUP BY lower(username)
-    ORDER BY SUM(usd) DESC, lower(username)
+    GROUP BY lower(platform), lower(username)
+    ORDER BY SUM(usd) DESC, lower(username), lower(platform)
     LIMIT 1;
 
   SELECT COALESCE(jsonb_object_agg(platform, jsonb_build_object('usd', usd, 'tips', n)), '{}'::jsonb)

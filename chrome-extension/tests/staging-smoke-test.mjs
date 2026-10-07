@@ -765,8 +765,9 @@ async function runSmokeTest() {
     const byPf = Object.fromEntries((sum2.platformRevenue || []).map((p) => [p.platform, p]));
     assert(cents(byPf.chaturbate?.usd) === 500 && cents(byPf.bongacams?.usd) === 250 && cents(byPf.myfreecams?.usd) === 300,
       `Platform revenue CB $5.00 / BC $2.50 / MFC $3.00, got ${JSON.stringify(sum2.platformRevenue)}`);
-    assert(sum2.tipCount === 3 && sum2.uniqueTippers === 2, `3 tips, 2 unique tippers (got ${sum2.tipCount}, ${sum2.uniqueTippers})`);
-    assert(sum2.topTipper?.username === 'S2Alice' && cents(sum2.topTipper?.usd) === 800, `Top tipper S2Alice $8.00, got ${JSON.stringify(sum2.topTipper)}`);
+    // S2Alice on Chaturbate and on MyFreeCams are two different fans (platform:username).
+    assert(sum2.tipCount === 3 && sum2.uniqueTippers === 3, `3 tips, 3 unique tippers (got ${sum2.tipCount}, ${sum2.uniqueTippers})`);
+    assert(sum2.topTipper?.username === 'S2Alice' && cents(sum2.topTipper?.usd) === 500, `Top tipper S2Alice $5.00 (Chaturbate only), got ${JSON.stringify(sum2.topTipper)}`);
     assert(cents(sum2.largestTipUsd) === 500, `Largest tip $5.00, got ${sum2.largestTipUsd}`);
     assert(sum2.durationSeconds === s2Row.final_duration_seconds && sum2.privateSeconds === s2Row.final_private_seconds,
       'Duration and private duration match the row');
