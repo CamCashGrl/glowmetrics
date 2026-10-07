@@ -106,7 +106,7 @@ BEGIN
   SELECT id INTO v_session_id
   FROM public.live_sessions
   WHERE user_id = p_user_id
-    AND status IN ('active', 'needs_resolution')
+    AND status IN ('active', 'paused', 'needs_resolution')
     AND (p_queued_ms IS NULL
          OR started_at <= now() - make_interval(secs => p_queued_ms / 1000.0) + interval '30 seconds')
   ORDER BY started_at DESC
