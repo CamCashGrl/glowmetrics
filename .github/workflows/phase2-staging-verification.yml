@@ -1244,7 +1244,7 @@ jobs:
                   "Overlapping sessions → unattributed + ambiguity log",
                   14,
                   passed,
-                  "live_session_id=null, exactly 1 ambiguity log (or ACL blocks read)",
+                  "live_session_id=null, exactly 1 ambiguity log with reason='multiple_session_matches'",
                   s14Result.message
                 );
               } catch (error) {
@@ -1450,9 +1450,23 @@ jobs:
                   }
                 );
 
-                const passed = tipError !== null;
+                // Contract: Must reject with PostgreSQL error code 42501 (permission denied)
+                // and message must indicate the function itself denied execution
+                const hasProperErrorCode = tipError && tipError.code === '42501';
+                const hasProperMessage = tipError && tipError.message &&
+                  tipError.message.includes("permission denied for function persist_extension_tip");
+                const passed = hasProperErrorCode && hasProperMessage;
+
                 s16Result.passed = passed;
-                s16Result.message = tipError ? `Permission denied: ${tipError.message}` : "No error (unexpected)";
+                if (!tipError) {
+                  s16Result.message = "No error returned (expected 42501 permission denied)";
+                } else if (!hasProperErrorCode) {
+                  s16Result.message = `Wrong error code: ${tipError.code} (expected 42501)`;
+                } else if (!hasProperMessage) {
+                  s16Result.message = `Wrong message: "${tipError.message}" (expected to mention function-level denial)`;
+                } else {
+                  s16Result.message = `✓ Properly denied: ${tipError.message}`;
+                }
 
                 printResult(
                   "Direct authenticated execution denied",
