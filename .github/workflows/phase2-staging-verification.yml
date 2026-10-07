@@ -1655,8 +1655,10 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
           LIVE_ENGINE_V2_TEST_BYPASS_USER_IDS: f47ac10b-58cc-4372-a567-0e02b2c3d479
         run: |
+          export LIVE_ENGINE_V2_TEST_BYPASS_USER_IDS=f47ac10b-58cc-4372-a567-0e02b2c3d479
           npm run dev > /tmp/camcash-next.log 2>&1 &
           echo $! > /tmp/camcash-next.pid
+          sleep 2
 
       - name: Wait for API
         run: |
