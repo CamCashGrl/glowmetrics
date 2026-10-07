@@ -75,7 +75,8 @@ describe('session history', () => {
   test('filters by type and platform', () => {
     expect(filterSessionHistory(history, { type: 'live' }).map((e) => e.type)).toEqual(['live'])
     expect(filterSessionHistory(history, { platform: 'myfreecams' }).map((e) => e.type)).toEqual(['live'])
-    expect(filterSessionHistory(history, { platform: 'bongacams' }).map((e) => e.type)).toEqual(['live', 'private', 'imported'])
+    expect(filterSessionHistory(history, { platform: 'bongacams' }).map((e) => e.type)).toEqual(['live', 'private'])
+    expect(filterSessionHistory(history, { platform: 'bongacams', includeShort: true }).map((e) => e.type)).toEqual(['live', 'private', 'imported'])
     expect(filterSessionHistory(history, { type: 'free_chat', platform: 'bongacams' })).toEqual([])
   })
 })
@@ -234,5 +235,27 @@ describe('freshest performance helpers', () => {
     ]
     expect(N.typicalSameWeekdayByNow({ tips, tz: 'UTC', now })).toEqual({ weekday: 'Wed', todayUSD: 12, typicalUSD: 10, days: 3, deltaPct: 20 })
     expect(N.typicalSameWeekdayByNow({ tips: tips.slice(0, 3), tz: 'UTC', now })).toBeNull()
+  })
+})
+
+describe('short tip groups are not sessions', () => {
+  const N = require('../normalize')
+  const lone = [{ id: 1, date_time: '2026-10-07T10:00:00Z', platform: 'chaturbate', username: 'X', usd: 0.5, tokens: 10, source: 'extension', live_session_id: null }]
+  const h = N.buildSessionHistory({ tips: lone })
+
+  test('a single $0.50 tip is hidden from history by default, shown on request', () => {
+    expect(h).toHaveLength(1)
+    expect(h[0]).toMatchObject({ isValid: false, durationUnknown: true, totalUSD: 0.5 })
+    expect(N.filterSessionHistory(h)).toEqual([])
+    expect(N.filterSessionHistory(h, { includeShort: true })).toHaveLength(1)
+  })
+
+  test('its money still counts in today totals', () => {
+    const d = N.dailySessionStats({ tips: lone, history: h, tz: 'UTC', now: new Date('2026-10-07T20:00:00Z') })
+    expect(d).toMatchObject({ publicUSD: 0.5, tipCount: 1, completedSessions: 0 })
+  })
+
+  test('latest performance never picks a short tip group', () => {
+    expect(N.latestPerformance(h)).toBeNull()
   })
 })

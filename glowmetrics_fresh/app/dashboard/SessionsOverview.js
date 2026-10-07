@@ -14,7 +14,7 @@
 import React, { useMemo, useState } from "react"
 import { platformDisplayName } from "../../lib/constants"
 import {
-  SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, dailySessionStats,
+  SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, isShortTipSession, dailySessionStats,
   liveSessionSnapshot, latestPerformance, withTodayDerived, todaySignal, typicalSameWeekdayByNow,
 } from "../../lib/sessions/normalize"
 import { ShowCard, fmtUsd, fmtDuration } from "./LatestShows"
@@ -157,7 +157,7 @@ function HistoryRow({ entry, tz }) {
       ]
     : [
         { label: "Earned", value: fmtUsd(entry.totalUSD), color: C.white },
-        { label: "Length", value: entry.durationUnknown ? "Unknown" : fmtMinutes(entry.durationMinutes, true), sub: "estimated" },
+        { label: "Length", value: entry.durationUnknown ? "Single tip" : fmtMinutes(entry.durationMinutes, true), sub: entry.durationUnknown ? "no length to measure" : "estimated" },
         { label: "Tips", value: entry.tipCount },
         { label: "Tippers", value: entry.uniqueTippers },
         { label: "Top tipper", value: entry.topTipper ? `${entry.topTipper.username}` : "—", sub: entry.topTipper ? fmtUsd(entry.topTipper.usd) : null },
@@ -170,7 +170,7 @@ function HistoryRow({ entry, tz }) {
         </span>
         {entry.platforms.map((p, i) => <span key={p} data-testid={`platform-badge-${p}`}><PlatChip name={pName(p)} i={i} /></span>)}
         <span style={{ fontSize: 12, color: C.text }}>{when}</span>
-        {entry.type !== "private" && !entry.isValid && <span style={{ fontSize: 11, color: C.muted }}>· short session</span>}
+        {entry.type !== "private" && !entry.isValid && <span style={{ fontSize: 11, color: C.muted }}>· short tip group (not a full session)</span>}
       </div>
       <MetricStrip items={items} />
     </div>
@@ -181,6 +181,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   const [typeFilter, setTypeFilter] = useState("all")
   const [platformFilter, setPlatformFilter] = useState("all")
   const [limit, setLimit] = useState(PAGE_SIZE)
+  const [includeShort, setIncludeShort] = useState(false)
   const at = now || new Date()
 
   const history = useMemo(
@@ -204,9 +205,10 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   )
   const latest = useMemo(() => latestPerformance(history), [history])
   const visible = useMemo(
-    () => filterSessionHistory(history, { type: typeFilter, platform: platformFilter }),
-    [history, typeFilter, platformFilter]
+    () => filterSessionHistory(history, { type: typeFilter, platform: platformFilter, includeShort }),
+    [history, typeFilter, platformFilter, includeShort]
   )
+  const shortCount = useMemo(() => history.filter(isShortTipSession).length, [history])
   const signal = todaySignal(today, pName)
   const hasToday = today.totalUSD > 0 || today.tipCount > 0
   const updated = fmtTime(at.toISOString(), tz)
@@ -293,6 +295,11 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
           ))}
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {shortCount > 0 && (
+            <span data-testid="filter-short"><Pill active={includeShort} onClick={() => pick(setIncludeShort, !includeShort)}>
+              {includeShort ? "Hide" : "Show"} short tip groups ({shortCount})
+            </Pill></span>
+          )}
           <span data-testid="filter-platform-all"><Pill active={platformFilter === "all"} onClick={() => pick(setPlatformFilter, "all")}>All platforms</Pill></span>
           {SUPPORTED_PLATFORMS.map((p) => (
             <span key={p} data-testid={`filter-platform-${p}`}><Pill active={platformFilter === p} onClick={() => pick(setPlatformFilter, p)}>{pName(p)}</Pill></span>
@@ -304,7 +311,9 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
           <div data-testid="history-empty" style={{ color: C.text, fontSize: 13 }}>No sessions yet. Start a Live Mode show or import your tip history.</div>
         )}
         {history.length > 0 && !visible.length && (
-          <div data-testid="history-filter-empty" style={{ color: C.text, fontSize: 13 }}>No sessions match these filters.</div>
+          <div data-testid="history-filter-empty" style={{ color: C.text, fontSize: 13 }}>
+            No sessions match these filters.{!includeShort && shortCount > 0 ? " Short tip groups (under 30 min or a single tip) are hidden." : ""}
+          </div>
         )}
         {visible.slice(0, limit).map((e) => <HistoryRow key={e.id} entry={e} tz={tz} />)}
         {visible.length > limit && (

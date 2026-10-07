@@ -144,9 +144,16 @@ export function buildSessionHistory({ tips = [], shows = [], paidSessions = [] }
   return entries.sort((a, b) => new Date(b.startTime) - new Date(a.startTime) || (a.id < b.id ? 1 : -1))
 }
 
-export function filterSessionHistory(history, { type = 'all', platform = 'all' } = {}) {
+// Tip groupings that fail the valid-session rule (< 30 min or < 2 tips, e.g.
+// a lone $0.50 tip with no measurable length) are not sessions; they are
+// hidden unless includeShort. Live shows and private imports always show.
+// Their money is still in every daily/platform total.
+export const isShortTipSession = (e) => (e.type === 'free_chat' || e.type === 'imported') && !e.isValid
+
+export function filterSessionHistory(history, { type = 'all', platform = 'all', includeShort = false } = {}) {
   return (history || []).filter((e) =>
-    (type === 'all' || e.type === type)
+    (includeShort || !isShortTipSession(e))
+    && (type === 'all' || e.type === type)
     && (platform === 'all' || e.platforms.includes(platform)))
 }
 
@@ -348,7 +355,7 @@ export function liveSessionSnapshot({ session, tips = [], privateInterval = null
 // Most recently finished performance: the newest finalized Live show, else
 // the newest inferred tip session. Private imports are not "performances".
 export function latestPerformance(history = []) {
-  const candidates = history.filter((e) => e.type !== 'private' && e.endTime)
+  const candidates = history.filter((e) => e.type !== 'private' && e.endTime && !isShortTipSession(e))
   if (!candidates.length) return null
   return [...candidates].sort((a, b) => new Date(b.endTime) - new Date(a.endTime))[0]
 }
