@@ -89,29 +89,7 @@ async function main() {
     if (extErr) throw new Error(`extension sign-in: ${extErr.message}`);
     const extToken = extAuth.session.access_token;
 
-    // ── earlier today, before the show: a free-chat session (extension tips,
-    // no Live show running) and one imported private session ────────────────
-    console.log('\nStep 0: Free chat + imported private earlier today');
     const startMs = Date.now();
-    const freeChat = [
-      { username: 'FreeCara', amount: 200, platform: 'bongacams', detectedAt: new Date(startMs - 50 * 60000).toISOString() }, // $5.00
-      { username: 'FreeDan', amount: 100, platform: 'bongacams', detectedAt: new Date(startMs - 10 * 60000).toISOString() },  // $2.50
-    ];
-    const fcRes = [];
-    for (const t of freeChat) {
-      fcRes.push(await fetch(`${APP}/api/live/tips`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${extToken}` },
-        body: JSON.stringify({ ...t, clientEventId: crypto.randomUUID() }),
-      }).then((r) => r.json()));
-    }
-    check('Free-chat tips accepted with no show running', fcRes.every((r) => r.success === true && !r.live_session_id), JSON.stringify(fcRes));
-    const { error: paidErr } = await ext.from('paid_sessions').insert({
-      user_id: userId, date_time: new Date(startMs - 30 * 60000).toISOString(), platform: 'bongacams',
-      username: 'PrivFay', username_lower: 'privfay', session_type: 'private', tokens: 400, usd: 10, usd_rounded: 10,
-    });
-    check('Imported private session seeded (own-row RLS)', !paidErr, paidErr?.message);
-    const FREE_CHAT_USD = 7.5, PAID_USD = 10;
 
     const launch = { headless: true, args: ['--no-sandbox'] };
     if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
@@ -185,6 +163,32 @@ async function main() {
     await shot(page, '03-live-show-stopped');
     const { data: row } = await admin.from('live_sessions').select('*').eq('id', sessionId).single();
     check('Show finalized', row?.status === 'ended' && !!row?.finalized_at, JSON.stringify({ status: row?.status, finalized_at: row?.finalized_at }));
+
+    // ── earlier today, before the show: a free-chat session (extension tips,
+    // no Live show running) and one imported private session. Sent after Stop
+    // with their earlier detection times, so the Live page's go-live flow is
+    // untouched and no tip falls inside the show's window. ─────────────────
+    console.log('\nStep 5b: Free chat + imported private earlier today');
+    const freeChat = [
+      { username: 'FreeCara', amount: 200, platform: 'bongacams', detectedAt: new Date(startMs - 50 * 60000).toISOString() }, // $5.00
+      { username: 'FreeDan', amount: 100, platform: 'bongacams', detectedAt: new Date(startMs - 10 * 60000).toISOString() },  // $2.50
+    ];
+    const fcRes = [];
+    for (const t of freeChat) {
+      fcRes.push(await fetch(`${APP}/api/live/tips`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${extToken}` },
+        body: JSON.stringify({ ...t, clientEventId: crypto.randomUUID() }),
+      }).then((r) => r.json()));
+    }
+    check('Free-chat tips accepted with no show running', fcRes.every((r) => r.success === true && !r.live_session_id), JSON.stringify(fcRes));
+    const { error: paidErr } = await ext.from('paid_sessions').insert({
+      user_id: userId, date_time: new Date(startMs - 30 * 60000).toISOString(), platform: 'bongacams',
+      username: 'PrivFay', username_lower: 'privfay', session_type: 'private', tokens: 400, usd: 10, usd_rounded: 10,
+    });
+    check('Imported private session seeded (own-row RLS)', !paidErr, paidErr?.message);
+    const FREE_CHAT_USD = 7.5, PAID_USD = 10;
+
 
     // ── dashboard overview: KPI delta ───────────────────────────────────────
     console.log('\nStep 6: Dashboard overview');
