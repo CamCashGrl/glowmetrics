@@ -7,7 +7,7 @@
 import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
-import { detectSessions, SESSION_GAP_MS } from './analytics/sessions'
+import { detectSessions, SESSION_GAP_MS, isValidSession } from './analytics/sessions'
 
 // ===============================
 // TIMEZONE HELPERS
@@ -1312,8 +1312,8 @@ export function aggregateRows(tips, tz = null) {
     const mins = s.durationMinutes || 0
     const usd  = s.totalUSD || 0
     if (mins < 2 && usd === 0) return 'invalid'
-    if (mins < 15 && usd < 10) return 'low_signal'
-    return 'meaningful'
+    // Canonical rule: meaningful = duration >= 30 min AND tips >= 2.
+    return isValidSession(s) ? 'meaningful' : 'low_signal'
   }
   const scoreSession = (s) => {
     const mins = s.durationMinutes || 0

@@ -133,11 +133,11 @@ describe('Phase 1 Correct Architecture', () => {
   describe('Session Analytics: Meaningful Sessions Only', () => {
     test('sessions array should only include meaningful sessions', () => {
       const tips = [
-        // Meaningful session 1: 20 min, $100
+        // Meaningful session 1: 36 min, 10 tips, $100 (>= 30 min AND >= 2 tips)
         ...Array(10).fill(null).map((_, i) => ({
           platform: 'Chaturbate',
           username: 'u1',
-          date_time: new Date(new Date('2026-09-01T10:00:00Z').getTime() + i * 120000).toISOString(),
+          date_time: new Date(new Date('2026-09-01T10:00:00Z').getTime() + i * 240000).toISOString(),
           usd: 10,
           tokens: 200
         })),

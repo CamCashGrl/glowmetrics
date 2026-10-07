@@ -25,6 +25,7 @@ import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
+import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
@@ -2773,12 +2774,11 @@ const stopImportMessageRotation = () => {
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
-    const SESSION_GAP_MS = 3 * 60 * 60 * 1000
     const reengageFans = (whales || [])
       .filter(w => {
         if (!w.tips || w.tips.length < 2) return false
 
-        // Group this fan's tips into sessions (3hr gap = new session)
+        // Group this fan's tips into sessions (shared SESSION_GAP_MS = new session)
         const sorted = [...w.tips].sort((a, b) =>
           new Date(a.date_time || a.dateRaw) - new Date(b.date_time || b.dateRaw)
         )

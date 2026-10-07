@@ -16,24 +16,17 @@
 // live_tips (the Live Mode UI stream) is never read here, so it can never be
 // added to tips.
 
-import { detectSessions } from '../analytics/sessions'
+import { detectSessions, isValidSession } from '../analytics/sessions'
+
+export { isValidSession }
 
 export const SUPPORTED_PLATFORMS = ['chaturbate', 'bongacams', 'myfreecams']
-
-const MIN_VALID_SESSION_MINUTES = 30
-const MIN_VALID_SESSION_TIPS = 2
 
 const money = (v) => Math.round((Number(v) || 0) * 100) / 100
 const norm = (s) => String(s || '').trim().toLowerCase()
 
 // Fans are never merged across platforms by username alone.
 export const fanKey = (platform, username) => `${norm(platform)}:${norm(username)}`
-
-// Valid session rule: duration >= 30 min AND tips >= 2.
-export function isValidSession(s) {
-  return (Number(s?.durationMinutes) || 0) >= MIN_VALID_SESSION_MINUTES
-    && (Number(s?.tipCount) || 0) >= MIN_VALID_SESSION_TIPS
-}
 
 // YYYY-MM-DD of an instant in the creator's timezone.
 export function localDayKey(at, tz) {
