@@ -440,6 +440,7 @@ async function runSmokeTest() {
       final_largest_tip_usd: finalMetrics.final_largest_tip_usd,
       final_avg_tip_usd: finalMetrics.final_avg_tip_usd,
       final_usd_per_hour: finalMetrics.final_usd_per_hour,
+      final_duration_seconds: finalMetrics.final_duration_seconds,
       finalized_at: finalMetrics.finalized_at,
     };
 
@@ -495,6 +496,11 @@ async function runSmokeTest() {
       stoppedSessionAgain.final_usd_per_hour,
       firstMetrics.final_usd_per_hour,
       'final_usd_per_hour unchanged'
+    );
+    deepEqual(
+      stoppedSessionAgain.final_duration_seconds,
+      firstMetrics.final_duration_seconds,
+      'final_duration_seconds unchanged'
     );
     assert(
       stoppedSessionAgain.finalized_at === firstMetrics.finalized_at,
