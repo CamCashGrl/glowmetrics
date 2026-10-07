@@ -56,6 +56,10 @@ async function restore() {
   if (data.session && data.user) {
     const token = typeof data.session === 'string' ? data.session : data.session?.access_token;
     if (token) session = { access_token: token, user: data.user };
+  } else {
+    // FIX R1/R1b: Sign-out clears storage but wasn't clearing in-memory session.
+    // Tips after sign-out would be credited to the old account if restored later.
+    session = null;
   }
 }
 
@@ -258,11 +262,300 @@ async function sendExtensionHeartbeat() {
   liveSession = data?.session || null;
 }
 
-// ─── Tip sync ──────────────────────────────────────────────────────────────────
-// Always saved to the live feed (free, on every supported platform). Permanent
-// history — the data behind the dashboard's historical analytics — is a Pro
-// feature, so the plan check happens server-side in this route rather than
-// here; the extension can't be trusted to gate its own writes.
+// ─── Persistent tip queue ─────────────────────────────────────────────────────
+// Every real tip is written to chrome.storage.local BEFORE any network send
+// and only removed once the server confirms it, so tips survive network
+// outages, server errors, and the service worker being stopped/restarted.
+// Each item keeps the clientEventId and detectedAt assigned when content.js
+// saw the tip; every retry resends those exact values and the server's
+// idempotency check (persist_extension_tip) guarantees one row per event.
+const TIP_QUEUE_KEY = '_tip_queue_v1';
+const TIP_QUEUE_ALARM = 'tip_queue_flush';
+const TIP_RETRY_DELAYS_MS = [1000, 2000, 5000, 15000, 30000, 60000, 120000, 300000];
+const MAX_FAILED_TIPS_KEPT = 200;
+const RECENT_EVENT_IDS_MAX = 1000;
+
+let tipQueueChain = Promise.resolve();
+let flushInProgress = false;
+let flushAgain = false;
+let flushTimer = null;
+let flushPausedUntil = 0;
+// Event ids already applied to the local popup/overlay stats, so a tip that
+// content.js re-delivers (no ack the first time) isn't counted twice locally.
+const recentEventIds = new Set();
+
+function retryDelayMs(attempts) {
+  return TIP_RETRY_DELAYS_MS[Math.min(attempts, TIP_RETRY_DELAYS_MS.length) - 1];
+}
+
+// Serializes every read-modify-write of the queue so an enqueue that lands
+// mid-flush is never overwritten by a stale copy. Never await network inside.
+function withTipQueue(mutate) {
+  const run = tipQueueChain.then(async () => {
+    const data = await chrome.storage.local.get([TIP_QUEUE_KEY]);
+    const queue = Array.isArray(data[TIP_QUEUE_KEY]) ? data[TIP_QUEUE_KEY] : [];
+    const result = await mutate(queue);
+    await chrome.storage.local.set({ [TIP_QUEUE_KEY]: queue });
+    return result;
+  });
+  // FIX R5: Don't silently ignore storage errors with empty catch.
+  // Log them and re-throw so the caller can handle (retry with backoff, etc).
+  tipQueueChain = run.catch((e) => {
+    console.error('[CamCash] tip queue storage error:', e.message);
+    throw e;
+  });
+  return run;
+}
+
+function rememberEventId(id) {
+  recentEventIds.add(id);
+  if (recentEventIds.size > RECENT_EVENT_IDS_MAX) {
+    recentEventIds.delete(recentEventIds.values().next().value);
+  }
+}
+
+function enqueueTip(payload, userId, displayKey) {
+  return withTipQueue((queue) => {
+    if (queue.some((i) => i.id === payload.clientEventId)) return false;
+    const now = Date.now();
+    queue.push({
+      id: payload.clientEventId,
+      // clientEventId + detectedAt (original timestamp) are immutable idempotency keys.
+      // Queued tips are NOT locked to the CamCash account that queued them.
+      // If the user switches accounts, the queue flushes with the new account's token.
+      payload,
+      displayKey,
+      status: 'pending',
+      attempts: 0,
+      nextAttemptAt: now,
+      createdAt: now,
+      lastAttemptAt: null,
+      lastError: null,
+    });
+    return true;
+  });
+}
+
+// One send attempt. 401 gets one token refresh + immediate resend; after
+// that it stays retryable (the user may sign in again). 408/425/429/5xx and
+// network errors are retryable; any other 4xx is a permanent rejection.
+async function postQueuedTip(payload) {
+  // queuedMs is measured on this browser's clock alone (detection -> now),
+  // so the server can place a delayed tip in time without trusting our clock.
+  const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      ...payload,
+      queuedMs: Math.max(0, Date.now() - (Date.parse(payload.detectedAt) || Date.now())),
+    }),
+  });
+
+  let res;
+  try {
+    res = await doPost();
+    if (res.status === 401) {
+      const refreshed = await refreshSession();
+      // Queued tips can flush under any authenticated account.
+      // clientEventId + detectedAt provide idempotency on the backend.
+      if (refreshed) res = await doPost();
+      else return { outcome: 'retry', reason: 'token refresh failed' };
+    }
+  } catch (e) {
+    return { outcome: 'retry', offline: true, reason: `network: ${e.message}` };
+  }
+
+  if (res.ok) {
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    if (data?.success) return { outcome: 'synced', data };
+    return { outcome: 'retry', reason: 'unexpected response body' };
+  }
+
+  const status = res.status;
+  let detail = '';
+  try { detail = (await res.text()).slice(0, 200); } catch (_) {}
+  if (status === 401 || status === 408 || status === 425 || status === 429 || status >= 500) {
+    return { outcome: 'retry', rateLimited: status === 429, reason: `HTTP ${status}` };
+  }
+  return { outcome: 'failed', reason: `HTTP ${status}: ${detail}` };
+}
+
+async function markDisplayRecordSynced(displayKey, data) {
+  if (!displayKey) return;
+  const stored = await chrome.storage.local.get([displayKey]);
+  if (!stored[displayKey]) return;
+  await chrome.storage.local.set({
+    [displayKey]: { ...stored[displayKey], synced: true, savedToHistory: !!data?.savedToHistory },
+  });
+}
+
+function pruneFailedTips(queue) {
+  const failed = queue.filter((i) => i.status === 'failed');
+  if (failed.length <= MAX_FAILED_TIPS_KEPT) return;
+  const drop = new Set(failed.sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, failed.length - MAX_FAILED_TIPS_KEPT).map((i) => i.id));
+  for (let i = queue.length - 1; i >= 0; i--) if (drop.has(queue[i].id)) queue.splice(i, 1);
+}
+
+async function flushTipQueue() {
+  if (flushInProgress) { flushAgain = true; return; }
+  flushInProgress = true;
+  try {
+    do {
+      flushAgain = false;
+      await restorePromise;
+      const userId = session?.user?.id;
+      if (!userId || Date.now() < flushPausedUntil) break;
+
+      let due = [];
+      try {
+        due = await withTipQueue((queue) => {
+          const now = Date.now();
+          // FIX R3: Backward clock step could stall the queue forever.
+          // If nextAttemptAt is in the future by > 1 hour, reset it (likely a clock issue).
+          for (const item of queue) {
+            if (item.status === 'pending' && item.nextAttemptAt > now + 3600000) {
+              item.nextAttemptAt = now;
+            }
+          }
+          return queue
+            .filter((i) => i.status === 'pending' && i.nextAttemptAt <= now)
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey }));
+        });
+      } catch (e) {
+        // FIX R5: Storage error — don't loop immediately. Pause for 5s backoff.
+        console.error('[CamCash] flush paused due to storage error:', e.message);
+        flushPausedUntil = Date.now() + 5000;
+        break;
+      }
+
+      for (const item of due) {
+        // Queued tips are not locked to the original CamCash account.
+        // Idempotency is guaranteed by clientEventId + detectedAt in persist_extension_tip.
+        const result = await postQueuedTip(item.payload);
+        let nextAttemptAt = 0;
+        try {
+          await withTipQueue((queue) => {
+            const idx = queue.findIndex((i) => i.id === item.id);
+            if (idx === -1) return;
+            const cur = queue[idx];
+            cur.attempts += 1;
+            cur.lastAttemptAt = Date.now();
+            if (result.outcome === 'synced') { queue.splice(idx, 1); return; }
+            cur.lastError = result.reason;
+            if (result.outcome === 'failed') {
+              cur.status = 'failed';
+              console.error('[CamCash] tip permanently rejected:', item.id, result.reason);
+              pruneFailedTips(queue);
+              return;
+            }
+            cur.nextAttemptAt = Date.now() + retryDelayMs(cur.attempts);
+            nextAttemptAt = cur.nextAttemptAt;
+          });
+        } catch (e) {
+          // FIX R5: Storage error mid-flush — pause and retry this tip later.
+          console.error('[CamCash] storage error updating queue:', e.message);
+          flushPausedUntil = Date.now() + 5000;
+          break;
+        }
+        if (result.outcome === 'synced') await markDisplayRecordSynced(item.displayKey, result.data);
+        // Offline or rate-limited: everything else would fail the same way,
+        // so hold the whole queue until this item's retry time.
+        if (result.offline || result.rateLimited) { flushPausedUntil = nextAttemptAt; break; }
+      }
+    } while (flushAgain);
+  } finally {
+    flushInProgress = false;
+    await scheduleTipQueueFlush();
+  }
+}
+
+// setTimeout handles near-term retries while the worker is alive; the
+// alarm is the backstop that wakes a stopped worker to keep retrying.
+async function scheduleTipQueueFlush() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  const userId = session?.user?.id;
+  const stored = await chrome.storage.local.get([TIP_QUEUE_KEY]);
+  // Queue flushes whenever ANY user is logged in, not just the user who queued the tips.
+  // Idempotency on backend ensures no duplicates across account switches.
+  const pending = (stored[TIP_QUEUE_KEY] || []).filter((i) => i.status === 'pending');
+  if (!userId || pending.length === 0) {
+    chrome.alarms.clear(TIP_QUEUE_ALARM);
+    return;
+  }
+  const nextAt = Math.max(Math.min(...pending.map((i) => i.nextAttemptAt)), flushPausedUntil);
+  flushTimer = setTimeout(() => { flushTipQueue(); }, Math.max(0, nextAt - Date.now()));
+  chrome.alarms.create(TIP_QUEUE_ALARM, { periodInMinutes: 0.5 });
+}
+
+async function handleTipMessage(msg) {
+  const { username, tokens, platform, isTest, broadcaster_username } = msg;
+  const clientEventId = msg.clientEventId || crypto.randomUUID();
+  const detectedAt = msg.detectedAt || new Date().toISOString();
+  const detectedMs = Date.parse(detectedAt) || Date.now();
+  const displayKey = `tip_${detectedMs}_${clientEventId.slice(0, 8)}`;
+  const tipRecord  = { username, amount: tokens, platform, timestamp: detectedAt, synced: false, savedToHistory: false };
+
+  // A re-delivery of an event already shown locally skips the local stats
+  // but still goes through enqueue below (the queue itself dedups by id).
+  if (!recentEventIds.has(clientEventId)) {
+    rememberEventId(clientEventId);
+    lastTipTs = detectedMs;
+    const usd = parseFloat((tokens * (TOKEN_RATES[platform] || 0.05)).toFixed(2));
+    const tip = { username, tokens, usd, platform, ts: lastTipTs };
+
+    sessionTips.unshift(tip);
+    if (sessionTips.length > 100) sessionTips.length = 100;
+    sessionTokens += tokens;
+    sessionUsd    += usd;
+    // Tokens are worth different amounts per platform; rank by USD.
+    if (!topTipper || usd > topTipper.usd) topTipper = tip;
+
+    chrome.storage.local.set({ [displayKey]: tipRecord });
+    chrome.storage.local.get(null, (items) => {
+      const keys = Object.keys(items).filter(k => k.startsWith('tip_')).sort().reverse();
+      if (keys.length > 100) chrome.storage.local.remove(keys.slice(100));
+    });
+
+    broadcast({ action: 'state', state: getState() });
+    broadcastOverlay();
+  }
+
+  // The popup's Test Tip: the server acknowledges it without saving
+  // anything, so it is sent once and never queued.
+  if (isTest) {
+    syncTip({ username, tokens, platform, timestamp: detectedAt, isTest, broadcaster_username }).then((result) => {
+      chrome.storage.local.set({ [displayKey]: { ...tipRecord, synced: true, savedToHistory: !!result?.savedToHistory } });
+    });
+    return { queued: false, test: true };
+  }
+
+  await restorePromise;
+  if (!session?.user?.id) return { queued: false, reason: 'signed_out' };
+
+  const payload = {
+    username,
+    amount: parseInt(tokens, 10),
+    platform: platform ? platform.toLowerCase() : 'extension',
+    clientEventId,
+    detectedAt,
+    // Legacy field name the server also accepts; same detection time.
+    timestamp: detectedAt,
+    broadcaster_username,
+  };
+  const added = await enqueueTip(payload, session.user.id, displayKey);
+  flushTipQueue();
+  return { queued: true, duplicate: !added };
+}
+
+// ─── Tip sync (Test Tip only) ─────────────────────────────────────────────────
+// Real tips go through the persistent queue above. This single-attempt path
+// is only used for the popup's Test Tip, which the server never saves.
 async function syncTip({ username, tokens, platform, timestamp, isTest, broadcaster_username }) {
   await restorePromise;
   if (!session) return;
@@ -369,7 +662,9 @@ async function logout() {
   liveSession = null;
   broadcasterPageActive = false;
   broadcasterTabId = null;
-  await chrome.storage.local.clear();
+  // Unsent tips survive sign-out (each stays tagged to its own account and
+  // is only sent again once that same account signs back in).
+  await withTipQueue(() => chrome.storage.local.clear());
   chrome.alarms.clearAll();
 }
 
@@ -429,17 +724,23 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === TIP_QUEUE_ALARM) { await flushTipQueue(); return; }
   if (alarm.name === 'whale_refresh') { await loadWhales(); await loadPlan(); }
-  if (alarm.name === 'live_heartbeat' && session) {
-    if (liveSession) {
-      await sendExtensionHeartbeat();
-      await fetchCoachingPrompt();
-    } else {
-      // No session currently tracked here — check whether a fresh,
-      // explicit Start Stream just happened on another surface (the
-      // website). Bounded to PENDING_START_FRESHNESS_MS so this never
-      // silently adopts an old/stale session (see checkForPendingStart).
-      await checkForPendingStart();
+  if (alarm.name === 'live_heartbeat') {
+    // FIX R4: Await restorePromise so on cold start we have current session state,
+    // not stale. Otherwise heartbeat on restart reads old session or null.
+    await restorePromise;
+    if (session) {
+      if (liveSession) {
+        await sendExtensionHeartbeat();
+        await fetchCoachingPrompt();
+      } else {
+        // No session currently tracked here — check whether a fresh,
+        // explicit Start Stream just happened on another surface (the
+        // website). Bounded to PENDING_START_FRESHNESS_MS so this never
+        // silently adopts an old/stale session (see checkForPendingStart).
+        await checkForPendingStart();
+      }
     }
   }
 });
@@ -570,34 +871,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   }
 
   if (msg.action === 'tip') {
-    const { username, tokens, platform, isTest, broadcaster_username } = msg;
-    lastTipTs = Date.now();
-    const usd = parseFloat((tokens * (TOKEN_RATES[platform] || 0.05)).toFixed(2));
-    const tip = { username, tokens, usd, platform, ts: lastTipTs };
-
-    sessionTips.unshift(tip);
-    if (sessionTips.length > 100) sessionTips.length = 100;
-    sessionTokens += tokens;
-    sessionUsd    += usd;
-    if (!topTipper || tokens > topTipper.tokens) topTipper = tip;
-
-    const storageKey = `tip_${lastTipTs}`;
-    const tipRecord  = { username, amount: tokens, platform, timestamp: new Date(lastTipTs).toISOString(), synced: false, savedToHistory: false };
-    chrome.storage.local.set({ [storageKey]: tipRecord });
-
-    chrome.storage.local.get(null, (items) => {
-      const keys = Object.keys(items).filter(k => k.startsWith('tip_')).sort().reverse();
-      if (keys.length > 100) chrome.storage.local.remove(keys.slice(100));
+    // Replies only after the tip is persisted to the queue — content.js
+    // resends the same event until it gets this reply.
+    handleTipMessage(msg).then(reply, (e) => {
+      // Not persisted: reply with nothing so content.js resends this event.
+      console.error('[CamCash] could not queue tip:', e.message);
+      reply();
     });
-
-    // SECURITY FIX #285: Pass broadcaster_username to syncTip for room verification
-    syncTip({ username, tokens, platform, timestamp: new Date(lastTipTs).toISOString(), isTest, broadcaster_username }).then((result) => {
-      chrome.storage.local.set({ [storageKey]: { ...tipRecord, synced: true, savedToHistory: !!result?.savedToHistory } });
-    });
-
-    broadcast({ action: 'state', state: getState() });
-    broadcastOverlay();
-    return false;
+    return true;
   }
 
   if (msg.action === 'entered') {
@@ -659,7 +940,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.type === 'AUTH_CHANGED') {
     restorePromise = restore().then(() => {
-      if (session) { loadWhales(); loadPlan(); checkForPendingStart(); scheduleAlarms(); pingExtensionActive(); }
+      if (session) { loadWhales(); loadPlan(); checkForPendingStart(); scheduleAlarms(); pingExtensionActive(); flushTipQueue(); }
       else { plan = 'free'; liveSession = null; chrome.alarms.clearAll(); }
     });
     return false;
@@ -671,7 +952,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 // checkForPendingStart(). A genuine browser/extension restart mid-session
 // intentionally does not silently continue tracking; the backend sweep
 // (10 min -> inactive_warning, 20 min -> auto-ended) is what protects a
-// session that's now unreachable from every surface.
+// session that's now unreachable from every surface. Any tips still in the
+// persistent queue are resent from here.
 restorePromise = restore().then(() => {
-  if (session) { loadWhales(); loadPlan(); checkForPendingStart(); scheduleAlarms(); pingExtensionActive(); }
+  if (session) { loadWhales(); loadPlan(); checkForPendingStart(); scheduleAlarms(); pingExtensionActive(); flushTipQueue(); }
 });

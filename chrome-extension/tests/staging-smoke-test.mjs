@@ -665,6 +665,30 @@ async function runSmokeTest() {
       deepEqual(afterOwn[key], before[key], `${key} unchanged after owner re-finalization`);
     }
 
+    // Step 17: simultaneous tips from three platforms, two of them identical
+    // in username/amount/timestamp. Each keeps its own platform end to end.
+    console.log('\nStep 17: Simultaneous multi-platform tips keep their platform in API and DB');
+    const mpAt = new Date().toISOString();
+    const mpTips = [
+      { platform: 'chaturbate', username: 'MultiFan', tokens: 200, id: generateUUID() },
+      { platform: 'myfreecams', username: 'MultiFan', tokens: 200, id: generateUUID() },
+      { platform: 'bongacams', username: 'MultiFan', tokens: 200, id: generateUUID() },
+    ];
+    const mpResponses = await Promise.all(mpTips.map((t) => postTip(accessToken, t.username, t.tokens, t.platform, t.id, mpAt)));
+    assert(mpResponses.every((r) => r && r.success === true && r.duplicate === false), 'All three simultaneous tips accepted as new events');
+    for (const t of mpTips) {
+      const rows = await readLiveTip(tempUser.userId, t.id);
+      const { data: lt } = await adminClient.from('live_tips').select('platform').eq('client_event_id', t.id);
+      assert(rows.length === 1 && lt?.[0]?.platform === t.platform, `live_tips row for ${t.platform} keeps platform ${t.platform}, got ${lt?.[0]?.platform}`);
+    }
+    const canonical = await queryTips(tempUser.userId);
+    for (const t of mpTips) {
+      const c = canonical.filter((r) => r.client_event_id === t.id);
+      assert(c.length === 1 && c[0].platform === t.platform, `canonical tips row for ${t.platform} keeps platform ${t.platform}, got ${c[0]?.platform}`);
+    }
+    const sameKey = canonical.filter((r) => r.username === 'MultiFan' && r.tokens === 200 && ['chaturbate', 'myfreecams'].includes(r.platform));
+    assert(sameKey.length === 2, `Same fan/amount/time on Chaturbate and MyFreeCams both stored (${sameKey.length} rows)`);
+
   } catch (e) {
     fail(`Unhandled error: ${e.message}`);
     console.error(e);
