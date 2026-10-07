@@ -1205,37 +1205,39 @@ jobs:
                 if (tipData.live_session_id !== null) failures.push(`live_session_id=${tipData.live_session_id} (expected null)`);
                 if (!tipData.success) failures.push(`success=${tipData.success} (expected true)`);
 
-                // Contract: live_session_id=null (core), ambiguity log verification best-effort
-                // Note: unattributed_tips_log has RLS that may block service_role reads in staging
+                // Contract: MUST verify exactly one unattributed_tips_log row with reason='multiple_session_matches'
+                // Use approved helper RPC (verify_ambiguity_logs_for_user) that bypasses RLS
                 let logVerified = false;
                 let logCount = 0;
 
-                const { data: ambiguityLogs, error: logError } = await serviceRoleClient
-                  .from("unattributed_tips_log")
-                  .select("*")
-                  .eq("user_id", s14UserId)
-                  .eq("reason", "multiple_session_matches");
+                const { data: logResult, error: logError } = await serviceRoleClient
+                  .rpc("verify_ambiguity_logs_for_user", {
+                    p_user_id: s14UserId,
+                    p_reason: "multiple_session_matches"
+                  });
 
-                if (!logError && ambiguityLogs) {
-                  logCount = ambiguityLogs.length;
-                  logVerified = true;
-                  if (logCount !== 1) {
-                    failures.push(`log row count=${logCount} (expected exactly 1)`);
+                if (!logError && logResult && Array.isArray(logResult)) {
+                  // Helper RPC returns array of {reason, count} rows
+                  if (logResult.length === 1) {
+                    logCount = parseInt(logResult[0].count) || 0;
+                    logVerified = true;
+                    if (logCount !== 1) {
+                      failures.push(`ambiguity log row count=${logCount} (expected exactly 1 row with reason='multiple_session_matches')`);
+                    }
+                  } else if (logResult.length === 0) {
+                    failures.push(`ambiguity log: no rows found for 'multiple_session_matches' (expected exactly 1)`);
+                  } else {
+                    failures.push(`ambiguity log: unexpected row count ${logResult.length}`);
                   }
-                } else if (logError && logError.message.includes("permission")) {
-                  // RLS blocks verification in staging - core assertion (live_session_id=null) still validates
-                  console.log(`⚠ unattributed_tips_log RLS blocks verification, core null assertion sufficient`);
-                  logVerified = false; // Can't verify, but not a failure
                 } else if (logError) {
-                  failures.push(`Log query error: ${logError.message}`);
+                  // Verification unavailable - strict contract requires failure
+                  failures.push(`CRITICAL: ambiguity-log verification blocked (${logError.message}). Require approved read path.`);
                 }
 
                 const passed = failures.length === 0;
                 s14Result.passed = passed;
                 s14Result.message = passed
-                  ? (logVerified
-                      ? `✓ live_session_id=null, ambiguity log verified (${logCount} rows)`
-                      : `✓ live_session_id=null, core assertion validates (log verification unavailable)`)
+                  ? `✓ live_session_id=null, ambiguity log verified (${logCount} row with reason='multiple_session_matches')`
                   : `✗ ${failures.join("; ")}`;
 
                 printResult(
@@ -1347,35 +1349,46 @@ jobs:
                   failures.push(`final_tip_count=${finalResult.data.final_tip_count} (expected 1)`);
                 }
 
-                // S15: Verify advisory lock architecture
-                // Required contract (per user approval): Both persist_extension_tip and finalize_live_session
-                // must use identical user-level advisory lock: pg_advisory_xact_lock(hashtextextended(user_id::text, 0)::bigint)
-                // This serializes all session-state mutations (persistence, finalization, delayed-tip reconciliation)
-                // within a transaction for each user.
-                //
-                // Verification: We cannot easily inspect pg_get_functiondef from Node.js without a helper RPC.
-                // Instead, verify contractually: if both functions exist and can be called, and finalization
-                // produces correct metrics including delayed tips, the locks are working correctly.
-                // A mismatch would cause races detectable as:
-                //   - Finalization returning wrong metrics when concurrent tips arrive
-                //   - Delayed tips not recalculating metrics atomically
-                //
-                // The harness tests this implicitly: Scenario 13 (delayed tip to ended session)
-                // must produce correct recalculated metrics, which only happens if locks serialize correctly.
-                //
-                // For explicit verification, inspect migrations 20261003 and 20261007:
-                //   20261003: persist_extension_tip must use hashtextextended(p_user_id::text, 0)::bigint
-                //   20261007: finalize_live_session must use hashtextextended(v_uid::text, 0)::bigint
+                // S15: Verify advisory lock architecture - EXPLICIT verification required
+                // Required contract: Both persist_extension_tip and finalize_live_session must use
+                // identical user-level advisory lock: pg_advisory_xact_lock(hashtextextended(user_id::text, 0)::bigint)
+                // This is NOT implied by S13 passing - S13 can pass with correct metrics even if locks differ.
+                // Must verify actual installed function definitions using helper RPC.
 
-                // Scenario 13 (delayed-tip reconciliation) acts as implicit lock verification:
-                // if metrics are recalculated correctly and atomically, locks are correct.
-                // S13's correct behavior (final metrics include delayed tip) proves user-level lock works.
-                const s13PassedImpliesLocksCorrect = testResults.some(r => r.scenario === 13 && r.passed);
+                let lockVerifyPassed = false;
 
-                if (s13PassedImpliesLocksCorrect) {
-                  console.log(`✓ Advisory lock serialization verified (implicit): S13 delayed-tip reconciliation passed, demonstrating atomic lock boundaries`);
-                } else {
-                  console.log(`⚠ Lock verification inconclusive: S13 outcome will determine if locks serialize correctly`);
+                const { data: lockData, error: lockError } = await serviceRoleClient
+                  .rpc("verify_function_lock_expressions");
+
+                if (!lockError && lockData) {
+                  const persistDefined = lockData.persist_extension_tip_defined === true;
+                  const finalizeDefined = lockData.finalize_live_session_defined === true;
+                  const persistHasUserLock = lockData.persist_has_user_lock === true;
+                  const finalizeHasUserLock = lockData.finalize_has_user_lock === true;
+                  const persistHasCompositeLock = lockData.persist_has_composite_lock === true;
+
+                  if (!persistDefined) {
+                    failures.push(`persist_extension_tip not installed`);
+                  }
+                  if (!finalizeDefined) {
+                    failures.push(`finalize_live_session not installed`);
+                  }
+                  if (persistHasCompositeLock) {
+                    failures.push(`CRITICAL: persist_extension_tip uses composite lock (user:event), not user-level lock`);
+                  }
+                  if (!persistHasUserLock && !persistHasCompositeLock && persistDefined) {
+                    failures.push(`persist_extension_tip: user-level lock not found`);
+                  }
+                  if (!finalizeHasUserLock && finalizeDefined) {
+                    failures.push(`finalize_live_session: user-level lock not found`);
+                  }
+
+                  if (persistHasUserLock && finalizeHasUserLock && !persistHasCompositeLock) {
+                    console.log(`✓ Advisory lock serialization explicitly verified: both functions use user-level locks`);
+                    lockVerifyPassed = true;
+                  }
+                } else if (lockError) {
+                  failures.push(`Lock verification failed: ${lockError.message}`);
                 }
 
                 if (!tipResult.data.success) failures.push(`tip success=${tipResult.data.success} (expected true)`);
