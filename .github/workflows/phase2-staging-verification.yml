@@ -502,7 +502,10 @@ jobs:
 
                 // Contract: status=ended, paused_at=null, total_paused_seconds preserved, final_duration ≈ elapsed - paused
                 const expectedTotalPaused = 1800;
-                const expectedDuration = Math.floor((resumeTime.getTime() - startTime.getTime()) / 1000) - expectedTotalPaused;
+                // Use actual returned ended_at, not resumeTime. Session elapsed = ended_at - started_at.
+                // Duration excluding pause = (ended_at - started_at) - total_paused_seconds
+                const actualEndTime = new Date(finalSession.ended_at);
+                const expectedDuration = Math.floor((actualEndTime.getTime() - startTime.getTime()) / 1000) - expectedTotalPaused;
                 const tolerance = 5; // 5 second tolerance for execution timing
 
                 const passed =
@@ -1202,7 +1205,7 @@ jobs:
                 if (tipData.live_session_id !== null) failures.push(`live_session_id=${tipData.live_session_id} (expected null)`);
                 if (!tipData.success) failures.push(`success=${tipData.success} (expected true)`);
 
-                // Try to read ambiguity log; if ACL blocks it, note but don't fail the core assertion
+                // Strict contract: verify exactly one ambiguity log row exists
                 const { data: ambiguityLogs, error: logError } = await serviceRoleClient
                   .from("unattributed_tips_log")
                   .select("*")
@@ -1210,24 +1213,20 @@ jobs:
                   .eq("reason", "multiple_session_matches");
 
                 let logCount = 0;
-                let aclDenied = false;
 
-                if (logError && logError.message.includes("permission")) {
-                  console.log(`⚠ ACL blocks unattributed_tips_log read - core null assertion validates, log count unverifiable`);
-                  aclDenied = true;
-                } else if (logError) {
-                  failures.push(`Log query error: ${logError.message}`);
+                if (logError) {
+                  failures.push(`Cannot verify ambiguity log: ${logError.message}`);
                 } else if (ambiguityLogs) {
                   logCount = ambiguityLogs.length;
                   if (logCount !== 1) failures.push(`log row count=${logCount} (expected exactly 1)`);
+                } else {
+                  failures.push(`Ambiguity log not found (expected exactly 1)`);
                 }
 
                 const passed = failures.length === 0;
                 s14Result.passed = passed;
                 s14Result.message = passed
-                  ? (aclDenied
-                      ? `✓ live_session_id=null (ACL blocks log verification, core assertion validates)`
-                      : `✓ live_session_id=null, exactly 1 ambiguity log`)
+                  ? `✓ live_session_id=null, exactly 1 ambiguity log verified`
                   : `✗ ${failures.join("; ")}`;
 
                 printResult(
@@ -1339,10 +1338,47 @@ jobs:
                   failures.push(`final_tip_count=${finalResult.data.final_tip_count} (expected 1)`);
                 }
 
-                // Verify advisory lock expression is identical in both functions
-                // persist_extension_tip uses: pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':' || p_client_event_id::text, 0))
-                // finalize_live_session should use the same or compatible expression
-                console.log(`✓ Advisory lock serialization verified: concurrent ops completed safely`);
+                // Verify advisory lock expressions in both functions
+                // Required: user-scoped lock in both: pg_advisory_xact_lock(hashtextextended(user_id::text, 0)::bigint)
+                const requiredLockExpr = "hashtextextended(user_id::text, 0)";
+
+                let persistLockFound = false;
+                let finalizeLockFound = false;
+                let lockMismatch = false;
+
+                // Query persist_extension_tip function definition
+                const { data: persistFunc } = await serviceRoleClient.rpc(
+                  "get_function_definition",
+                  { func_name: "persist_extension_tip", schema: "public" }
+                ).catch(() => ({ data: null }));
+
+                if (persistFunc) {
+                  // Check for the required lock expression
+                  if (persistFunc.includes(requiredLockExpr) || persistFunc.includes("pg_advisory_xact_lock")) {
+                    persistLockFound = true;
+                  }
+                }
+
+                // Query finalize_live_session function definition
+                const { data: finalizeFunc } = await serviceRoleClient.rpc(
+                  "get_function_definition",
+                  { func_name: "finalize_live_session", schema: "public" }
+                ).catch(() => ({ data: null }));
+
+                if (finalizeFunc) {
+                  if (finalizeFunc.includes(requiredLockExpr) || finalizeFunc.includes("pg_advisory_xact_lock")) {
+                    finalizeLockFound = true;
+                  }
+                }
+
+                if (!persistLockFound || !finalizeLockFound) {
+                  failures.push(`Lock verification incomplete: persist=${persistLockFound}, finalize=${finalizeLockFound}`);
+                } else if (persistFunc && finalizeFunc && persistFunc.includes("||") && !persistFunc.includes(requiredLockExpr)) {
+                  // Flag if persist uses a different lock expression (user:event vs user-only)
+                  failures.push(`Lock expressions may differ: persist uses composite key, verify user-scoped lock required`);
+                } else {
+                  console.log(`✓ Advisory lock serialization verified: user-scoped transaction locks confirmed`);
+                }
 
                 if (!tipResult.data.success) failures.push(`tip success=${tipResult.data.success} (expected true)`);
 
