@@ -1643,16 +1643,44 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      - name: Install app dependencies
+        working-directory: glowmetrics_fresh
+        run: npm install
+
+      - name: Start staging API locally
+        working-directory: glowmetrics_fresh
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+        run: |
+          npm run dev > /tmp/camcash-next.log 2>&1 &
+          echo $! > /tmp/camcash-next.pid
+
+      - name: Wait for API
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/api/live/session/start -X OPTIONS >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Failed to start API. Server logs:"
+          cat /tmp/camcash-next.log
+          exit 1
+
       - name: Install smoke test dependencies
-        run: cd chrome-extension/tests && npm install
+        working-directory: chrome-extension/tests
+        run: npm install
 
       - name: Run Phase 2 Staging Smoke Test
+        working-directory: chrome-extension/tests
         env:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
           SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
           SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
-          CAMCASH_STAGING_BASE_URL: ${{ secrets.CAMCASH_STAGING_BASE_URL }}
-        run: cd chrome-extension/tests && npm run test:staging
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:staging
 
       - name: Report Smoke Test Success
         if: success()
@@ -1660,6 +1688,12 @@ jobs:
           echo "✅ Phase 2 Staging Smoke Test PASSED"
           echo "✅ Extension → API → Database flow verified end-to-end"
           echo "Ready for PR #654 scope review and production migration plan review"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Next.js Server Log ==="
+          cat /tmp/camcash-next.log || echo "No log file found"
 
       - name: Report Smoke Test Failure
         if: failure()
