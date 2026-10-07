@@ -78,6 +78,7 @@ function deepEqual(a, b, msg) {
 // ─── Test State ────────────────────────────────────────────────────────────
 
 let tempUser = null;
+let otherUser = null;
 let liveSession = null;
 let firstTipId = null;
 let secondTipId = null;
@@ -163,6 +164,22 @@ async function signInTempUser(email, password) {
     fail(`Sign in temp user: ${e.message}`);
     throw e;
   }
+}
+
+// Second creator for the cross-user check; random id, never whitelisted.
+async function createRandomAuthUser() {
+  const email = `smoke-other-${Date.now()}-${crypto.randomBytes(4).toString('hex')}@staging.local`;
+  const password = crypto.randomBytes(24).toString('hex');
+  const { data, error } = await adminClient.auth.admin.createUser({ email, password, email_confirm: true });
+  if (error) throw new Error(`Failed to create second auth user: ${error.message}`);
+  return { userId: data.user.id, email, password };
+}
+
+function clientForToken(token) {
+  return createClient(STAGING_URL, STAGING_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 async function deleteTempAuthUser(userId) {
@@ -547,6 +564,48 @@ async function runSmokeTest() {
       'Every pause history row is closed after Stop'
     );
 
+    // Step 16: Another creator must not be able to recalculate this session
+    console.log('\nStep 16: Cross-user recalculation is rejected');
+    const RECALC_KEYS = [...METRIC_KEYS, 'last_heartbeat_at'];
+    const readSessionRow = async () => {
+      const { data, error } = await adminClient
+        .from('live_sessions').select(RECALC_KEYS.join(',')).eq('id', liveSession.id).single();
+      if (error) throw new Error(`Read live_sessions row failed: ${error.message}`);
+      return data;
+    };
+    const before = await readSessionRow();
+
+    otherUser = await createRandomAuthUser();
+    const otherToken = await signInTempUser(otherUser.email, otherUser.password);
+    const otherClient = clientForToken(otherToken);
+
+    const { error: crossErr } = await otherClient.rpc('recalculate_session_final_metrics', { p_session_id: liveSession.id });
+    assert(crossErr && crossErr.code === '22023', `Other user is refused (code 22023), got ${crossErr ? crossErr.code : 'no error'}`);
+
+    const { error: missingErr } = await otherClient.rpc('recalculate_session_final_metrics', { p_session_id: generateUUID() });
+    assert(
+      crossErr && missingErr && crossErr.message === missingErr.message && crossErr.code === missingErr.code,
+      'Refusal is indistinguishable from a nonexistent session (no id leak)'
+    );
+
+    // Fresh client: the shared anonClient carries whichever user signed in last.
+    const pureAnon = createClient(STAGING_URL, STAGING_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error: anonErr } = await pureAnon.rpc('recalculate_session_final_metrics', { p_session_id: liveSession.id });
+    assert(anonErr && anonErr.code === '42501', `Anonymous caller is refused with 42501, got ${anonErr ? anonErr.code : 'no error'}`);
+
+    const afterCross = await readSessionRow();
+    for (const key of RECALC_KEYS) {
+      deepEqual(afterCross[key], before[key], `${key} untouched by rejected cross-user/anon calls`);
+    }
+
+    // Positive control: the owner can still recalculate, and values do not move.
+    const { error: ownErr } = await clientForToken(accessToken).rpc('recalculate_session_final_metrics', { p_session_id: liveSession.id });
+    assert(!ownErr, `Owner may recalculate own session${ownErr ? `: ${ownErr.code} ${ownErr.message}` : ''}`);
+    const afterOwn = await readSessionRow();
+    for (const key of METRIC_KEYS) {
+      deepEqual(afterOwn[key], before[key], `${key} unchanged after owner recalculation`);
+    }
+
   } catch (e) {
     fail(`Unhandled error: ${e.message}`);
     console.error(e);
@@ -557,6 +616,9 @@ async function runSmokeTest() {
       await cleanupUserData(tempUser.userId);
       await deleteTempAuthUser(tempUser.userId);
       await verifyTipsCleaned(tempUser.userId);
+    }
+    if (otherUser) {
+      await deleteTempAuthUser(otherUser.userId);
     }
   }
 

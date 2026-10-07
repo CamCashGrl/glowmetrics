@@ -22,11 +22,6 @@ CREATE POLICY "Users can see their own ambiguity logs"
   FOR SELECT
   USING (user_id = auth.uid());
 
-CREATE POLICY "Users can delete their own ambiguity logs"
-  ON public.unattributed_tips_log
-  FOR DELETE
-  USING (user_id = auth.uid());
-
 -- Index for efficient user_id queries (used by verification helper)
 CREATE INDEX idx_unattributed_tips_log_user_id
   ON public.unattributed_tips_log(user_id);
