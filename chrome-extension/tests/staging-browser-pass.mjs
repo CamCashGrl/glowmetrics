@@ -57,9 +57,12 @@ const admin = createClient(STAGING_URL, STAGING_SERVICE_ROLE_KEY, { auth: { pers
 async function signIn(page, email, password) {
   await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' });
   const pwInLogin = page.locator('input[type="password"][placeholder="Password"]:visible').first();
-  // Up to ~2 min: a cold `next dev` compile of /landing can exceed 30s on a slow runner.
+  // Up to ~2 min: a cold `next dev` compile of /landing can exceed 30s on a
+  // slow runner. Each click gets 5s (not the page's 120s default, which let
+  // one blocked click eat the whole budget); reload every 30 tries.
   for (let i = 0; i < 120 && !(await pwInLogin.count()); i++) {
-    await page.getByRole('button', { name: 'Log In', exact: true }).first().click();
+    if (i > 0 && i % 30 === 0) await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' }).catch(() => {});
+    await page.getByRole('button', { name: 'Log In', exact: true }).first().click({ timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(1000);
   }
   await pwInLogin.waitFor({ state: 'visible', timeout: 10_000 });
