@@ -145,6 +145,11 @@ async function main() {
     check('LIVE NOW hero at the top while the show runs', (await page.getByTestId('hero-latest').count()) === 0);
     check('LIVE NOW total = public tips this session ($10.50)', ((await page.getByTestId('hero-live-total').textContent()) || '').trim() === '$10.50', await page.getByTestId('hero-live-total').textContent());
     await shot(page, '02b-sessions-live-now');
+    // Leave the dashboard on Command Center: it remembers the last tab, and
+    // Sessions auto-acknowledges a NEW show after 3s, which would clear the
+    // overview delta checked in Step 6 before the test sees it.
+    await page.locator('text="Command Center" >> visible=true').first().click();
+    await page.waitForTimeout(500);
     await page.goto(`${APP}/live`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /Pause/ }).first().waitFor({ state: 'visible' });
 
