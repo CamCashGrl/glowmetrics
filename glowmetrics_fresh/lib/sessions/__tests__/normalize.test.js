@@ -176,3 +176,63 @@ describe('total earned = public + private', () => {
     expect(totalEarned({ publicUSD: 0, privateRows: rows, windowStarts: {} }).privateUSD).toBe(5)
   })
 })
+
+describe('freshest performance helpers', () => {
+  const N = require('../normalize')
+
+  test('live snapshot uses only canonical tips linked to the running show', () => {
+    const session = { id: 'live-1', status: 'live', started_at: '2026-10-07T19:00:00Z', active_duration_seconds: 2520 }
+    const t = [
+      { live_session_id: 'live-1', platform: 'chaturbate', username: 'Alice', usd: 5, date_time: '2026-10-07T19:10:00Z' },
+      { live_session_id: 'live-1', platform: 'myfreecams', username: 'Alice', usd: 3, date_time: '2026-10-07T19:20:00Z' },
+      { live_session_id: 'other', platform: 'chaturbate', username: 'Zed', usd: 100, date_time: '2026-10-07T19:21:00Z' },
+      { live_session_id: null, platform: 'chaturbate', username: 'Zed', usd: 50, date_time: '2026-10-07T19:22:00Z' },
+    ]
+    const s = N.liveSessionSnapshot({ session, tips: t, privateInterval: { started_at: '2026-10-07T19:30:00Z', platform: 'Chaturbate' }, now: new Date('2026-10-07T19:40:00Z') })
+    expect(s).toMatchObject({ publicUSD: 8, tipCount: 2, uniqueTippers: 2, largestTipUSD: 5, durationSeconds: 2520, lastUpdated: '2026-10-07T19:20:00.000Z' })
+    expect(s.topTipper).toEqual({ username: 'Alice', platform: 'chaturbate', usd: 5 })
+    expect(s.platformSplit.map((p) => [p.platform, p.share])).toEqual([['chaturbate', 63], ['myfreecams', 38]])
+    expect(s.privateNow).toMatchObject({ platform: 'chaturbate', minutes: 10 })
+    expect(N.liveSessionSnapshot({ session: null })).toBeNull()
+  })
+
+  test('latest performance = most recently ended non-private entry', () => {
+    const h = [
+      { type: 'private', endTime: '2026-10-07T23:00:00Z' },
+      { type: 'free_chat', endTime: '2026-10-07T12:00:00Z' },
+      { type: 'live', endTime: '2026-10-07T18:00:00Z' },
+    ]
+    expect(N.latestPerformance(h).type).toBe('live')
+    expect(N.latestPerformance([])).toBeNull()
+  })
+
+  test('platform shares and $/hr only from exact time', () => {
+    const base = { totalUSD: 10, streamedMinutes: 60, streamedEstimated: false, platforms: [{ platform: 'chaturbate', totalUSD: 7.5 }, { platform: 'bongacams', totalUSD: 2.5 }] }
+    const d = N.withTodayDerived(base)
+    expect(d.platforms.map((p) => p.share)).toEqual([75, 25])
+    expect(d.usdPerHour).toBe(10)
+    expect(N.withTodayDerived({ ...base, streamedEstimated: true }).usdPerHour).toBeNull()
+    expect(N.withTodayDerived({ ...base, streamedMinutes: 0 }).usdPerHour).toBeNull()
+  })
+
+  test('today signal is truthful or absent', () => {
+    expect(N.todaySignal({ totalUSD: 11.13, platforms: [{ platform: 'chaturbate', totalUSD: 5.63 }, { platform: 'myfreecams', totalUSD: 3 }] }, (p) => p.toUpperCase()))
+      .toBe('CHATURBATE is leading today with 51% of your earnings.')
+    expect(N.todaySignal({ totalUSD: 4, platforms: [{ platform: 'bongacams', totalUSD: 4 }] })).toBe("All of today's earnings so far came from bongacams.")
+    expect(N.todaySignal({ totalUSD: 0, platforms: [] })).toBeNull()
+  })
+
+  test('same-weekday comparison needs 3+ earning days and compares by this time', () => {
+    const now = new Date('2026-10-07T20:00:00Z') // Wednesday
+    const tips = [
+      { date_time: '2026-10-07T15:00:00Z', usd: 12 },              // today
+      { date_time: '2026-09-30T15:00:00Z', usd: 10 },              // Wed, before 20:00
+      { date_time: '2026-09-30T21:00:00Z', usd: 500 },             // Wed, after 20:00 → excluded
+      { date_time: '2026-09-23T15:00:00Z', usd: 8 },
+      { date_time: '2026-09-16T15:00:00Z', usd: 20 },
+      { date_time: '2026-09-29T15:00:00Z', usd: 999 },             // Tuesday → excluded
+    ]
+    expect(N.typicalSameWeekdayByNow({ tips, tz: 'UTC', now })).toEqual({ weekday: 'Wed', todayUSD: 12, typicalUSD: 10, days: 3, deltaPct: 20 })
+    expect(N.typicalSameWeekdayByNow({ tips: tips.slice(0, 3), tz: 'UTC', now })).toBeNull()
+  })
+})

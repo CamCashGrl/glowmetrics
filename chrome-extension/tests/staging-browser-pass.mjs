@@ -76,6 +76,7 @@ async function main() {
   if (createErr) throw new Error(`create user: ${createErr.message}`);
   const userId = created.user.id;
   let browser;
+  let ext;
   try {
     const { error: pErr } = await admin.from('profiles').upsert({ id: userId, plan: 'pro' });
     if (pErr) throw new Error(`profile: ${pErr.message}`);
@@ -83,10 +84,34 @@ async function main() {
     if (bErr) throw new Error(`beta_users: ${bErr.message}`);
 
     // Extension-side token for posting tips through /api/live/tips.
-    const ext = createClient(STAGING_URL, STAGING_ANON_KEY, { auth: { persistSession: false } });
+    ext = createClient(STAGING_URL, STAGING_ANON_KEY, { auth: { persistSession: false } });
     const { data: extAuth, error: extErr } = await ext.auth.signInWithPassword({ email, password });
     if (extErr) throw new Error(`extension sign-in: ${extErr.message}`);
     const extToken = extAuth.session.access_token;
+
+    // ── earlier today, before the show: a free-chat session (extension tips,
+    // no Live show running) and one imported private session ────────────────
+    console.log('\nStep 0: Free chat + imported private earlier today');
+    const startMs = Date.now();
+    const freeChat = [
+      { username: 'FreeCara', amount: 200, platform: 'bongacams', detectedAt: new Date(startMs - 50 * 60000).toISOString() }, // $5.00
+      { username: 'FreeDan', amount: 100, platform: 'bongacams', detectedAt: new Date(startMs - 10 * 60000).toISOString() },  // $2.50
+    ];
+    const fcRes = [];
+    for (const t of freeChat) {
+      fcRes.push(await fetch(`${APP}/api/live/tips`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${extToken}` },
+        body: JSON.stringify({ ...t, clientEventId: crypto.randomUUID() }),
+      }).then((r) => r.json()));
+    }
+    check('Free-chat tips accepted with no show running', fcRes.every((r) => r.success === true && !r.live_session_id), JSON.stringify(fcRes));
+    const { error: paidErr } = await ext.from('paid_sessions').insert({
+      user_id: userId, date_time: new Date(startMs - 30 * 60000).toISOString(), platform: 'bongacams',
+      username: 'PrivFay', username_lower: 'privfay', session_type: 'private', tokens: 400, usd: 10, usd_rounded: 10,
+    });
+    check('Imported private session seeded (own-row RLS)', !paidErr, paidErr?.message);
+    const FREE_CHAT_USD = 7.5, PAID_USD = 10;
 
     const launch = { headless: true, args: ['--no-sandbox'] };
     if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
@@ -128,6 +153,19 @@ async function main() {
     }).then((r) => r.json())));
     check('Three simultaneous tips accepted', responses.every((r) => r.success === true && r.duplicate === false), JSON.stringify(responses));
 
+    // ── Sessions while live: the LIVE NOW hero takes the top ────────────────
+    console.log('\nStep 3b: Sessions — LIVE NOW hero');
+    await page.goto(`${APP}/dashboard`, { waitUntil: 'domcontentloaded' });
+    await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
+    const liveHero = page.getByTestId('hero-live');
+    await liveHero.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('[data-testid="hero-live-total"]')?.textContent?.trim() === '$10.50', null, { timeout: 60_000 }).catch(() => {});
+    check('LIVE NOW hero at the top while the show runs', (await page.getByTestId('hero-latest').count()) === 0);
+    check('LIVE NOW total = public tips this session ($10.50)', ((await page.getByTestId('hero-live-total').textContent()) || '').trim() === '$10.50', await page.getByTestId('hero-live-total').textContent());
+    await shot(page, '02b-sessions-live-now');
+    await page.goto(`${APP}/live`, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: /Pause/ }).first().waitFor({ state: 'visible' });
+
     // ── private interval with a known rate ──────────────────────────────────
     console.log('\nStep 4: Private show');
     await page.getByTestId('private-rate').fill('6');
@@ -168,23 +206,43 @@ async function main() {
     const history = page.getByTestId('session-history');
     check('Finished show is first in Session History',
       (await history.locator('[data-testid^="history-"]').first().getAttribute('data-testid')) === `history-live:${sessionId}`);
-    check('Live show carries the LIVE MODE badge',
-      (await page.getByTestId(`history-live:${sessionId}`).getByTestId('type-badge-live').count()) === 1);
+    check('Live show renders as its ShowCard in the history',
+      (await page.getByTestId(`history-live:${sessionId}`).getByTestId(`show-${sessionId}`).count()) === 1);
     check('No "No sessions yet" while a finalized show exists', (await page.getByTestId('history-empty').count()) === 0);
     check('No separate Latest live shows area', (await page.getByTestId('latest-shows').count()) === 0);
-    // Today (creator-local): every tip of this fresh account belongs to the show.
-    const today = async (id) => ((await page.getByTestId(id).textContent()) || '').trim();
-    check('Today total = show total', (await today('today-total')) === usd(row.final_total_usd), await today('today-total'));
-    check('Today public = $10.50', (await today('today-public')) === '$10.50', await today('today-public'));
-    check('Today private = show private', (await today('today-private')) === usd(row.final_private_usd), await today('today-private'));
-    check('Today tips 3', (await today('today-tips')) === '3', await today('today-tips'));
-    check('Today unique tippers 3 (per platform)', (await today('today-unique')) === '3', await today('today-unique'));
-    check('Today completed sessions 1', (await today('today-completed')) === '1', await today('today-completed'));
+    // Values of Command Center Stats: wrapper > card > value.
+    const statVal = async (id) => ((await page.getByTestId(id).locator(':scope > div > div').first().textContent()) || '').trim();
+    // Top hero: the most recently finished performance is this show.
+    check('Top hero is Latest Performance', (await page.getByTestId('hero-latest').count()) === 1 && (await page.getByTestId('hero-live').count()) === 0);
+    check('Hero total = show total', ((await page.getByTestId('hero-latest-total').textContent()) || '').trim() === usd(row.final_total_usd));
+    check('Hero marked NEW · JUST ENDED', (await page.getByTestId('hero-new-badge').count()) === 1);
+    check('Hero public = show public', (await statVal('latest-public')) === usd(row.final_public_usd), await statVal('latest-public'));
+    check('Hero private = show private', (await statVal('latest-private')) === usd(row.final_private_usd), await statVal('latest-private'));
+    check('Hero unique tippers 3', (await statVal('latest-unique')) === '3', await statVal('latest-unique'));
+    // Today so far = the show + earlier free chat + imported private, once each.
+    const expPublic = Number(row.final_public_usd) + FREE_CHAT_USD;
+    const expPrivate = Number(row.final_private_usd) + PAID_USD;
+    check('Today public = show public + free chat', (await statVal('today-public')) === usd(expPublic), await statVal('today-public'));
+    check('Today private = show private + imported private', (await statVal('today-private')) === usd(expPrivate), await statVal('today-private'));
+    check('Today total = public + private', (await statVal('today-total')) === usd(expPublic + expPrivate), await statVal('today-total'));
+    check('Today tips 5', (await statVal('today-tips')) === '5', await statVal('today-tips'));
+    check('Today unique tippers 5 (per platform)', (await statVal('today-unique')) === '5', await statVal('today-unique'));
+    check('Today completed sessions 2 (show + 40-min free chat)', (await statVal('today-completed')) === '2', await statVal('today-completed'));
+    check('Best platform is BongaCams', (await statVal('today-best-platform')) === 'BongaCams', await statVal('today-best-platform'));
+    check('Best platform card is highlighted', (await page.getByTestId('today-platform-bongacams').getByTestId('best-platform-badge').count()) === 1);
+    check("Today's strongest signal shown", /BongaCams is leading today with \d+% of your earnings\./.test((await page.getByTestId('today-signal').textContent()) || ''));
+    const header = await page.locator('text=Total Earned').first().locator('xpath=..').textContent();
+    check('Header Total Earned includes private', (header || '').includes(usd(expPublic + expPrivate)), header);
     for (const pf of ['chaturbate', 'bongacams', 'myfreecams']) {
       check(`Today by Platform lists ${pf}`, (await page.getByTestId(`today-platform-${pf}`).count()) === 1);
     }
     await page.getByTestId('filter-type-free_chat').click();
     check('Free chat filter hides the Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 0);
+    check('Free chat filter shows the earlier free-chat session', (await page.getByTestId('type-badge-free_chat').count()) === 1);
+    await shot(page, '05c-sessions-filter-free-chat');
+    await page.getByTestId('filter-type-private').click();
+    check('Private filter shows the imported private session', (await page.getByTestId('type-badge-private').count()) === 1);
+    await shot(page, '05d-sessions-filter-private');
     await page.getByTestId('filter-type-all').click();
     await page.getByTestId('filter-platform-myfreecams').click();
     check('MyFreeCams filter keeps the multi-platform Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 1);
@@ -241,6 +299,7 @@ async function main() {
     } catch (_) {}
   } finally {
     if (browser) await browser.close();
+    if (ext) await ext.from('paid_sessions').delete().eq('user_id', userId);
     await admin.from('beta_users').delete().eq('user_id', userId);
     await admin.from('profiles').delete().eq('id', userId);
     const { error: delErr } = await admin.auth.admin.deleteUser(userId);

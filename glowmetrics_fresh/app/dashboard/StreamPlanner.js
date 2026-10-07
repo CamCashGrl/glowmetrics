@@ -291,7 +291,7 @@ function ConfBadge({ level }) {
   return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:c.bg, color:c.color, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{c.label}</span>
 }
 
-function PlatChip({ name, i = 0 }) {
+export function PlatChip({ name, i = 0 }) {
   if (!name) return <span style={{ color:MUTED, fontSize:11 }}>—</span>
   const color = PLAT_COLORS[name] || PLAT_FB[i % PLAT_FB.length]
   return <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:5, background:`${color}18`, border:`1px solid ${color}40`, color, fontSize:11, fontWeight:500 }}>{name}</span>
@@ -306,7 +306,7 @@ function SecHead({ title, sub }) {
   )
 }
 
-function Pill({ active, onClick, children }) {
+export function Pill({ active, onClick, children }) {
   return (
     <button onClick={onClick} style={{ padding:"5px 13px", borderRadius:8, fontSize:12, cursor:"pointer", border:`1px solid ${active?CYAN:BORDER}`, background:active?"rgba(34,211,238,0.10)":"transparent", color:active?CYAN:FAINT, fontWeight:active?700:400, transition:"all 0.15s" }}>
       {children}

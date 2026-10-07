@@ -5306,6 +5306,9 @@ const stopImportMessageRotation = () => {
             tz={liveTimezone}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}
+            live={liveEngine.phase === 'active' && liveEngine.duration
+              ? { session: liveEngine.duration, privateInterval: liveEngine.privateInterval }
+              : null}
           />
         )}
 

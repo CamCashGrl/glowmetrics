@@ -31,6 +31,10 @@ const freeChat = [
   { id: 5, date_time: '2026-10-07T12:45:00Z', platform: 'bongacams', username: 'Dan', usd: 6, tokens: 240, live_session_id: null, source: 'extension' },
 ]
 
+// Value of a Command Center Stat wrapped in KStat: wrapper > card > value.
+const val = (id) => screen.getByTestId(id).firstChild.firstChild.textContent
+const click = (id) => fireEvent.click(screen.getByTestId(id).querySelector('button'))
+
 const renderTab = (props = {}) => render(
   <SessionsOverview tips={[]} shows={[]} paidSessions={[]} tz={TZ} now={NOW} {...props} />
 )
@@ -46,14 +50,14 @@ test('a finalized Live show appears and "No sessions yet" does not', () => {
 
 test('today KPIs: total = public + private, live-linked tips counted once', () => {
   renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
-  expect(screen.getByTestId('today-public').textContent).toBe('$20.50')
-  expect(screen.getByTestId('today-private').textContent).toBe('$0.66')
-  expect(screen.getByTestId('today-total').textContent).toBe('$21.16')
-  expect(screen.getByTestId('today-tips').textContent).toBe('5')
-  expect(screen.getByTestId('today-unique').textContent).toBe('5')
-  expect(screen.getByTestId('today-completed').textContent).toBe('2')
-  expect(screen.getByTestId('today-streamed').textContent).toBe('~1h 45m')
-  expect(screen.getByTestId('today-best-platform').textContent).toBe('BongaCams')
+  expect(val('today-public')).toBe('$20.50')
+  expect(val('today-private')).toBe('$0.66')
+  expect(val('today-total')).toBe('$21.16')
+  expect(val('today-tips')).toBe('5')
+  expect(val('today-unique')).toBe('5')
+  expect(val('today-completed')).toBe('2')
+  expect(val('today-streamed')).toBe('~1h 45m')
+  expect(val('today-best-platform')).toBe('BongaCams')
   // Exactly two history entries: the Live show and one free-chat session.
   expect(screen.getAllByTestId(/^history-(live|tips|private):/)).toHaveLength(2)
 })
@@ -61,33 +65,73 @@ test('today KPIs: total = public + private, live-linked tips counted once', () =
 test('today by platform', () => {
   renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
   const bc = screen.getByTestId('today-platform-bongacams')
-  expect(within(bc).getByText('$12.50')).toBeTruthy()
+  expect(within(bc).getAllByText('$12.50')).toHaveLength(2) // total and public (no private)
+  expect(within(bc).getByText('59%')).toBeTruthy() // $12.50 of $21.16 today
+  expect(within(bc).getByTestId('best-platform-badge')).toBeTruthy()
   expect(screen.getByTestId('today-platform-myfreecams')).toBeTruthy()
   expect(screen.getByTestId('today-platform-chaturbate')).toBeTruthy()
 })
 
 test('type and platform filters', () => {
   renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
-  fireEvent.click(screen.getByTestId('filter-type-free_chat'))
+  click('filter-type-free_chat')
   expect(screen.queryByTestId('history-live:show-a')).toBeNull()
   expect(screen.getAllByTestId('type-badge-free_chat')).toHaveLength(1)
-  fireEvent.click(screen.getByTestId('filter-type-all'))
-  fireEvent.click(screen.getByTestId('filter-platform-myfreecams'))
+  click('filter-type-all')
+  click('filter-platform-myfreecams')
   expect(screen.getByTestId('history-live:show-a')).toBeTruthy()
   expect(screen.queryByTestId('type-badge-free_chat')).toBeNull()
-  fireEvent.click(screen.getByTestId('filter-type-private'))
+  click('filter-type-private')
   expect(screen.getByTestId('history-filter-empty')).toBeTruthy()
 })
 
 test('empty account shows the empty state and "Not enough data yet"', () => {
   renderTab()
   expect(screen.getByTestId('history-empty')).toBeTruthy()
-  expect(screen.getByTestId('today-best-platform').textContent).toBe('Not enough data yet')
+  expect(val('today-best-platform')).toBe('—')
+  expect(screen.getByTestId('today-best-platform').textContent).toContain('Not enough data yet')
 })
 
 test('imported private sessions are badged PRIVATE and count as private', () => {
   renderTab({ paidSessions: [{ id: 7, date_time: '2026-10-07T15:00:00Z', platform: 'bongacams', username: 'Fay', session_type: 'private', usd: 7 }] })
   expect(screen.getByTestId('type-badge-private').textContent).toBe('PRIVATE · PRIVATE')
-  expect(screen.getByTestId('today-private').textContent).toBe('$7.00')
-  expect(screen.getByTestId('today-public').textContent).toBe('$0.00')
+  expect(val('today-private')).toBe('$7.00')
+  expect(val('today-public')).toBe('$0.00')
+})
+
+test('top hero: latest finished performance when not live', () => {
+  renderTab({ tips: liveTips, shows: [show] })
+  expect(screen.getByTestId('hero-latest')).toBeTruthy()
+  expect(screen.queryByTestId('hero-live')).toBeNull()
+  expect(screen.getByTestId('hero-latest-total').textContent).toBe('$11.16')
+  expect(screen.getByTestId('hero-new-badge')).toBeTruthy()
+  expect(val('latest-public')).toBe('$10.50')
+  expect(val('latest-private')).toBe('$0.66')
+  expect(val('latest-unique')).toBe('3')
+})
+
+test('top hero: LIVE NOW replaces Latest Performance while a show runs', () => {
+  const session = { id: 'run-1', status: 'live', started_at: '2026-10-07T19:00:00Z', active_duration_seconds: 2520 }
+  const runTips = [
+    { id: 9, date_time: '2026-10-07T19:30:00Z', platform: 'chaturbate', username: 'Gus', usd: 20, tokens: 400, live_session_id: 'run-1', source: 'extension' },
+    { id: 10, date_time: '2026-10-07T19:31:00Z', platform: 'bongacams', username: 'Gus', usd: 5, tokens: 200, live_session_id: 'run-1', source: 'extension' },
+  ]
+  renderTab({ tips: [...liveTips, ...runTips], shows: [show], live: { session, privateInterval: null } })
+  expect(screen.getByTestId('hero-live')).toBeTruthy()
+  expect(screen.queryByTestId('hero-latest')).toBeNull()
+  expect(screen.getByTestId('hero-live-total').textContent).toBe('$25.00')
+  expect(val('live-tips')).toBe('2')
+  expect(val('live-unique')).toBe('2') // Gus on two platforms = two fans
+  expect(val('live-duration')).toBe('42m')
+  expect(screen.getByTestId('hero-live').textContent).toContain('LIVE NOW · 42m')
+})
+
+test('strongest signal names the leading platform from real shares', () => {
+  renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
+  expect(screen.getByTestId('today-signal').textContent).toContain('BongaCams is leading today with 59% of your earnings.')
+})
+
+test('no weekday comparison without enough history', () => {
+  renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
+  expect(screen.queryByTestId('today-comparison')).toBeNull()
 })
