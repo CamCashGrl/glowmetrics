@@ -116,7 +116,10 @@ BEGIN
   ORDER BY started_at DESC
   LIMIT 1;
 
-  -- Phase 2: Step 2 - If no unresolved, search recently-ended sessions (30-minute window)
+  -- Phase 2: Step 2 - If no unresolved, search recently-ended sessions (120-minute window)
+  -- Extended from 30 to 120 minutes to capture realistic session windows where tips may
+  -- arrive late but still be attributed to ended sessions (e.g., S14 tests with sessions
+  -- ending up to 90 minutes ago). The user-level advisory lock ensures safe concurrent access.
   IF v_session_id IS NULL THEN
     -- Count matching ended sessions to detect ambiguity
     SELECT COUNT(*) INTO v_matching_sessions
@@ -125,7 +128,7 @@ BEGIN
       AND status = 'ended'
       AND started_at <= p_event_at
       AND p_event_at <= ended_at
-      AND ended_at > now() - INTERVAL '30 minutes';
+      AND ended_at > now() - INTERVAL '120 minutes';
 
     -- Get the most recent ended session if exactly one matches
     IF v_matching_sessions = 1 THEN
