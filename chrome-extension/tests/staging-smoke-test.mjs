@@ -19,23 +19,33 @@ import crypto from 'crypto';
 const STAGING_URL = process.env.SUPABASE_STAGING_URL;
 const STAGING_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
 const STAGING_SERVICE_ROLE_KEY = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
-const API_BASE = process.env.CAMCASH_STAGING_BASE_URL || 'https://staging.camcashgrl.com';
+const API_BASE = process.env.CAMCASH_STAGING_BASE_URL;
 
-// Sanity check: refuse to run against production
-if (API_BASE.includes('camcashgrl.com') && !API_BASE.includes('staging')) {
-  console.error('❌ FATAL: API_BASE points to production. Set CAMCASH_STAGING_BASE_URL explicitly.');
-  process.exit(1);
-}
+// Known production URLs to guard against
+const PRODUCTION_SUPABASE_URL = 'https://hlsdlaibnayzbfflxclj.supabase.co';
 
+// Required env vars with validation
 const missingEnv = [
   { name: 'SUPABASE_STAGING_URL', value: STAGING_URL },
   { name: 'SUPABASE_STAGING_ANON_KEY', value: STAGING_ANON_KEY },
   { name: 'SUPABASE_STAGING_SERVICE_ROLE_KEY', value: STAGING_SERVICE_ROLE_KEY },
+  { name: 'CAMCASH_STAGING_BASE_URL', value: API_BASE },
 ].filter(({ value }) => !value);
 
 if (missingEnv.length > 0) {
   console.error('❌ Missing required staging credentials:');
   missingEnv.forEach(({ name }) => console.error(`   ${name}`));
+  process.exit(1);
+}
+
+// Production safety checks
+if (STAGING_URL === PRODUCTION_SUPABASE_URL) {
+  console.error('❌ FATAL: SUPABASE_STAGING_URL is the production URL. Use staging credentials only.');
+  process.exit(1);
+}
+
+if (API_BASE.includes('camcashgrl.com') && !API_BASE.includes('staging')) {
+  console.error('❌ FATAL: CAMCASH_STAGING_BASE_URL points to production. Use staging URL only.');
   process.exit(1);
 }
 
@@ -133,13 +143,33 @@ async function deleteTempAuthUser(userId) {
 }
 
 async function cleanupUserData(userId) {
+  let cleanupErrors = [];
+
   try {
-    await adminClient.from('live_tips').delete().eq('user_id', userId);
-    await adminClient.from('tips').delete().eq('user_id', userId);
-    await adminClient.from('live_sessions').delete().eq('user_id', userId);
-    pass(`Cleanup: Deleted test data for user ${userId}`);
+    const { error: tipsErr } = await adminClient.from('live_tips').delete().eq('user_id', userId);
+    if (tipsErr) cleanupErrors.push(`live_tips: ${tipsErr.message}`);
   } catch (e) {
-    console.warn(`⚠ Error cleaning up user data: ${e.message}`);
+    cleanupErrors.push(`live_tips exception: ${e.message}`);
+  }
+
+  try {
+    const { error: canonicalErr } = await adminClient.from('tips').delete().eq('user_id', userId);
+    if (canonicalErr) cleanupErrors.push(`tips: ${canonicalErr.message}`);
+  } catch (e) {
+    cleanupErrors.push(`tips exception: ${e.message}`);
+  }
+
+  try {
+    const { error: sessionErr } = await adminClient.from('live_sessions').delete().eq('user_id', userId);
+    if (sessionErr) cleanupErrors.push(`live_sessions: ${sessionErr.message}`);
+  } catch (e) {
+    cleanupErrors.push(`live_sessions exception: ${e.message}`);
+  }
+
+  if (cleanupErrors.length > 0) {
+    fail(`Cleanup: Failed to delete test data for user ${userId}: ${cleanupErrors.join('; ')}`);
+  } else {
+    pass(`Cleanup: Deleted test data for user ${userId}`);
   }
 }
 
@@ -184,9 +214,13 @@ async function startLiveSession(accessToken) {
       },
     });
 
-    const data = await res.json();
     if (!res.ok) {
       fail(`POST /api/live/session/start failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    if (!data.session) {
+      fail(`POST /api/live/session/start returned no session: ${JSON.stringify(data)}`);
       return null;
     }
     return data.session;
@@ -206,9 +240,13 @@ async function pauseLiveSession(accessToken) {
       },
     });
 
-    const data = await res.json();
     if (!res.ok) {
       fail(`POST /api/live/session/pause failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    if (!data.session) {
+      fail(`POST /api/live/session/pause returned no session: ${JSON.stringify(data)}`);
       return null;
     }
     return data.session;
@@ -228,9 +266,13 @@ async function resumeLiveSession(accessToken) {
       },
     });
 
-    const data = await res.json();
     if (!res.ok) {
       fail(`POST /api/live/session/resume failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    if (!data.session) {
+      fail(`POST /api/live/session/resume returned no session: ${JSON.stringify(data)}`);
       return null;
     }
     return data.session;
@@ -242,7 +284,7 @@ async function resumeLiveSession(accessToken) {
 
 async function stopLiveSession(accessToken) {
   try {
-    const res = await fetch(`${API_BASE}/api/live/session/finalize`, {
+    const res = await fetch(`${API_BASE}/api/live/session/stop`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -250,12 +292,16 @@ async function stopLiveSession(accessToken) {
       },
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      fail(`POST /api/live/session/finalize failed: ${res.status}`);
+      fail(`POST /api/live/session/stop failed: ${res.status}`);
       return null;
     }
-    return data;
+    const data = await res.json();
+    if (!data.session) {
+      fail(`POST /api/live/session/stop returned no session: ${JSON.stringify(data)}`);
+      return null;
+    }
+    return data.session;
   } catch (e) {
     fail(`Stop live session error: ${e.message}`);
     return null;
@@ -317,15 +363,15 @@ async function runSmokeTest() {
     assert(liveSession.status === 'active', `Session status is 'active', got '${liveSession.status}'`);
 
     // Step 4: POST first tip (real event, not test)
+    // Use Chaturbate ($0.05/token) so USD calculation is deterministic
     console.log('\nStep 4: POST first tip');
     firstClientEventId = generateUUID();
     const detectedAt1 = new Date().toISOString();
-    const tipResponse1 = await postTip(accessToken, 'tipper_alice', 1000, 'twitch', firstClientEventId, detectedAt1);
+    const tipResponse1 = await postTip(accessToken, 'tipper_alice', 1000, 'chaturbate', firstClientEventId, detectedAt1);
     assert(tipResponse1 && tipResponse1.success === true, 'First tip POST succeeded');
     assert(tipResponse1.duplicate === false, 'First tip is not a duplicate');
     assert(tipResponse1.clientEventId === firstClientEventId, `clientEventId matches: ${firstClientEventId}`);
-    assert(tipResponse1.live_session_id === liveSession.id, `liveSessionId matches session: ${liveSession.id}`);
-    firstTipId = tipResponse1.tip_id;
+    assert(tipResponse1.liveSessionId === liveSession.id, `liveSessionId matches session: ${liveSession.id}`);
 
     // Step 5: Verify exactly one live_tips + one tips row
     console.log('\nStep 5: Verify database state after first tip');
@@ -336,7 +382,7 @@ async function runSmokeTest() {
 
     // Step 6: Retry same clientEventId (duplicate detection)
     console.log('\nStep 6: Test idempotency - retry same clientEventId');
-    const tipResponse1Retry = await postTip(accessToken, 'tipper_alice', 1000, 'twitch', firstClientEventId, detectedAt1);
+    const tipResponse1Retry = await postTip(accessToken, 'tipper_alice', 1000, 'chaturbate', firstClientEventId, detectedAt1);
     assert(tipResponse1Retry && tipResponse1Retry.success === true, 'Duplicate POST succeeded');
     assert(tipResponse1Retry.duplicate === true, 'Duplicate flag set to true');
     const liveTips1After = await queryLiveTips(tempUser.userId);
@@ -353,10 +399,9 @@ async function runSmokeTest() {
     console.log('\nStep 8: POST second tip while paused');
     secondClientEventId = generateUUID();
     const detectedAt2 = new Date().toISOString();
-    const tipResponse2 = await postTip(accessToken, 'tipper_bob', 500, 'twitch', secondClientEventId, detectedAt2);
+    const tipResponse2 = await postTip(accessToken, 'tipper_bob', 500, 'chaturbate', secondClientEventId, detectedAt2);
     assert(tipResponse2 && tipResponse2.success === true, 'Second tip POST succeeded');
-    assert(tipResponse2.live_session_id === liveSession.id, 'Second tip attached to same session');
-    secondTipId = tipResponse2.tip_id;
+    assert(tipResponse2.liveSessionId === liveSession.id, 'Second tip attached to same session');
 
     // Step 9: Verify two tips now in database
     console.log('\nStep 9: Verify both tips in database');
@@ -382,8 +427,21 @@ async function runSmokeTest() {
     assert(finalMetrics.final_tip_count === 2, `Final tip count: 2, got ${finalMetrics.final_tip_count}`);
     assert(finalMetrics.final_total_usd === 75, `Final USD (1000×0.05 + 500×0.05 = 50 + 25 = 75), got ${finalMetrics.final_total_usd}`);
     assert(finalMetrics.final_unique_tippers === 2, `Final unique tippers: 2, got ${finalMetrics.final_unique_tippers}`);
-    const firstMetrics = JSON.parse(JSON.stringify(finalMetrics));
-    const finalizedAt1 = finalMetrics.finalized_at;
+    assert(finalMetrics.final_tokens === 1500, `Final tokens: 1500, got ${finalMetrics.final_tokens}`);
+
+    // Store full metrics for idempotency comparison
+    const firstMetrics = {
+      final_tip_count: finalMetrics.final_tip_count,
+      final_total_usd: finalMetrics.final_total_usd,
+      final_tokens: finalMetrics.final_tokens,
+      final_unique_tippers: finalMetrics.final_unique_tippers,
+      final_top_tipper_username: finalMetrics.final_top_tipper_username,
+      final_top_tipper_usd: finalMetrics.final_top_tipper_usd,
+      final_largest_tip_usd: finalMetrics.final_largest_tip_usd,
+      final_avg_tip_usd: finalMetrics.final_avg_tip_usd,
+      final_usd_per_hour: finalMetrics.final_usd_per_hour,
+      finalized_at: finalMetrics.finalized_at,
+    };
 
     // Step 13: Call Stop again (idempotency)
     console.log('\nStep 13: Stop again (idempotency check)');
@@ -391,8 +449,8 @@ async function runSmokeTest() {
     assert(stoppedSessionAgain, 'Second stop returned session data');
     assert(stoppedSessionAgain.status === 'ended', `Session still ended, status: ${stoppedSessionAgain.status}`);
 
-    // Step 14: Deep compare metrics (should be identical)
-    console.log('\nStep 14: Verify metrics unchanged on second stop');
+    // Step 14: Deep compare all metrics (should be identical)
+    console.log('\nStep 14: Verify all metrics unchanged on second stop');
     deepEqual(
       stoppedSessionAgain.final_tip_count,
       firstMetrics.final_tip_count,
@@ -404,12 +462,42 @@ async function runSmokeTest() {
       'final_total_usd unchanged'
     );
     deepEqual(
+      stoppedSessionAgain.final_tokens,
+      firstMetrics.final_tokens,
+      'final_tokens unchanged'
+    );
+    deepEqual(
       stoppedSessionAgain.final_unique_tippers,
       firstMetrics.final_unique_tippers,
       'final_unique_tippers unchanged'
     );
+    deepEqual(
+      stoppedSessionAgain.final_top_tipper_username,
+      firstMetrics.final_top_tipper_username,
+      'final_top_tipper_username unchanged'
+    );
+    deepEqual(
+      stoppedSessionAgain.final_top_tipper_usd,
+      firstMetrics.final_top_tipper_usd,
+      'final_top_tipper_usd unchanged'
+    );
+    deepEqual(
+      stoppedSessionAgain.final_largest_tip_usd,
+      firstMetrics.final_largest_tip_usd,
+      'final_largest_tip_usd unchanged'
+    );
+    deepEqual(
+      stoppedSessionAgain.final_avg_tip_usd,
+      firstMetrics.final_avg_tip_usd,
+      'final_avg_tip_usd unchanged'
+    );
+    deepEqual(
+      stoppedSessionAgain.final_usd_per_hour,
+      firstMetrics.final_usd_per_hour,
+      'final_usd_per_hour unchanged'
+    );
     assert(
-      stoppedSessionAgain.finalized_at === finalizedAt1,
+      stoppedSessionAgain.finalized_at === firstMetrics.finalized_at,
       'finalized_at unchanged (idempotent)'
     );
 
