@@ -122,11 +122,10 @@ GRANT EXECUTE ON FUNCTION public.finalize_live_session(uuid) TO authenticated;
 CREATE OR REPLACE FUNCTION public.recalculate_session_final_metrics(p_session_id uuid)
 RETURNS void
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_uid uuid := auth.uid();
   v_session live_sessions;
   v_total_usd numeric;
   v_total_tokens bigint;
@@ -138,13 +137,13 @@ DECLARE
   v_avg_tip_usd numeric;
   v_usd_per_hour numeric;
 BEGIN
-  IF v_uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated' USING ERRCODE = '28000';
-  END IF;
-
-  -- Verify session belongs to caller and is ended (or being finalized)
+  -- S13: Verify session exists and is ended (or being finalized).
+  -- Called from finalize_live_session (authenticated context) and
+  -- persist_extension_tip (service_role context). Ownership verification
+  -- is the responsibility of the caller, which has already validated the
+  -- session belongs to the expected user before calling this function.
   SELECT * INTO v_session FROM public.live_sessions
-  WHERE id = p_session_id AND user_id = v_uid AND status IN ('ended', 'finalizing');
+  WHERE id = p_session_id AND status IN ('ended', 'finalizing');
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Session not found or not ended/finalizing' USING ERRCODE = '22023';
   END IF;

@@ -138,6 +138,15 @@ BEGIN
         AND ended_at > now() - INTERVAL '30 minutes'
       LIMIT 1;
     ELSIF v_matching_sessions > 1 THEN
+      -- S14: Multiple ended sessions overlap this tip's event_at.
+      -- Cannot attribute to a single session - log ambiguity and set session to NULL.
+      PERFORM public.log_unattributed_tip_ambiguity(
+        p_user_id,
+        p_username,
+        p_usd,
+        p_event_at,
+        'multiple_session_matches'
+      );
       v_session_id := NULL;
     END IF;
   END IF;
