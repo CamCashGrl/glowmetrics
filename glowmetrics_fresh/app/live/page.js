@@ -14,6 +14,7 @@ import LiveTipsStream from './LiveTipsStream';
 import PlatformBreakdown from './components/PlatformBreakdown';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
+import PrivateShowControl from './PrivateShowControl';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
 
 const C = {
@@ -1025,6 +1026,9 @@ export default function LivePage() {
                       ⏹ End
                     </button>
                   </>
+                )}
+                {engine.serverSession?.status === 'live' && (
+                  <PrivateShowControl engine={engine} platform={engine.serverSession?.stream_platform} />
                 )}
                 {engine.serverSession?.status === 'live' && (
                   <button disabled={engine.actionPending} onClick={() => {

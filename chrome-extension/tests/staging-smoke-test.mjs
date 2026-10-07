@@ -283,6 +283,20 @@ async function readLiveTip(userId, clientEventId) {
   return data || [];
 }
 
+async function api(method, path, accessToken, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  return { status: res.status, ok: res.ok, data };
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const cents = (v) => Math.round(Number(v) * 100);
+
 async function startLiveSession(accessToken) {
   try {
     const res = await fetch(`${API_BASE}/api/live/session/start`, {
@@ -688,6 +702,124 @@ async function runSmokeTest() {
     }
     const sameKey = canonical.filter((r) => r.username === 'MultiFan' && r.tokens === 200 && ['chaturbate', 'myfreecams'].includes(r.platform));
     assert(sameKey.length === 2, `Same fan/amount/time on Chaturbate and MyFreeCams both stored (${sameKey.length} rows)`);
+
+    // ── Post-show reconciliation ─────────────────────────────────────────────
+    const firstShowId = liveSession.id;
+
+    // Step 18: a second show with simultaneous multi-platform tips and two
+    // private intervals; Stop while the second private is still open.
+    console.log('\nStep 18: Second show — multi-platform tips, two private intervals, Stop while private');
+    const show2 = await startLiveSession(accessToken);
+    assert(show2 && show2.id && show2.id !== firstShowId, `Second show started (${show2?.id})`);
+    if (!show2) throw new Error('Cannot continue without a second show');
+    const live2 = await sendWebsiteHeartbeat(accessToken);
+    assert(live2?.status === 'live', `Second show is live, got ${live2?.status}`);
+    const s2At = new Date().toISOString();
+    const s2Tips = [
+      { platform: 'chaturbate', username: 'S2Alice', tokens: 100, id: generateUUID() }, // $5.00
+      { platform: 'bongacams', username: 'S2Bob', tokens: 100, id: generateUUID() },    // $2.50
+      { platform: 'myfreecams', username: 'S2Alice', tokens: 60, id: generateUUID() },  // $3.00
+    ];
+    const s2Res = await Promise.all(s2Tips.map((t) => postTip(accessToken, t.username, t.tokens, t.platform, t.id, s2At)));
+    assert(s2Res.every((r) => r?.success === true && r.duplicate === false), 'Three simultaneous multi-platform tips accepted');
+
+    const p1 = await api('POST', '/api/live/session/private/start', accessToken, { ratePerMinute: 6 });
+    assert(p1.ok && p1.data?.privateInterval?.id, `Private #1 started (${p1.status})`);
+    const p1Again = await api('POST', '/api/live/session/private/start', accessToken, { ratePerMinute: 99 });
+    assert(p1Again.data?.privateInterval?.id === p1.data?.privateInterval?.id, 'Repeated Start Private returns the open interval');
+    const stillLive = await api('GET', '/api/live/session', accessToken);
+    assert(stillLive.data?.session?.status === 'live' && stillLive.data?.privateInterval?.id === p1.data?.privateInterval?.id,
+      'Starting private does not pause or end the show, and the open interval is reported');
+    await sleep(1500);
+    const p1End = await api('POST', '/api/live/session/private/end', accessToken);
+    const p1Row = p1End.data?.privateInterval;
+    const p1Secs = p1Row ? (Date.parse(p1Row.ended_at) - Date.parse(p1Row.started_at)) / 1000 : NaN;
+    assert(p1Row && p1Row.ended_at && cents(p1Row.estimated_earnings_usd) === Math.round(6 * p1Secs / 60 * 100),
+      `Private #1 closed at $6/min × ${p1Secs}s = ${p1Row?.estimated_earnings_usd}`);
+    const p2 = await api('POST', '/api/live/session/private/start', accessToken, { ratePerMinute: 3 });
+    assert(p2.ok && p2.data?.privateInterval?.id && p2.data.privateInterval.id !== p1Row?.id, 'Private #2 started in the same show');
+    await sleep(1000);
+
+    const stop2 = await stopLiveSession(accessToken);
+    const sum2 = stop2?.summary;
+    assert(stop2 && stop2.alreadyStopped === false && sum2?.id === show2.id, 'Stop returned the second show summary');
+    const { data: s2Row } = await adminClient.from('live_sessions').select('*').eq('id', show2.id).single();
+    const { data: s2Intervals } = await adminClient.from('live_private_intervals').select('*').eq('live_session_id', show2.id).order('started_at');
+    assert(s2Intervals?.length === 2 && s2Intervals.every((i) => i.ended_at), `Both private intervals closed (${s2Intervals?.length})`);
+    assert(s2Intervals?.[1] && Date.parse(s2Intervals[1].ended_at) === Date.parse(s2Row.ended_at),
+      `Open private interval closed at the show's ended_at (${s2Intervals?.[1]?.ended_at} vs ${s2Row?.ended_at})`);
+    const p2Secs = (Date.parse(s2Intervals[1].ended_at) - Date.parse(s2Intervals[1].started_at)) / 1000;
+    assert(cents(s2Intervals[1].estimated_earnings_usd) === Math.round(3 * p2Secs / 60 * 100), `Private #2 earnings = $3/min × ${p2Secs}s`);
+
+    // Step 19: every displayed value equals the persisted data, recomputed independently.
+    console.log('\nStep 19: Show summary equals persisted DB values');
+    const { data: s2Canon } = await adminClient.rpc('staging_smoke_list_session_tips', { p_user_id: tempUser.userId, p_live_session_id: show2.id });
+    const pubCents = (s2Canon || []).reduce((a, t) => a + cents(t.usd), 0);
+    const privCents = s2Intervals.reduce((a, i) => a + cents(i.estimated_earnings_usd), 0);
+    assert(s2Canon?.length === 3 && pubCents === 1050, `Canonical tips for show 2: 3 rows, $10.50 (got ${s2Canon?.length}, ${pubCents / 100})`);
+    assert(cents(sum2.publicUsd) === pubCents, `Public earnings ${sum2.publicUsd} = canonical tips ${pubCents / 100}`);
+    assert(cents(sum2.privateUsd) === privCents, `Private earnings ${sum2.privateUsd} = sum of intervals ${privCents / 100}`);
+    assert(cents(sum2.totalUsd) === pubCents + privCents, `Total ${sum2.totalUsd} = public + private`);
+    assert(cents(s2Row.final_total_usd) === cents(sum2.totalUsd) && cents(s2Row.final_public_usd) === pubCents && cents(s2Row.final_private_usd) === privCents,
+      'Summary matches the finalized live_sessions row');
+    const byPf = Object.fromEntries((sum2.platformRevenue || []).map((p) => [p.platform, p]));
+    assert(cents(byPf.chaturbate?.usd) === 500 && cents(byPf.bongacams?.usd) === 250 && cents(byPf.myfreecams?.usd) === 300,
+      `Platform revenue CB $5.00 / BC $2.50 / MFC $3.00, got ${JSON.stringify(sum2.platformRevenue)}`);
+    assert(sum2.tipCount === 3 && sum2.uniqueTippers === 2, `3 tips, 2 unique tippers (got ${sum2.tipCount}, ${sum2.uniqueTippers})`);
+    assert(sum2.topTipper?.username === 'S2Alice' && cents(sum2.topTipper?.usd) === 800, `Top tipper S2Alice $8.00, got ${JSON.stringify(sum2.topTipper)}`);
+    assert(cents(sum2.largestTipUsd) === 500, `Largest tip $5.00, got ${sum2.largestTipUsd}`);
+    assert(sum2.durationSeconds === s2Row.final_duration_seconds && sum2.privateSeconds === s2Row.final_private_seconds,
+      'Duration and private duration match the row');
+    assert(sum2.privateIntervals.length === 2, 'Both private intervals listed in the summary');
+
+    // Step 20: repeated Stop and refreshes never duplicate a show or its earnings.
+    console.log('\nStep 20: Repeated Stop / refresh do not duplicate');
+    const stop2Again = await stopLiveSession(accessToken);
+    assert(stop2Again?.alreadyStopped === true && stop2Again.summary?.id === show2.id && cents(stop2Again.summary.totalUsd) === cents(sum2.totalUsd),
+      'Repeated Stop returns the same show with the same total');
+    const r1 = await api('GET', '/api/live/sessions/recent', accessToken);
+    const r2 = await api('GET', '/api/live/sessions/recent', accessToken);
+    assert(r1.ok && JSON.stringify(r1.data) === JSON.stringify(r2.data), 'Two refreshes return identical shows');
+    const ids = (r1.data?.shows || []).map((x) => x.id);
+    assert(ids.length === 2 && new Set(ids).size === 2 && ids[0] === show2.id && ids[1] === firstShowId,
+      `Exactly two distinct shows, newest first (${JSON.stringify(ids)})`);
+
+    // Step 21: a delayed tip reconciles into the correct finalized show.
+    console.log('\nStep 21: Delayed tip updates the correct finalized show');
+    const show1Before = r1.data.shows.find((x) => x.id === firstShowId);
+    const midShow2 = new Date((Date.parse(s2Row.started_at) + Date.parse(s2Row.ended_at)) / 2).toISOString();
+    const late = await postTip(accessToken, 'LateFan', 40, 'chaturbate', generateUUID(), midShow2); // $2.00
+    assert(late?.success === true, 'Delayed tip accepted');
+    const r3 = await api('GET', '/api/live/sessions/recent', accessToken);
+    const s2After = r3.data?.shows?.find((x) => x.id === show2.id);
+    const s1After = r3.data?.shows?.find((x) => x.id === firstShowId);
+    assert(cents(s2After?.totalUsd) === cents(sum2.totalUsd) + 200 && cents(s2After?.publicUsd) === pubCents + 200 && s2After?.tipCount === 4,
+      `Show 2 total +$2.00 → ${s2After?.totalUsd}`);
+    assert(JSON.stringify(s1After) === JSON.stringify(show1Before), 'Show 1 unchanged by the delayed tip');
+
+    // Step 22-23: NEW per account; acknowledgement persists across devices.
+    console.log('\nStep 22: NEW appears for unacknowledged shows; acknowledgement persists across devices');
+    assert(s2After?.isNew === true && s1After?.isNew === true, 'Both finalized shows start as NEW');
+    const ack2 = await api('POST', '/api/live/sessions/acknowledge', accessToken, { sessionIds: [show2.id] });
+    assert(ack2.ok && ack2.data?.acknowledged?.[0]?.id === show2.id, 'Acknowledged show 2 (device 1)');
+    const device2Token = await signInTempUser(tempUser.email, tempUser.password);
+    assert(device2Token && device2Token !== accessToken, 'Signed in on a second device');
+    const d2 = await api('GET', '/api/live/sessions/recent', device2Token);
+    const d2s2 = d2.data?.shows?.find((x) => x.id === show2.id);
+    const d2s1 = d2.data?.shows?.find((x) => x.id === firstShowId);
+    assert(d2s2?.isNew === false && d2s1?.isNew === true, 'Second device: show 2 already seen, show 1 still NEW');
+    const ackAgain = await api('POST', '/api/live/sessions/acknowledge', device2Token, { sessionIds: [show2.id] });
+    assert(ackAgain.data?.acknowledged?.[0]?.seenAt === ack2.data?.acknowledged?.[0]?.seenAt, 'Re-acknowledging keeps the first seen time');
+    await api('POST', '/api/live/sessions/acknowledge', device2Token, { sessionIds: [firstShowId] });
+    const d1 = await api('GET', '/api/live/sessions/recent', accessToken);
+    assert((d1.data?.shows || []).every((x) => x.isNew === false), 'Device 1 sees both acknowledged');
+
+    // Step 24: two completed shows stay two sessions with their own totals.
+    console.log('\nStep 24: Two shows are two distinct sessions, never combined');
+    const finalShows = d1.data?.shows || [];
+    assert(finalShows.length === 2, `Two shows (${finalShows.length})`);
+    assert(cents(finalShows[1].totalUsd) === 7500, `Show 1 still $75.00 (${finalShows[1]?.totalUsd})`);
+    assert(cents(finalShows[0].totalUsd) === cents(s2After.totalUsd), `Show 2 keeps its own total (${finalShows[0]?.totalUsd})`);
 
   } catch (e) {
     fail(`Unhandled error: ${e.message}`);

@@ -30,6 +30,14 @@ export function useLiveSessionEngine() {
   // the 4 terminal choices just happened; cleared once the transient
   // 'resolved' display window ends. Never touched by 'still_live'.
   const [lastResolution, setLastResolution] = useState(null)
+  // Open private interval of the running session, if any.
+  const [privateInterval, setPrivateInterval] = useState(null)
+  // Summary of the show this page just stopped (rebuilt server-side from
+  // persisted data), and a counter bumped whenever any show finishes —
+  // stopped here, resolved, or ended elsewhere — so dashboards refetch.
+  const [lastCompletedShow, setLastCompletedShow] = useState(null)
+  const [completedShowsVersion, setCompletedShowsVersion] = useState(0)
+  const markShowCompleted = useCallback(() => setCompletedShowsVersion((v) => v + 1), [])
   const [, setTick] = useState(0) // drives re-render only; the live timer is recomputed from serverSession each tick, never written to the DB
 
   const heartbeatIntervalRef = useRef(null)
@@ -95,6 +103,7 @@ export function useLiveSessionEngine() {
 
       if (data.session) {
         setServerSession(data.session)
+        setPrivateInterval(data.privateInterval || null)
         setPhase(phaseForStatus(data.session.status))
         startHeartbeat()
       } else {
@@ -132,17 +141,22 @@ export function useLiveSessionEngine() {
       const data = await res.json()
       if (data.session) {
         setServerSession(data.session)
+        setPrivateInterval(data.privateInterval || null)
         setPhase(phaseForStatus(data.session.status))
         startHeartbeat()
       } else {
+        // A session this page knew about ended elsewhere (extension, other
+        // tab, inactivity sweep): its finalized show is new data.
+        if (phaseRef.current !== 'idle') markShowCompleted()
         setServerSession(null)
+        setPrivateInterval(null)
         setPhase('idle')
         stopHeartbeat()
       }
     } catch (_) {
       // a failed poll is never surfaced — the next tick retries
     }
-  }, [startHeartbeat, stopHeartbeat])
+  }, [startHeartbeat, stopHeartbeat, markShowCompleted])
 
   useEffect(() => {
     const id = setInterval(poll, POLL_INTERVAL_MS)
@@ -214,6 +228,7 @@ export function useLiveSessionEngine() {
       stopHeartbeat()
       if (!res.ok) { setActionError(data.error); return }
 
+      setPrivateInterval(null)
       if (data.alreadyStopped) {
         setServerSession(null)
         setPhase('idle')
@@ -221,6 +236,8 @@ export function useLiveSessionEngine() {
       }
 
       setServerSession(data.session)
+      setLastCompletedShow(data.summary || null)
+      markShowCompleted()
       setPhase('justEnded')
       stopSummaryTimeoutRef.current = setTimeout(() => {
         setPhase('idle')
@@ -229,7 +246,7 @@ export function useLiveSessionEngine() {
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, stopHeartbeat])
+  }, [actionPending, stopHeartbeat, markShowCompleted])
 
   const resolve = useCallback(async (choice, endTime) => {
     // actionPending is also the duplicate-submission guard: a second click
@@ -264,6 +281,8 @@ export function useLiveSessionEngine() {
         stopHeartbeat()
         setServerSession(data.session)
         setLastResolution({ choice, session: data.session })
+        setPrivateInterval(null)
+        markShowCompleted()
         setPhase('resolved')
         stopSummaryTimeoutRef.current = setTimeout(() => {
           setPhase('idle')
@@ -281,7 +300,7 @@ export function useLiveSessionEngine() {
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, startHeartbeat, stopHeartbeat])
+  }, [actionPending, startHeartbeat, stopHeartbeat, markShowCompleted])
 
   // Never deletes a live_tips row — sets tips_cleared_at on the current
   // session (see app/api/live/session/clear-tips/route.js). Allowed in any
@@ -306,6 +325,38 @@ export function useLiveSessionEngine() {
     clearTimeout(stopSummaryTimeoutRef.current)
   }, [stopHeartbeat])
 
+  const startPrivate = useCallback(async (ratePerMinute, platform) => {
+    if (actionPending) return
+    setActionPending(true)
+    setActionError(null)
+    try {
+      const res = await fetch('/api/live/session/private/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ratePerMinute, platform }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setActionError(data.error); return }
+      setPrivateInterval(data.privateInterval || null)
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending])
+
+  const endPrivate = useCallback(async () => {
+    if (actionPending) return
+    setActionPending(true)
+    setActionError(null)
+    try {
+      const res = await fetch('/api/live/session/private/end', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setActionError(data.error); return }
+      setPrivateInterval(null)
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending])
+
   const duration = serverSession ? shapeLiveSession(serverSession) : null
 
   return {
@@ -322,5 +373,10 @@ export function useLiveSessionEngine() {
     resolve,
     clearTips,
     logout,
+    privateInterval,
+    startPrivate,
+    endPrivate,
+    lastCompletedShow,
+    completedShowsVersion,
   }
 }

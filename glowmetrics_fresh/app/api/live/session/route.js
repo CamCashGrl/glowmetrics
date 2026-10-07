@@ -43,8 +43,19 @@ export async function GET(req) {
     return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store', ...cors } })
   }
 
+  let privateInterval = null
+  if (data?.id) {
+    const { data: open } = await supabase
+      .from('live_private_intervals')
+      .select('id,live_session_id,platform,started_at,rate_per_minute')
+      .eq('live_session_id', data.id)
+      .is('ended_at', null)
+      .maybeSingle()
+    privateInterval = open || null
+  }
+
   return NextResponse.json(
-    { session: shapeLiveSession(data) },
+    { session: shapeLiveSession(data), privateInterval },
     { headers: { 'Cache-Control': 'no-store', ...cors } }
   )
 }

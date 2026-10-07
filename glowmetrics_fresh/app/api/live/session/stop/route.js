@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
+import { loadFinalizedShows } from '../../../../../lib/liveSession/loadShows'
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
@@ -23,7 +24,8 @@ export async function POST(req) {
   // A plpgsql composite return of NULL ("nothing to stop") arrives as an
   // object of null fields, not null.
   if (data?.id) {
-    return NextResponse.json({ session: shapeLiveSession(data), alreadyStopped: false }, { headers: cors })
+    const summary = await completedShowSummary(supabase, user.id, data.id)
+    return NextResponse.json({ session: shapeLiveSession(data), alreadyStopped: false, summary }, { headers: cors })
   }
 
   // Repeated Stop: return the same ended session, unchanged.
@@ -40,5 +42,13 @@ export async function POST(req) {
     return NextResponse.json(body, { status, headers: cors })
   }
 
-  return NextResponse.json({ session: shapeLiveSession(lastEnded), alreadyStopped: true }, { headers: cors })
+  const summary = lastEnded?.id ? await completedShowSummary(supabase, user.id, lastEnded.id) : null
+  return NextResponse.json({ session: shapeLiveSession(lastEnded), alreadyStopped: true, summary }, { headers: cors })
+}
+
+// The completed-show summary, re-read from the finalized row, its canonical
+// tips breakdown and its private intervals (never from in-memory state).
+async function completedShowSummary(supabase, userId, sessionId) {
+  const { shows } = await loadFinalizedShows(supabase, userId, { ids: [sessionId] })
+  return shows[0] || null
 }

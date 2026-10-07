@@ -23,6 +23,8 @@ import SubscriptionManager from './SubscriptionManager'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import LatestShows, { LatestShowDelta } from './LatestShows'
+import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
 
@@ -1477,6 +1479,24 @@ export default function Dashboard() {
     setLiveActive(status === 'live' || status === 'starting')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
   }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  // Finalized shows from persisted data; refetched whenever a show finishes.
+  const recentShows = useRecentShows(liveEngine.completedShowsVersion, { enabled: !!user })
+  // Opening Sessions shows every new show in full; after a moment on screen
+  // they count as viewed for this account (all devices).
+  const newShowIdsKey = recentShows.newIds.join(',')
+  useEffect(() => {
+    if (activeTab !== 'sessions' || !newShowIdsKey) return
+    const t = setTimeout(() => recentShows.acknowledge(newShowIdsKey.split(',')), 3000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, newShowIdsKey])
+  // A finished show changes the canonical tips behind every historical KPI:
+  // reload them from the database rather than adding anything in memory.
+  useEffect(() => {
+    if (!user || liveEngine.completedShowsVersion === 0) return
+    loadData(user.id, true, { silent: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveEngine.completedShowsVersion, user?.id])
   // Timezone for the session start/duration readout — same localStorage key
   // app/live/page.js uses, so a choice made on either surface carries over.
   const [liveTimezone, setLiveTimezone] = useState(() => {
@@ -3325,6 +3345,14 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+            {recentShows.delta && (
+              <div style={{ marginBottom: 16 }}>
+                <LatestShowDelta
+                  delta={recentShows.delta}
+                  onDismiss={() => recentShows.acknowledge([recentShows.delta.sessionId])}
+                />
+              </div>
+            )}
 
 
             {/* ═══════════════════════════════════════
@@ -5244,6 +5272,10 @@ const stopImportMessageRotation = () => {
             </div>
           )
         })()}
+
+        {activeTab === "sessions" && (
+          <LatestShows shows={recentShows.shows} loading={recentShows.loading} error={recentShows.error} />
+        )}
 
         {activeTab === "sessions" && (() => {
           const displaySessions = meaningfulOnly
