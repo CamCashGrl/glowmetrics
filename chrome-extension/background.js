@@ -321,8 +321,10 @@ function enqueueTip(payload, userId, displayKey) {
     queue.push({
       id: payload.clientEventId,
       // clientEventId + detectedAt (original timestamp) are immutable idempotency keys.
-      // Queued tips are NOT locked to the CamCash account that queued them.
-      // If the user switches accounts, the queue flushes with the new account's token.
+      // The CamCash account that captured the tip. It is only ever sent with
+      // that account's token; another account signing in on this browser
+      // waits instead of having this creator's earnings attributed to it.
+      userId,
       payload,
       displayKey,
       status: 'pending',
@@ -339,7 +341,7 @@ function enqueueTip(payload, userId, displayKey) {
 // One send attempt. 401 gets one token refresh + immediate resend; after
 // that it stays retryable (the user may sign in again). 408/425/429/5xx and
 // network errors are retryable; any other 4xx is a permanent rejection.
-async function postQueuedTip(payload) {
+async function postQueuedTip(payload, expectedUserId) {
   // queuedMs is measured on this browser's clock alone (detection -> now),
   // so the server can place a delayed tip in time without trusting our clock.
   const doPost = () => fetch(`${API_BASE}/api/live/tips`, {
@@ -359,10 +361,9 @@ async function postQueuedTip(payload) {
     res = await doPost();
     if (res.status === 401) {
       const refreshed = await refreshSession();
-      // Queued tips can flush under any authenticated account.
-      // clientEventId + detectedAt provide idempotency on the backend.
-      if (refreshed) res = await doPost();
-      else return { outcome: 'retry', reason: 'token refresh failed' };
+      // Only resend if the refreshed session is still the capturing account.
+      if (refreshed && session?.user?.id === expectedUserId) res = await doPost();
+      else return { outcome: 'retry', reason: 'account mismatch or refresh failed' };
     }
   } catch (e) {
     return { outcome: 'retry', offline: true, reason: `network: ${e.message}` };
@@ -423,9 +424,9 @@ async function flushTipQueue() {
             }
           }
           return queue
-            .filter((i) => i.status === 'pending' && i.nextAttemptAt <= now)
+            .filter((i) => i.status === 'pending' && i.userId === userId && i.nextAttemptAt <= now)
             .sort((a, b) => a.createdAt - b.createdAt)
-            .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey }));
+            .map((i) => ({ id: i.id, payload: i.payload, displayKey: i.displayKey, userId: i.userId }));
         });
       } catch (e) {
         // FIX R5: Storage error — don't loop immediately. Pause for 5s backoff.
@@ -435,9 +436,9 @@ async function flushTipQueue() {
       }
 
       for (const item of due) {
-        // Queued tips are not locked to the original CamCash account.
-        // Idempotency is guaranteed by clientEventId + detectedAt in persist_extension_tip.
-        const result = await postQueuedTip(item.payload);
+        // The signed-in account may have changed since this flush started.
+        if (session?.user?.id !== item.userId) break;
+        const result = await postQueuedTip(item.payload, item.userId);
         let nextAttemptAt = 0;
         try {
           await withTipQueue((queue) => {
@@ -481,9 +482,8 @@ async function scheduleTipQueueFlush() {
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
   const userId = session?.user?.id;
   const stored = await chrome.storage.local.get([TIP_QUEUE_KEY]);
-  // Queue flushes whenever ANY user is logged in, not just the user who queued the tips.
-  // Idempotency on backend ensures no duplicates across account switches.
-  const pending = (stored[TIP_QUEUE_KEY] || []).filter((i) => i.status === 'pending');
+  // Only the signed-in account's own tips are flushable now; others wait.
+  const pending = (stored[TIP_QUEUE_KEY] || []).filter((i) => i.status === 'pending' && i.userId === userId);
   if (!userId || pending.length === 0) {
     chrome.alarms.clear(TIP_QUEUE_ALARM);
     return;
