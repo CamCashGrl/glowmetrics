@@ -52,6 +52,22 @@ const fmtDuration = (seconds) => {
 
 const admin = createClient(STAGING_URL, STAGING_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
+// The landing page is client-rendered: wait until React has hydrated the
+// auth form (the Log In tab switches the password placeholder) before typing.
+async function signIn(page, email, password) {
+  await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' });
+  const pwInLogin = page.locator('input[type="password"][placeholder="Password"]:visible').first();
+  for (let i = 0; i < 30 && !(await pwInLogin.count()); i++) {
+    await page.getByRole('button', { name: 'Log In', exact: true }).first().click();
+    await page.waitForTimeout(1000);
+  }
+  await pwInLogin.waitFor({ state: 'visible', timeout: 10_000 });
+  const form = page.locator('form', { has: pwInLogin }).first();
+  await form.locator('input[type="email"]').fill(email);
+  await pwInLogin.fill(password);
+  await pwInLogin.press('Enter');
+}
+
 async function main() {
   // ── staging creator: Pro, onboarded ──────────────────────────────────────
   const email = `browser-pass-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@staging.local`;
@@ -82,12 +98,7 @@ async function main() {
 
     // ── sign in through the real landing form ───────────────────────────────
     console.log('\nStep 1: Sign in');
-    await page.goto(`${APP}/landing`, { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Log In', exact: true }).first().click();
-    await page.locator('input[type="email"]:visible').first().fill(email);
-    const pw = page.locator('input[type="password"]:visible').first();
-    await pw.fill(password);
-    await pw.press('Enter');
+    await signIn(page, email, password);
     await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 120_000 });
     check('Signed in through the landing form', /\/dashboard|\/onboarding/.test(page.url()), page.url());
 
@@ -190,12 +201,7 @@ async function main() {
     const second = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const p2 = await second.newPage();
     p2.setDefaultTimeout(120_000);
-    await p2.goto(`${APP}/landing`, { waitUntil: 'domcontentloaded' });
-    await p2.getByRole('button', { name: 'Log In', exact: true }).first().click();
-    await p2.locator('input[type="email"]:visible').first().fill(email);
-    const pw2 = p2.locator('input[type="password"]:visible').first();
-    await pw2.fill(password);
-    await pw2.press('Enter');
+    await signIn(p2, email, password);
     await p2.waitForURL(/\/dashboard/);
     await p2.locator('text="Free Chat Sessions" >> visible=true').first().click();
     await p2.getByTestId(`show-${sessionId}`).waitFor({ state: 'visible' });
