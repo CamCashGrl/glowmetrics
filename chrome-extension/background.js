@@ -168,11 +168,39 @@ async function liveSessionCall(path, method, body) {
   }
 }
 
-async function restoreLiveSession() {
+// How fresh a 'starting' session has to be for the extension to auto-adopt
+// it. This is the ONLY form of auto-start: the website's Start Stream
+// button creates a live_sessions row in 'starting' status, and this is the
+// extension picking up that explicit signal — never an old/stale session.
+// Anything not in 'starting', or a 'starting' row older than this window
+// (e.g. the website tab was closed before the extension ever connected),
+// is left alone: it will time out on its own via the backend sweep rather
+// than be silently adopted here.
+const PENDING_START_FRESHNESS_MS = 2 * 60 * 1000;
+
+// Called only when nothing is currently tracked locally (liveSession is
+// null) — on boot, on auth change, and on the heartbeat alarm's "nothing
+// tracked" branch. Deliberately does NOT resume an already-'live' or
+// 'inactive_warning' session: an extension boot/restart must never silently
+// revive a session it didn't just explicitly get told to start (this is
+// what makes "extension restart -> no phantom live session" hold).
+async function checkForPendingStart() {
+  if (liveSession) return;
   const data = await liveSessionCall('/api/live/session', 'GET');
-  liveSession = data?.session || null;
+  const candidate = data?.session;
+  if (!candidate || candidate.status !== 'starting') return;
+
+  const ageMs = Date.now() - new Date(candidate.started_at).getTime();
+  if (ageMs > PENDING_START_FRESHNESS_MS) return;
+
+  // Validate: authenticated (session already required to get here),
+  // session id is the one just discovered, status is genuinely 'starting'.
+  // Accepting it means sending our own heartbeat immediately — this is what
+  // the server treats as "the extension connected", flipping starting->live.
+  liveSession = candidate;
+  await sendExtensionHeartbeat();
+  await fetchCoachingPrompt();
   broadcast({ action: 'state', state: getState() });
-  if (liveSession) await fetchCoachingPrompt();
 }
 
 async function startLiveSession(platform) {
@@ -407,11 +435,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       await sendExtensionHeartbeat();
       await fetchCoachingPrompt();
     } else {
-      // No session currently tracked here — check whether one was started
-      // on another surface (the website) since we last knew. Without this,
-      // an extension that booted up before a website-started session began
-      // would never learn about it until its own restart or next login.
-      await restoreLiveSession();
+      // No session currently tracked here — check whether a fresh,
+      // explicit Start Stream just happened on another surface (the
+      // website). Bounded to PENDING_START_FRESHNESS_MS so this never
+      // silently adopts an old/stale session (see checkForPendingStart).
+      await checkForPendingStart();
     }
   }
 });
@@ -631,7 +659,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 
   if (msg.type === 'AUTH_CHANGED') {
     restorePromise = restore().then(() => {
-      if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); pingExtensionActive(); }
+      if (session) { loadWhales(); loadPlan(); checkForPendingStart(); scheduleAlarms(); pingExtensionActive(); }
       else { plan = 'free'; liveSession = null; chrome.alarms.clearAll(); }
     });
     return false;
@@ -639,6 +667,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 });
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+// Never resumes an already-'live' session on its own — see
+// checkForPendingStart(). A genuine browser/extension restart mid-session
+// intentionally does not silently continue tracking; the backend sweep
+// (10 min -> inactive_warning, 20 min -> auto-ended) is what protects a
+// session that's now unreachable from every surface.
 restorePromise = restore().then(() => {
-  if (session) { loadWhales(); loadPlan(); restoreLiveSession(); scheduleAlarms(); pingExtensionActive(); }
+  if (session) { loadWhales(); loadPlan(); checkForPendingStart(); scheduleAlarms(); pingExtensionActive(); }
 });

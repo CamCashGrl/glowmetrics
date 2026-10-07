@@ -10,7 +10,7 @@ export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
 }
 
-const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
+const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
 
 function shapeCoachingEvent(row) {
   if (!row) return null
