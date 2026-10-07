@@ -1487,6 +1487,8 @@ export default function Dashboard() {
   // Closed private intervals of finalized Live shows — the Live term of
   // Total Earned. Reloaded whenever a show finishes.
   const [livePrivateIntervals, setLivePrivateIntervals] = useState([])
+  // Detailed per-session analytics are progressive disclosure on Sessions.
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(false)
   useEffect(() => {
     if (!user) return
     let cancelled = false
@@ -5312,8 +5314,17 @@ const stopImportMessageRotation = () => {
           />
         )}
 
-        {/* Detailed tip-session breakdown; the empty state lives in SessionsOverview. */}
-        {activeTab === "sessions" && sessions.length > 0 && (() => {
+        {/* Detailed tip-session breakdown: collapsed by default (progressive
+            disclosure); the empty state lives in SessionsOverview. */}
+        {activeTab === "sessions" && sessions.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <button data-testid="toggle-detailed-breakdown" onClick={() => setShowDetailedBreakdown(v => !v)}
+              style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", border: "1px solid rgba(255,255,255,0.12)", background: showDetailedBreakdown ? "rgba(34,211,238,0.10)" : "transparent", color: showDetailedBreakdown ? C.cyan : C.muted }}>
+              {showDetailedBreakdown ? "Hide detailed session analytics" : "Show detailed session analytics (timeline, coaching)"}
+            </button>
+          </div>
+        )}
+        {activeTab === "sessions" && sessions.length > 0 && showDetailedBreakdown && (() => {
           const displaySessions = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)

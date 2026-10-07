@@ -50,6 +50,15 @@ const fmtDuration = (seconds) => {
   return h ? `${h}h ${m}m` : m ? `${m}m` : `${s}s`;
 };
 
+// Opens a Live show's full card from its Session History row (View details).
+async function openShowCard(pg, sessionId) {
+  await pg.getByTestId(`history-live:${sessionId}`).waitFor({ state: 'visible' });
+  const showCard = pg.getByTestId(`show-${sessionId}`);
+  if (!(await showCard.count())) await pg.getByTestId(`details-live:${sessionId}`).locator('button').click();
+  await showCard.waitFor({ state: 'visible' });
+  return showCard;
+}
+
 const admin = createClient(STAGING_URL, STAGING_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 // The landing page is client-rendered: wait until React has hydrated the
@@ -211,11 +220,13 @@ async function main() {
     // ── Sessions: the finished show, NEW, every value ───────────────────────
     console.log('\nStep 7: Sessions — finished show');
     await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
-    const card = page.getByTestId(`show-${sessionId}`);
-    await card.waitFor({ state: 'visible' });
+    const liveRow = page.getByTestId(`history-live:${sessionId}`);
+    await liveRow.waitFor({ state: 'visible' });
     // Checked first: viewing Sessions for 3s acknowledges the show.
-    check('Marked NEW / just ended', (await card.getByTestId('new-badge').count()) === 1 && /NEW/.test(await card.getByTestId('new-badge').textContent()));
+    check('Marked NEW / just ended (recent row)', (await liveRow.getByTestId('row-new-badge').count()) === 1);
     await shot(page, '05-dashboard-sessions-new-show');
+    // The full show card is progressive disclosure behind View details.
+    const card = await openShowCard(page, sessionId);
     const text = async (id) => ((await card.getByTestId(id).textContent()) || '').trim();
     const breakdown = row.final_platform_breakdown || {};
     const history = page.getByTestId('session-history');
@@ -226,7 +237,7 @@ async function main() {
     check('No "No sessions yet" while a finalized show exists', (await page.getByTestId('history-empty').count()) === 0);
     check('No separate Latest live shows area', (await page.getByTestId('latest-shows').count()) === 0);
     // Values of Command Center Stats: wrapper > card > value.
-    const statVal = async (id) => ((await page.getByTestId(id).locator(':scope > div > div').first().textContent()) || '').trim();
+    const statVal = async (id) => ((await page.getByTestId(id).textContent()) || '').trim();
     // Top hero: the most recently finished performance is this show.
     check('Top hero is Latest Performance', (await page.getByTestId('hero-latest').count()) === 1 && (await page.getByTestId('hero-live').count()) === 0);
     check('Hero total = show total', ((await page.getByTestId('hero-latest-total').textContent()) || '').trim() === usd(row.final_total_usd));
@@ -251,6 +262,7 @@ async function main() {
     for (const pf of ['chaturbate', 'bongacams', 'myfreecams']) {
       check(`Today by Platform lists ${pf}`, (await page.getByTestId(`today-platform-${pf}`).count()) === 1);
     }
+    await page.getByTestId('view-all').click();
     await page.getByTestId('filter-type-free_chat').click();
     check('Free chat filter hides the Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 0);
     check('Free chat filter shows the earlier free-chat session', (await page.getByTestId('type-badge-free_chat').count()) === 1);
@@ -286,7 +298,7 @@ async function main() {
     check('Viewing Sessions stored dashboard_seen_at', !!seen?.dashboard_seen_at);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
-    await page.getByTestId(`show-${sessionId}`).waitFor({ state: 'visible' });
+    await openShowCard(page, sessionId);
     check('NEW badge gone after reload', (await page.getByTestId(`show-${sessionId}`).getByTestId('new-badge').count()) === 0);
     await shot(page, '06-dashboard-sessions-acknowledged');
     await page.goto(`${APP}/dashboard`, { waitUntil: 'domcontentloaded' });
@@ -300,7 +312,7 @@ async function main() {
     await signIn(p2, email, password);
     await p2.waitForURL(/\/dashboard/);
     await p2.locator('text="Free Chat Sessions" >> visible=true').first().click();
-    await p2.getByTestId(`show-${sessionId}`).waitFor({ state: 'visible' });
+    await openShowCard(p2, sessionId);
     check('Second browser (device) shows it as already seen', (await p2.getByTestId(`show-${sessionId}`).getByTestId('new-badge').count()) === 0);
     await p2.screenshot({ path: path.join(OUT, '08-second-device-sessions.png'), fullPage: true });
     console.log('📸 08-second-device-sessions.png');

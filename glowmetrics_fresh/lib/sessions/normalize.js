@@ -421,3 +421,65 @@ export function typicalSameWeekdayByNow({ tips = [], tz = 'UTC', now = new Date(
     deltaPct: typical > 0 ? Math.round(((today - typical) / typical) * 100) : null,
   }
 }
+
+// ── FRESHNESS (all from real timestamps; nothing synthesized) ────────────
+
+// Canonical tips (public) in the last `minutes` before `now`.
+export function recentActivity({ tips = [], now = new Date(), minutes = 10 } = {}) {
+  const end = new Date(now).getTime()
+  const start = end - minutes * 60000
+  let usd = 0, count = 0, lastAt = null
+  for (const t of tips) {
+    const ms = new Date(t.date_time || t.dateRaw).getTime()
+    if (isNaN(ms) || ms > end) continue
+    if (!lastAt || ms > lastAt) lastAt = ms
+    if (ms < start) continue
+    usd += Number(t.usd) || 0
+    count += 1
+  }
+  return { minutes, usd: money(usd), count, lastTipAt: lastAt ? new Date(lastAt).toISOString() : null }
+}
+
+// Today's leading platform now vs `minutes` ago (same daily formula applied to
+// only the data that existed then). Returns { platform } only when the leader
+// actually changed and earned something; otherwise null.
+export function leaderShift({ tips = [], history = [], paidSessions = [], tz = 'UTC', now = new Date(), minutes = 10 } = {}) {
+  const cutoff = new Date(new Date(now).getTime() - minutes * 60000)
+  const before = (iso) => new Date(iso).getTime() <= cutoff.getTime()
+  const nowStats = dailySessionStats({ tips, history, paidSessions, tz, now })
+  if (!nowStats.bestPlatform) return null
+  if (localDayKey(cutoff, tz) !== nowStats.day) return null
+  const then = dailySessionStats({
+    tips: tips.filter((t) => before(t.date_time || t.dateRaw)),
+    history: history.filter((e) => e.endTime && before(e.endTime)),
+    paidSessions: paidSessions.filter((p) => before(p.date_time)),
+    tz, now: cutoff,
+  })
+  if (then.bestPlatform === nowStats.bestPlatform) return null
+  return { platform: nowStats.bestPlatform, previous: then.bestPlatform, minutes }
+}
+
+// Public tips per local hour today (0–23), for a sparkline.
+export function todayHourly({ tips = [], tz = 'UTC', now = new Date() } = {}) {
+  const day = localDayKey(now, tz)
+  const hours = Array(24).fill(0)
+  for (const t of tips) {
+    const at = new Date(t.date_time || t.dateRaw)
+    if (isNaN(at.getTime())) continue
+    const p = localParts(at, tz)
+    if (p.day !== day) continue
+    hours[Math.floor(p.minute / 60)] += Number(t.usd) || 0
+  }
+  return hours.map(money)
+}
+
+export function timeAgo(iso, now = new Date()) {
+  if (!iso) return null
+  const s = Math.max(0, Math.round((new Date(now) - new Date(iso)) / 1000))
+  if (s < 60) return `${s}s ago`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ${m % 60}m ago`
+  return `${Math.floor(h / 24)}d ago`
+}

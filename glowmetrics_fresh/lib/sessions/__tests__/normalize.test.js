@@ -259,3 +259,36 @@ describe('short tip groups are not sessions', () => {
     expect(N.latestPerformance(h)).toBeNull()
   })
 })
+
+describe('freshness helpers use only real timestamps', () => {
+  const N = require('../normalize')
+  const now = new Date('2026-10-07T20:00:00Z')
+  const tips = [
+    { date_time: '2026-10-07T19:55:00Z', platform: 'bongacams', username: 'A', usd: 6.5 },
+    { date_time: '2026-10-07T19:30:00Z', platform: 'chaturbate', username: 'B', usd: 5 },
+    { date_time: '2026-10-07T20:05:00Z', platform: 'bongacams', username: 'C', usd: 99 }, // future → ignored
+  ]
+
+  test('recent activity counts only the window', () => {
+    expect(N.recentActivity({ tips, now })).toEqual({ minutes: 10, usd: 6.5, count: 1, lastTipAt: '2026-10-07T19:55:00.000Z' })
+    expect(N.recentActivity({ tips: [], now }).lastTipAt).toBeNull()
+  })
+
+  test('leader shift only when the #1 platform actually changed', () => {
+    const s = N.leaderShift({ tips: tips.slice(0, 2), tz: 'UTC', now })
+    expect(s).toEqual({ platform: 'bongacams', previous: 'chaturbate', minutes: 10 })
+    expect(N.leaderShift({ tips: [tips[1]], tz: 'UTC', now })).toBeNull()
+  })
+
+  test('hourly buckets for today', () => {
+    const h = N.todayHourly({ tips: tips.slice(0, 2), tz: 'UTC', now })
+    expect(h[19]).toBe(11.5)
+    expect(h.reduce((a, b) => a + b, 0)).toBe(11.5)
+  })
+
+  test('time ago', () => {
+    expect(N.timeAgo('2026-10-07T19:59:42Z', now)).toBe('18s ago')
+    expect(N.timeAgo('2026-10-07T19:56:00Z', now)).toBe('4 min ago')
+    expect(N.timeAgo(null, now)).toBeNull()
+  })
+})
