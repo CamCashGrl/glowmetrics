@@ -8,10 +8,6 @@ on:
         required: false
         default: 'true'
 
-  push:
-    branches:
-      - claude/intelligent-volta-gplyme
-
 jobs:
   staging-17-scenarios:
     name: Run 17-Scenario Test Suite
