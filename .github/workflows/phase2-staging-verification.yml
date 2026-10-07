@@ -1625,3 +1625,45 @@ jobs:
           echo "❌ Test suite failed"
           echo "Do not proceed to production"
           exit 1
+
+  staging-smoke-test:
+    name: Run Staging Smoke Test
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    needs: staging-17-scenarios
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install smoke test dependencies
+        run: cd chrome-extension/tests && npm install
+
+      - name: Run Phase 2 Staging Smoke Test
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: ${{ secrets.CAMCASH_STAGING_BASE_URL }}
+        run: cd chrome-extension/tests && npm run test:staging
+
+      - name: Report Smoke Test Success
+        if: success()
+        run: |
+          echo "✅ Phase 2 Staging Smoke Test PASSED"
+          echo "✅ Extension → API → Database flow verified end-to-end"
+          echo "Ready for PR #654 scope review and production migration plan review"
+
+      - name: Report Smoke Test Failure
+        if: failure()
+        run: |
+          echo "❌ Phase 2 Staging Smoke Test FAILED"
+          echo "Do not proceed to production"
+          exit 1
