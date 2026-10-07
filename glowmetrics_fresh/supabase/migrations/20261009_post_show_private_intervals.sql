@@ -52,8 +52,15 @@ CREATE INDEX IF NOT EXISTS idx_live_private_intervals_session
 CREATE INDEX IF NOT EXISTS idx_live_private_intervals_user
   ON public.live_private_intervals (user_id);
 
--- Read own rows; every write goes through the functions below.
+-- Read own rows; every write goes through the functions below. Grants are
+-- explicit (no reliance on default privileges): _finalize_live_session_metrics
+-- runs as the creator for Stop/resolve and must read the intervals.
 ALTER TABLE public.live_private_intervals ENABLE ROW LEVEL SECURITY;
+-- Production's default privileges grant anon/authenticated ALL on new
+-- tables; start from nothing and grant exactly what is needed.
+REVOKE ALL ON public.live_private_intervals FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.live_private_intervals TO authenticated;
+GRANT ALL ON public.live_private_intervals TO service_role;
 DO $$
 BEGIN
   IF NOT EXISTS (

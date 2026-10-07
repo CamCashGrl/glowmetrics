@@ -46,6 +46,12 @@ CREATE TABLE IF NOT EXISTS public.unattributed_tips_log (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE public.unattributed_tips_log ENABLE ROW LEVEL SECURITY;
+-- Production's default privileges grant anon/authenticated ALL on new
+-- tables; creators may only read their own rows (policy below), writes are
+-- log_unattributed_tip_ambiguity's alone.
+REVOKE ALL ON public.unattributed_tips_log FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.unattributed_tips_log TO authenticated;
+GRANT ALL ON public.unattributed_tips_log TO service_role;
 
 DO $$
 BEGIN
