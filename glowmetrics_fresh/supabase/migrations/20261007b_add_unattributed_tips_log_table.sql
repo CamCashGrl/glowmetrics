@@ -6,7 +6,7 @@
 
 CREATE TABLE IF NOT EXISTS public.unattributed_tips_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
   username text NOT NULL,
   usd numeric NOT NULL,
   event_at timestamptz NOT NULL,
@@ -72,6 +72,7 @@ BEGIN
   RETURNING id INTO v_log_id;
 
   RETURN v_log_id;
+
 END;
 $$;
 
