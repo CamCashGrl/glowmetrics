@@ -3390,9 +3390,12 @@ const stopImportMessageRotation = () => {
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
-              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
-              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
+              // First-party comparison only (the creator's own previous month).
+              // CamCash has no cross-creator dataset, so no ranking is ever shown.
+              const prevMonthLine = (isFinite(prevMonthRev) && prevMonthRev > 0)
+                ? `vs $${prevMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} last month`
+                : null
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
               const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
 
@@ -3428,7 +3431,7 @@ const stopImportMessageRotation = () => {
               const cardDefs = [
                 { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
                   value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
+                  sub: prevMonthLine,
                   icon:'💰', isHero:true },
                 { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
                   value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
@@ -3462,7 +3465,7 @@ const stopImportMessageRotation = () => {
                         <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
                           {s.value}<TrendBadge pct={s.trend} />
                         </div>
-                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
+                        {s.sub && <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>}
                       </div>
                     ))}
                   </div>
