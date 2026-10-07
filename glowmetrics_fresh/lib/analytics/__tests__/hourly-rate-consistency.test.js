@@ -91,9 +91,9 @@ describe('Hourly rate consistency', () => {
       ...timedSession('Chaturbate', 0, 20, 10),
       ...timedSession('Chaturbate', 1, 20, 10),
       ...timedSession('Stripchat', 2, 21, 6),
-      // A lone tip that never becomes a meaningful session. It must be absent
-      // from both the platform's earnings and its revenue mix, or the mix
-      // shown under the earnings figure would total more than it.
+      // A lone tip that never becomes a meaningful session. Platform earnings
+      // count every tip, so the revenue mix must include it too, or the mix
+      // shown under the earnings figure would total less than it.
       ...untimedSession('Chaturbate', 3, 500),
     ]
 

@@ -1639,15 +1639,15 @@ export function aggregateRows(tips, tz = null) {
     avgUsd: d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0
   })).sort((a, b) => b.usd - a.usd)
 
-  // Same breakdown split by platform. Built from the meaningful sessions'
-  // own tips rather than every tip, so each platform's mix sums to the same
-  // revenue that platform reports in `platforms` — a mix built from all tips
-  // would total more than the earnings shown beside it.
+  // Same breakdown split by platform. Built from every tip, grouped with the
+  // same platform key as `platforms` (which sums ALL tips — "financial
+  // truth"), so each platform's mix sums to exactly the earnings that
+  // platform reports beside it.
   // Percentages are shares of that platform's own revenue, so a row never
   // reads as a share of the whole business on a single-platform view.
   const platformTipTypeMap = {}
-  meaningfulSessions.forEach(s => (s.tips || []).forEach(t => {
-    const plat = s.platform || t.platform || 'Unknown'
+  tips.forEach(t => {
+    const plat = t.platform || 'Chaturbate'
     const type = t.tip_type || 'Tip'
     if (!platformTipTypeMap[plat]) platformTipTypeMap[plat] = { total: 0, types: {} }
     if (!platformTipTypeMap[plat].types[type]) platformTipTypeMap[plat].types[type] = { usd: 0, count: 0, fans: new Set() }
@@ -1655,7 +1655,7 @@ export function aggregateRows(tips, tz = null) {
     platformTipTypeMap[plat].types[type].usd += t.usd || 0
     platformTipTypeMap[plat].types[type].count += 1
     platformTipTypeMap[plat].types[type].fans.add((t.username || '').toLowerCase())
-  }))
+  })
 
   const platformTipTypes = {}
   Object.entries(platformTipTypeMap).forEach(([plat, d]) => {
