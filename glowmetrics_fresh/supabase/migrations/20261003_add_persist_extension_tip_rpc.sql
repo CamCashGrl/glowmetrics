@@ -77,9 +77,13 @@ BEGIN
     RAISE EXCEPTION 'queued_ms must be >= 0' USING ERRCODE = '22003';
   END IF;
 
-  -- Serialize concurrent submissions of the same event (e.g. a retry that
-  -- overlaps a slow first attempt) so the existence check below is reliable.
-  PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text || ':' || p_client_event_id::text, 0));
+  -- Serialize all session-state mutations for this user (persistence, finalization, resumption)
+  -- using a user-level lock. This prevents races between:
+  --   1. persist_extension_tip writing new tips and selecting/creating sessions
+  --   2. finalize_live_session reading and updating session final metrics
+  -- A composite lock (user:event_id) is insufficient because it only serializes retries
+  -- of the exact same event, not different tips against finalization for the same user.
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0)::bigint);
 
   SELECT id, live_session_id INTO v_existing_live_id, v_existing_session_id
   FROM public.live_tips
@@ -170,6 +174,27 @@ BEGIN
     p_client_event_id
   )
   RETURNING id INTO v_live_tip_id;
+
+  -- S13: Delayed-tip reconciliation and metrics recomputation
+  -- When a tip arrives for an already-ended session (within 30-min window),
+  -- recalculate final_* metrics to include the delayed tip. This runs inside
+  -- the same user-level advisory lock that serializes finalization, so it's
+  -- safe to mutate final_* fields without racing against concurrent Stop.
+  -- Recomputation only happens for ended sessions, not active/paused ones.
+  IF v_session_id IS NOT NULL THEN
+    DECLARE
+      v_session_status text;
+    BEGIN
+      SELECT status INTO v_session_status
+      FROM public.live_sessions
+      WHERE id = v_session_id;
+
+      IF v_session_status = 'ended' THEN
+        -- Session is already finalized; recalculate final metrics to include this delayed tip
+        PERFORM public.recalculate_session_final_metrics(v_session_id);
+      END IF;
+    END;
+  END IF;
 
   RETURN jsonb_build_object(
     'success', true,
