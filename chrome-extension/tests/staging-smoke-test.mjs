@@ -104,7 +104,7 @@ async function createTempAuthUser() {
 
   try {
     const { data: created, error: createErr } = await adminClient.auth.admin.createUser({
-      user_id: SMOKE_TEST_USER_ID,
+      id: SMOKE_TEST_USER_ID,
       email: tempEmail,
       password: tempPassword,
       email_confirm: true
