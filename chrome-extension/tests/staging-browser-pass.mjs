@@ -50,15 +50,6 @@ const fmtDuration = (seconds) => {
   return h ? `${h}h ${m}m` : m ? `${m}m` : `${s}s`;
 };
 
-// Opens a Live show's full card from its Session History row (View details).
-async function openShowCard(pg, sessionId) {
-  await pg.getByTestId(`history-live:${sessionId}`).waitFor({ state: 'visible' });
-  const showCard = pg.getByTestId(`show-${sessionId}`);
-  if (!(await showCard.count())) await pg.getByTestId(`details-live:${sessionId}`).locator('button').click();
-  await showCard.waitFor({ state: 'visible' });
-  return showCard;
-}
-
 const admin = createClient(STAGING_URL, STAGING_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 // The landing page is client-rendered: wait until React has hydrated the
@@ -150,9 +141,10 @@ async function main() {
     await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
     const liveHero = page.getByTestId('hero-live');
     await liveHero.waitFor({ state: 'visible' });
-    await page.waitForFunction(() => document.querySelector('[data-testid="hero-live-total"]')?.textContent?.trim() === '$10.50', null, { timeout: 60_000 }).catch(() => {});
-    check('LIVE NOW hero at the top while the show runs', (await page.getByTestId('hero-latest').count()) === 0);
-    check('LIVE NOW total = public tips this session ($10.50)', ((await page.getByTestId('hero-live-total').textContent()) || '').trim() === '$10.50', await page.getByTestId('hero-live-total').textContent());
+    await page.waitForFunction(() => document.querySelector('[data-testid="details-total"]')?.textContent?.trim() === '$10.50', null, { timeout: 60_000 }).catch(() => {});
+    check('LIVE NOW chip in the Today hero', /LIVE NOW/.test((await liveHero.textContent()) || ''));
+    check('Running show leads Recent Sessions', (await page.getByTestId('session-history').locator('[data-testid^="history-"]').first().getAttribute('data-testid')) === `history-running:${sessionId}`);
+    check('Running show details = public tips this session ($10.50)', ((await page.getByTestId('details-total').textContent()) || '').trim() === '$10.50', await page.getByTestId('details-total').textContent());
     await shot(page, '02b-sessions-live-now');
     // Leave the dashboard on Command Center: it remembers the last tab, and
     // Sessions auto-acknowledges a NEW show after 3s, which would clear the
@@ -223,28 +215,34 @@ async function main() {
     const liveRow = page.getByTestId(`history-live:${sessionId}`);
     await liveRow.waitFor({ state: 'visible' });
     // Checked first: viewing Sessions for 3s acknowledges the show.
-    check('Marked NEW / just ended (recent row)', (await liveRow.getByTestId('row-new-badge').count()) === 1);
+    check('Marked NEW / just ended (row)', (await liveRow.getByTestId('row-new-badge').count()) === 1 && /JUST ENDED/.test((await liveRow.textContent()) || ''));
     await shot(page, '05-dashboard-sessions-new-show');
-    // The full show card is progressive disclosure behind View details.
-    const card = await openShowCard(page, sessionId);
-    const text = async (id) => ((await card.getByTestId(id).textContent()) || '').trim();
+    await page.locator('.sx-md').screenshot({ path: path.join(OUT, '05e-master-detail-selected.png') });
+    console.log('📸 05e-master-detail-selected.png');
     const breakdown = row.final_platform_breakdown || {};
     const history = page.getByTestId('session-history');
-    check('Finished show is first in Session History',
-      (await history.locator('[data-testid^="history-"]').first().getAttribute('data-testid')) === `history-live:${sessionId}`);
-    check('Live show renders as its ShowCard in the history',
-      (await page.getByTestId(`history-live:${sessionId}`).getByTestId(`show-${sessionId}`).count()) === 1);
+    check('Finished show is first in Recent Sessions and selected',
+      (await history.locator('[data-testid^="history-"]').first().getAttribute('data-testid')) === `history-live:${sessionId}` && (await liveRow.getAttribute('aria-pressed')) === 'true');
     check('No "No sessions yet" while a finalized show exists', (await page.getByTestId('history-empty').count()) === 0);
     check('No separate Latest live shows area', (await page.getByTestId('latest-shows').count()) === 0);
-    // Values of Command Center Stats: wrapper > card > value.
+    check('No detailed-breakdown section on Sessions', (await page.locator('text=Session Breakdown (detailed)').count()) === 0);
     const statVal = async (id) => ((await page.getByTestId(id).textContent()) || '').trim();
-    // Top hero: the most recently finished performance is this show.
-    check('Top hero is Latest Performance', (await page.getByTestId('hero-latest').count()) === 1 && (await page.getByTestId('hero-live').count()) === 0);
-    check('Hero total = show total', ((await page.getByTestId('hero-latest-total').textContent()) || '').trim() === usd(row.final_total_usd));
-    check('Hero marked NEW · JUST ENDED', (await page.getByTestId('hero-new-badge').count()) === 1);
-    check('Hero public = show public', (await statVal('latest-public')) === usd(row.final_public_usd), await statVal('latest-public'));
-    check('Hero private = show private', (await statVal('latest-private')) === usd(row.final_private_usd), await statVal('latest-private'));
-    check('Hero unique tippers 3', (await statVal('latest-unique')) === '3', await statVal('latest-unique'));
+    // Session Details = the persisted show row.
+    check('Details total = show total', (await statVal('details-total')) === usd(row.final_total_usd), await statVal('details-total'));
+    check('Details public = $10.50', (await statVal('details-public')) === usd(row.final_public_usd) && usd(row.final_public_usd) === '$10.50', await statVal('details-public'));
+    check('Details private = closed interval earnings', (await statVal('details-private')) === usd(row.final_private_usd) && usd(row.final_private_usd) === usd(intervals[0].estimated_earnings_usd), await statVal('details-private'));
+    check('Total = public + private', Math.round(Number(row.final_total_usd) * 100) === Math.round(Number(row.final_public_usd) * 100) + Math.round(Number(row.final_private_usd) * 100));
+    check('Details tips 3', (await statVal('details-tips')) === '3', await statVal('details-tips'));
+    // BrowserAlice on Chaturbate and on MyFreeCams are two different fans.
+    check('Details unique tippers 3 (no cross-platform merge)', (await statVal('details-unique')) === '3', await statVal('details-unique'));
+    check('Details top tipper BrowserAlice', (await statVal('details-top')) === 'BrowserAlice', await statVal('details-top'));
+    check('Details largest tip $5.00', (await statVal('details-largest')) === '$5.00', await statVal('details-largest'));
+    check('Details duration matches the saved show', (await statVal('details-duration')) === fmtDuration(row.final_duration_seconds), `${await statVal('details-duration')} vs ${row.final_duration_seconds}s`);
+    check('Details private time matches the saved show', (await statVal('details-private-time')) === fmtDuration(row.final_private_seconds), `${await statVal('details-private-time')} vs ${row.final_private_seconds}s`);
+    check('Earnings timeline rendered from real data', (await page.getByTestId('details-timeline').count()) === 1);
+    for (const [pf, expectUsd] of [['chaturbate', '$5.00'], ['bongacams', '$2.50'], ['myfreecams', '$3.00']]) {
+      check(`Saved platform split ${pf} ${expectUsd}`, usd(breakdown[pf]?.usd) === expectUsd, JSON.stringify(breakdown[pf]));
+    }
     // Today so far = the show + earlier free chat + imported private, once each.
     const expPublic = Number(row.final_public_usd) + FREE_CHAT_USD;
     const expPrivate = Number(row.final_private_usd) + PAID_USD;
@@ -255,41 +253,22 @@ async function main() {
     check('Today unique tippers 5 (per platform)', (await statVal('today-unique')) === '5', await statVal('today-unique'));
     check('Today completed sessions 2 (show + 40-min free chat)', (await statVal('today-completed')) === '2', await statVal('today-completed'));
     check('Best platform is BongaCams', (await statVal('today-best-platform')) === 'BongaCams', await statVal('today-best-platform'));
-    check('Best platform card is highlighted', (await page.getByTestId('today-platform-bongacams').getByTestId('best-platform-badge').count()) === 1);
-    check("Today's strongest signal shown", /BongaCams is leading today with \d+% of your earnings\./.test((await page.getByTestId('today-signal').textContent()) || ''));
+    check('BongaCams card marked BEST TODAY', (await page.getByTestId('today-platform-bongacams').getByTestId('best-platform-badge').count()) === 1);
+    check("Strongest signal shown", /BongaCams is leading today with \d+% of your earnings\./.test((await page.getByTestId('today-signal').textContent()) || ''));
     const header = await page.locator('text=Total Earned').first().locator('xpath=..').textContent();
     check('Header Total Earned includes private', (header || '').includes(usd(expPublic + expPrivate)), header);
-    for (const pf of ['chaturbate', 'bongacams', 'myfreecams']) {
-      check(`Today by Platform lists ${pf}`, (await page.getByTestId(`today-platform-${pf}`).count()) === 1);
+    for (const pf of ['bongacams', 'chaturbate', 'myfreecams']) {
+      check(`Platform card ${pf}`, (await page.getByTestId(`today-platform-${pf}`).count()) === 1);
     }
-    await page.getByTestId('view-all').click();
-    await page.getByTestId('filter-type-free_chat').click();
-    check('Free chat filter hides the Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 0);
-    check('Free chat filter shows the earlier free-chat session', (await page.getByTestId('type-badge-free_chat').count()) === 1);
+    await page.getByTestId('filter-type-free_chat').locator('button').click();
+    check('Free Chat filter hides the Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 0);
+    check('Free Chat filter shows the earlier free-chat session', (await page.getByTestId('type-badge-free_chat').count()) === 1);
     await shot(page, '05c-sessions-filter-free-chat');
-    await page.getByTestId('filter-type-private').click();
+    await page.getByTestId('filter-type-private').locator('button').click();
     check('Private filter shows the imported private session', (await page.getByTestId('type-badge-private').count()) === 1);
     await shot(page, '05d-sessions-filter-private');
-    await page.getByTestId('filter-type-all').click();
-    await page.getByTestId('filter-platform-myfreecams').click();
-    check('MyFreeCams filter keeps the multi-platform Live show', (await page.getByTestId(`history-live:${sessionId}`).count()) === 1);
-    await page.getByTestId('filter-platform-all').click();
+    await page.getByTestId('filter-type-all').locator('button').click();
     await shot(page, '05b-dashboard-sessions-today');
-    check('Total earnings', (await text('show-total')) === usd(row.final_total_usd), `${await text('show-total')} vs ${usd(row.final_total_usd)}`);
-    check('Public earnings = $10.50', (await text('show-public')) === usd(row.final_public_usd) && usd(row.final_public_usd) === '$10.50', await text('show-public'));
-    check('Private earnings', (await text('show-private')) === usd(row.final_private_usd) && usd(row.final_private_usd) === usd(intervals[0].estimated_earnings_usd), await text('show-private'));
-    check('Total = public + private', Math.round(Number(row.final_total_usd) * 100) === Math.round(Number(row.final_public_usd) * 100) + Math.round(Number(row.final_private_usd) * 100));
-    check('Tip count 3', (await text('show-tips')) === '3', await text('show-tips'));
-    // BrowserAlice on Chaturbate and on MyFreeCams are two different fans.
-    check('Unique tippers 3 (no cross-platform merge)', (await text('show-unique')) === '3', await text('show-unique'));
-    check('Top tipper BrowserAlice ($5.00, Chaturbate only)', (await text('show-top')) === 'BrowserAlice ($5.00)', await text('show-top'));
-    check('Largest tip $5.00', (await text('show-largest')) === '$5.00', await text('show-largest'));
-    check('Duration matches the saved show', (await text('show-duration')) === fmtDuration(row.final_duration_seconds), `${await text('show-duration')} vs ${row.final_duration_seconds}s`);
-    check('Private duration matches the saved show', (await text('show-private-time')) === fmtDuration(row.final_private_seconds), `${await text('show-private-time')} vs ${row.final_private_seconds}s`);
-    for (const [pf, expectUsd, expectTips] of [['chaturbate', '$5.00', 1], ['bongacams', '$2.50', 1], ['myfreecams', '$3.00', 1]]) {
-      const t = ((await card.getByTestId(`platform-${pf}`).textContent()) || '').trim();
-      check(`Platform split ${pf} ${expectUsd}`, t.includes(`${expectUsd} · ${expectTips} tip`) && usd(breakdown[pf]?.usd) === expectUsd, t);
-    }
 
     // ── acknowledgement clears NEW, and it persists ─────────────────────────
     console.log('\nStep 8: Acknowledgement');
@@ -298,8 +277,8 @@ async function main() {
     check('Viewing Sessions stored dashboard_seen_at', !!seen?.dashboard_seen_at);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
-    await openShowCard(page, sessionId);
-    check('NEW badge gone after reload', (await page.getByTestId(`show-${sessionId}`).getByTestId('new-badge').count()) === 0);
+    await page.getByTestId(`history-live:${sessionId}`).waitFor({ state: 'visible' });
+    check('NEW badge gone after reload', (await page.getByTestId(`history-live:${sessionId}`).getByTestId('row-new-badge').count()) === 0);
     await shot(page, '06-dashboard-sessions-acknowledged');
     await page.goto(`${APP}/dashboard`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(4000);
@@ -312,8 +291,8 @@ async function main() {
     await signIn(p2, email, password);
     await p2.waitForURL(/\/dashboard/);
     await p2.locator('text="Free Chat Sessions" >> visible=true').first().click();
-    await openShowCard(p2, sessionId);
-    check('Second browser (device) shows it as already seen', (await p2.getByTestId(`show-${sessionId}`).getByTestId('new-badge').count()) === 0);
+    await p2.getByTestId(`history-live:${sessionId}`).waitFor({ state: 'visible' });
+    check('Second browser (device) shows it as already seen', (await p2.getByTestId(`history-live:${sessionId}`).getByTestId('row-new-badge').count()) === 0);
     await p2.screenshot({ path: path.join(OUT, '08-second-device-sessions.png'), fullPage: true });
     console.log('📸 08-second-device-sessions.png');
   } catch (e) {

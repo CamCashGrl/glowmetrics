@@ -5318,16 +5318,9 @@ const stopImportMessageRotation = () => {
           />
         )}
 
-        {/* Detailed tip-session breakdown: collapsed by default (progressive
-            disclosure); the empty state lives in SessionsOverview. */}
-        {activeTab === "sessions" && sessions.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <button data-testid="toggle-detailed-breakdown" onClick={() => setShowDetailedBreakdown(v => !v)}
-              style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", border: "1px solid rgba(255,255,255,0.12)", background: showDetailedBreakdown ? "rgba(34,211,238,0.10)" : "transparent", color: showDetailedBreakdown ? C.cyan : C.muted }}>
-              {showDetailedBreakdown ? "Hide detailed session analytics" : "Show detailed session analytics (timeline, coaching)"}
-            </button>
-          </div>
-        )}
+        {/* The legacy detailed breakdown below is no longer opened from the
+            Sessions tab (replaced by the Session Details panel). Kept, not
+            deleted, pending approval to remove it. */}
         {activeTab === "sessions" && sessions.length > 0 && showDetailedBreakdown && (() => {
           const displaySessions = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)

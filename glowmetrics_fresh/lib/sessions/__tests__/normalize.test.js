@@ -317,3 +317,49 @@ describe('imported private charges group into one private session', () => {
     expect(d.publicUSD).toBe(0)
   })
 })
+
+describe('range, yesterday comparison and session timeline', () => {
+  const N = require('../normalize')
+  const now = new Date('2026-10-07T20:00:00Z')
+
+  test('days widens the window to N local days ending today', () => {
+    const tips = [
+      { date_time: '2026-10-07T10:00:00Z', platform: 'bongacams', username: 'a', usd: 1 },
+      { date_time: '2026-10-01T10:00:00Z', platform: 'bongacams', username: 'b', usd: 2 },
+      { date_time: '2026-09-30T10:00:00Z', platform: 'bongacams', username: 'c', usd: 4 },
+    ]
+    expect(N.dailySessionStats({ tips, tz: 'UTC', now }).totalUSD).toBe(1)
+    expect(N.dailySessionStats({ tips, tz: 'UTC', now, days: 7 }).totalUSD).toBe(3)
+    expect(N.dailySessionStats({ tips, tz: 'UTC', now, days: 30 }).totalUSD).toBe(7)
+  })
+
+  test('vs yesterday compares up to the same local time only', () => {
+    const tips = [
+      { date_time: '2026-10-07T10:00:00Z', usd: 12 },
+      { date_time: '2026-10-06T10:00:00Z', usd: 10 },
+      { date_time: '2026-10-06T22:00:00Z', usd: 500 }, // after 20:00 yesterday → excluded
+    ]
+    expect(N.vsYesterdayByNow({ tips, tz: 'UTC', now })).toEqual({ todayUSD: 12, yesterdayUSD: 10, deltaPct: 20 })
+    expect(N.vsYesterdayByNow({ tips: [tips[0]], tz: 'UTC', now })).toBeNull()
+  })
+
+  test('timeline puts tips at their time and spreads a private interval over its span', () => {
+    const entry = {
+      type: 'live', sourceId: 's', startTime: '2026-10-07T17:00:00Z', endTime: '2026-10-07T18:00:00Z',
+      privateIntervals: [{ startedAt: '2026-10-07T17:30:00Z', endedAt: '2026-10-07T17:40:00Z', earningsUsd: 6 }],
+    }
+    const tips = [
+      { live_session_id: 's', date_time: '2026-10-07T17:05:00Z', usd: 5 },
+      { live_session_id: 's', date_time: '2026-10-07T17:55:00Z', usd: 3 },
+      { live_session_id: 'other', date_time: '2026-10-07T17:10:00Z', usd: 99 },
+    ]
+    const tl = N.sessionTimeline(entry, { tips, count: 6 }) // 10-minute buckets
+    expect(tl.buckets.map((b) => b.public)).toEqual([5, 0, 0, 0, 0, 3])
+    expect(tl.buckets.map((b) => b.private)).toEqual([0, 0, 0, 6, 0, 0])
+    expect(tl.buckets.reduce((s, b) => s + b.tips, 0)).toBe(2)
+  })
+
+  test('timeline is null when nothing time-resolved exists', () => {
+    expect(N.sessionTimeline({ type: 'free_chat', startTime: '2026-10-07T10:00:00Z', endTime: '2026-10-07T10:00:00Z', session: { tips: [{ date_time: '2026-10-07T10:00:00Z', usd: 1 }] } })).toBeNull()
+  })
+})

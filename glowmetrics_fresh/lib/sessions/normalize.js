@@ -144,6 +144,7 @@ function privateEntry(g) {
     durationMinutes: null,
     chargeSpanMinutes: g.rows.length > 1 ? spanMinutes : null,
     chargeCount: g.rows.length,
+    charges: g.rows.map((r) => ({ date_time: r.date_time, usd: Number(r.usd) || 0 })),
     durationEstimated: false,
     durationUnknown: true,
     publicUSD: 0,
@@ -218,8 +219,18 @@ function finishBucket(b) {
 //   completed = finalized Live shows + valid inferred sessions
 //   best platform = highest total USD that day (null when no revenue)
 // A show or inferred session belongs to the day it started.
-export function dailySessionStats({ tips = [], history = [], paidSessions = [], tz = 'UTC', now = new Date() } = {}) {
+// `days` widens the same formulas to the last N creator-local days ending
+// today (1 = today, 7, 30). Nothing else changes.
+export function localDayKeysBack(now, tz, days = 1) {
+  const keys = new Set()
+  const base = new Date(now).getTime()
+  for (let i = 0; keys.size < days && i < days + 3; i++) keys.add(localDayKey(new Date(base - i * 86400000), tz))
+  return keys
+}
+
+export function dailySessionStats({ tips = [], history = [], paidSessions = [], tz = 'UTC', now = new Date(), days = 1 } = {}) {
   const day = localDayKey(now, tz)
+  const inRange = localDayKeysBack(now, tz, days)
   const overall = emptyBucket()
   const byPlatform = new Map()
   const bucketFor = (p) => {
@@ -229,7 +240,7 @@ export function dailySessionStats({ tips = [], history = [], paidSessions = [], 
   }
 
   for (const t of tips) {
-    if (localDayKey(t.date_time || t.dateRaw, tz) !== day) continue
+    if (!inRange.has(localDayKey(t.date_time || t.dateRaw, tz))) continue
     const usd = Number(t.usd) || 0
     const key = fanKey(t.platform, t.username)
     for (const b of [overall, bucketFor(t.platform)]) {
@@ -240,7 +251,7 @@ export function dailySessionStats({ tips = [], history = [], paidSessions = [], 
   }
 
   for (const p of paidSessions) {
-    if (localDayKey(p.date_time, tz) !== day) continue
+    if (!inRange.has(localDayKey(p.date_time, tz))) continue
     const usd = Number(p.usd) || 0
     overall.privateUSD += usd
     bucketFor(p.platform).privateUSD += usd
@@ -248,7 +259,7 @@ export function dailySessionStats({ tips = [], history = [], paidSessions = [], 
 
   for (const e of history) {
     if (e.type === 'private') continue
-    if (localDayKey(e.startTime, tz) !== day) continue
+    if (!inRange.has(localDayKey(e.startTime, tz))) continue
     overall.streamedMinutes += e.durationMinutes || 0
     if (e.durationEstimated) overall.streamedEstimated = true
     if (e.type === 'live') {
@@ -273,6 +284,7 @@ export function dailySessionStats({ tips = [], history = [], paidSessions = [], 
 
   return {
     day,
+    days,
     ...finishBucket(overall),
     bestPlatform: best ? best.platform : null,
     platforms,
@@ -512,4 +524,76 @@ export function timeAgo(iso, now = new Date()) {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h}h ${m % 60}m ago`
   return `${Math.floor(h / 24)}d ago`
+}
+
+// Public tips today up to now vs yesterday up to the same local time.
+// Null unless yesterday had public tips by then (no comparison is invented).
+export function vsYesterdayByNow({ tips = [], tz = 'UTC', now = new Date() } = {}) {
+  const nowP = localParts(new Date(now), tz)
+  const yKey = localDayKey(new Date(new Date(now).getTime() - 86400000), tz)
+  let today = 0, yesterday = 0
+  for (const t of tips) {
+    const at = new Date(t.date_time || t.dateRaw)
+    if (isNaN(at.getTime()) || at > new Date(now)) continue
+    const p = localParts(at, tz)
+    if (p.minute > nowP.minute) continue
+    if (p.day === nowP.day) today += Number(t.usd) || 0
+    else if (p.day === yKey) yesterday += Number(t.usd) || 0
+  }
+  if (yesterday <= 0) return null
+  return { todayUSD: money(today), yesterdayUSD: money(yesterday), deltaPct: Math.round(((today - yesterday) / yesterday) * 100) }
+}
+
+// Cumulative public tips by local hour today (for the hero trend line).
+export function todayCumulative({ tips = [], tz = 'UTC', now = new Date() } = {}) {
+  const hourly = todayHourly({ tips, tz, now })
+  const nowHour = Math.floor(localParts(new Date(now), tz).minute / 60)
+  let run = 0
+  return hourly.slice(0, nowHour + 1).map((v) => money((run += v)))
+}
+
+// Earnings over one session's real span, in `count` equal buckets.
+//  public  = canonical tips at their times
+//  private = Live private intervals spread over their real start→end (rate is
+//            per minute), or imported private charges at their charge times
+//  tips    = tip events per bucket
+// Null when there is nothing time-resolved to plot.
+export function sessionTimeline(entry, { tips = [], count = 24 } = {}) {
+  if (!entry) return null
+  let events = []
+  let privates = []
+  if (entry.type === 'live') {
+    events = tips.filter((t) => t.live_session_id === entry.sourceId)
+    privates = (entry.privateIntervals || []).filter((iv) => iv.startedAt && iv.endedAt)
+      .map((iv) => ({ start: new Date(iv.startedAt).getTime(), end: new Date(iv.endedAt).getTime(), usd: Number(iv.earningsUsd) || 0 }))
+  } else if (entry.type === 'private') {
+    privates = (entry.charges || []).map((c) => { const ms = new Date(c.date_time).getTime(); return { start: ms, end: ms, usd: Number(c.usd) || 0 } })
+  } else {
+    events = entry.session?.tips || []
+  }
+  const times = [
+    ...events.map((t) => new Date(t.date_time || t.dateRaw).getTime()),
+    ...privates.flatMap((p) => [p.start, p.end]),
+  ].filter((x) => !isNaN(x))
+  const start = Math.min(new Date(entry.startTime).getTime(), ...times)
+  const end = Math.max(new Date(entry.endTime || entry.startTime).getTime(), ...times)
+  if (!isFinite(start) || !isFinite(end) || end <= start || (events.length + privates.length) < 2) return null
+  const width = (end - start) / count
+  const buckets = Array.from({ length: count }, (_, i) => ({ t: new Date(start + i * width).toISOString(), public: 0, private: 0, tips: 0 }))
+  const at = (ms) => Math.min(count - 1, Math.max(0, Math.floor((ms - start) / width)))
+  for (const t of events) {
+    const b = buckets[at(new Date(t.date_time || t.dateRaw).getTime())]
+    b.public += Number(t.usd) || 0
+    b.tips += 1
+  }
+  for (const p of privates) {
+    if (p.end <= p.start) { buckets[at(p.start)].private += p.usd; continue }
+    for (let i = at(p.start); i <= at(p.end); i++) {
+      const bs = start + i * width, be = bs + width
+      const overlap = Math.max(0, Math.min(be, p.end) - Math.max(bs, p.start))
+      buckets[i].private += p.usd * (overlap / (p.end - p.start))
+    }
+  }
+  for (const b of buckets) { b.public = money(b.public); b.private = money(b.private) }
+  return { start: new Date(start).toISOString(), end: new Date(end).toISOString(), buckets }
 }
