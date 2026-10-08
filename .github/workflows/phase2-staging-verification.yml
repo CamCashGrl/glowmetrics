@@ -7,10 +7,15 @@ on:
         description: 'Run staging test scenarios'
         required: false
         default: 'true'
+      only_sessions:
+        description: 'Run only the Sessions adaptive-layer browser test'
+        required: false
+        default: 'false'
 
 jobs:
   staging-17-scenarios:
     name: Run 17-Scenario Test Suite
+    if: inputs.only_sessions != 'true'
     runs-on: ubuntu-latest
     environment:
       name: staging
@@ -1669,6 +1674,7 @@ jobs:
     environment:
       name: staging
     needs: staging-17-scenarios
+    if: inputs.only_sessions != 'true'
 
     steps:
       - name: Checkout repository
@@ -1745,6 +1751,8 @@ jobs:
     environment:
       name: staging
     needs: staging-smoke-test
+    if: always() && (needs.staging-smoke-test.result == 'success' || inputs.only_sessions == 'true')
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -1786,6 +1794,7 @@ jobs:
           npx playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps chromium
 
       - name: Run browser pass
+        if: inputs.only_sessions != 'true'
         working-directory: chrome-extension/tests
         env:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
@@ -1796,7 +1805,7 @@ jobs:
         run: node staging-browser-pass.mjs
 
       - name: Run profile-security attack tests
-        if: success() || failure()
+        if: inputs.only_sessions != 'true' && (success() || failure())
         working-directory: chrome-extension/tests
         env:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
@@ -1807,7 +1816,7 @@ jobs:
         run: node staging-profile-security.mjs
 
       - name: Run onboarding restore browser test
-        if: success() || failure()
+        if: inputs.only_sessions != 'true' && (success() || failure())
         working-directory: chrome-extension/tests
         env:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
