@@ -104,7 +104,7 @@ function Cell({ icon, value, label, testId, accent, sub, strong }) {
     <div style={{ ...inset, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", minWidth: 0, ...(strong ? { border: `1px solid ${C.violet}88`, boxShadow: `0 0 22px ${C.violet}33, inset 0 0 18px ${C.violet}14` } : {}) }}>
       {icon && <span aria-hidden="true" style={{ fontSize: 20, width: 26, textAlign: "center", flexShrink: 0 }}>{icon}</span>}
       <div style={{ minWidth: 0 }}>
-        <div data-testid={testId} style={{ fontSize: String(value).length >= 9 ? 15 : strong ? 18 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, overflowWrap: "break-word" }}>{value}</div>
+        <div data-testid={testId} style={{ fontSize: String(value).length >= 9 ? 15 : String(value).length >= 7 || strong ? 18 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, ...(/^[$\d.,\s~↑↓%-]+$/.test(String(value)) ? { whiteSpace: "nowrap" } : { overflowWrap: "break-word" }) }}>{value}</div>
         <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>{label}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
       </div>
@@ -119,7 +119,7 @@ function TrendLine({ values }) {
   const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 6 - (v / max) * (h - 14)])
   const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ")
   return (
-    <svg data-testid="today-trend" viewBox={`0 0 ${w} ${h}`} width={w} height={h} role="img" aria-label="Cumulative public tips today" style={{ overflow: "visible" }}>
+    <svg data-testid="today-trend" viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none" role="img" aria-label="Cumulative public tips today" style={{ overflow: "hidden", maxWidth: w, display: "block" }}>
       <defs><linearGradient id="sxTrend" x1="0" x2="1"><stop offset="0" stopColor={C.cyan} /><stop offset=".55" stopColor={C.indigo} /><stop offset="1" stopColor={C.pink} /></linearGradient></defs>
       <path d={d} fill="none" stroke="url(#sxTrend)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 6px ${C.indigo})` }} />
       <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="4" fill={C.pink} />
@@ -128,7 +128,7 @@ function TrendLine({ values }) {
 }
 
 // ── Row 2: hero ──────────────────────────────────────────────────────────────
-function Hero({ stats, range, comparison, trend, live, now }) {
+function Hero({ stats, range, comparison, trend, live, now, noData = false }) {
   const flash = useFlash(stats.totalUSD)
   const title = range === 1 ? "Today so far" : `Last ${range} days`
   return (
@@ -140,7 +140,9 @@ function Hero({ stats, range, comparison, trend, live, now }) {
       <div style={{ position: "relative", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={eyebrow}>{title}</span>
-          {live
+          {noData
+            ? <span data-testid="hero-no-data" style={{ fontSize: 10, fontWeight: 800, color: C.text, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.04)", padding: "3px 10px", borderRadius: 999 }}>NO DATA YET · import your tip history or start a Live Mode show</span>
+            : live
             ? <span data-testid="hero-live" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 800, color: C.green, border: `1px solid ${C.green}66`, background: `${C.green}14`, padding: "3px 10px", borderRadius: 999 }}><span className="sx-pulse" />LIVE NOW · {fmtDuration(live.durationSeconds)}</span>
             : <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 800, color: C.green, border: `1px solid ${C.green}55`, background: `${C.green}10`, padding: "3px 10px", borderRadius: 999 }}><span style={{ width: 7, height: 7, borderRadius: 4, background: C.green }} />LIVE DATA</span>}
         </div>
@@ -155,7 +157,7 @@ function Hero({ stats, range, comparison, trend, live, now }) {
               </div>
             )}
           </div>
-          {range === 1 && <TrendLine values={trend} />}
+          {range === 1 && <div style={{ flex: "0 1 220px", minWidth: 0, overflow: "hidden", paddingTop: 6 }}><TrendLine values={trend} /></div>}
         </div>
       </div>
       <div className="sx-cells" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
@@ -317,7 +319,7 @@ function SessionRow({ e, tz, selected, onSelect }) {
       </span>
       <span><div style={{ fontWeight: 900, fontSize: 14 }}>{fmtUsd(e.totalUSD)}</div><div style={{ fontSize: 11, color: C.text }}>Total Earned</div></span>
       <span><div style={{ fontWeight: 800, fontSize: 13 }}>{lengthText(e)}</div><div style={{ fontSize: 11, color: C.text }}>{e.type === "live" ? "Duration" : e.type === "private" ? "Charge span" : "Est. span"}</div></span>
-      <span><div style={{ fontWeight: 800, fontSize: 13 }}>{e.type === "private" ? e.chargeCount : e.tipCount}</div><div style={{ fontSize: 11, color: C.text }}>{e.type === "private" ? "Charges" : "Tips"}</div></span>
+      <span><div style={{ fontWeight: 800, fontSize: 13 }}>{e.type === "private" ? e.chargeCount : e.tipCount}</div><div style={{ fontSize: 11, color: C.text }}>{e.type === "private" ? (e.chargeCount === 1 ? "Charge" : "Charges") : (e.tipCount === 1 ? "Tip" : "Tips")}</div></span>
       <span aria-hidden="true" style={{ color: C.text, fontSize: 16 }}>›</span>
     </button>
   )
@@ -376,7 +378,7 @@ function Details({ e, tips, tz, today, signal }) {
       <div className="sx-dgrid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
         <Cell value={fmtUsd(e.publicUSD)} label="Public" testId="details-public" />
         <Cell value={fmtUsd(e.privateUSD)} label="Private" testId="details-private" accent={C.pink} />
-        <Cell value={e.type === "private" ? `${e.chargeCount} charges` : e.tipCount} label={e.type === "private" ? "Billing" : "Tips"} testId="details-tips" />
+        <Cell value={e.type === "private" ? `${e.chargeCount} ${e.chargeCount === 1 ? "charge" : "charges"}` : e.tipCount} label={e.type === "private" ? "Billing" : "Tips"} testId="details-tips" />
         <Cell value={e.uniqueTippers} label="Unique Tippers" testId="details-unique" />
         <Cell value={e.type === "live" ? fmtUsd(e.show?.largestTipUsd) : e.type === "private" ? "—" : fmtUsd(Math.max(0, ...(e.session?.tips || []).map((x) => Number(x.usd) || 0)))} label="Largest Tip" testId="details-largest" />
         <Cell value={e.topTipper ? e.topTipper.username : e.fan || "—"} label={e.type === "private" ? "Fan" : "Top Tipper"} testId="details-top" />
@@ -471,8 +473,9 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
               {[["today", "Today"], ["overall", "Overall"]].map(([k, l]) => <span key={k} data-testid={`scope-${k}`}><Pill active={scope === k} onClick={() => setScopePick(k)}>{l}</Pill></span>)}
             </div>
           )}
-          {scope === "today" && <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)" }}>
-            {RANGES.map(([d, l]) => <span key={d} data-testid={`range-${d}`}><Pill active={range === d} onClick={() => setRange(d)}>{l}</Pill></span>)}
+          {scope === "today" && <div data-testid="range-group" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)", alignItems: "center" }}>
+            {mode.kind === "mixed" && <span style={{ fontSize: 11, color: C.muted, padding: "0 6px" }}>Range</span>}
+            {RANGES.map(([d, l]) => <span key={d} data-testid={`range-${d}`}><Pill active={range === d} onClick={() => setRange(d)}>{mode.kind === "mixed" && d === 1 ? "1 Day" : l}</Pill></span>)}
           </div>}
  <PrimaryPlatformControl isPro={isPro} primary={primaryPlatform} onSaved={onPrimarySaved} />
           <span data-testid="updated" style={{ fontSize: 12, color: C.text, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -484,7 +487,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
       {/* Row 2 */}
       {scope === "overall"
         ? <OverallHero o={overall} sourceLabel={sourceLabel} historyNote={historyNote} tz={tz} />
-        : <Hero stats={stats} range={range} comparison={comparison} trend={trend} live={snap} now={now} />}
+        : <Hero stats={stats} range={range} comparison={comparison} trend={trend} live={snap} now={now} noData={mode.kind === "none"} />}
 
       {/* Row 3 */}
       {showPerf ? (

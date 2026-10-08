@@ -226,3 +226,28 @@ test('Free history note follows the primary platform', () => {
   renderTab({ tips: csvTips, isPro: false, primaryPlatform: 'Chaturbate' })
   expect(val('overall-history-note')).toMatch(/full history on Chaturbate/)
 })
+
+// ── UI polish (no numeric change) ────────────────────────────────────────────
+test('mixed mode: no two adjacent controls both labeled "Today"', () => {
+  renderTab({ tips: [...liveTips, ...freeChat, ...csvTips], shows: [show] })
+  expect(val('scope-today')).toBe('Today')
+  expect(val('range-1')).toBe('1 Day')
+  expect(screen.getByTestId('range-group').textContent).not.toMatch(/Today/)
+})
+
+test('one private charge reads "1 charge"', () => {
+  renderTab({ paidSessions: [{ id: 9, date_time: '2026-10-07T15:00:00Z', platform: 'bongacams', username: 'Fay', username_lower: 'fay', session_type: 'Private Chat', usd: 0.38 }] })
+  expect(val('details-tips')).toBe('1 charge')
+  expect(screen.getByTestId('session-history').textContent).toMatch(/1Charge(?!s)/)
+})
+
+test('no data: neutral badge instead of LIVE DATA', () => {
+  const { container } = renderTab({})
+  expect(screen.getByTestId('hero-no-data')).toBeTruthy()
+  expect(container.textContent).not.toMatch(/LIVE DATA/)
+})
+
+test('money values never wrap', () => {
+  renderTab({ tips: csvTips })
+  expect(screen.getByTestId('overall-public').style.whiteSpace).toBe('nowrap')
+})
