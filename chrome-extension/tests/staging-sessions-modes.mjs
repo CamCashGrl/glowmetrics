@@ -113,6 +113,19 @@ async function makeUser(name, sc) {
     })));
     if (sErr) throw new Error(`paid ${name}: ${sErr.message}`);
   }
+  // Persisted rows must equal the fixture exactly (no normalization, nothing dropped).
+  const want = sc.tips.map(([d, hm, platform, username, usd, source]) => `${new Date(at(d, hm)).toISOString()}|${platform}|${username}|${Number(usd).toFixed(2)}|${source}`).sort();
+  const { data: got, error: rErr } = await client.from('tips').select('date_time, platform, username, usd, source').eq('user_id', id);
+  if (rErr) throw new Error(`read back ${name}: ${rErr.message}`);
+  const have = (got || []).map((r) => `${new Date(r.date_time).toISOString()}|${r.platform}|${r.username}|${Number(r.usd).toFixed(2)}|${r.source}`).sort();
+  const same = JSON.stringify(want) === JSON.stringify(have);
+  check(`${name} · seeded ${want.length} tips persisted exactly as the fixture`, same, `\n  fixture: ${JSON.stringify(want)}\n  stored:  ${JSON.stringify(have)}`);
+  if (sc.paid.length) {
+    const wantP = sc.paid.map(([d, hm, platform, username, usd, t]) => `${new Date(at(d, hm)).toISOString()}|${platform}|${username}|${Number(usd).toFixed(2)}|${t}`).sort();
+    const { data: gp } = await client.from('paid_sessions').select('date_time, platform, username, usd, session_type').eq('user_id', id);
+    const haveP = (gp || []).map((r) => `${new Date(r.date_time).toISOString()}|${r.platform}|${r.username}|${Number(r.usd).toFixed(2)}|${r.session_type}`).sort();
+    check(`${name} · seeded ${wantP.length} private rows persisted exactly`, JSON.stringify(wantP) === JSON.stringify(haveP), `\n  fixture: ${JSON.stringify(wantP)}\n  stored:  ${JSON.stringify(haveP)}`);
+  }
   return { id, email, password, client };
 }
 
