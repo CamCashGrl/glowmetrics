@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, freeWindowStartByPlatform } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, accessibleDataset } from "../../lib/analytics"
 import { totalEarned, privateEarningRows } from "../../lib/sessions/normalize"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
@@ -21,7 +21,7 @@ import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedIns
 import PlatformsIntelligence from './PlatformsIntelligence'
 import CommandCenter from './CommandCenter'
 import SubscriptionManager from './SubscriptionManager'
-import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
+import { platformLimitMessage, FREE_PLATFORM_LIMIT, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import { LatestShowDelta } from './LatestShows'
@@ -1599,10 +1599,14 @@ export default function Dashboard() {
 
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
+  // Free tier: the primary platform (lib/planLimits.js resolver — onboarding
+  // selection only, never inferred from revenue) keeps full history; others
+  // keep 31 days. No primary on file → every platform is windowed.
+  const freeUnlimitedPlatform = isPro ? null : resolvePlanPlatformRoles(profile?.streaming_platforms, profile?.primary_pro_platform).primary
   const uploadLimit = Infinity
 
   // Compute windowed tips for free users; windowSummary feeds teaser signal detection
-  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
+  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
   const windowSummary = summarizeWindowExclusion(tips, analysisTips)
 
   // whales must be declared before use here — buildProTeasers reads it below,
@@ -1967,7 +1971,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31 })
+            const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -2026,7 +2030,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31 })
+            const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -2185,7 +2189,7 @@ export default function Dashboard() {
         setTips(allData)
         try {
           // Apply 31-day rolling window for free users (per-platform, activity-anchored)
-          const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31 })
+          const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
           // CHECKPOINT 2: Immediately before runEngine()
           console.log('[DASH TRACE] before engine', {
             count: analysisTips.length,
@@ -2446,10 +2450,18 @@ const stopImportMessageRotation = () => {
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
   // Total Earned = public tip earnings + private earnings (lib/sessions/normalize.js).
   // Free tier: private earnings use the same per-platform window as the tips.
+  // One gated dataset for everything that shows history (header total,
+  // Sessions): same windows as the analytics engine, applied to every table.
+  // (memoOn, not useMemo: this runs after the `if (loading) return` above.)
+  const accessible = memoOn(derivedCacheRef.current, 'accessible',
+    [tips, paidSessions, livePrivateIntervals, recentShows.shows, isPro, freeUnlimitedPlatform],
+    () => accessibleDataset({
+      tips, paidSessions, liveIntervals: livePrivateIntervals, shows: recentShows.shows,
+      isPro, unlimitedPlatform: freeUnlimitedPlatform,
+    }))
   const earned = totalEarned({
     publicUSD: analytics?.totalUSD || 0,
-    privateRows: privateEarningRows({ paidSessions, liveIntervals: livePrivateIntervals }),
-    windowStarts: isPro ? null : freeWindowStartByPlatform(tips),
+    privateRows: privateEarningRows({ paidSessions: accessible.paidSessions, liveIntervals: accessible.liveIntervals }),
   })
   const totalRevenue = analytics?.totalUSD || 0 // public tips only (shares, per-session averages)
   const totalEarnedUSD = earned.totalUSD        // header / share card: public + private
@@ -5306,9 +5318,9 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "sessions" && (
           <SessionsOverview
-            tips={tips}
-            shows={recentShows.shows}
-            paidSessions={paidSessions}
+            tips={accessible.tips}
+            shows={accessible.shows}
+            paidSessions={accessible.paidSessions}
             tz={liveTimezone}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}
