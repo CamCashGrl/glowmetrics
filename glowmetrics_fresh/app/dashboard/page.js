@@ -3496,7 +3496,7 @@ const stopImportMessageRotation = () => {
             {/* ═══════════════════════════════════════
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
-            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+            {accessible.tips.length > 0 && <DashboardGrowthCharts tips={accessible.tips} sessions={sessions} />}
 
             {/* ═══════════════════════════════════════
                 YOUR NEXT BEST MOVE — Command Center
@@ -4134,7 +4134,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "platforms" && (
           <PlatformsIntelligence
             analytics={analytics}
-            tips={tips}
+            tips={accessible.tips}
             isPro={isPro}
             onOpenPlanner={() => handleTabChange('planner')}
           />
@@ -6333,7 +6333,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
+            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={accessible.tips} sessions={sessions} whales={whales} />
           </div>
         )}
 

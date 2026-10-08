@@ -18,7 +18,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { FREE_PLATFORM_LIMIT, isProPlan, platformLimitMessage } from '../../lib/planLimits'
+import { FREE_PLATFORM_LIMIT, isProPlan, platformLimitMessage, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
 
 // ── BRAND TOKENS ─────────────────────────────────────────────
 const C = {
@@ -864,28 +864,18 @@ function resolvePlatformName(key) {
   return ALL_PLATFORM_NAMES.find(name => _normPlatKey(name) === norm) || null
 }
 
-// Which platform is primary / secondary right now. Prefers the onboarding
-// selection (profiles.primary_pro_platform / streaming_platforms); falls
-// back to inferring from real tip data for accounts that onboarded before
-// that selection existed, so this never leaves an existing user with no
-// primary at all.
+// Which platform is primary / secondary right now. Delegates to the single
+// canonical resolver (lib/planLimits.js) — never inferred from revenue. With
+// no selection on file there is no primary; platforms seen in the data are
+// listed as secondary in a fixed order (not ranked by earnings).
+const FIXED_PLATFORM_ORDER = ['Chaturbate', 'BongaCams', 'MyFreeCams']
 export function resolvePlatformRoles({ primaryProPlatform, streamingPlatforms, tips = [] }) {
-  const fromOnboarding = resolvePlatformName(primaryProPlatform)
-  const selected = (streamingPlatforms || []).map(resolvePlatformName).filter(Boolean)
-
-  if (fromOnboarding) {
-    const secondary = selected.filter(p => p !== fromOnboarding)
-    return { primary: fromOnboarding, secondary, source: 'onboarding' }
-  }
-
-  const byUsd = {}
-  tips.forEach(t => {
-    const p = resolvePlatformName(t.platform)
-    if (!p) return
-    byUsd[p] = (byUsd[p] || 0) + (parseFloat(t.usd) || 0)
-  })
-  const ranked = Object.entries(byUsd).sort((a, b) => b[1] - a[1]).map(([p]) => p)
-  return { primary: ranked[0] || null, secondary: ranked.slice(1), source: 'inferred' }
+  const roles = resolvePlanPlatformRoles(streamingPlatforms, primaryProPlatform)
+  const primary = resolvePlatformName(roles.primary)
+  const selected = roles.secondary.map(resolvePlatformName).filter((p) => p && p !== primary)
+  if (primary || selected.length) return { primary, secondary: selected, source: 'selection' }
+  const seen = new Set(tips.map((t) => resolvePlatformName(t.platform)).filter(Boolean))
+  return { primary: null, secondary: FIXED_PLATFORM_ORDER.filter((p) => seen.has(p)), source: 'none' }
 }
 
 // Real, honest per-platform stats for the most recent `windowDays` of data.
