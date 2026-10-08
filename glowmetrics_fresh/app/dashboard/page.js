@@ -26,6 +26,7 @@ import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
+import { PrimaryPlatformBanner } from './PrimaryPlatformPrompt'
 import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
@@ -1608,6 +1609,26 @@ export default function Dashboard() {
   // Compute windowed tips for free users; windowSummary feeds teaser signal detection
   const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
   const windowSummary = summarizeWindowExclusion(tips, analysisTips)
+  // Re-run the engine when the plan or primary platform changes after tips
+  // loaded (profile arrives separately; choosing a primary updates it), so
+  // every tab reflects the same gating without a reload.
+  const gatingKeyRef = useRef(null)
+  // Current gating for async loaders (their closures can predate the profile).
+  const gatingRef = useRef({ isPro, unlimited: freeUnlimitedPlatform })
+  gatingRef.current = { isPro, unlimited: freeUnlimitedPlatform }
+  useEffect(() => {
+    const key = `${isPro}|${freeUnlimitedPlatform || ''}`
+    if (gatingKeyRef.current === null) { gatingKeyRef.current = key; return }
+    if (gatingKeyRef.current === key || !tips.length) { gatingKeyRef.current = key; return }
+    gatingKeyRef.current = key
+    try {
+      let tz = 'UTC'
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch (_) {}
+      const r = runEngine(isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform }), tz)
+      if (r) setAnalytics(r)
+    } catch (e) { console.error('gating re-run failed:', e) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPro, freeUnlimitedPlatform])
 
   // whales must be declared before use here — buildProTeasers reads it below,
   // and this runs unconditionally on every render (including before the
@@ -1971,7 +1992,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
+            const analysisTips = gatingRef.current.isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -2030,7 +2051,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
+            const analysisTips = gatingRef.current.isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -2189,7 +2210,7 @@ export default function Dashboard() {
         setTips(allData)
         try {
           // Apply 31-day rolling window for free users (per-platform, activity-anchored)
-          const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
+          const analysisTips = gatingRef.current.isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
           // CHECKPOINT 2: Immediately before runEngine()
           console.log('[DASH TRACE] before engine', {
             count: analysisTips.length,
@@ -3383,6 +3404,10 @@ const stopImportMessageRotation = () => {
           />
         )}
 
+        {(activeTab === "overview" || activeTab === "sessions") && (
+          <PrimaryPlatformBanner isPro={isPro} primary={freeUnlimitedPlatform}
+            onSaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))} />
+        )}
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
             {recentShows.delta && (
@@ -5321,6 +5346,9 @@ const stopImportMessageRotation = () => {
             tips={accessible.tips}
             shows={accessible.shows}
             paidSessions={accessible.paidSessions}
+            isPro={isPro}
+            primaryPlatform={freeUnlimitedPlatform}
+            onPrimarySaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))}
             tz={liveTimezone}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}

@@ -20,6 +20,7 @@ import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
 import { PlatformCell } from "./PlatformsIntelligence"
 import { Pill, PlatChip } from "./StreamPlanner"
+import { PrimaryPlatformControl } from "./PrimaryPlatformPrompt"
 
 const C = {
   cyan: "#22D3EE", green: "#10B981", gold: "#F59E0B", pink: "#EC4899", violet: "#a855f7", indigo: "#7C5CFF",
@@ -323,7 +324,7 @@ function Details({ e, tips, tz, today, signal }) {
   )
 }
 
-export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live }) {
+export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {} }) {
   const now = useNow(fixedNow, live?.session ? 5000 : 15000)
   const [range, setRange] = useState(1)
   const [filter, setFilter] = useState("all")
@@ -377,6 +378,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
           <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)" }}>
             {RANGES.map(([d, l]) => <span key={d} data-testid={`range-${d}`}><Pill active={range === d} onClick={() => setRange(d)}>{l}</Pill></span>)}
           </div>
+ <PrimaryPlatformControl isPro={isPro} primary={primaryPlatform} onSaved={onPrimarySaved} />
           <span data-testid="updated" style={{ fontSize: 12, color: C.text, display: "inline-flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 7, height: 7, borderRadius: 4, background: C.green }} />Updated {timeAgo(loadedAt.toISOString(), now)}
           </span>
