@@ -96,7 +96,7 @@ async function makeUser(name, sc) {
   await admin.from('beta_users').insert({ user_id: id, email, onboarding_complete: true });
   if (sc.tips.length) {
     const { error: tErr } = await admin.from('tips').insert(sc.tips.map(([d, hm, platform, username, usd, source], i) => ({
-      user_id: id, date_time: at(d, hm), platform, username, username_lower: username.toLowerCase(), usd, usd_rounded: usd, tokens: 0,
+      user_id: id, date_time: at(d, hm), platform, username, usd, tokens: 0,
       source, tip_ref: `sessions-modes-${name}-${i}-${id}`,
     })));
     if (tErr) throw new Error(`tips ${name}: ${tErr.message}`);
