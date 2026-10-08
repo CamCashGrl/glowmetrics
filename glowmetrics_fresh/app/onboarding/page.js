@@ -709,6 +709,7 @@ export default function OnboardingPage(){
   const[parseError,setParseError]=useState('')
   const[importResult,setImportResult]=useState(null)
   const[importError,setImportError]=useState('')
+  const[primarySaveError,setPrimarySaveError]=useState('')
   const[upgradeBlocked,setUpgradeBlocked]=useState(null)
   const[isFirstImport,setIsFirstImport]=useState(true)
   const[showSparkle,setShowSparkle]=useState(false)
@@ -802,7 +803,14 @@ export default function OnboardingPage(){
   async function confirmPlatforms(){
     if(!selectedPlatforms.length)return
     if(user){
-      await supabase.from('profiles').upsert({id:user.id,streaming_platforms:selectedPlatforms,primary_pro_platform:selectedPlatforms[0]},{onConflict:'id'})
+      setPrimarySaveError('')
+      // Browser saves only the platform list; the permanent primary is set only by the server route.
+      const{error:listErr}=await supabase.from('profiles').upsert({id:user.id,streaming_platforms:selectedPlatforms},{onConflict:'id'})
+      if(listErr){setPrimarySaveError('We could not save your platforms. Please try again.');return}
+      const res=await fetch('/api/profile/primary-platform',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:selectedPlatforms[0]})}).catch(()=>null)
+      const body=res?await res.json().catch(()=>({})):{}
+      const alreadySame=res?.status===409&&String(body?.primary_pro_platform||'').toLowerCase()===selectedPlatforms[0]
+      if(!res||(!res.ok&&!alreadySame)){setPrimarySaveError(body?.error||'We could not save your primary platform. Please try again.');return}
     }
     selectedPlatforms.forEach(id=>track('onboarding_platform_selected',{platform:id}))
     setQueueIndex(0)
@@ -1187,6 +1195,7 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
+              {primarySaveError&&<div role="alert" data-testid="primary-save-error" style={{color:'#F87171',fontSize:13,marginBottom:10,textAlign:'center'}}>{primarySaveError} Tap Continue to retry.</div>}
               <OBBtn onClick={confirmPlatforms} disabled={!selectedPlatforms.length} style={{marginBottom:10}}>
                 {selectedPlatforms.length?`Continue with ${selectedPlatforms.length} platform${selectedPlatforms.length===1?'':'s'} →`:'Select a platform to continue'}
               </OBBtn>

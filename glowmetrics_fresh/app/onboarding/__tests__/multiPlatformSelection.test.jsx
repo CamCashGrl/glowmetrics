@@ -20,6 +20,8 @@ HTMLCanvasElement.prototype.getContext = () => ({
   set globalAlpha(v) {}, set lineWidth(v) {},
 })
 
+const mockUpserts = []
+let mockUpsertError = null
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     auth: {
@@ -35,7 +37,7 @@ jest.mock('../../../lib/supabase', () => ({
           if (table === 'profiles') return { data: { plan: 'free', streaming_platforms: null, primary_pro_platform: null } }
           return { data: null }
         },
-        upsert: jest.fn().mockResolvedValue({ data: null, error: null }),
+        upsert: jest.fn(async (v) => { mockUpserts.push({ table, v }); return { data: null, error: table === 'profiles' ? mockUpsertError : null } }),
       }
       return chain
     }),
@@ -102,5 +104,70 @@ describe('Onboarding Step 1 — multi-platform + primary designation', () => {
     render(<OnboardingPage />)
     await screen.findByText('Chaturbate')
     expect(screen.getByRole('button', { name: 'Select a platform to continue' })).toBeDisabled()
+  })
+})
+
+describe('Onboarding Step 1 — saving platforms and the permanent primary', () => {
+  const okJson = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
+  beforeEach(() => { mockUpserts.length = 0; mockUpsertError = null; global.fetch = jest.fn() })
+  const profileUpserts = () => mockUpserts.filter((u) => u.table === 'profiles').map((u) => u.v)
+  async function chooseAndContinue() {
+    render(<OnboardingPage />)
+    fireEvent.click(await screen.findByText('BongaCams'))
+    fireEvent.click(await screen.findByText('Chaturbate'))
+    fireEvent.click(await screen.findByRole('button', { name: /Continue with 2 platforms/ }))
+  }
+
+  test('browser saves only streaming_platforms; the primary goes through the server route', async () => {
+    global.fetch.mockResolvedValue(okJson(200, { primary_pro_platform: 'bongacams' }))
+    await chooseAndContinue()
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams', 'chaturbate'] }])
+    expect(profileUpserts()[0]).not.toHaveProperty('primary_pro_platform')
+    const [url, init] = global.fetch.mock.calls[0]
+    expect(url).toBe('/api/profile/primary-platform')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({ platform: 'bongacams' })
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with 2 platforms/ })).not.toBeInTheDocument())
+    expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
+  })
+
+  test('route failure is shown, onboarding does not advance, and Continue retries', async () => {
+    global.fetch.mockResolvedValueOnce(okJson(500, { error: 'Could not save your primary platform.' }))
+    await chooseAndContinue()
+    expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('Could not save your primary platform.')
+    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
+    global.fetch.mockResolvedValueOnce(okJson(200, { primary_pro_platform: 'bongacams' }))
+    fireEvent.click(screen.getByRole('button', { name: /Continue with 2 platforms/ }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with 2 platforms/ })).not.toBeInTheDocument())
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  test('network failure is shown and does not advance', async () => {
+    global.fetch.mockRejectedValueOnce(new Error('offline'))
+    await chooseAndContinue()
+    expect(await screen.findByTestId('primary-save-error')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
+  })
+
+  test('409 for a DIFFERENT stored primary is shown, not treated as success', async () => {
+    global.fetch.mockResolvedValueOnce(okJson(409, { error: 'Your primary platform is already set and cannot be changed.', primary_pro_platform: 'myfreecams' }))
+    await chooseAndContinue()
+    expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('already set')
+    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
+  })
+
+  test('409 for the SAME stored primary (retry after an earlier success) continues', async () => {
+    global.fetch.mockResolvedValueOnce(okJson(409, { primary_pro_platform: 'bongacams' }))
+    await chooseAndContinue()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with 2 platforms/ })).not.toBeInTheDocument())
+    expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
+  })
+
+  test('platform-list save failure is shown and the route is not called', async () => {
+    mockUpsertError = { message: 'permission denied' }
+    await chooseAndContinue()
+    expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('could not save your platforms')
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })
