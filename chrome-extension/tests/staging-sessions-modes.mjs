@@ -13,9 +13,10 @@ import { fileURLToPath } from 'url';
 
 const URL_ = process.env.SUPABASE_STAGING_URL;
 const SERVICE = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
+const ANON = process.env.SUPABASE_STAGING_ANON_KEY;
 const APP = process.env.CAMCASH_STAGING_BASE_URL;
 const OUT = process.env.BROWSER_ARTIFACTS_DIR || path.resolve('browser-artifacts');
-for (const [k, v] of Object.entries({ SUPABASE_STAGING_URL: URL_, SUPABASE_STAGING_SERVICE_ROLE_KEY: SERVICE, CAMCASH_STAGING_BASE_URL: APP })) {
+for (const [k, v] of Object.entries({ SUPABASE_STAGING_URL: URL_, SUPABASE_STAGING_SERVICE_ROLE_KEY: SERVICE, SUPABASE_STAGING_ANON_KEY: ANON, CAMCASH_STAGING_BASE_URL: APP })) {
   if (!v) { console.error(`❌ Missing ${k}`); process.exit(1); }
 }
 if (URL_.includes('hlsdlaibnayzbfflxclj') || /camcashgrl\.com/.test(APP)) { console.error('❌ FATAL: refusing to run against production'); process.exit(1); }
@@ -94,20 +95,25 @@ async function makeUser(name, sc) {
   const { error: pErr } = await admin.from('profiles').upsert(prof);
   if (pErr) throw new Error(`profile ${name}: ${pErr.message}`);
   await admin.from('beta_users').insert({ user_id: id, email, onboarding_complete: true });
+  // Staging's service role has no INSERT on tips (by design); seed as the
+  // creator through RLS, exactly like the app's own browser writes.
+  const client = createClient(URL_, ANON, { auth: { persistSession: false } });
+  const { error: sErr0 } = await client.auth.signInWithPassword({ email, password });
+  if (sErr0) throw new Error(`sign in ${name}: ${sErr0.message}`);
   if (sc.tips.length) {
-    const { error: tErr } = await admin.from('tips').insert(sc.tips.map(([d, hm, platform, username, usd, source], i) => ({
+    const { error: tErr } = await client.from('tips').insert(sc.tips.map(([d, hm, platform, username, usd, source], i) => ({
       user_id: id, date_time: at(d, hm), platform, username, usd, tokens: 0,
       source, tip_ref: `sessions-modes-${name}-${i}-${id}`,
     })));
     if (tErr) throw new Error(`tips ${name}: ${tErr.message}`);
   }
   if (sc.paid.length) {
-    const { error: sErr } = await admin.from('paid_sessions').insert(sc.paid.map(([d, hm, platform, username, usd, session_type]) => ({
+    const { error: sErr } = await client.from('paid_sessions').insert(sc.paid.map(([d, hm, platform, username, usd, session_type]) => ({
       user_id: id, date_time: at(d, hm), platform, username, username_lower: username.toLowerCase(), usd, usd_rounded: usd, tokens: 0, session_type,
     })));
     if (sErr) throw new Error(`paid ${name}: ${sErr.message}`);
   }
-  return { id, email, password };
+  return { id, email, password, client };
 }
 
 async function signIn(page, u) {
@@ -182,8 +188,9 @@ async function main() {
   } finally {
     if (browser) await browser.close();
     for (const u of users) {
+      await u.client.from('tips').delete().eq('user_id', u.id);
+      await u.client.from('paid_sessions').delete().eq('user_id', u.id);
       await admin.from('tips').delete().eq('user_id', u.id);
-      await admin.from('paid_sessions').delete().eq('user_id', u.id);
       await admin.from('beta_users').delete().eq('user_id', u.id);
       await admin.from('profiles').delete().eq('id', u.id);
       await admin.auth.admin.deleteUser(u.id);

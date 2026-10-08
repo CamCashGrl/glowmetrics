@@ -1819,9 +1819,11 @@ jobs:
 
       - name: Run Sessions adaptive-layer browser test
         if: success() || failure()
+        timeout-minutes: 8
         working-directory: chrome-extension/tests
         env:
           SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
           SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
           CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
           BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
