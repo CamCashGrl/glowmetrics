@@ -34,7 +34,7 @@ const check = (name, cond, detail = '') => {
 const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
 const row = async (id) => (await admin.from('profiles').select('*').eq('id', id).single()).data;
 
-async function makeUser(label, plan) {
+async function makeUser(label, plan, onboardingComplete = true) {
   const email = `sec-${label}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@staging.local`;
   const password = crypto.randomBytes(18).toString('hex');
   const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
@@ -42,7 +42,7 @@ async function makeUser(label, plan) {
   const id = data.user.id;
   const { error: pErr } = await admin.from('profiles').upsert({ id, plan });
   if (pErr) throw new Error(`profile ${label}: ${pErr.message}`);
-  await admin.from('beta_users').insert({ user_id: id, email, onboarding_complete: true });
+  await admin.from('beta_users').insert({ user_id: id, email, onboarding_complete: onboardingComplete });
   const client = createClient(URL_, ANON, { auth: { persistSession: false } });
   const { data: s, error: sErr } = await client.auth.signInWithPassword({ email, password });
   if (sErr) throw new Error(`sign in ${label}: ${sErr.message}`);
@@ -54,6 +54,21 @@ const choose = (token, platform) => fetch(`${APP}/api/profile/primary-platform`,
   body: JSON.stringify({ platform }),
 }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }));
 
+async function signIn(page, u) {
+  await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' });
+  const pw = page.locator('input[type="password"][placeholder="Password"]:visible').first();
+  for (let i = 0; i < 120 && !(await pw.count()); i++) {
+    if (i > 0 && i % 30 === 0) await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' }).catch(() => {});
+    await page.getByRole('button', { name: 'Log In', exact: true }).first().click({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(1000);
+  }
+  const form = page.locator('form', { has: pw }).first();
+  await form.locator('input[type="email"]').fill(u.email);
+  await pw.fill(u.password);
+  await pw.press('Enter');
+  await page.waitForURL(/\/(dashboard|onboarding)/);
+}
+
 async function main() {
   const users = [];
   let browser;
@@ -61,6 +76,7 @@ async function main() {
     const free = await makeUser('free', 'free'); users.push(free);
     const pro = await makeUser('pro', 'pro'); users.push(pro);
     const racer = await makeUser('racer', 'free'); users.push(racer);
+    const onb = await makeUser('onboard', 'free', false); users.push(onb);
 
     console.log('\nMust fail (browser-style, proven from the database)');
     let r = await free.client.from('profiles').update({ plan: 'pro' }).eq('id', free.id).select();
@@ -143,22 +159,57 @@ async function main() {
       const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       const page = await ctx.newPage();
       page.setDefaultTimeout(120_000);
-      await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' });
-      const pw = page.locator('input[type="password"][placeholder="Password"]:visible').first();
-      for (let i = 0; i < 120 && !(await pw.count()); i++) {
-        if (i > 0 && i % 30 === 0) await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' }).catch(() => {});
-        await page.getByRole('button', { name: 'Log In', exact: true }).first().click({ timeout: 5000 }).catch(() => {});
-        await page.waitForTimeout(1000);
-      }
-      const form = page.locator('form', { has: pw }).first();
-      await form.locator('input[type="email"]').fill(u.email);
-      await pw.fill(u.password);
-      await pw.press('Enter');
-      await page.waitForURL(/\/dashboard/);
+      await signIn(page, u);
       const marker = page.locator(`text=${expectPro ? 'Pro plan active' : 'Upgrade to Pro'}`).first();
       await marker.waitFor({ state: 'visible' }).catch(() => {});
       check(`${expectPro ? 'Pro' : 'Free (after attacks)'} account sees ${expectPro ? 'Pro' : 'Free'} UI`, (await marker.count()) > 0);
       await page.screenshot({ path: path.join(OUT, `sec-${expectPro ? 'pro' : 'free'}-dashboard.png`), fullPage: false });
+      await ctx.close();
+    }
+
+    console.log('\nReal-browser onboarding: platform list + primary via route, with a failed first attempt');
+    {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+      const page = await ctx.newPage();
+      page.setDefaultTimeout(120_000);
+      const routeCalls = [];
+      let failNext = true;
+      await page.route('**/api/profile/primary-platform', async (route) => {
+        routeCalls.push(route.request().postDataJSON());
+        if (failNext) { failNext = false; return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Could not save your primary platform.' }) }); }
+        return route.continue();
+      });
+      await signIn(page, onb);
+      if (!/\/onboarding/.test(page.url())) await page.goto(`${APP}/onboarding`, { waitUntil: 'networkidle' });
+      await page.getByText('BongaCams', { exact: true }).first().click();
+      await page.getByText('Chaturbate', { exact: true }).first().click();
+      const cont = page.getByRole('button', { name: /Continue with 2 platforms/ });
+      await cont.click();
+      const err = page.getByTestId('primary-save-error');
+      await err.waitFor({ state: 'visible' }).catch(() => {});
+      check('Failed first route attempt shows a visible retryable error', (await err.count()) > 0 && /retry/i.test(await err.innerText()));
+      check('  Onboarding stays on the platform step', await cont.isVisible());
+      let r0 = await row(onb.id);
+      check('  DB: platform list saved, primary still NULL after the failed attempt', r0.streaming_platforms?.join() === 'BongaCams,Chaturbate' && r0.primary_pro_platform == null, JSON.stringify({ sp: r0.streaming_platforms, p: r0.primary_pro_platform }));
+      await page.screenshot({ path: path.join(OUT, 'sec-onboarding-retry-error.png') });
+      await cont.click();
+      await cont.waitFor({ state: 'detached' }).catch(() => {});
+      check('Retry succeeds and onboarding proceeds past the platform step', !(await cont.isVisible().catch(() => false)) && (await err.count()) === 0);
+      await page.screenshot({ path: path.join(OUT, 'sec-onboarding-after-retry.png') });
+      check('  Route called exactly twice, both with the selected primary', routeCalls.length === 2 && routeCalls.every((b) => b?.platform === 'bongacams'), JSON.stringify(routeCalls));
+      r0 = await row(onb.id);
+      check('  DB: exactly one permanent primary = BongaCams; list = BongaCams,Chaturbate', r0.primary_pro_platform === 'BongaCams' && r0.streaming_platforms?.join() === 'BongaCams,Chaturbate', JSON.stringify({ sp: r0.streaming_platforms, p: r0.primary_pro_platform }));
+      console.log(`  DB after flow: primary_pro_platform=${r0.primary_pro_platform} streaming_platforms=${JSON.stringify(r0.streaming_platforms)} plan=${r0.plan}`);
+      // Reload: the chosen primary persists (read back by the app after a full reload).
+      await admin.from('beta_users').update({ onboarding_complete: true }).eq('user_id', onb.id);
+      await page.goto(`${APP}/dashboard`, { waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.locator('text="Free Chat Sessions" >> visible=true').first().click().catch(() => {});
+      const ctl = page.getByTestId('primary-platform-control').first();
+      await ctl.waitFor({ state: 'visible' }).catch(() => {});
+      check('After reload the app shows the permanent primary (Primary: BongaCams)', (await ctl.count()) > 0 && /Primary:\s*BongaCams/.test(await ctl.innerText()), (await ctl.count()) ? await ctl.innerText() : 'control not found');
+      await page.screenshot({ path: path.join(OUT, 'sec-onboarding-reload-dashboard.png') });
+      check('  DB: still exactly that primary after reload', (await row(onb.id)).primary_pro_platform === 'BongaCams');
       await ctx.close();
     }
     check('DB: Free account still free at the end', (await row(free.id)).plan === 'free');
