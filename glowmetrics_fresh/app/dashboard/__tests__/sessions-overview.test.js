@@ -44,7 +44,8 @@ test('hero: total = public + private, live-linked tips counted once, 8 cells', (
   expect(val('today-private')).toBe('$0.66')
   expect(val('today-tips')).toBe('5')
   expect(val('today-unique')).toBe('5')
-  expect(val('today-streamed')).toBe('~1h 45m')
+  expect(val('today-streamed')).toContain('1h 0m') // exact Live minutes only
+  expect(val('today-streamed')).not.toContain('~')
   expect(val('today-private-time')).toBe('2m')
   expect(val('today-completed')).toBe('2')
   expect(val('today-best-platform')).toBe('BongaCams')
@@ -125,8 +126,9 @@ test('imported private charges are one PRIVATE session and count as private', ()
     { id: 8, date_time: '2026-10-07T15:01:00Z', platform: 'bongacams', username: 'Fay', username_lower: 'fay', session_type: 'Private Chat', usd: 0.38 },
   ] })
   expect(screen.getAllByTestId(/^history-private:/)).toHaveLength(1)
-  expect(val('today-private')).toBe('$0.76')
-  expect(val('today-public')).toBe('$0.00')
+  // imported-only data → Overall Performance hero
+  expect(val('overall-private')).toBe('$0.76')
+  expect(val('overall-public')).toBe('$0.00')
   expect(val('details-tips')).toBe('2 charges')
 })
 
@@ -153,4 +155,74 @@ test('strongest signal from real shares', () => {
   renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
   expect(val('today-signal')).toContain('BongaCams is leading today with 59% of your earnings.')
   expect(val('today-signal')).toContain('$12.50 of today')
+})
+
+// ── Adaptive layer (CSV-only / single-platform / mixed) ──────────────────────
+const csvTip = (id, iso, platform, username, usd) => ({ id, date_time: iso, platform, username, usd, tokens: 0, live_session_id: null, source: 'upload' })
+// 3 meaningful Chaturbate sessions on different days (>= 30 min, >= 2 tips each)
+const csvTips = [
+  csvTip(101, '2026-09-01T20:00:00Z', 'chaturbate', 'Ann', 10), csvTip(102, '2026-09-01T20:40:00Z', 'chaturbate', 'Ben', 5),
+  csvTip(103, '2026-09-03T20:00:00Z', 'chaturbate', 'Ann', 20), csvTip(104, '2026-09-03T20:50:00Z', 'chaturbate', 'Cy', 4),
+  csvTip(105, '2026-09-05T20:00:00Z', 'chaturbate', 'Ann', 6), csvTip(106, '2026-09-05T20:35:00Z', 'chaturbate', 'Ben', 9),
+  csvTip(107, '2026-09-06T10:00:00Z', 'chaturbate', 'Dee', 1), // lone tip: not a session, still counted in totals
+]
+
+test('CSV-only: Overall Performance hero, no Today/range controls, no stream time or $/hr', () => {
+  const { container } = renderTab({ tips: csvTips })
+  expect(screen.queryByTestId('today-stats')).toBeNull()
+  expect(screen.queryByTestId('scope-switch')).toBeNull()
+  expect(screen.queryByTestId('range-1')).toBeNull()
+  expect(val('overall-source')).toBe('IMPORTED HISTORY')
+  expect(val('overall-total')).toBe('$55.00')
+  expect(val('overall-public')).toBe('$55.00')
+  expect(val('overall-tips')).toBe('7')
+  expect(val('overall-unique')).toBe('4')
+  expect(val('overall-meaningful')).toBe('3')
+  expect(val('overall-median')).toBe('$15.00') // sessions 15, 24, 15
+  expect(val('overall-top-tipper')).toBe('Ann')
+  expect(val('overall-largest')).toBe('$20.00')
+  expect(container.textContent).not.toMatch(/\/hr|per hour|Streamed Time|Best Day|Best Time/i)
+  expect(screen.getAllByTestId(/^history-tips:/)).toHaveLength(3)
+  expect(container.textContent).toMatch(/Est\. span/)
+})
+
+test('single platform: Session Performance cards replace platform comparison', () => {
+  renderTab({ tips: csvTips })
+  expect(screen.queryByTestId('today-by-platform')).toBeNull()
+  expect(val('perf-typical-median')).toBe('$15.00')
+  expect(val('perf-typical-count')).toBe('3')
+  expect(screen.getByTestId('perf-momentum').textContent).toMatch(/Not enough data yet/)
+  expect(val('perf-audience-unique')).toBe('4')
+  expect(screen.getByTestId('perf-audience').textContent).toMatch(/2 repeat fans/) // Ann (3 sessions), Ben (2)
+  expect(val('perf-audience-top')).toBe('Ann ($36.00), Ben ($14.00), Cy ($4.00)')
+  expect(val('perf-audience-share')).toBe('98%') // 54 / 55
+})
+
+test('mixed Live + CSV: Today is default, Overall switch shows overall history', () => {
+  renderTab({ tips: [...liveTips, ...freeChat, ...csvTips], shows: [show] })
+  expect(screen.getByTestId('scope-switch')).toBeTruthy()
+  expect(screen.getByTestId('today-stats')).toBeTruthy()
+  expect(screen.getByTestId('today-by-platform')).toBeTruthy() // 3 platforms today
+  click('scope-overall')
+  expect(val('overall-source')).toBe('LIVE + IMPORTED HISTORY')
+  expect(val('overall-public')).toBe('$75.50') // 10.5 live + 10 free chat + 55 csv
+  expect(val('overall-private')).toBe('$0.66')
+  expect(val('overall-total')).toBe('$76.16')
+  expect(screen.getByTestId('session-performance')).toBeTruthy()
+  expect(screen.queryByTestId('range-1')).toBeNull()
+})
+
+test('no data: Today hero at zero and the empty sessions message', () => {
+  renderTab({})
+  expect(val('today-total')).toBe('$0.00')
+  expect(screen.getByTestId('history-empty')).toBeTruthy()
+  expect(screen.queryByTestId('scope-switch')).toBeNull()
+})
+
+test('Free history note follows the primary platform', () => {
+  const { unmount } = renderTab({ tips: csvTips, isPro: false, primaryPlatform: null })
+  expect(val('overall-history-note')).toMatch(/last 31 days on every platform/)
+  unmount()
+  renderTab({ tips: csvTips, isPro: false, primaryPlatform: 'Chaturbate' })
+  expect(val('overall-history-note')).toMatch(/full history on Chaturbate/)
 })

@@ -108,7 +108,8 @@ describe('daily stats (creator-local day)', () => {
   })
 
   test('streamed time, private time, completed sessions, best platform', () => {
-    expect(d.streamedMinutes).toBe(100) // 60 live + 40 estimated free chat
+    expect(d.streamedMinutes).toBe(60) // exact Live minutes only
+    expect(d.activitySpanMinutes).toBe(40) // free-chat first→last tip span, never stream time
     expect(d.streamedEstimated).toBe(true)
     expect(d.privateMinutes).toBe(2)
     expect(d.completedSessions).toBe(2) // live show + valid 40-min/2-tip free chat

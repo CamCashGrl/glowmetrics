@@ -1817,6 +1817,16 @@ jobs:
           BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
         run: node staging-onboarding-restore.mjs
 
+      - name: Run Sessions adaptive-layer browser test
+        if: success() || failure()
+        working-directory: chrome-extension/tests
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+          BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
+        run: node staging-sessions-modes.mjs
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4

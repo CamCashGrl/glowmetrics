@@ -191,7 +191,7 @@ export function filterSessionHistory(history, { type = 'all', platform = 'all', 
 function emptyBucket() {
   return {
     totalUSD: 0, publicUSD: 0, privateUSD: 0, tipCount: 0,
-    fanKeys: new Set(), streamedMinutes: 0, streamedEstimated: false,
+    fanKeys: new Set(), streamedMinutes: 0, streamedEstimated: false, activitySpanMinutes: 0,
     privateMinutes: 0, completedSessions: 0,
   }
 }
@@ -214,7 +214,9 @@ function finishBucket(b) {
 //   total    = public + private
 //   tips     = count of canonical tips that day
 //   unique   = distinct platform:username over those tips
-//   streamed = Live active minutes + estimated free-chat/imported minutes
+//   streamed = Live active minutes only (exact). First-to-last tip spans of
+//              free-chat/imported groups are NOT stream time; they are kept
+//              apart as activitySpanMinutes and always labeled estimated.
 //   private time = Live private-interval minutes (imports carry no duration)
 //   completed = finalized Live shows + valid inferred sessions
 //   best platform = highest total USD that day (null when no revenue)
@@ -260,8 +262,8 @@ export function dailySessionStats({ tips = [], history = [], paidSessions = [], 
   for (const e of history) {
     if (e.type === 'private') continue
     if (!inRange.has(localDayKey(e.startTime, tz))) continue
-    overall.streamedMinutes += e.durationMinutes || 0
-    if (e.durationEstimated) overall.streamedEstimated = true
+    if (e.type === 'live') overall.streamedMinutes += e.durationMinutes || 0
+    else { overall.activitySpanMinutes += e.durationMinutes || 0; overall.streamedEstimated = true }
     if (e.type === 'live') {
       overall.privateUSD += e.privateUSD
       overall.privateMinutes += e.privateMinutes || 0
@@ -597,3 +599,157 @@ export function sessionTimeline(entry, { tips = [], count = 24 } = {}) {
   for (const b of buckets) { b.public = money(b.public); b.private = money(b.private) }
   return { start: new Date(start).toISOString(), end: new Date(end).toISOString(), buckets }
 }
+
+// ── ADAPTIVE SESSIONS (CSV / single-platform / mixed) ───────────────────
+
+// Which data the creator has, so the Sessions tab can adapt its content:
+//   none  → no tips, shows or private rows
+//   csv   → imported data only (uploads / paid_sessions), no Live Mode
+//   live  → Live Mode / extension data only
+//   mixed → both
+// platforms = supported platforms that actually have data.
+export function sessionsMode({ tips = [], shows = [], paidSessions = [], live = false } = {}) {
+  const liveTip = (t) => t.source === 'extension' || !!t.live_session_id
+  const hasLive = !!live || shows.length > 0 || tips.some(liveTip)
+  const hasImported = tips.some((t) => !liveTip(t)) || paidSessions.length > 0
+  const seen = new Set()
+  for (const t of tips) seen.add(norm(t.platform))
+  for (const p of paidSessions) seen.add(norm(p.platform))
+  for (const sh of shows) {
+    seen.add(norm(sh.platform))
+    for (const r of sh.platformRevenue || []) seen.add(norm(r.platform))
+  }
+  const platforms = SUPPORTED_PLATFORMS.filter((p) => seen.has(p))
+  const kind = hasLive && hasImported ? 'mixed' : hasLive ? 'live' : hasImported ? 'csv' : 'none'
+  return { kind, hasLive, hasImported, platforms, singlePlatform: platforms.length <= 1 }
+}
+
+// Meaningful sessions: finalized Live shows + inferred tip sessions that pass
+// isValidSession (>= 30 min AND >= 2 tips). Imported private charges are
+// private earnings, not tip sessions, and are not counted here.
+export const isMeaningfulSession = (e) => e.type === 'live' || ((e.type === 'free_chat' || e.type === 'imported') && e.isValid)
+
+const median = (xs) => {
+  if (!xs.length) return null
+  const v = [...xs].sort((a, b) => a - b)
+  const m = Math.floor(v.length / 2)
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2
+}
+
+// Overall performance over everything passed in (the caller passes the
+// plan-gated dataset, so Free history limits already apply).
+//   public   = Σ tips.usd
+//   private  = Σ paid_sessions.usd + Σ finalized Live private (show.privateUsd)
+//   total    = public + private
+//   tips / unique tippers (platform:username) / top tipper / largest tip use
+//   tips only (manual tips, never private revenue).
+//   meaningful sessions, avg and median per-session total use
+//   isMeaningfulSession. No $/hr and no streamed time: imported history has
+//   no true stream duration.
+export function overallSessionStats({ tips = [], history = [], paidSessions = [] } = {}) {
+  let publicUSD = 0
+  let largest = null
+  const fans = new Map()
+  const dates = []
+  for (const t of tips) {
+    const usd = Number(t.usd) || 0
+    publicUSD += usd
+    const k = fanKey(t.platform, t.username)
+    const f = fans.get(k) || { username: t.username, platform: norm(t.platform), usd: 0 }
+    f.usd += usd
+    fans.set(k, f)
+    if (!largest || usd > largest.usd) largest = { usd: money(usd), username: t.username, platform: norm(t.platform) }
+    const d = t.date_time || t.dateRaw
+    if (d && !isNaN(new Date(d).getTime())) dates.push(new Date(d).getTime())
+  }
+  let privateUSD = 0
+  for (const p of paidSessions) {
+    privateUSD += Number(p.usd) || 0
+    if (p.date_time && !isNaN(new Date(p.date_time).getTime())) dates.push(new Date(p.date_time).getTime())
+  }
+  for (const e of history) if (e.type === 'live') privateUSD += e.privateUSD || 0
+
+  const ranked = [...fans.values()].sort((a, b) => b.usd - a.usd || norm(a.username).localeCompare(norm(b.username)))
+  const meaningful = history.filter(isMeaningfulSession)
+  const totals = meaningful.map((e) => e.totalUSD)
+  const top3 = ranked.slice(0, 3).map((f) => ({ ...f, usd: money(f.usd) }))
+  const top3USD = top3.reduce((a, f) => a + f.usd, 0)
+  return {
+    totalUSD: money(publicUSD + privateUSD),
+    publicUSD: money(publicUSD),
+    privateUSD: money(privateUSD),
+    tipCount: tips.length,
+    uniqueTippers: fans.size,
+    meaningfulSessions: meaningful.length,
+    avgSessionUSD: totals.length ? money(totals.reduce((a, b) => a + b, 0) / totals.length) : null,
+    medianSessionUSD: totals.length ? money(median(totals)) : null,
+    topTipper: ranked[0] ? { username: ranked[0].username, platform: ranked[0].platform, usd: money(ranked[0].usd) } : null,
+    largestTip: largest && largest.usd > 0 ? largest : null,
+    topFans: top3,
+    topFansSharePct: publicUSD > 0 && top3.length ? Math.round((top3USD / publicUSD) * 100) : null,
+    firstAt: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
+    lastAt: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+  }
+}
+
+// Session Performance cards (replace platform comparison when there is one
+// platform, and in the Overall scope). Built from meaningful sessions only.
+//   typical  : median per-session total and median tips per session.
+//              < 3 sessions → null ("Not enough data yet"); 3–4 → early signal.
+//   momentum : average of the most recent N sessions vs the N before them,
+//              N = min(5, floor(count / 2)); needs >= 6 sessions.
+//   audience : unique tippers, repeat fans (tipped in >= 2 meaningful
+//              sessions), top 3 fans and their share of public tips.
+export function sessionPerformance({ history = [], tips = [], overall = null } = {}) {
+  const meaningful = history.filter(isMeaningfulSession).sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
+  const n = meaningful.length
+  const typical = n >= 3 ? {
+    sessions: n,
+    medianUSD: money(median(meaningful.map((e) => e.totalUSD))),
+    medianTips: Math.round(median(meaningful.map((e) => e.tipCount || 0))),
+    early: n < 5,
+  } : null
+
+  const k = Math.min(5, Math.floor(n / 2))
+  let momentum = null
+  if (n >= 6) {
+    const avg = (xs) => xs.reduce((a, e) => a + e.totalUSD, 0) / xs.length
+    const recent = avg(meaningful.slice(0, k))
+    const prior = avg(meaningful.slice(k, 2 * k))
+    momentum = { window: k, recentAvgUSD: money(recent), priorAvgUSD: money(prior), deltaPct: prior > 0 ? Math.round(((recent - prior) / prior) * 100) : null }
+  }
+
+  // Which meaningful sessions each fan tipped in.
+  const byFan = new Map()
+  const tipsByShow = new Map()
+  for (const t of tips) if (t.live_session_id) {
+    if (!tipsByShow.has(t.live_session_id)) tipsByShow.set(t.live_session_id, [])
+    tipsByShow.get(t.live_session_id).push(t)
+  }
+  for (const e of meaningful) {
+    const sessionTips = e.type === 'live' ? (tipsByShow.get(e.sourceId) || []) : (e.session?.tips || [])
+    for (const t of sessionTips) {
+      const key = fanKey(t.platform, t.username)
+      if (!byFan.has(key)) byFan.set(key, new Set())
+      byFan.get(key).add(e.id)
+    }
+  }
+  const repeatFans = [...byFan.values()].filter((set) => set.size >= 2).length
+  const o = overall || overallSessionStats({ tips, history })
+  const audience = o.uniqueTippers > 0 ? {
+    uniqueTippers: o.uniqueTippers,
+    repeatFans,
+    topFans: o.topFans,
+    topFansSharePct: o.topFansSharePct,
+  } : null
+  return { meaningfulSessions: n, typical, momentum, audience }
+}
+
+// One truthful sentence about overall history, or null.
+export function overallSignal(overall, perf) {
+  if (!overall || overall.totalUSD <= 0) return null
+  if (perf?.typical) return `Your typical meaningful session earns ${'$'}${perf.typical.medianUSD.toFixed(2)} (median of ${perf.typical.sessions}).`
+  if (overall.topFansSharePct != null && overall.uniqueTippers >= 3) return `Your top 3 fans brought ${overall.topFansSharePct}% of your public tips.`
+  return null
+}
+
