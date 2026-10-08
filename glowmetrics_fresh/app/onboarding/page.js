@@ -745,9 +745,11 @@ export default function OnboardingPage(){
       setUserPlan(profile?.plan==='pro'?'pro':'free')
       // Restore an in-progress platform selection if the user left and came
       // back — matches beta_users.onboarding_complete already gating re-entry.
-      const saved=(profile?.streaming_platforms||[]).filter(id=>PLATFORMS[id])
+      // The database stores canonical names ('BongaCams'); onboarding ids are lowercase.
+      const saved=(profile?.streaming_platforms||[]).map(id=>String(id).toLowerCase()).filter(id=>PLATFORMS[id])
       if(saved.length){
-        const primary=profile?.primary_pro_platform&&saved.includes(profile.primary_pro_platform)?profile.primary_pro_platform:saved[0]
+        const storedPrimary=profile?.primary_pro_platform?String(profile.primary_pro_platform).toLowerCase():null
+        const primary=storedPrimary&&saved.includes(storedPrimary)?storedPrimary:saved[0]
         setSelectedPlatforms([primary,...saved.filter(id=>id!==primary)])
       }
       setUser(user);setBooting(false)
