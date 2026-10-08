@@ -99,7 +99,7 @@ function Cell({ icon, value, label, testId, accent, sub, strong }) {
     <div style={{ ...inset, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", minWidth: 0, ...(strong ? { border: `1px solid ${C.violet}88`, boxShadow: `0 0 22px ${C.violet}33, inset 0 0 18px ${C.violet}14` } : {}) }}>
       {icon && <span aria-hidden="true" style={{ fontSize: 20, width: 26, textAlign: "center", flexShrink: 0 }}>{icon}</span>}
       <div style={{ minWidth: 0 }}>
-        <div data-testid={testId} style={{ fontSize: String(value).length > 9 ? 15 : strong ? 18 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, overflowWrap: "anywhere" }}>{value}</div>
+        <div data-testid={testId} style={{ fontSize: String(value).length >= 9 ? 15 : strong ? 18 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, overflowWrap: "break-word" }}>{value}</div>
         <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>{label}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
       </div>
@@ -217,17 +217,17 @@ function SessionRow({ e, tz, selected, onSelect }) {
   return (
     <button data-testid={`history-${e.id}`} onClick={onSelect} aria-pressed={selected} className="sx-row" style={{
       ...inset, width: "100%", textAlign: "left", cursor: "pointer", padding: "10px 14px", display: "grid",
-      gridTemplateColumns: "36px minmax(0,1fr) 78px 56px 48px 12px", gap: 10, alignItems: "center", color: C.white,
+      gridTemplateColumns: "32px minmax(0,1fr) 70px 50px 44px 10px", gap: 8, alignItems: "center", color: C.white,
       ...(selected ? { border: `1px solid ${C.pink}`, boxShadow: `0 0 0 1px ${C.indigo}55, 0 0 22px ${C.pink}40`, background: "rgba(30,18,52,0.75)" } : {}),
     }}>
       <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.05)", color: e.type === "imported" ? C.text : C.cyan, fontSize: 14 }}>{e.type === "imported" ? "▤" : e.type === "private" ? "🔒" : "▶"}</span>
       <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
           <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis" }}>{sessionTitle(e, tz)}</span>
-          <Badge text={status.label} color={status.color} testId={`type-badge-${e.type}`} />
           {e.isNew && <span data-testid="row-new-badge" style={{ display: "none" }}>NEW</span>}
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
+          <Badge text={status.label} color={status.color} testId={`type-badge-${e.type}`} />
           {e.platforms.slice(0, 1).map((p, i) => <span key={p} data-testid={`platform-badge-${p}`}><PlatChip name={pName(p)} i={i} /></span>)}
           {e.platforms.length > 1 && <span title={e.platforms.slice(1).map(pName).join(", ")} style={{ color: C.text }}>+{e.platforms.length - 1}</span>}
           <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>· {whenText(e.startTime, tz)}</span>
