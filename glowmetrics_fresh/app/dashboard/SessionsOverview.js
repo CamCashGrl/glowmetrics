@@ -241,7 +241,8 @@ function SessionDetails({ entry }) {
       { label: "Private", value: fmtUsd(entry.privateUSD), color: C.indigo },
       { label: "Fan", value: entry.fan || "—" },
       { label: "Type", value: entry.sessionType || "private" },
-      { label: "Length", value: "Not in import", color: C.muted },
+      { label: "Charges", value: entry.chargeCount },
+      { label: "Charge span", value: entry.chargeSpanMinutes != null ? fmtMinutes(entry.chargeSpanMinutes) : "Single charge", sub: "first to last charge; length not in import" },
     ]} />
   }
   const fans = new Map()
@@ -281,7 +282,7 @@ function SessionDetails({ entry }) {
 function SessionRow({ entry, tz, open, onToggle }) {
   const when = new Date(entry.startTime).toLocaleString([], { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
   const len = entry.type === "live" ? fmtDuration(entry.durationMinutes * 60)
-    : entry.type === "private" ? "—" : entry.durationUnknown ? "Single tip" : fmtMinutes(entry.durationMinutes, true)
+    : entry.type === "private" ? (entry.chargeSpanMinutes != null ? fmtMinutes(entry.chargeSpanMinutes) : "—") : entry.durationUnknown ? "Single tip" : fmtMinutes(entry.durationMinutes, true)
   return (
     <div data-testid={`history-${entry.id}`} style={card({ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 })}>
       <div className="sx-row" style={{ display: "grid", gridTemplateColumns: "150px 1fr 90px 70px 60px auto", gap: 12, alignItems: "center", fontSize: 13 }}>
@@ -298,7 +299,7 @@ function SessionRow({ entry, tz, open, onToggle }) {
           {entry.privateUSD > 0 && entry.publicUSD > 0 && <div style={{ fontSize: 10.5, color: C.indigo, fontWeight: 600 }}>{fmtUsd(entry.privateUSD)} private</div>}
         </span>
         <span style={{ color: C.text, textAlign: "right" }}>{len}</span>
-        <span style={{ color: C.text, textAlign: "right" }}>{entry.type === "private" ? "" : `${entry.tipCount} tips`}</span>
+        <span style={{ color: C.text, textAlign: "right" }}>{entry.type === "private" ? `${entry.chargeCount} charge${entry.chargeCount === 1 ? "" : "s"}` : `${entry.tipCount} tips`}</span>
         <span data-testid={`details-${entry.id}`}><Pill active={open} onClick={onToggle}>{open ? "Hide" : "View details"}</Pill></span>
       </div>
       {open && <SessionDetails entry={entry} />}

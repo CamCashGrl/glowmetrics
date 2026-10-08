@@ -292,3 +292,28 @@ describe('freshness helpers use only real timestamps', () => {
     expect(N.timeAgo(null, now)).toBeNull()
   })
 })
+
+describe('imported private charges group into one private session', () => {
+  const N = require('../normalize')
+  const charge = (id, t, extra = {}) => ({ id, date_time: t, platform: 'Chaturbate', username: 'Fay', username_lower: 'fay', session_type: 'Private Chat', usd: 0.38, ...extra })
+  const rows = [
+    charge(1, '2026-03-29T20:00:00Z'), charge(2, '2026-03-29T20:01:00Z'), charge(3, '2026-03-29T20:02:00Z'),
+    charge(4, '2026-03-29T22:30:00Z'),                                       // >60 min later → new session
+    charge(5, '2026-03-29T20:01:30Z', { username: 'Gil', username_lower: 'gil' }), // other fan
+    charge(6, '2026-03-29T20:03:00Z', { session_type: 'Spy Mode', usd: 0.05 }),     // other type
+  ]
+
+  test('per-minute charges become sessions per fan + type + platform', () => {
+    const h = N.buildSessionHistory({ paidSessions: rows }).filter((e) => e.type === 'private')
+    expect(h).toHaveLength(4)
+    const fay = h.find((e) => e.fan === 'Fay' && e.sessionType === 'Private Chat' && e.chargeCount === 3)
+    expect(fay).toMatchObject({ privateUSD: 1.14, chargeSpanMinutes: 2, tipCount: 0, publicUSD: 0 })
+  })
+
+  test('daily private total is unchanged by grouping (sums raw rows)', () => {
+    const history = N.buildSessionHistory({ paidSessions: rows })
+    const d = N.dailySessionStats({ tips: [], history, paidSessions: rows, tz: 'UTC', now: new Date('2026-03-29T23:00:00Z') })
+    expect(d.privateUSD).toBe(1.95) // 5 × 0.38 + 0.05
+    expect(d.publicUSD).toBe(0)
+  })
+})

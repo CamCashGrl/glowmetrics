@@ -16,7 +16,7 @@
 // live_tips (the Live Mode UI stream) is never read here, so it can never be
 // added to tips.
 
-import { detectSessions, isValidSession } from '../analytics/sessions'
+import { detectSessions, isValidSession, SESSION_GAP_MS } from '../analytics/sessions'
 import { freeWindowStartByPlatform } from '../analytics'
 
 export { isValidSession }
@@ -101,19 +101,49 @@ function tipSessionEntry(s) {
   }
 }
 
-function privateEntry(p) {
-  const platform = norm(p.platform)
-  const usd = money(p.usd)
+// Imported private/spy/group revenue arrives as one paid_sessions row per
+// billing charge (Chaturbate bills private shows per minute: ~$0.38 rows).
+// One fan's consecutive charges of the same type on the same platform form
+// one private session, split by the same SESSION_GAP_MS as tip sessions.
+// Length is not in the import, so only the first-to-last charge span is
+// shown, labeled as such. Totals are unaffected (they sum the raw rows).
+export function groupPaidSessions(rows = []) {
+  const sorted = rows
+    .filter((p) => p?.id && p.date_time && !isNaN(new Date(p.date_time).getTime()))
+    .sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
+  const open = new Map()
+  const groups = []
+  for (const p of sorted) {
+    const key = `${norm(p.platform)}|${norm(p.username_lower || p.username)}|${norm(p.session_type)}`
+    const ms = new Date(p.date_time).getTime()
+    const cur = open.get(key)
+    if (cur && ms - cur.endMs <= SESSION_GAP_MS) {
+      cur.rows.push(p); cur.endMs = ms
+    } else {
+      const g = { key, rows: [p], startMs: ms, endMs: ms }
+      groups.push(g); open.set(key, g)
+    }
+  }
+  return groups
+}
+
+function privateEntry(g) {
+  const first = g.rows[0]
+  const platform = norm(first.platform)
+  const usd = money(g.rows.reduce((s, r) => s + (Number(r.usd) || 0), 0))
+  const spanMinutes = (g.endMs - g.startMs) / 60000
   return {
-    id: `private:${p.id}`,
-    sourceId: p.id,
+    id: `private:${first.id}`,
+    sourceId: first.id,
     type: 'private',
-    sessionType: p.session_type || null,
+    sessionType: first.session_type || null,
     platforms: [platform],
     platformBreakdown: [{ platform, usd, tips: 0 }],
-    startTime: p.date_time,
-    endTime: p.date_time,
+    startTime: new Date(g.startMs).toISOString(),
+    endTime: new Date(g.endMs).toISOString(),
     durationMinutes: null,
+    chargeSpanMinutes: g.rows.length > 1 ? spanMinutes : null,
+    chargeCount: g.rows.length,
     durationEstimated: false,
     durationUnknown: true,
     publicUSD: 0,
@@ -121,9 +151,9 @@ function privateEntry(p) {
     totalUSD: usd,
     privateMinutes: null,
     tipCount: 0,
-    uniqueTippers: p.username ? 1 : 0,
+    uniqueTippers: first.username ? 1 : 0,
     topTipper: null,
-    fan: p.username || null,
+    fan: first.username || null,
     isNew: false,
     isValid: true,
   }
@@ -139,7 +169,7 @@ export function buildSessionHistory({ tips = [], shows = [], paidSessions = [] }
   const entries = [
     ...shows.filter((s) => s?.id && s.endedAt).map(liveEntry),
     ...detectSessions(unlinkedTips(tips)).map(tipSessionEntry),
-    ...paidSessions.filter((p) => p?.id && p.date_time).map(privateEntry),
+    ...groupPaidSessions(paidSessions).map(privateEntry),
   ]
   return entries.sort((a, b) => new Date(b.startTime) - new Date(a.startTime) || (a.id < b.id ? 1 : -1))
 }
