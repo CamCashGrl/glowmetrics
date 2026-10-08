@@ -21,12 +21,14 @@ export function isProPlan(plan) {
 // ── Platform role resolution ─────────────────────────────────────────────────
 // THE single source of truth for primary-platform identity (Free history
 // gating, Platform Intelligence, everything). Canonical field:
-// profiles.primary_pro_platform. streaming_platforms[0] is a read-only
-// compatibility fallback (onboarding writes both; index 0 always equals the
-// primary). Never inferred from revenue or activity: no selection → null.
+// profiles.primary_pro_platform, set only by POST /api/profile/primary-platform.
+// It is NEVER inferred from streaming_platforms order, revenue, activity or
+// earnings: primary_pro_platform NULL → primary null → on Free every platform
+// stays on the 31-day window. streaming_platforms only supplies display order
+// for the secondary list.
 export function resolvePlatformRoles(streamingPlatforms, primaryProPlatform) {
   const list = Array.isArray(streamingPlatforms) ? streamingPlatforms.filter(Boolean) : []
-  const primary = (primaryProPlatform && String(primaryProPlatform).trim()) || list[0] || null
+  const primary = (primaryProPlatform && String(primaryProPlatform).trim()) || null
   const lower = primary ? String(primary).toLowerCase() : null
   const secondary = list.filter((p) => String(p).toLowerCase() !== lower)
   return { primary, secondary }

@@ -24,9 +24,24 @@ const rows = [
   tip('BongaCams', '2026-10-01T12:00:00Z', 3, 'bc_new'),
 ]
 
-test('primary comes only from the onboarding selection; none on file → null', () => {
-  expect(resolvePlatformRoles(['Chaturbate', 'BongaCams'], null).primary).toBe('Chaturbate')
+test('primary comes only from primary_pro_platform; none on file → null', () => {
+  expect(resolvePlatformRoles(['Chaturbate', 'BongaCams'], null).primary).toBeNull()
   expect(resolvePlatformRoles(null, null).primary).toBeNull()
+  expect(resolvePlatformRoles(['BongaCams', 'Chaturbate'], 'Chaturbate').primary).toBe('Chaturbate')
+})
+
+test('no primary + streaming_platforms[0] set → every platform gets 31 days', () => {
+  const unlimited = resolvePlatformRoles(['Chaturbate', 'BongaCams'], null).primary
+  const out = applyFreeAnalysisWindow(rows, { windowDays: 31, unlimitedPlatform: unlimited })
+  expect(out.some((r) => r.username === 'old_cb')).toBe(false)
+  expect(out.some((r) => r.username === 'old_bc')).toBe(false)
+})
+
+test('reordering streaming_platforms does not change gating', () => {
+  const gate = (list, primary) => applyFreeAnalysisWindow(rows, { windowDays: 31, unlimitedPlatform: resolvePlatformRoles(list, primary).primary }).map((r) => r.username).sort()
+  expect(gate(['Chaturbate', 'BongaCams'], null)).toEqual(gate(['BongaCams', 'Chaturbate'], null))
+  expect(gate(['Chaturbate', 'BongaCams'], 'Chaturbate')).toEqual(gate(['BongaCams', 'Chaturbate'], 'Chaturbate'))
+  expect(gate(['BongaCams', 'Chaturbate'], 'Chaturbate')).toContain('old_cb')
 })
 
 test('1. primary Free platform keeps history older than 31 days', () => {

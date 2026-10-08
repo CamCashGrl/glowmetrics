@@ -28,8 +28,10 @@ beforeEach(() => {
   state = { user: { id: 'u1' }, row: { primary_pro_platform: null, streaming_platforms: ['bongacams'] }, updates: [] }
   jest.resetModules()
   jest.doMock('../../../../lib/liveSession/auth', () => ({
-    getLiveSessionCaller: async () => ({ user: state.user, supabase: { from: () => mockClient() } }),
+    getLiveSessionCaller: async () => ({ user: state.user, supabase: { from: () => { throw new Error('caller client must not write') } } }),
   }))
+  // The write goes through the server (service-role) client only.
+  jest.doMock('@supabase/supabase-js', () => ({ createClient: () => ({ from: () => mockClient() }) }))
 })
 const req = (body) => ({ json: async () => body, headers: new Map() })
 
@@ -41,6 +43,7 @@ test('sets primary once, keeps it first in streaming_platforms, writes only plat
   expect(state.row.streaming_platforms).toEqual(['chaturbate', 'bongacams'])
   expect(Object.keys(state.updates[0].update).sort()).toEqual(['primary_pro_platform', 'streaming_platforms'])
   expect(state.updates[0].filters).toContainEqual(['is', 'primary_pro_platform', null])
+  expect(state.updates[0].filters).toContainEqual(['eq', 'id', 'u1'])
 })
 
 test('cannot be changed once set (409)', async () => {
@@ -49,6 +52,7 @@ test('cannot be changed once set (409)', async () => {
   const res = await POST(req({ platform: 'chaturbate' }))
   expect(res.status).toBe(409)
   expect(state.row.primary_pro_platform).toBe('bongacams')
+  expect((await res.json()).primary_pro_platform).toBe('bongacams')
   expect(state.updates).toHaveLength(0)
 })
 

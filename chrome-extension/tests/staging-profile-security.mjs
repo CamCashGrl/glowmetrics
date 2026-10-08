@@ -85,27 +85,53 @@ async function main() {
     const proRow = await row(pro.id);
     check('  DB: other user untouched and still Pro', proRow.utm_source == null && proRow.plan === 'pro', JSON.stringify(proRow));
 
-    console.log('\nMust succeed');
+    console.log('\nMust succeed (legitimate browser edits)');
     r = await free.client.from('profiles').update({ utm_source: 'newsletter', attributed_at: new Date().toISOString() }).eq('id', free.id).select();
     check('Signup attribution (UTM) update still works', !r.error && (await row(free.id)).utm_source === 'newsletter', r.error?.message);
+    r = await free.client.from('profiles').upsert({ id: free.id, streaming_platforms: ['chaturbate', 'bongacams'] }, { onConflict: 'id' }).select();
+    check('Onboarding platform-list save (upsert, no primary) works', !r.error, r.error?.message);
+    check('  DB: platform list saved, primary still NULL', (await row(free.id)).streaming_platforms?.join() === 'Chaturbate,BongaCams' && (await row(free.id)).primary_pro_platform == null, JSON.stringify(await row(free.id)));
+    r = await free.client.from('profiles').update({ chaturbate_username: 'sec_cb_user', broadcaster_type: 'female' }).eq('id', free.id).select();
+    check('Chaturbate username / broadcaster_type edit works', !r.error && (await row(free.id)).chaturbate_username === 'sec_cb_user', r.error?.message);
 
-    console.log('\nPrimary platform route');
+    console.log('\nPrimary NULL: browser cannot make the first permanent choice');
+    r = await free.client.from('profiles').update({ primary_pro_platform: 'chaturbate' }).eq('id', free.id).select();
+    check('Direct browser first-time primary write (update) → denied', !!r.error && /permission denied/i.test(r.error.message), JSON.stringify(r.error || r.data));
+    check('  DB: primary still NULL', (await row(free.id)).primary_pro_platform == null);
+    r = await free.client.from('profiles').upsert({ id: free.id, streaming_platforms: ['chaturbate'], primary_pro_platform: 'chaturbate' }, { onConflict: 'id' }).select();
+    check('Direct browser first-time primary write (onboarding-style upsert) → denied', !!r.error, JSON.stringify(r.data));
+    check('  DB: primary still NULL, list unchanged', (await row(free.id)).primary_pro_platform == null && (await row(free.id)).streaming_platforms?.join() === 'Chaturbate,BongaCams');
+    r = await free.client.from('profiles').update({ streaming_platforms: ['bongacams', 'chaturbate'] }).eq('id', free.id).select();
+    check('Platform-list reorder with no primary works', !r.error, r.error?.message);
+    check('  DB: reorder did NOT create a primary', (await row(free.id)).primary_pro_platform == null && (await row(free.id)).streaming_platforms?.[0] === 'BongaCams', JSON.stringify(await row(free.id)));
+
+    console.log('\nPrimary platform route (only path to the permanent primary)');
     check('Unauthenticated → 401', (await choose(null, 'bongacams')).status === 401);
     check('Invalid platform → 400', (await choose(free.token, 'stripchat')).status === 400);
-    const first = await choose(free.token, 'bongacams');
-    check('First choice → 200', first.status === 200, JSON.stringify(first));
-    check('  DB: primary = BongaCams, roster primary-first', (await row(free.id)).primary_pro_platform === 'BongaCams' && (await row(free.id)).streaming_platforms?.[0] === 'BongaCams', JSON.stringify(await row(free.id)));
-    const again = await choose(free.token, 'chaturbate');
-    check('Repeat choice → 409', again.status === 409, JSON.stringify(again));
-    r = await free.client.from('profiles').update({ primary_pro_platform: 'Chaturbate' }).eq('id', free.id).select();
-    check('Direct supabase update of a set primary is refused', !!r.error);
-    r = await free.client.from('profiles').update({ streaming_platforms: ['chaturbate', 'bongacams'] }).eq('id', free.id).select();
+    const first = await choose(free.token, 'chaturbate');
+    check('API first choice → 200', first.status === 200, JSON.stringify(first));
+    check('  DB: primary = Chaturbate', (await row(free.id)).primary_pro_platform === 'Chaturbate', JSON.stringify(await row(free.id)));
+    const again = await choose(free.token, 'bongacams');
+    check('API second choice → 409', again.status === 409, JSON.stringify(again));
+    check('  DB: primary still Chaturbate', (await row(free.id)).primary_pro_platform === 'Chaturbate');
+
+    console.log('\nPrimary set: browser cannot change or clear it');
+    r = await free.client.from('profiles').update({ primary_pro_platform: 'BongaCams' }).eq('id', free.id).select();
+    check('Direct browser primary change → denied', !!r.error);
+    r = await free.client.from('profiles').update({ primary_pro_platform: null }).eq('id', free.id).select();
+    check('Direct browser primary clear → denied', !!r.error);
+    r = await free.client.from('profiles').update({ streaming_platforms: ['bongacams', 'myfreecams', 'chaturbate'] }).eq('id', free.id).select();
+    check('Platform-list reorder with primary set works', !r.error, r.error?.message);
     const afterReorder = await row(free.id);
-    check('  DB: primary still BongaCams after all attempts (roster kept primary-first)', afterReorder.primary_pro_platform === 'BongaCams' && afterReorder.streaming_platforms?.[0] === 'BongaCams', JSON.stringify(afterReorder));
+    check('  DB: primary unchanged by reorder; list stored exactly as sent', afterReorder.primary_pro_platform === 'Chaturbate' && afterReorder.streaming_platforms?.join() === 'BongaCams,MyFreeCams,Chaturbate', JSON.stringify(afterReorder));
+
+    console.log('\nStripe checkout write path');
+    r = await admin.from('profiles').update({ stripe_customer_id: 'cus_staging_test' }).eq('id', pro.id).select();
+    check('Server role (as used by /api/stripe/checkout) can save stripe_customer_id', !r.error && (await row(pro.id)).stripe_customer_id === 'cus_staging_test', r.error?.message);
 
     const [a, b] = await Promise.all([choose(racer.token, 'chaturbate'), choose(racer.token, 'myfreecams')]);
     const statuses = [a.status, b.status].sort();
-    check('Concurrent first choices → exactly one 200, one 409', statuses[0] === 200 && statuses[1] === 409, JSON.stringify([a, b]));
+    check('Simultaneous API choices → exactly one 200, one 409', statuses[0] === 200 && statuses[1] === 409, JSON.stringify([a, b]));
     const winner = a.status === 200 ? 'Chaturbate' : 'MyFreeCams';
     check('  DB: primary is the winning request only', (await row(racer.id)).primary_pro_platform === winner, JSON.stringify(await row(racer.id)));
 

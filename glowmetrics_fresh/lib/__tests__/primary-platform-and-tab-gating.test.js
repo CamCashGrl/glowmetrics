@@ -16,9 +16,10 @@ const tips = [
   { platform: 'Chaturbate', date_time: '2026-10-01T12:00:00Z', usd: 1, username: 'small', tokens: 1 },
 ]
 
-test('canonical field primary_pro_platform wins; streaming_platforms[0] is only a fallback', () => {
+test('primary comes only from primary_pro_platform; streaming_platforms[0] is never a fallback', () => {
   expect(resolvePlatformRoles(['bongacams', 'chaturbate'], 'chaturbate')).toEqual({ primary: 'chaturbate', secondary: ['bongacams'] })
-  expect(resolvePlatformRoles(['myfreecams', 'chaturbate'], null).primary).toBe('myfreecams')
+  // No primary on file: list order is display order only, nothing is primary.
+  expect(resolvePlatformRoles(['myfreecams', 'chaturbate'], null)).toEqual({ primary: null, secondary: ['myfreecams', 'chaturbate'] })
   expect(resolvePlatformRoles(null, null)).toEqual({ primary: null, secondary: [] })
 })
 

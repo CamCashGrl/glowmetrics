@@ -10,15 +10,15 @@
 --  1. Column privileges: browsers (authenticated/anon) lose all write access
 --     to profiles, then get INSERT/UPDATE back ONLY on the columns the app
 --     writes from the browser (inventory: landing signup attribution,
---     onboarding platform selection + Chaturbate username, Chaturbate
---     onboarding broadcaster_type, the one-time primary-platform route).
---     plan, trial, Stripe and every other column become server-only
---     (service_role / SECURITY DEFINER functions only).
---  2. Trigger: once primary_pro_platform is set, ordinary users can never
---     change it (server role can repair). A first write of only
---     streaming_platforms materializes its first entry as the primary, and
---     streaming_platforms is kept primary-first, so the compatibility
---     fallback cannot be used to switch platforms later.
+--     onboarding platform list + Chaturbate username, Chaturbate onboarding
+--     broadcaster_type). plan, trial, Stripe, primary_pro_platform and every
+--     other column become server-only (service_role / SECURITY DEFINER).
+--     The permanent primary is established ONLY by
+--     POST /api/profile/primary-platform (service role, "only if NULL").
+--  2. Trigger (defense in depth): once primary_pro_platform is set, ordinary
+--     users can never change or clear it. It never creates or reorders
+--     anything: streaming_platforms is a display list and never sets the
+--     primary.
 --  3. subscriptions / promo tables: browser write privileges revoked (they
 --     are written only by the Stripe webhook and SECURITY DEFINER
 --     functions).
@@ -26,14 +26,17 @@
 -- send_live_mode_guide_batch) run as their owner and are unaffected.
 
 BEGIN;
+SET LOCAL lock_timeout = '10s';
 
 -- 1. profiles: column allowlist ------------------------------------------------
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.profiles FROM anon, authenticated;
+-- Explicit: the permanent primary is never browser-writable, even when NULL.
+REVOKE INSERT (primary_pro_platform), UPDATE (primary_pro_platform) ON public.profiles FROM anon, authenticated;
 
 GRANT INSERT (
   id,
   chaturbate_username, broadcaster_type,
-  streaming_platforms, primary_pro_platform,
+  streaming_platforms,
   utm_source, utm_medium, utm_campaign, utm_content, utm_term,
   referrer, attributed_landing_page, attributed_at
 ) ON public.profiles TO authenticated;
@@ -44,7 +47,7 @@ GRANT INSERT (
 GRANT UPDATE (
   id,
   chaturbate_username, broadcaster_type,
-  streaming_platforms, primary_pro_platform,
+  streaming_platforms,
   utm_source, utm_medium, utm_campaign, utm_content, utm_term,
   referrer, attributed_landing_page, attributed_at
 ) ON public.profiles TO authenticated;
@@ -67,22 +70,6 @@ BEGIN
      AND NEW.primary_pro_platform IS DISTINCT FROM OLD.primary_pro_platform THEN
     RAISE EXCEPTION 'primary_pro_platform is permanent once chosen'
       USING ERRCODE = '42501';
-  END IF;
-
-  -- The compatibility fallback (streaming_platforms[1]) becomes the stored
-  -- primary on first write, so it can never be used to change it later.
-  IF NEW.primary_pro_platform IS NULL
-     AND NEW.streaming_platforms IS NOT NULL
-     AND array_length(NEW.streaming_platforms, 1) > 0 THEN
-    NEW.primary_pro_platform := NEW.streaming_platforms[1];
-  END IF;
-
-  -- Keep the roster primary-first (index 1 always equals the primary).
-  IF NEW.primary_pro_platform IS NOT NULL AND NEW.streaming_platforms IS NOT NULL THEN
-    NEW.streaming_platforms := array_prepend(
-      NEW.primary_pro_platform,
-      array_remove(NEW.streaming_platforms, NEW.primary_pro_platform)
-    );
   END IF;
 
   RETURN NEW;
