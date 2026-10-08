@@ -79,7 +79,7 @@ function useFlash(value) {
 function sessionTitle(e, tz) {
   if (e.type === "live" && e.isNew) return "Just ended show"
   if (e.type === "live" && e.running) return "Live now"
-  if (e.type === "private") return `${e.sessionType || "Private"} session`
+  if (e.type === "private") { const t = String(e.sessionType || "private"); return `${t.charAt(0).toUpperCase()}${t.slice(1)} session` }
   if (e.type === "imported") return "Imported session"
   const h = Number(new Date(e.startTime).toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false })) % 24
   const part = h < 5 ? "Late-night" : h < 12 ? "Morning" : h < 17 ? "Afternoon" : h < 22 ? "Evening" : "Late-night"
@@ -99,7 +99,7 @@ function Cell({ icon, value, label, testId, accent, sub, strong }) {
     <div style={{ ...inset, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", minWidth: 0, ...(strong ? { border: `1px solid ${C.violet}88`, boxShadow: `0 0 22px ${C.violet}33, inset 0 0 18px ${C.violet}14` } : {}) }}>
       {icon && <span aria-hidden="true" style={{ fontSize: 20, width: 26, textAlign: "center", flexShrink: 0 }}>{icon}</span>}
       <div style={{ minWidth: 0 }}>
-        <div data-testid={testId} style={{ fontSize: strong ? 17 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+        <div data-testid={testId} style={{ fontSize: String(value).length > 9 ? 15 : strong ? 18 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, overflowWrap: "anywhere" }}>{value}</div>
         <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>{label}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
       </div>
@@ -182,7 +182,7 @@ function PlatformCard({ platform, p, best, range }) {
         <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 19, fontWeight: 900, color: C.white }}>
           <span style={{ width: 30, height: 30, borderRadius: 8, background: color, display: "grid", placeItems: "center", fontSize: 13, color: "#0b0e1a" }}>{pName(platform).slice(0, platform === "myfreecams" ? 3 : 1).toUpperCase()}</span>
           {pName(platform)}
-          {best && <span data-testid="best-platform-badge" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1, color, border: `1px solid ${color}88`, padding: "2px 7px", borderRadius: 999 }}>BEST {range === 1 ? "TODAY" : "IN RANGE"}</span>}
+          {best && <span data-testid="best-platform-badge" style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1, color, border: `1px solid ${color}88`, padding: "2px 7px", borderRadius: 999, whiteSpace: "nowrap" }}>BEST {range === 1 ? "TODAY" : "IN RANGE"}</span>}
         </span>
         <span style={{ textAlign: "right" }}>
           <div style={{ fontSize: 15, fontWeight: 900, color }}>{q.share}%</div>
@@ -217,19 +217,20 @@ function SessionRow({ e, tz, selected, onSelect }) {
   return (
     <button data-testid={`history-${e.id}`} onClick={onSelect} aria-pressed={selected} className="sx-row" style={{
       ...inset, width: "100%", textAlign: "left", cursor: "pointer", padding: "10px 14px", display: "grid",
-      gridTemplateColumns: "40px minmax(0,1.6fr) 0.8fr 0.6fr 0.5fr 18px", gap: 12, alignItems: "center", color: C.white,
+      gridTemplateColumns: "36px minmax(0,1fr) 78px 56px 48px 12px", gap: 10, alignItems: "center", color: C.white,
       ...(selected ? { border: `1px solid ${C.pink}`, boxShadow: `0 0 0 1px ${C.indigo}55, 0 0 22px ${C.pink}40`, background: "rgba(30,18,52,0.75)" } : {}),
     }}>
       <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.05)", color: e.type === "imported" ? C.text : C.cyan, fontSize: 14 }}>{e.type === "imported" ? "▤" : e.type === "private" ? "🔒" : "▶"}</span>
       <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 800, fontSize: 13.5 }}>{sessionTitle(e, tz)}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+          <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis" }}>{sessionTitle(e, tz)}</span>
           <Badge text={status.label} color={status.color} testId={`type-badge-${e.type}`} />
           {e.isNew && <span data-testid="row-new-badge" style={{ display: "none" }}>NEW</span>}
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: C.text, flexWrap: "wrap" }}>
-          {e.platforms.map((p, i) => <span key={p} data-testid={`platform-badge-${p}`}><PlatChip name={pName(p)} i={i} /></span>)}
-          <span>{whenText(e.startTime, tz)}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
+          {e.platforms.slice(0, 1).map((p, i) => <span key={p} data-testid={`platform-badge-${p}`}><PlatChip name={pName(p)} i={i} /></span>)}
+          {e.platforms.length > 1 && <span title={e.platforms.slice(1).map(pName).join(", ")} style={{ color: C.text }}>+{e.platforms.length - 1}</span>}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>· {whenText(e.startTime, tz)}</span>
         </span>
       </span>
       <span><div style={{ fontWeight: 900, fontSize: 14 }}>{fmtUsd(e.totalUSD)}</div><div style={{ fontSize: 11, color: C.text }}>Total Earned</div></span>
