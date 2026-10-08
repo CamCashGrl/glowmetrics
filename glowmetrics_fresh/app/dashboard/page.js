@@ -14,7 +14,7 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate, platformColor, platformDisplayName } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, tokenRate, platformColor, platformDisplayName, canonicalPlatform } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { trackTrialEvent } from '../../lib/analytics-client'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
@@ -1949,6 +1949,7 @@ export default function Dashboard() {
         const batch = pendingTipInsertsRef.current
         if (!batch.length) return
         pendingTipInsertsRef.current = []
+        batch.forEach(r => { r.platform = canonicalPlatform(r.platform) })
 
         setTips(prev => {
           const existingKeys = new Set(prev.map(t => `${t.date_time}|${t.username}|${t.tokens}`))
@@ -2158,6 +2159,8 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+      // One name per platform ('BC' → 'BongaCams') before any analytics run.
+      allData.forEach(t => { t.platform = canonicalPlatform(t.platform) })
       // CHECKPOINT 1: Immediately after Supabase tips fetch
       console.log('[DASH TRACE] tips fetch', {
         count: allData?.length,
@@ -2223,6 +2226,7 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         paidFrom += PAGE
       }
+      allPaidSessions.forEach(p => { p.platform = canonicalPlatform(p.platform) })
       setPaidSessions(allPaidSessions)
 
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })

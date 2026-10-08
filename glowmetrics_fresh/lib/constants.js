@@ -21,9 +21,23 @@ const PLATFORM_TOKEN_RATES_LOWER = Object.fromEntries(
   Object.entries(PLATFORM_TOKEN_RATES).map(([k, v]) => [k.toLowerCase(), v])
 )
 
+// Short platform codes seen in stored rows and UI (e.g. 519 production tips
+// saved as 'BC'). Every platform lookup resolves these to the canonical name,
+// so 'BC' is BongaCams everywhere: its token rate, its name, its color, and
+// its totals. Never compare raw platform strings; use canonicalPlatform().
+const PLATFORM_ALIASES = { bc: 'BongaCams', cb: 'Chaturbate', mfc: 'MyFreeCams' }
+
+export function canonicalPlatform(platform) {
+  if (!platform) return platform
+  const key = String(platform).trim().toLowerCase()
+  if (PLATFORM_ALIASES[key]) return PLATFORM_ALIASES[key]
+  const known = Object.keys(PLATFORM_TOKEN_RATES).find((k) => k.toLowerCase() === key)
+  return known || String(platform).trim()
+}
+
 export function tokenRate(platform) {
   if (!platform) return DEFAULT_TOKEN_RATE
-  return PLATFORM_TOKEN_RATES_LOWER[platform.toLowerCase()] ?? DEFAULT_TOKEN_RATE
+  return PLATFORM_TOKEN_RATES_LOWER[canonicalPlatform(platform).toLowerCase()] ?? DEFAULT_TOKEN_RATE
 }
 
 // What viewers pay per token to buy it (not what the model receives).
@@ -39,7 +53,7 @@ export const PLATFORM_VIEWER_RATES = {
 export const DEFAULT_VIEWER_RATE = 0.10
 
 export function viewerRate(platform) {
-  return PLATFORM_VIEWER_RATES[platform] ?? DEFAULT_VIEWER_RATE
+  return PLATFORM_VIEWER_RATES[canonicalPlatform(platform)] ?? DEFAULT_VIEWER_RATE
 }
 
 // ============================================================
@@ -69,11 +83,12 @@ const PLATFORM_NAMES_LOWER = Object.fromEntries(
 
 export function platformDisplayName(platform) {
   if (!platform) return "Unknown"
-  return PLATFORM_NAMES_LOWER[platform.toLowerCase()] || platform
+  const c = canonicalPlatform(platform)
+  return PLATFORM_NAMES_LOWER[c.toLowerCase()] || c
 }
 
 export function platformColor(platform) {
   if (!platform) return DEFAULT_PLATFORM_COLOR
-  const canonical = PLATFORM_NAMES_LOWER[platform.toLowerCase()]
+  const canonical = PLATFORM_NAMES_LOWER[canonicalPlatform(platform).toLowerCase()]
   return (canonical && PLATFORM_COLORS[canonical]) || DEFAULT_PLATFORM_COLOR
 }
