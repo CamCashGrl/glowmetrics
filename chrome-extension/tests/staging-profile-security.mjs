@@ -1,0 +1,155 @@
+// STAGING ONLY. Browser-style attack tests for migration
+// 20261010_lock_profile_entitlements.sql and /api/profile/primary-platform.
+//
+// Every attack is made exactly as a browser would make it — supabase-js with
+// the anon key and the attacker's own login token — and every outcome is
+// proven by re-reading the row with the service role afterwards (not just by
+// an HTTP error). Also checks the legitimate paths still work and that the
+// Free/Pro UI follows the database entitlement.
+//
+// Run: node staging-profile-security.mjs (needs the staging env vars and the
+// app at CAMCASH_STAGING_BASE_URL).
+
+import { chromium } from 'playwright-core';
+import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
+const URL_ = process.env.SUPABASE_STAGING_URL;
+const ANON = process.env.SUPABASE_STAGING_ANON_KEY;
+const SERVICE = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
+const APP = process.env.CAMCASH_STAGING_BASE_URL;
+const OUT = process.env.BROWSER_ARTIFACTS_DIR || path.resolve('browser-artifacts');
+for (const [k, v] of Object.entries({ SUPABASE_STAGING_URL: URL_, SUPABASE_STAGING_ANON_KEY: ANON, SUPABASE_STAGING_SERVICE_ROLE_KEY: SERVICE, CAMCASH_STAGING_BASE_URL: APP })) {
+  if (!v) { console.error(`❌ Missing ${k}`); process.exit(1); }
+}
+if (URL_.includes('hlsdlaibnayzbfflxclj') || /camcashgrl\.com/.test(APP)) { console.error('❌ FATAL: refusing to run against production'); process.exit(1); }
+fs.mkdirSync(OUT, { recursive: true });
+
+let pass = 0, fail = 0;
+const check = (name, cond, detail = '') => {
+  if (cond) { pass++; console.log(`✅ ${name}`); } else { fail++; console.error(`❌ ${name}${detail ? ` — ${detail}` : ''}`); }
+};
+const admin = createClient(URL_, SERVICE, { auth: { persistSession: false } });
+const row = async (id) => (await admin.from('profiles').select('*').eq('id', id).single()).data;
+
+async function makeUser(label, plan) {
+  const email = `sec-${label}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@staging.local`;
+  const password = crypto.randomBytes(18).toString('hex');
+  const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  if (error) throw new Error(`create ${label}: ${error.message}`);
+  const id = data.user.id;
+  const { error: pErr } = await admin.from('profiles').upsert({ id, plan });
+  if (pErr) throw new Error(`profile ${label}: ${pErr.message}`);
+  await admin.from('beta_users').insert({ user_id: id, email, onboarding_complete: true });
+  const client = createClient(URL_, ANON, { auth: { persistSession: false } });
+  const { data: s, error: sErr } = await client.auth.signInWithPassword({ email, password });
+  if (sErr) throw new Error(`sign in ${label}: ${sErr.message}`);
+  return { id, email, password, client, token: s.session.access_token };
+}
+const choose = (token, platform) => fetch(`${APP}/api/profile/primary-platform`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  body: JSON.stringify({ platform }),
+}).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) }));
+
+async function main() {
+  const users = [];
+  let browser;
+  try {
+    const free = await makeUser('free', 'free'); users.push(free);
+    const pro = await makeUser('pro', 'pro'); users.push(pro);
+    const racer = await makeUser('racer', 'free'); users.push(racer);
+
+    console.log('\nMust fail (browser-style, proven from the database)');
+    let r = await free.client.from('profiles').update({ plan: 'pro' }).eq('id', free.id).select();
+    check('Free user cannot set plan=pro', !!r.error, JSON.stringify(r.data));
+    check('  DB: plan still free', (await row(free.id)).plan === 'free');
+
+    r = await free.client.from('profiles').update({ subscription_status: 'active', stripe_subscription_id: 'sub_fake', trial_ends_at: new Date(Date.now() + 365 * 864e5).toISOString(), plan_expires_at: new Date(Date.now() + 3650 * 864e5).toISOString() }).eq('id', free.id).select();
+    check('Free user cannot set subscription/trial/expiry fields', !!r.error);
+    const afterSub = await row(free.id);
+    check('  DB: subscription/trial/expiry untouched', afterSub.subscription_status !== 'active' && afterSub.stripe_subscription_id == null && afterSub.trial_ends_at == null && afterSub.plan_expires_at == null, JSON.stringify(afterSub));
+
+    r = await free.client.from('profiles').update({ stripe_customer_id: 'cus_someone_else' }).eq('id', free.id).select();
+    check('Free user cannot set stripe_customer_id', !!r.error);
+    check('  DB: stripe_customer_id untouched', (await row(free.id)).stripe_customer_id == null);
+
+    r = await free.client.from('subscriptions').insert({ user_id: free.id, status: 'active', plan_type: 'pro' }).select();
+    check('Free user cannot insert a subscriptions row', !!r.error);
+    check('  DB: no subscriptions row', ((await admin.from('subscriptions').select('id').eq('user_id', free.id)).data || []).length === 0);
+
+    r = await free.client.from('profiles').update({ utm_source: 'hijack', plan: 'free' }).eq('id', pro.id).select();
+    check("Free user cannot edit another user's profile", !!r.error || (r.data || []).length === 0);
+    const proRow = await row(pro.id);
+    check('  DB: other user untouched and still Pro', proRow.utm_source == null && proRow.plan === 'pro', JSON.stringify(proRow));
+
+    console.log('\nMust succeed');
+    r = await free.client.from('profiles').update({ utm_source: 'newsletter', attributed_at: new Date().toISOString() }).eq('id', free.id).select();
+    check('Signup attribution (UTM) update still works', !r.error && (await row(free.id)).utm_source === 'newsletter', r.error?.message);
+
+    console.log('\nPrimary platform route');
+    check('Unauthenticated → 401', (await choose(null, 'bongacams')).status === 401);
+    check('Invalid platform → 400', (await choose(free.token, 'stripchat')).status === 400);
+    const first = await choose(free.token, 'bongacams');
+    check('First choice → 200', first.status === 200, JSON.stringify(first));
+    check('  DB: primary = BongaCams, roster primary-first', (await row(free.id)).primary_pro_platform === 'BongaCams' && (await row(free.id)).streaming_platforms?.[0] === 'BongaCams', JSON.stringify(await row(free.id)));
+    const again = await choose(free.token, 'chaturbate');
+    check('Repeat choice → 409', again.status === 409, JSON.stringify(again));
+    r = await free.client.from('profiles').update({ primary_pro_platform: 'Chaturbate' }).eq('id', free.id).select();
+    check('Direct supabase update of a set primary is refused', !!r.error);
+    r = await free.client.from('profiles').update({ streaming_platforms: ['chaturbate', 'bongacams'] }).eq('id', free.id).select();
+    const afterReorder = await row(free.id);
+    check('  DB: primary still BongaCams after all attempts (roster kept primary-first)', afterReorder.primary_pro_platform === 'BongaCams' && afterReorder.streaming_platforms?.[0] === 'BongaCams', JSON.stringify(afterReorder));
+
+    const [a, b] = await Promise.all([choose(racer.token, 'chaturbate'), choose(racer.token, 'myfreecams')]);
+    const statuses = [a.status, b.status].sort();
+    check('Concurrent first choices → exactly one 200, one 409', statuses[0] === 200 && statuses[1] === 409, JSON.stringify([a, b]));
+    const winner = a.status === 200 ? 'Chaturbate' : 'MyFreeCams';
+    check('  DB: primary is the winning request only', (await row(racer.id)).primary_pro_platform === winner, JSON.stringify(await row(racer.id)));
+
+    console.log('\nEntitlement in the UI');
+    const launch = { headless: true, args: ['--no-sandbox'] };
+    if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
+    browser = await chromium.launch(launch);
+    for (const [u, expectPro] of [[free, false], [pro, true]]) {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+      const page = await ctx.newPage();
+      page.setDefaultTimeout(120_000);
+      await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' });
+      const pw = page.locator('input[type="password"][placeholder="Password"]:visible').first();
+      for (let i = 0; i < 120 && !(await pw.count()); i++) {
+        if (i > 0 && i % 30 === 0) await page.goto(`${APP}/landing`, { waitUntil: 'networkidle' }).catch(() => {});
+        await page.getByRole('button', { name: 'Log In', exact: true }).first().click({ timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(1000);
+      }
+      const form = page.locator('form', { has: pw }).first();
+      await form.locator('input[type="email"]').fill(u.email);
+      await pw.fill(u.password);
+      await pw.press('Enter');
+      await page.waitForURL(/\/dashboard/);
+      const marker = page.locator(`text=${expectPro ? 'Pro plan active' : 'Upgrade to Pro'}`).first();
+      await marker.waitFor({ state: 'visible' }).catch(() => {});
+      check(`${expectPro ? 'Pro' : 'Free (after attacks)'} account sees ${expectPro ? 'Pro' : 'Free'} UI`, (await marker.count()) > 0);
+      await page.screenshot({ path: path.join(OUT, `sec-${expectPro ? 'pro' : 'free'}-dashboard.png`), fullPage: false });
+      await ctx.close();
+    }
+    check('DB: Free account still free at the end', (await row(free.id)).plan === 'free');
+    check('DB: Pro account still pro at the end', (await row(pro.id)).plan === 'pro');
+  } catch (e) {
+    fail++;
+    console.error('❌ Unhandled error:', e.message);
+  } finally {
+    if (browser) await browser.close();
+    for (const u of users) {
+      await admin.from('beta_users').delete().eq('user_id', u.id);
+      await admin.from('profiles').delete().eq('id', u.id);
+      await admin.auth.admin.deleteUser(u.id);
+    }
+  }
+  console.log(`\nResults: ${pass} passed, ${fail} failed`);
+  process.exit(fail ? 1 : 0);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
