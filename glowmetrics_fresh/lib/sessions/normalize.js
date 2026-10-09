@@ -885,3 +885,30 @@ export function sessionFanDrivers(entry, { tips = [], paidSessions = [] } = {}) 
     returning: earliest.has(k) && earliest.get(k) < firstMs,
   })).sort((a, b) => b.usd - a.usd || norm(a.username).localeCompare(norm(b.username)))
 }
+
+// ── SESSION VS THE CREATOR'S OWN TYPICAL ────────────────────────────────
+// Compares one meaningful session's total with the median total of the
+// creator's OTHER meaningful sessions (never other creators).
+//   basis 'same': same platform and same type (live / free_chat / imported),
+//                 used when there are >= 5 of them;
+//   basis 'all' : all other meaningful sessions, when >= 5;
+//   otherwise null (not enough history to claim anything).
+// outcome: 'above' / 'below' the median, or 'par' when equal.
+export const VS_TYPICAL_MIN = 5
+export function sessionVsTypical(entry, history = []) {
+  if (!entry || !isMeaningfulSession(entry)) return null
+  const others = history.filter((e) => e.id !== entry.id && isMeaningfulSession(e))
+  const same = others.filter((e) => e.type === entry.type && e.platforms[0] === entry.platforms[0])
+  const pool = same.length >= VS_TYPICAL_MIN ? same : others.length >= VS_TYPICAL_MIN ? others : null
+  if (!pool) return null
+  const med = median(pool.map((e) => e.totalUSD))
+  if (!(med > 0)) return null
+  const deltaPct = Math.round(((entry.totalUSD - med) / med) * 100)
+  return {
+    basis: pool === same ? 'same' : 'all',
+    sessions: pool.length,
+    medianUSD: money(med),
+    deltaPct,
+    outcome: entry.totalUSD > med ? 'above' : entry.totalUSD < med ? 'below' : 'par',
+  }
+}

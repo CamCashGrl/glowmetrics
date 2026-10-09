@@ -18,7 +18,7 @@ import { platformDisplayName, platformColor } from "../../lib/constants"
 import {
   SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, dailySessionStats,
   liveSessionSnapshot, withTodayDerived, todaySignal, vsYesterdayByNow, todayCumulative,
-  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
+  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
 } from "../../lib/sessions/normalize"
 import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
@@ -359,14 +359,28 @@ function Activation({ onImport, onStartLive }) {
   )
 }
 
+// "vs typical" marker: this session vs the creator's own comparable sessions.
+function VsTypical({ vs, testId, long = false, e }) {
+  if (!vs) return null
+  const color = vs.outcome === "above" ? C.green : vs.outcome === "below" ? "#F87171" : C.text
+  const arrow = vs.outcome === "above" ? "▲" : vs.outcome === "below" ? "▼" : "="
+  const pct = vs.outcome === "par" ? "On par" : `${vs.deltaPct > 0 ? "+" : ""}${vs.deltaPct}%`
+  const scope = vs.basis === "same" && e ? `your ${pName(e.platforms[0])} ${e.type === "live" ? "Live" : e.type === "free_chat" ? "free-chat" : "imported"} sessions` : "all your meaningful sessions"
+  return (
+    <span data-testid={testId} data-outcome={vs.outcome} title={`Median of ${vs.sessions} of ${scope}: ${fmtUsd(vs.medianUSD)}`} style={{ color, fontWeight: 800, fontSize: long ? 12.5 : 10.5, whiteSpace: "nowrap" }}>
+      {arrow} {pct}{long ? ` vs typical (median ${fmtUsd(vs.medianUSD)} of ${vs.sessions} of ${scope})` : " vs typical"}
+    </span>
+  )
+}
+
 // ── Row 4 left: sessions list ────────────────────────────────────────────────
-function SessionRow({ e, tz, selected, onSelect }) {
+function SessionRow({ e, tz, selected, onSelect, vs }) {
   const t = TYPE[e.type]
   const status = e.running ? { label: "LIVE NOW", color: C.green } : e.isNew ? { label: "JUST ENDED", color: C.pink } : t
   return (
     <button data-testid={`history-${e.id}`} onClick={onSelect} aria-pressed={selected} className="sx-row" style={{
       ...inset, width: "100%", textAlign: "left", cursor: "pointer", padding: "10px 14px", display: "grid",
-      gridTemplateColumns: "32px minmax(0,1fr) 70px 50px 44px 10px", gap: 8, alignItems: "center", color: C.white,
+      gridTemplateColumns: "32px minmax(0,1fr) 92px 50px 44px 10px", gap: 8, alignItems: "center", color: C.white,
       ...(selected ? { border: `1px solid ${C.pink}`, boxShadow: `0 0 0 1px ${C.indigo}55, 0 0 22px ${C.pink}40`, background: "rgba(30,18,52,0.75)" } : {}),
     }}>
       <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.05)", color: e.type === "imported" ? C.text : C.cyan, fontSize: 14 }}>{e.type === "imported" ? "▤" : e.type === "private" ? "🔒" : "▶"}</span>
@@ -382,7 +396,7 @@ function SessionRow({ e, tz, selected, onSelect }) {
           <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>· {whenText(e.startTime, tz)}</span>
         </span>
       </span>
-      <span><div style={{ fontWeight: 900, fontSize: 14 }}>{fmtUsd(e.totalUSD)}</div><div style={{ fontSize: 11, color: C.text }}>Total Earned</div></span>
+      <span><div style={{ fontWeight: 900, fontSize: 14 }}>{fmtUsd(e.totalUSD)}</div>{vs ? <VsTypical vs={vs} testId={`row-vs-${e.id}`} /> : <div style={{ fontSize: 11, color: C.text }}>Total Earned</div>}</span>
       <span><div style={{ fontWeight: 800, fontSize: 13 }}>{lengthText(e)}</div><div style={{ fontSize: 11, color: C.text }}>{e.type === "live" ? "Duration" : e.type === "private" ? "Charge span" : "Est. span"}</div></span>
       <span><div style={{ fontWeight: 800, fontSize: 13 }}>{e.type === "private" ? e.chargeCount : e.tipCount}</div><div style={{ fontSize: 11, color: C.text }}>{e.type === "private" ? (e.chargeCount === 1 ? "Charge" : "Charges") : (e.tipCount === 1 ? "Tip" : "Tips")}</div></span>
       <span aria-hidden="true" style={{ color: C.text, fontSize: 16 }}>›</span>
@@ -503,7 +517,7 @@ function FanDriversView({ e, tips, paidSessions, isPro, primaryPlatform }) {
 
 const DETAIL_TABS = [["overview", "Overview"], ["timeline", "Timeline"], ["fans", "Fans"]]
 
-function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null }) {
+function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null, vs = null }) {
   const [tab, setTab] = useState("overview")
   if (!e) return <div style={{ color: C.text, fontSize: 13 }}>Select a session to see its details.</div>
   const t = TYPE[e.type]
@@ -536,6 +550,8 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
       {tab === "timeline" && <BucketsView e={e} tips={tips} tz={tz} />}
       {tab === "fans" && <FanDriversView e={e} tips={tips} paidSessions={paidSessions} isPro={isPro} primaryPlatform={primaryPlatform} />}
       {tab === "overview" && <>
+      {vs ? <div style={{ ...inset, padding: "8px 12px" }}><VsTypical vs={vs} e={e} long testId="details-vs" /></div>
+        : (e.type === "free_chat" || e.type === "imported" || e.type === "live") && e.isValid ? <div data-testid="details-vs-empty" style={{ fontSize: 12, color: C.muted }}>Comparison with your typical session needs 5 other meaningful sessions.</div> : null}
       <div className="sx-dgrid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
         <Cell value={fmtUsd(e.publicUSD)} label="Public" testId="details-public" />
         <Cell value={fmtUsd(e.privateUSD)} label="Private" testId="details-private" accent={C.pink} />
@@ -604,6 +620,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   const overall = useMemo(() => overallSessionStats({ tips: T0, history, paidSessions: P0 }), [history]) // eslint-disable-line react-hooks/exhaustive-deps
   const perf = useMemo(() => sessionPerformance({ history, tips: T0, overall }), [history, overall]) // eslint-disable-line react-hooks/exhaustive-deps
   const showPerf = scope === "overall" || (mode.kind !== "none" && mode.singlePlatform)
+  const vsById = useMemo(() => new Map(history.map((e) => [e.id, sessionVsTypical(e, history)]).filter(([, v]) => v)), [history])
   const noData = mode.kind === "none" && !runningEntry && !showsLoading
   const light = mode.kind !== "none" && perf.meaningfulSessions < 3
   // Platform cards only for platforms the creator actually has data on.
@@ -695,11 +712,11 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
           {showsLoading && !history.length && <div style={{ color: C.text, fontSize: 12 }}>Loading…</div>}
           {!showsLoading && !history.length && !runningEntry && <div data-testid="history-empty" style={{ color: C.text, fontSize: 13 }}>No sessions yet. Start a Live Mode show or import your tip history.</div>}
           {(history.length > 0 || runningEntry) && !rows.length && <div data-testid="history-filter-empty" style={{ color: C.text, fontSize: 13 }}>No sessions of this type yet. Short tip groups (under 30 min or a single tip) are not listed.</div>}
-          {rows.map((e) => <SessionRow key={e.id} e={e} tz={tz} selected={selected?.id === e.id} onSelect={() => setSelectedId(e.id)} />)}
+          {rows.map((e) => <SessionRow key={e.id} e={e} tz={tz} selected={selected?.id === e.id} onSelect={() => setSelectedId(e.id)} vs={vsById.get(e.id)} />)}
         </div>
         <div data-testid="session-details" style={card({ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(12,15,28,0.78)", boxShadow: "none" })}>
           <div style={{ fontSize: 19, fontWeight: 900, color: C.white }}>Session Details</div>
-          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} />
+          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} />
         </div>
       </div>
       </>}

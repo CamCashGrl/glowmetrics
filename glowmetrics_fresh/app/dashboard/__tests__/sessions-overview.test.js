@@ -301,3 +301,20 @@ test('Fans: first appearance is New; Free outside primary says "in your availabl
   expect(screen.getAllByTestId('fan-status-new')).toHaveLength(2)
   expect(screen.getByTestId('fan-drivers').textContent).toMatch(/NEW IN YOUR AVAILABLE HISTORY/)
 })
+
+test('Recent Sessions rows marked above/below typical once 5 comparable sessions exist', () => {
+  const day = (d, a, b) => [csvTip(d * 10, `2026-09-${String(d).padStart(2, '0')}T20:00:00Z`, 'chaturbate', 'Ann', a), csvTip(d * 10 + 1, `2026-09-${String(d).padStart(2, '0')}T20:40:00Z`, 'chaturbate', 'Ben', b)]
+  const tips = [...day(2, 20, 10), ...day(4, 10, 10), ...day(6, 15, 5), ...day(8, 8, 2), ...day(10, 5, 5), ...day(12, 6, 4), ...day(14, 30, 10)]
+  renderTab({ tips })
+  const marks = screen.getAllByTestId(/^row-vs-/)
+  expect(marks[0].getAttribute('data-outcome')).toBe('above')
+  expect(marks[0].textContent).toBe('▲ +167% vs typical')
+  expect(val('details-vs')).toMatch(/\+167% vs typical \(median \$15\.00 of 6 of your Chaturbate imported sessions\)/)
+  expect(marks.some((m) => m.getAttribute('data-outcome') === 'below')).toBe(true)
+})
+
+test('no vs-typical marker without enough history', () => {
+  renderTab({ tips: csvTips })
+  expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
+  expect(screen.getByTestId('details-vs-empty')).toBeTruthy()
+})

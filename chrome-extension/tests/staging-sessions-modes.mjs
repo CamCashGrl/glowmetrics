@@ -91,6 +91,9 @@ const EXPECT = {
       'perf-momentum': '5 more sessions needed for Recent Momentum',
     },
   },
+  peakPro: {
+    overall: { 'overall-total': '$52.50', 'overall-tips': '8', 'overall-unique': '4', 'overall-meaningful': '2', 'overall-median': '$26.25' },
+  },
   noData: { contains: { 'sessions-activation': 'No performance data yet' }, present: ['activation-import', 'activation-live'], absent: ['today-stats', 'today-by-platform', 'session-history'] },
 };
 
@@ -223,6 +226,38 @@ async function main() {
         check(`${name} · Ann $10.00, 67% of session, Returning`, /\$10\.00/.test(fans[0]) && /67% of session/.test(fans[0]) && /RETURNING/.test(fans[0]), fans[0]);
         check(`${name} · Ben $5.00, 33% of session, Returning`, /\$5\.00/.test(fans[1]) && /33% of session/.test(fans[1]) && /RETURNING/.test(fans[1]), fans[1]);
         await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-fans.png') });
+      }
+      if (name === 'peakPro') {
+        // Newest session (raw rows): 20:00 Ann 4, 20:05 Ben 2, 20:12 Ben 12, 20:14 Cy 9, 20:31 Ann 12, 20:45 Dee 3.5 = $42.50 over 45 min.
+        const tabClick = async (id) => { const t = page.getByTestId(id); await t.locator('button').first().click().catch(async () => t.click()); };
+        await tabClick('details-tab-timeline');
+        await page.getByTestId('buckets').waitFor({ state: 'visible' });
+        const rows = await page.getByTestId('bucket-row').allTextContents();
+        check(`${name} · 5 ten-minute buckets for a 45-minute span`, rows.length === 5, JSON.stringify(rows));
+        const peak = (await page.getByTestId('buckets-peak').count()) ? await page.getByTestId('buckets-peak').textContent() : '';
+        check(`${name} · peak bucket = $21.00, 49% of session earnings`, /49%/.test(peak) && /\$21\.00/.test(peak), peak);
+        table.push({ scenario: name, scope: 'Timeline', metric: 'buckets-peak', raw: 'contains "49%" and "$21.00"', dom: peak.slice(0, 80) });
+        await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-peak.png') });
+        await tabClick('details-tab-fans');
+        await page.getByTestId('fan-drivers').waitFor({ state: 'visible' });
+        const fans = await page.getByTestId('fan-driver').allTextContents();
+        const want = [['Ann', '$16.00', '38%', 'RETURNING'], ['Ben', '$14.00', '33%', 'NEW'], ['Cy', '$9.00', '21%', 'NEW'], ['Dee', '$3.50', '8%', 'NEW']];
+        check(`${name} · 4 fans ranked by session USD`, fans.length === 4, JSON.stringify(fans));
+        want.forEach(([u, usd, pct, status], i) => {
+          const f = fans[i] || '';
+          const ok = f.startsWith(`${i + 1}${u}`) && f.includes(usd) && f.includes(`${pct} of session`) && f.includes(status) && !(status === 'NEW' && f.includes('RETURNING'));
+          check(`${name} · fan ${i + 1}: ${u} ${usd} ${pct} ${status}`, ok, f);
+          table.push({ scenario: name, scope: 'Fans', metric: `fan ${i + 1}`, raw: `${u} ${usd} ${pct} ${status}`, dom: ok ? `${u} ${usd} ${pct} ${status}` : f.slice(0, 80) });
+        });
+        await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-fans-new-returning.png') });
+      }
+      if (name === 'singleFree') {
+        // 7 Chaturbate imported sessions: 30, 20, 20, 10 (newest first) then 10, 10, 40.
+        const marks = await page.locator('[data-testid^="row-vs-"]').allTextContents();
+        check(`${name} · newest session marked ▲ +100% vs typical (30 vs median 15 of the other 6)`, marks[0] === '▲ +100% vs typical', JSON.stringify(marks));
+        check(`${name} · second session ▲ +33% vs typical (20 vs median 15)`, marks[1] === '▲ +33% vs typical', JSON.stringify(marks));
+        check(`${name} · fourth session ▼ -50% vs typical (10 vs median 20)`, marks[3] === '▼ -50% vs typical', JSON.stringify(marks));
+        table.push({ scenario: name, scope: 'Recent Sessions', metric: 'row vs typical (rows 1,2,4)', raw: '▲ +100% | ▲ +33% | ▼ -50%', dom: [marks[0], marks[1], marks[3]].join(' | ') });
       }
       await ctx.close();
     }

@@ -114,3 +114,26 @@ describe('sessionFanDrivers', () => {
     expect(sessionFanDrivers(entry, { tips: history, paidSessions: paid }).find((f) => f.username === 'Cy').returning).toBe(true)
   })
 })
+
+import { sessionVsTypical } from '../normalize'
+describe('sessionVsTypical', () => {
+  const day = (d, a, b) => [tip(d * 10, `2026-09-${String(d).padStart(2, '0')}T20:00:00Z`, 'Ann', a), tip(d * 10 + 1, `2026-09-${String(d).padStart(2, '0')}T20:40:00Z`, 'Ben', b)]
+  const tips = [...day(2, 20, 10), ...day(4, 10, 10), ...day(6, 15, 5), ...day(8, 8, 2), ...day(10, 5, 5), ...day(12, 6, 4), ...day(14, 30, 10)]
+  const history = buildSessionHistory({ tips })
+  const at = (d) => history.find((e) => e.startTime.startsWith(`2026-09-${String(d).padStart(2, '0')}`))
+  test('above / below the median of the creator\'s other comparable sessions', () => {
+    expect(sessionVsTypical(at(14), history)).toMatchObject({ basis: 'same', sessions: 6, medianUSD: 15, deltaPct: 167, outcome: 'above' }) // 40 vs median of 30,20,20,10,10,10
+    expect(sessionVsTypical(at(8), history)).toMatchObject({ outcome: 'below', deltaPct: -50 }) // 10 vs median 20
+  })
+  test('falls back to all meaningful sessions, labeled, when the same platform/type has < 5', () => {
+    const bc = [tip(900, '2026-09-20T20:00:00Z', 'Ola', 9, 'bongacams'), tip(901, '2026-09-20T20:40:00Z', 'Pia', 9, 'bongacams')]
+    const h = buildSessionHistory({ tips: [...tips, ...bc] })
+    expect(sessionVsTypical(h.find((e) => e.platforms[0] === 'bongacams'), h)).toMatchObject({ basis: 'all', sessions: 7 })
+  })
+  test('null with fewer than 5 comparable sessions, and for non-meaningful sessions', () => {
+    const few = buildSessionHistory({ tips: tips.slice(0, 8) })
+    expect(sessionVsTypical(few[0], few)).toBeNull()
+    const lone = buildSessionHistory({ tips: [...tips, tip(999, '2026-09-25T10:00:00Z', 'Zed', 50)] })
+    expect(sessionVsTypical(lone.find((e) => e.tipCount === 1), lone)).toBeNull()
+  })
+})
