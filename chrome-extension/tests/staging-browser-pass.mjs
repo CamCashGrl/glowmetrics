@@ -16,6 +16,8 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { middayTimezone } from './midday-timezone.mjs';
+const TEST_TZ = middayTimezone();
 
 const STAGING_URL = process.env.SUPABASE_STAGING_URL;
 const STAGING_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
@@ -98,7 +100,7 @@ async function main() {
     const launch = { headless: true, args: ['--no-sandbox'] };
     if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
     browser = await chromium.launch(launch);
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: TEST_TZ });
     const page = await context.newPage();
     page.setDefaultTimeout(120_000);
     page.on('pageerror', (e) => console.error('PAGE ERROR:', e.message));
@@ -285,7 +287,7 @@ async function main() {
     check('Overview delta gone after acknowledgement', (await page.getByTestId('latest-show-delta').count()) === 0);
     await shot(page, '07-dashboard-overview-after-ack');
 
-    const second = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const second = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: TEST_TZ });
     const p2 = await second.newPage();
     p2.setDefaultTimeout(120_000);
     await signIn(p2, email, password);
