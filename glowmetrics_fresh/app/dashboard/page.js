@@ -1421,8 +1421,8 @@ export default function Dashboard() {
   const loadPlannedStreams = useCallback(async () => {
     if (!user?.id) return
     const { data, error } = await supabase.from('planned_streams')
-      .select('id, platform, planned_start_at, planned_end_at, source, created_at')
-      .eq('user_id', user.id).order('planned_start_at', { ascending: false }).limit(500)
+      .select('id, platform, start_at, end_at, source, created_at')
+      .eq('user_id', user.id).order('start_at', { ascending: false }).limit(500)
     if (!error) setPlannedStreams(data || [])
   }, [user?.id])
   useEffect(() => { loadPlannedStreams() }, [loadPlannedStreams])

@@ -320,7 +320,7 @@ test('no vs-typical marker without enough history', () => {
 })
 
 // ── Schedule tab ─────────────────────────────────────────────────────────────
-const plan = (s, e, platform = 'Chaturbate') => ({ id: s, platform, planned_start_at: s, planned_end_at: e })
+const plan = (s, e, platform = 'Chaturbate') => ({ id: s, platform, start_at: s, end_at: e })
 test('Schedule: "No saved plan" when the creator has never saved one', () => {
   renderTab({ tips: csvTips })
   click('details-tab-schedule')

@@ -932,7 +932,7 @@ export function matchPlannedStream(entry, plans = []) {
   const exact = entry.type === 'live'
   const startMs = new Date(entry.startTime).getTime()
   const plats = new Set((entry.platforms || []).map(norm))
-  const candidates = plans.map((p) => ({ ...p, s: new Date(p.planned_start_at).getTime(), e: new Date(p.planned_end_at).getTime() }))
+  const candidates = plans.map((p) => ({ ...p, s: new Date(p.start_at).getTime(), e: new Date(p.end_at).getTime() }))
     .filter((p) => plats.has(norm(p.platform)) && startMs >= p.s - SCHEDULE_EARLY_MAX_MIN * 60000 && startMs <= p.e)
   if (!candidates.length) return { status: 'unscheduled', exact }
   const plan = candidates.sort((a, b) => Math.abs(startMs - a.s) - Math.abs(startMs - b.s))[0]
@@ -940,7 +940,7 @@ export function matchPlannedStream(entry, plans = []) {
   const status = Math.abs(startDiffMin) <= SCHEDULE_ON_TIME_MIN ? 'on_schedule' : startDiffMin < 0 ? 'early' : 'late'
   const out = {
     status, exact, startDiffMin,
-    plan: { id: plan.id, platform: plan.platform, start: plan.planned_start_at, end: plan.planned_end_at },
+    plan: { id: plan.id, platform: plan.platform, start: plan.start_at, end: plan.end_at },
     insideWindow: startMs >= plan.s && startMs <= plan.e,
   }
   if (exact && entry.endTime) {

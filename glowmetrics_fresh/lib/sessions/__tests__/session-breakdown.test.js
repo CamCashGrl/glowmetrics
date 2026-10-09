@@ -140,7 +140,7 @@ describe('sessionVsTypical', () => {
 
 import { matchPlannedStream } from '../normalize'
 describe('matchPlannedStream', () => {
-  const plan = (id, s, e, platform = 'Chaturbate') => ({ id, platform, planned_start_at: s, planned_end_at: e })
+  const plan = (id, s, e, platform = 'Chaturbate') => ({ id, platform, start_at: s, end_at: e })
   const csv = buildSessionHistory({ tips: [tip(1, '2026-10-01T20:28:00Z', 'Ann', 5), tip(2, '2026-10-01T21:00:00Z', 'Ben', 5)] })[0]
   test('no saved plans at all → no_plans (not "unscheduled")', () => {
     expect(matchPlannedStream(csv, [])).toEqual({ status: 'no_plans' })

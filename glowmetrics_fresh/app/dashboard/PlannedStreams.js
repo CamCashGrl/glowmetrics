@@ -33,8 +33,8 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const now = Date.now()
-  const upcoming = plans.filter((p) => new Date(p.planned_start_at).getTime() > now).sort((a, b) => new Date(a.planned_start_at) - new Date(b.planned_start_at))
-  const past = plans.filter((p) => new Date(p.planned_start_at).getTime() <= now).sort((a, b) => new Date(b.planned_start_at) - new Date(a.planned_start_at)).slice(0, 5)
+  const upcoming = plans.filter((p) => new Date(p.start_at).getTime() > now).sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+  const past = plans.filter((p) => new Date(p.start_at).getTime() <= now).sort((a, b) => new Date(b.start_at) - new Date(a.start_at)).slice(0, 5)
 
   const add = async (ev) => {
     ev.preventDefault()
@@ -44,7 +44,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
     if (new Date(w.start).getTime() <= Date.now()) { setError("Plans can only be added for a future time."); return }
     if (new Date(w.end) - new Date(w.start) > 12 * 3600000) { setError("A plan can be at most 12 hours long."); return }
     setBusy(true)
-    const { error: e } = await supabase.from("planned_streams").insert({ user_id: userId, platform, planned_start_at: w.start, planned_end_at: w.end, source: "stream_planner" })
+    const { error: e } = await supabase.from("planned_streams").insert({ user_id: userId, platform, start_at: w.start, end_at: w.end, source: "stream_planner" })
     setBusy(false)
     if (e) { setError("Could not save this plan. Please try again."); return }
     setDate("")
@@ -77,7 +77,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
           <div style={{ color: C.muted, fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>UPCOMING</div>
           {upcoming.map((p) => (
             <div key={p.id} data-testid="plan-upcoming" style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.white }}>
-              <span>{fmt(p.planned_start_at)}–{fmtT(p.planned_end_at)} · {p.platform}</span>
+              <span>{fmt(p.start_at)}–{fmtT(p.end_at)} · {p.platform}</span>
               <button onClick={() => remove(p.id)} style={{ background: "none", border: "none", color: C.text, cursor: "pointer", fontSize: 12 }}>Delete</button>
             </div>
           ))}
@@ -87,7 +87,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
         <div style={{ marginTop: 10 }}>
           <div style={{ color: C.muted, fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>PAST (LOCKED)</div>
           {past.map((p) => (
-            <div key={p.id} data-testid="plan-past" style={{ padding: "6px 0", borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.text }}>{fmt(p.planned_start_at)}–{fmtT(p.planned_end_at)} · {p.platform}</div>
+            <div key={p.id} data-testid="plan-past" style={{ padding: "6px 0", borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.text }}>{fmt(p.start_at)}–{fmtT(p.end_at)} · {p.platform}</div>
           ))}
         </div>
       )}

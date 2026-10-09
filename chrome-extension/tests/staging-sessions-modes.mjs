@@ -127,7 +127,7 @@ async function makeUser(name, sc) {
     if (sErr) throw new Error(`paid ${name}: ${sErr.message}`);
   }
   if ((sc.plans || []).length) {
-    const { error: plErr } = await admin.from('planned_streams').insert(sc.plans.map(([d, s, e, platform]) => ({ user_id: id, platform, planned_start_at: at(d, s), planned_end_at: at(d, e), source: 'manual' })));
+    const { error: plErr } = await admin.from('planned_streams').insert(sc.plans.map(([d, s, e, platform]) => ({ user_id: id, platform, start_at: at(d, s), end_at: at(d, e), source: 'manual' })));
     if (plErr) throw new Error(`plans ${name}: ${plErr.message}`);
   }
   // Persisted rows must equal the fixture exactly (no normalization, nothing dropped).
@@ -290,25 +290,25 @@ async function main() {
     const futureEnd = new Date(Date.now() + 3 * 86400000 + 7200000).toISOString();
     const pastStart = new Date(Date.now() - 2 * 86400000).toISOString();
     const pastEnd = new Date(Date.now() - 2 * 86400000 + 7200000).toISOString();
-    let r = await ua.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', planned_start_at: pastStart, planned_end_at: pastEnd }).select();
+    let r = await ua.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', start_at: pastStart, end_at: pastEnd }).select();
     check('Back-dated plan (start in the past) is refused', !!r.error, JSON.stringify(r.data));
-    r = await ua.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', planned_start_at: future, planned_end_at: futureEnd }).select();
+    r = await ua.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', start_at: future, end_at: futureEnd }).select();
     check('Future plan can be saved', !r.error && r.data?.length === 1, r.error?.message);
     const futureId = r.data?.[0]?.id;
-    r = await ua.client.from('planned_streams').update({ planned_end_at: new Date(Date.now() + 3 * 86400000 + 3600000).toISOString() }).eq('id', futureId).select();
+    r = await ua.client.from('planned_streams').update({ end_at: new Date(Date.now() + 3 * 86400000 + 3600000).toISOString() }).eq('id', futureId).select();
     check('Future plan can be edited', !r.error && r.data?.length === 1, r.error?.message);
-    const { data: seededPast } = await admin.from('planned_streams').select('id, planned_start_at, planned_end_at').eq('user_id', ua.id).lt('planned_start_at', new Date().toISOString()).limit(1);
+    const { data: seededPast } = await admin.from('planned_streams').select('id, start_at, end_at').eq('user_id', ua.id).lt('start_at', new Date().toISOString()).limit(1);
     const pastId = seededPast?.[0]?.id;
-    r = await ua.client.from('planned_streams').update({ planned_start_at: new Date(Date.now() - 2 * 86400000).toISOString() }).eq('id', pastId).select();
-    const pastAfter = (await admin.from('planned_streams').select('planned_start_at').eq('id', pastId).single()).data;
-    check('Past plan cannot be edited (DB unchanged)', (!!r.error || (r.data || []).length === 0) && pastAfter?.planned_start_at === seededPast?.[0]?.planned_start_at, JSON.stringify({ r: r.data, pastAfter }));
-    r = await ua.client.from('planned_streams').update({ planned_start_at: future }).eq('id', pastId).select();
+    r = await ua.client.from('planned_streams').update({ start_at: new Date(Date.now() - 2 * 86400000).toISOString() }).eq('id', pastId).select();
+    const pastAfter = (await admin.from('planned_streams').select('start_at').eq('id', pastId).single()).data;
+    check('Past plan cannot be edited (DB unchanged)', (!!r.error || (r.data || []).length === 0) && pastAfter?.start_at === seededPast?.[0]?.start_at, JSON.stringify({ r: r.data, pastAfter }));
+    r = await ua.client.from('planned_streams').update({ start_at: future }).eq('id', pastId).select();
     check('Past plan cannot be moved into the future either', (!!r.error || (r.data || []).length === 0));
     r = await ua.client.from('planned_streams').delete().eq('id', pastId).select();
     check('Past plan cannot be deleted (still in DB)', (await admin.from('planned_streams').select('id').eq('id', pastId)).data?.length === 1, JSON.stringify(r));
     r = await ub.client.from('planned_streams').select('id').eq('user_id', ua.id);
     check("Another creator's plans are invisible", (r.data || []).length === 0, JSON.stringify(r.data));
-    r = await ub.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', planned_start_at: future, planned_end_at: futureEnd }).select();
+    r = await ub.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', start_at: future, end_at: futureEnd }).select();
     check("Cannot create a plan for another creator", !!r.error);
     r = await ua.client.from('planned_streams').delete().eq('id', futureId).select();
     check('Future plan can be deleted', !r.error && (await admin.from('planned_streams').select('id').eq('id', futureId)).data?.length === 0, r.error?.message);
