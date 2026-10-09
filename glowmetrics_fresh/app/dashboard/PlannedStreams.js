@@ -7,8 +7,12 @@
 
 import React, { useState } from "react"
 import { supabase } from "../../lib/supabase"
+import { canonicalPlatform } from "../../lib/constants"
 
 const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams"]
+// The database only accepts these exact names; the default can arrive as an
+// onboarding key ('bongacams'), so resolve it before it reaches the form.
+const toPlanPlatform = (p) => { const c = canonicalPlatform(p); return PLATFORMS.includes(c) ? c : PLATFORMS[0] }
 const C = { cyan: "#22D3EE", white: "#F1F5F9", text: "#94A3B8", muted: "#64748B", line: "rgba(255,255,255,0.10)", red: "#F87171" }
 const box = { background: "rgba(8,11,22,0.72)", border: `1px solid ${C.line}`, borderRadius: 12 }
 const input = { background: "rgba(255,255,255,0.04)", border: `1px solid ${C.line}`, borderRadius: 8, color: C.white, padding: "7px 10px", fontSize: 13 }
@@ -29,7 +33,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
   const [date, setDate] = useState("")
   const [startTime, setStartTime] = useState("20:00")
   const [endTime, setEndTime] = useState("22:00")
-  const [platform, setPlatform] = useState(defaultPlatform)
+  const [platform, setPlatform] = useState(() => toPlanPlatform(defaultPlatform))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const now = Date.now()
