@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
+import { parseCSV, detectPlatform, detectDateOrder, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
-import { canonicalPlatform } from '../../../lib/constants'
+import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
+
+const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
@@ -67,9 +69,53 @@ async function handleUpload(req) {
   // detection is a fallback for callers that don't pass one, and can't find
   // any platform keywords in a clean, already-normalized CSV (e.g. the
   // onboarding paste flow, which sends parsed rows rather than raw text).
-  const explicitPlatform = (fd.get('platform') || '').toString().trim()
-  const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
-  const parsed = parseCSV(raw)
+  // A platform that can't be determined is never stored: rows saved as
+  // 'Unknown' land in their own "Unknown" platform everywhere (Command Center,
+  // breakdowns) and get DEFAULT_TOKEN_RATE instead of the platform's rate.
+  // Order: the user's choice, then the file contents, then the file name
+  // (e.g. "MFC2024-2026.csv" with no platform words inside), else ask.
+  const explicitPlatform = canonicalPlatform((fd.get('platform') || '').toString().trim()) || ''
+  if (explicitPlatform && !KNOWN_PLATFORMS.includes(explicitPlatform)) {
+    return NextResponse.json({ error: `Unsupported platform: ${explicitPlatform}`, code: 'platform_required' }, { status: 400 })
+  }
+  const contentPlatform = detectPlatform(raw)
+  let textDetectedPlatform = explicitPlatform || contentPlatform
+  if (textDetectedPlatform === 'Unknown') textDetectedPlatform = detectPlatform((file.name || '').toString())
+  if (!KNOWN_PLATFORMS.includes(textDetectedPlatform)) {
+    return NextResponse.json({
+      error: "We couldn't tell which platform this file is from. Choose the platform in the Platform menu and upload again.",
+      code: 'platform_required',
+    }, { status: 400 })
+  }
+  // Numeric dates (06/11/2024) are read in the order the file proves; when
+  // every date could be either, the user chooses. Never guessed: a wrong
+  // guess moves tips to other dates and past the duplicate check.
+  const fileDateOrder = detectDateOrder(raw)
+  const chosenDateOrder = ['MDY', 'DMY'].includes(fd.get('date_order')) ? fd.get('date_order') : null
+  if (fileDateOrder === 'conflict') {
+    return NextResponse.json({
+      error: 'This file mixes month-first and day-first dates, so its dates cannot be read reliably. Export it again in a single date format.',
+      code: 'date_order_conflict',
+    }, { status: 400 })
+  }
+  if (fileDateOrder === 'ambiguous' && !chosenDateOrder) {
+    return NextResponse.json({
+      error: 'Every date in this file could be month-first or day-first (e.g. 06/11/2024). Choose the date format and upload again.',
+      code: 'date_order_required',
+    }, { status: 400 })
+  }
+  if (chosenDateOrder && (fileDateOrder === 'MDY' || fileDateOrder === 'DMY') && chosenDateOrder !== fileDateOrder) {
+    return NextResponse.json({
+      error: `The dates in this file are ${fileDateOrder === 'DMY' ? 'day-first (DD/MM/YYYY)' : 'month-first (MM/DD/YYYY)'}, which does not match the format you chose.`,
+      code: 'date_order_mismatch',
+    }, { status: 400 })
+  }
+  const dateOrder = fileDateOrder === 'ambiguous' ? chosenDateOrder : (fileDateOrder || null)
+
+  // The parser keeps its content-detected platform when it has one (same
+  // parse as before); otherwise it uses the resolved platform so token→USD
+  // uses that platform's rate rather than the default.
+  const parsed = parseCSV(raw, contentPlatform !== 'Unknown' ? contentPlatform : textDetectedPlatform, { dateOrder })
 
   // Log parse attempt to track platform support and format issues
   const formatAnalysis = analyzeFormat(raw)
@@ -148,6 +194,9 @@ async function handleUpload(req) {
   // BongaCams token rate only for the exact name 'BongaCams'. The dedup key
   // does not include platform, so re-uploads still dedup against old rows.
   rows.forEach(r => { r.platform = canonicalPlatform(r.platform) })
+  // A per-row platform column with an unrecognised value falls back to the
+  // file's platform instead of being stored as a new, unknown platform.
+  rows.forEach(r => { if (!KNOWN_PLATFORMS.includes(r.platform)) r.platform = detectedPlatform })
 
   // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
   // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to
