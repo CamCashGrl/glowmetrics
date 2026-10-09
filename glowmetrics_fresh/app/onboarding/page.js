@@ -701,6 +701,20 @@ function OBTrust(){
 }
 
 // ── Main component ─────────────────────────────────────────────
+// A timed-out (504), too-large (413) or crashed upload returns a non-JSON
+// body from the platform, and res.json() then throws a raw parse error that
+// reads as a broken CSV. Mirrors the dashboard uploader's handling.
+async function readUploadJson(res){
+  const raw=await res.text()
+  try{return raw?JSON.parse(raw):{}}
+  catch{
+    const tooLong=res.status===504||res.status===413||!raw
+    return{error:tooLong
+      ?'The server stopped responding while importing this file — it may be too large to process in one upload. Try splitting it into smaller date ranges.'
+      :`Server returned an unreadable response (HTTP ${res.status}).`}
+  }
+}
+
 export default function OnboardingPage(){
   const router=useRouter()
   const[user,setUser]=useState(null)
@@ -1006,7 +1020,7 @@ export default function OnboardingPage(){
       ])
       clearTimeout(timeoutId)
       clearInterval(pi);clearInterval(mi);setLoadingProgress(100)
-      const json=await res.json()
+      const json=await readUploadJson(res)
       if(!res.ok||json.error){
         const err=new Error(json.error||'Import failed')
         err.code=json.code;err.upgradeUrl=json.upgradeUrl
@@ -1099,7 +1113,7 @@ export default function OnboardingPage(){
       ])
       clearTimeout(timeoutId)
       clearInterval(pi);setLoadingProgress(100)
-      const json=await res.json()
+      const json=await readUploadJson(res)
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
       const inserted=json.inserted??preview?.tipsDetected??0
       setImportResult({inserted,skipped:json.skipped??0})
