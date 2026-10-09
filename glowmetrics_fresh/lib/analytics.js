@@ -172,7 +172,46 @@ function parseChaturbateMultiLine(lines) {
   return results
 }
 
-export function parseCSV(text, platform = null) {
+// Numeric dates like 06/11/2024 can be June 11 or 6 November. JS Date reads
+// them month-first, so a day-first export lands on the wrong dates (and a
+// re-import of the same tips no longer dedups against the originals). The
+// order is decided per file from its own unambiguous dates, never guessed:
+//   'DMY'       some date has a first number > 12
+//   'MDY'       some date has a second number > 12
+//   'conflict'  both appear — the file mixes formats
+//   'ambiguous' every date could be either — the user must choose
+//   null        no such dates (ISO, dotted BongaCams, epoch, etc.)
+const NUMERIC_DATE_RE = /(?:^|[\s",;\t])(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?=$|[\s",;\tT])/g
+export function detectDateOrder(text) {
+  let dmy = false, mdy = false, seen = false
+  for (const m of String(text || '').matchAll(NUMERIC_DATE_RE)) {
+    const a = Number(m[1]), b = Number(m[2])
+    if (a < 1 || b < 1 || a > 31 || b > 31) continue
+    seen = true
+    if (a > 12) dmy = true
+    if (b > 12) mdy = true
+  }
+  if (!seen) return null
+  if (dmy && mdy) return 'conflict'
+  if (dmy) return 'DMY'
+  if (mdy) return 'MDY'
+  return 'ambiguous'
+}
+
+// Date order for the parse in progress (parseCSV is synchronous, so this is
+// never shared between two parses). null keeps the previous behaviour.
+let activeDateOrder = null
+
+export function parseCSV(text, platform = null, { dateOrder = null } = {}) {
+  activeDateOrder = dateOrder === 'DMY' || dateOrder === 'MDY' ? dateOrder : null
+  try {
+    return parseCSVInner(text, platform)
+  } finally {
+    activeDateOrder = null
+  }
+}
+
+function parseCSVInner(text, platform) {
   let allLines = text.trim().split('\n')
   if (allLines.length === 0) return []
 
@@ -315,6 +354,17 @@ function normalizeDate(raw) {
   raw = raw.replace(/\b(\d{1,2})(st|nd|rd|th)\b/i, '$1')
   const euro = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}:\d{2}))?/)
   if (euro) return `${euro[2]}/${euro[1]}/${euro[3]}${euro[4] ? ' ' + euro[4] : ''}`
+  if (activeDateOrder) {
+    const num = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(.*)/)
+    if (num) {
+      const [d, m] = activeDateOrder === 'DMY' ? [num[1], num[2]] : [num[2], num[1]]
+      // YYYY-MM-DD HH:MM: not re-matched when normalizeTip normalizes again,
+      // and (with a time) read as local time exactly like MM/DD/YYYY was. A
+      // date-only value gets 00:00 so it is not read as UTC midnight instead.
+      const rest = num[4].replace('T', ' ').replace('Z', '').trim()
+      return `${num[3]}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${rest || '00:00'}`
+    }
+  }
   const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
   if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
   return raw.replace('T', ' ').replace('Z', '')

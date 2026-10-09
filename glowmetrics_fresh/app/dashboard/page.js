@@ -2325,7 +2325,7 @@ const stopImportMessageRotation = () => {
     gtmTrack('platform_limit_preview_shown', { platform: detectedLabel, hasPreview: !!preview })
   }
 
-  const handleCSV = async (file, forcePlatform = null) => {
+  const handleCSV = async (file, forcePlatform = null, dateOrder = null) => {
     if (!file || !user) return
     // Free plan tracks a single platform — instead of a hard block, show a
     // quick preview of the file's contents plus a soft paywall below it.
@@ -2350,6 +2350,7 @@ const stopImportMessageRotation = () => {
       const fd = new FormData()
       fd.append('file', file)
       if (forcePlatform) fd.append('platform', forcePlatform)
+      if (dateOrder) fd.append('date_order', dateOrder)
 
       const res = await fetch('/api/upload', {
         method: 'POST',
@@ -2379,7 +2380,14 @@ const stopImportMessageRotation = () => {
           await denyWithPlatformPreview(file, forcePlatform || uploadPlatform || result.platform || null)
         } else {
           showToast("❌ " + (result.error || 'Upload failed'))
-          setLastUploadResult({ success: false, error: result.error || "We couldn't read this CSV. Please check the format or try another file." })
+          // date_order_required: the file's dates fit both MM/DD and DD/MM —
+          // keep the file so the creator can pick the format and retry.
+          setLastUploadResult({
+            success: false,
+            error: result.error || "We couldn't read this CSV. Please check the format or try another file.",
+            code: result.code || null,
+            retry: result.code === 'date_order_required' ? { file, forcePlatform } : null,
+          })
           setImportStage('error')
         }
         return
@@ -5997,6 +6005,12 @@ const stopImportMessageRotation = () => {
                   </div>
                   <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Check the file format, or try a different export from your platform.</div>
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                    {lastUploadResult.retry && (
+                      <>
+                        <Button data-testid="date-order-mdy" onClick={() => handleCSV(lastUploadResult.retry.file, lastUploadResult.retry.forcePlatform, 'MDY')} style={{ padding: "12px 24px", fontSize: 13 }}>Month first (MM/DD/YYYY)</Button>
+                        <Button data-testid="date-order-dmy" onClick={() => handleCSV(lastUploadResult.retry.file, lastUploadResult.retry.forcePlatform, 'DMY')} style={{ padding: "12px 24px", fontSize: 13 }}>Day first (DD/MM/YYYY)</Button>
+                      </>
+                    )}
                     <Button variant="secondary" onClick={resetImport} style={{ padding: "12px 24px", fontSize: 13 }}>Try Again</Button>
                   </div>
                 </div>

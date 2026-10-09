@@ -27,9 +27,10 @@ jest.mock('@supabase/supabase-js', () => ({ createClient: () => mockSupabase() }
 const { POST: upload } = require('../route')
 const { POST: uploadPaid } = require('../../upload-paid-sessions/route')
 
-function req(text, { name = 'upload.csv', platform } = {}) {
+function req(text, { name = 'upload.csv', platform, dateOrder } = {}) {
   const fd = new Map([['file', { name, text: async () => text }]])
   if (platform !== undefined) fd.set('platform', platform)
+  if (dateOrder !== undefined) fd.set('date_order', dateOrder)
   return {
     headers: { get: (h) => (h.toLowerCase() === 'authorization' ? 'Bearer t' : null) },
     formData: async () => ({ get: (k) => fd.get(k) ?? null }),
@@ -94,5 +95,45 @@ describe('/api/upload-paid-sessions platform labelling', () => {
     const res = await uploadPaid(req(PAID))
     expect(res.status).toBe(400)
     expect(insertedPaid()).toHaveLength(0)
+  })
+})
+
+describe('/api/upload date order', () => {
+  const AMB = ['date_time,username,tokens', '06/11/2024 11:21,fanA,10', '07/08/2024 04:44,fanB,5'].join('\n')
+  const DMY = ['date_time,username,tokens', '06/11/2024 11:21,fanA,10', '25/08/2024 04:44,fanB,5'].join('\n')
+  const MIX = ['date_time,username,tokens', '13/11/2024 11:21,fanA,10', '08/25/2024 04:44,fanB,5'].join('\n')
+  const day = (t) => { const d = new Date(t.date_time); return `${d.getMonth() + 1}/${d.getDate()}` }
+
+  test('an all-ambiguous file is rejected until the user chooses, nothing written', async () => {
+    const res = await upload(req(AMB, { platform: 'BongaCams' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('date_order_required')
+    expect(insertedTips()).toHaveLength(0)
+  })
+
+  test('the chosen order is applied', async () => {
+    const res = await upload(req(AMB, { platform: 'BongaCams', dateOrder: 'DMY' }))
+    expect(res.status).toBe(200)
+    expect(insertedTips().map(day).sort()).toEqual(['11/6', '8/7'])
+  })
+
+  test('a file that proves day-first is read day-first without asking', async () => {
+    const res = await upload(req(DMY, { platform: 'BongaCams' }))
+    expect(res.status).toBe(200)
+    expect(insertedTips().map(day).sort()).toEqual(['11/6', '8/25'])
+  })
+
+  test('a choice contradicting the file is rejected', async () => {
+    const res = await upload(req(DMY, { platform: 'BongaCams', dateOrder: 'MDY' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('date_order_mismatch')
+    expect(insertedTips()).toHaveLength(0)
+  })
+
+  test('a file mixing both orders is rejected', async () => {
+    const res = await upload(req(MIX, { platform: 'BongaCams' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('date_order_conflict')
+    expect(insertedTips()).toHaveLength(0)
   })
 })

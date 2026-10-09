@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
+import { parseCSV, detectPlatform, detectDateOrder, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
 import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
 
@@ -87,10 +87,35 @@ async function handleUpload(req) {
       code: 'platform_required',
     }, { status: 400 })
   }
+  // Numeric dates (06/11/2024) are read in the order the file proves; when
+  // every date could be either, the user chooses. Never guessed: a wrong
+  // guess moves tips to other dates and past the duplicate check.
+  const fileDateOrder = detectDateOrder(raw)
+  const chosenDateOrder = ['MDY', 'DMY'].includes(fd.get('date_order')) ? fd.get('date_order') : null
+  if (fileDateOrder === 'conflict') {
+    return NextResponse.json({
+      error: 'This file mixes month-first and day-first dates, so its dates cannot be read reliably. Export it again in a single date format.',
+      code: 'date_order_conflict',
+    }, { status: 400 })
+  }
+  if (fileDateOrder === 'ambiguous' && !chosenDateOrder) {
+    return NextResponse.json({
+      error: 'Every date in this file could be month-first or day-first (e.g. 06/11/2024). Choose the date format and upload again.',
+      code: 'date_order_required',
+    }, { status: 400 })
+  }
+  if (chosenDateOrder && (fileDateOrder === 'MDY' || fileDateOrder === 'DMY') && chosenDateOrder !== fileDateOrder) {
+    return NextResponse.json({
+      error: `The dates in this file are ${fileDateOrder === 'DMY' ? 'day-first (DD/MM/YYYY)' : 'month-first (MM/DD/YYYY)'}, which does not match the format you chose.`,
+      code: 'date_order_mismatch',
+    }, { status: 400 })
+  }
+  const dateOrder = fileDateOrder === 'ambiguous' ? chosenDateOrder : (fileDateOrder || null)
+
   // The parser keeps its content-detected platform when it has one (same
   // parse as before); otherwise it uses the resolved platform so token→USD
   // uses that platform's rate rather than the default.
-  const parsed = parseCSV(raw, contentPlatform !== 'Unknown' ? contentPlatform : textDetectedPlatform)
+  const parsed = parseCSV(raw, contentPlatform !== 'Unknown' ? contentPlatform : textDetectedPlatform, { dateOrder })
 
   // Log parse attempt to track platform support and format issues
   const formatAnalysis = analyzeFormat(raw)
