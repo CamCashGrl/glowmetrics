@@ -10,6 +10,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { middayTimezone } from './midday-timezone.mjs';
+const TEST_TZ = middayTimezone();
 
 const URL_ = process.env.SUPABASE_STAGING_URL;
 const SERVICE = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
@@ -169,7 +171,7 @@ async function main() {
     for (const [name, sc] of Object.entries(fixture.scenarios)) {
       console.log(`\n${name}`);
       const u = await makeUser(name, sc); users.push(u);
-      const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'UTC' });
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: TEST_TZ });
       const page = await ctx.newPage(); page.setDefaultTimeout(120_000);
       await signIn(page, u);
       await page.locator('text="Free Chat Sessions" >> visible=true').first().click();
