@@ -283,13 +283,14 @@ function PerfCard({ title, color, testId, children }) {
     </div>
   )
 }
-function NotEnough({ need, have, onImport }) {
+function NotEnough({ need, have, onImport, insight }) {
+  const left = need ? Math.max(0, need - have) : 0
   return (
     <div style={{ color: C.muted, fontSize: 13, display: "flex", flexDirection: "column", gap: 8 }}>
-      <span>Not enough data yet{need ? ` · needs ${need} meaningful sessions` : ""}</span>
+      <span data-testid="progress-text">{need ? `${left} more session${left === 1 ? "" : "s"} needed for ${insight}` : "Not enough data yet"}</span>
       {need ? <>
         <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}><div style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%`, height: "100%", background: C.cyan }} /></div>
-        <span style={{ fontSize: 12 }}>{have} of {need} so far</span>
+        <span style={{ fontSize: 12 }}>{have} of {need} meaningful sessions so far</span>
       </> : null}
       {onImport && <button onClick={onImport} style={{ alignSelf: "flex-start", background: "transparent", border: "none", padding: 0, color: C.cyan, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Import more history →</button>}
     </div>
@@ -305,13 +306,13 @@ function SessionPerformanceCards({ perf, onImport }) {
         {typical ? <>
           <Big v={fmtUsd(typical.medianUSD)} l="Median earnings per meaningful session" id="perf-typical-median" />
           <div style={{ fontSize: 12.5, color: C.text }}><T id="perf-typical-tips">{typical.medianTips}</T> tips in a typical session · from <T id="perf-typical-count">{typical.sessions}</T> sessions{typical.early ? " · Early signal" : ""}</div>
-        </> : <NotEnough need={3} have={have} onImport={onImport} />}
+        </> : <NotEnough need={3} have={have} onImport={onImport} insight="Typical Session" />}
       </PerfCard>
       <PerfCard title="Recent Momentum" color={C.indigo} testId="perf-momentum">
         {momentum ? <>
           <Big v={momentum.deltaPct == null ? "—" : `${momentum.deltaPct >= 0 ? "↑" : "↓"} ${Math.abs(momentum.deltaPct)}%`} l={`Last ${momentum.window} sessions vs the ${momentum.window} before`} id="perf-momentum-delta" />
           <div style={{ fontSize: 12.5, color: C.text }}>avg <T id="perf-momentum-recent">{fmtUsd(momentum.recentAvgUSD)}</T> vs <T id="perf-momentum-prior">{fmtUsd(momentum.priorAvgUSD)}</T> per session</div>
-        </> : <NotEnough need={6} have={have} onImport={onImport} />}
+        </> : <NotEnough need={6} have={have} onImport={onImport} insight="Recent Momentum" />}
       </PerfCard>
       <PerfCard title="Audience Strength" color={C.pink} testId="perf-audience">
         {audience ? <>

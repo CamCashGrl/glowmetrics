@@ -196,7 +196,7 @@ test('single platform: Session Performance cards replace platform comparison', (
   expect(screen.queryByTestId('today-by-platform')).toBeNull()
   expect(val('perf-typical-median')).toBe('$15.00')
   expect(val('perf-typical-count')).toBe('3')
-  expect(screen.getByTestId('perf-momentum').textContent).toMatch(/Not enough data yet/)
+  expect(screen.getByTestId('perf-momentum').textContent).toMatch(/3 more sessions needed for Recent Momentum/)
   expect(val('perf-audience-unique')).toBe('4')
   expect(screen.getByTestId('perf-audience').textContent).toMatch(/2 repeat fans/) // Ann (3 sessions), Ben (2)
   expect(val('perf-audience-top')).toBe('Ann ($36.00), Ben ($14.00), Cy ($4.00)')
@@ -258,8 +258,8 @@ test('light data: real numbers kept, empty cells become guidance', () => {
   expect(screen.getByTestId('today-private').getAttribute('data-hint')).toBe('1')
   expect(val('today-private')).toMatch(/No private earnings yet/)
   expect(screen.getByTestId('today-private-time').getAttribute('data-hint')).toBe('1')
-  expect(screen.getByTestId('perf-typical').textContent).toMatch(/1 of 3 so far/)
-  expect(screen.getByTestId('perf-momentum').textContent).toMatch(/1 of 6 so far/)
+  expect(screen.getByTestId('perf-typical').textContent).toMatch(/2 more sessions needed for Typical Session/)
+  expect(screen.getByTestId('perf-momentum').textContent).toMatch(/5 more sessions needed for Recent Momentum/)
 })
 
 test('platform cards only for platforms with data', () => {

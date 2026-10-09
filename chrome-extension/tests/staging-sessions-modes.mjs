@@ -51,7 +51,7 @@ const EXPECT = {
       'perf-typical-median': '$12.00', 'perf-typical-count': '5', 'perf-typical-tips': '2', 'perf-audience-unique': '5',
       'perf-audience-top': 'Ann ($26.00), Ben ($13.00), Ola ($10.00)', 'perf-audience-share': '78%',
     },
-    contains: { 'overall-history-note': 'last 31 days on every platform', 'perf-momentum': 'Not enough data yet' },
+    contains: { 'overall-history-note': 'last 31 days on every platform', 'perf-momentum': '1 more session needed for Recent Momentum' },
   },
   singleFree: {
     overall: {
@@ -83,7 +83,7 @@ const EXPECT = {
     },
     contains: { 'overall-history-note': 'Full history on every platform' },
   },
-  noData: { today: { 'today-total': '$0.00', 'today-tips': '0' }, present: ['history-empty'] },
+  noData: { contains: { 'sessions-activation': 'No performance data yet' }, present: ['activation-import', 'activation-live'], absent: ['today-stats', 'today-by-platform', 'session-history'] },
 };
 
 async function makeUser(name, sc) {
@@ -181,6 +181,8 @@ async function main() {
       const body = await page.getByTestId('sessions-overview').textContent();
       if (e.today) await domCheck(page, name, 'Today', e.today, e.todayContains || {});
       for (const id of e.present || []) check(`${name} · ${id} shown`, (await page.getByTestId(id).count()) > 0);
+      for (const id of e.absent || []) check(`${name} · ${id} not shown`, (await page.getByTestId(id).count()) === 0);
+      if (name === 'noData') await domCheck(page, name, 'Activation', {}, e.contains);
       if (name === 'mixed') {
         check('mixed · Today is the default scope', (await page.getByTestId('today-stats').count()) > 0);
         check('mixed · streamed time is Live-only; tip span labeled estimate', /est\. tip activity \(not stream time\)/.test(await page.getByTestId('today-streamed').locator('xpath=..').textContent()));
