@@ -5349,6 +5349,8 @@ const stopImportMessageRotation = () => {
             isPro={isPro}
             primaryPlatform={freeUnlimitedPlatform}
             onPrimarySaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))}
+            onImport={() => handleTabChange('upload')}
+            onStartLive={() => handleTabChange('live')}
             tz={liveTimezone}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}

@@ -113,11 +113,16 @@ test('7 Days range widens the same formulas', () => {
   expect(val('today-total')).toBe('$19.00')
 })
 
-test('empty account: empty state and "Not enough data yet"', () => {
-  renderTab()
-  expect(screen.getByTestId('history-empty')).toBeTruthy()
-  expect(val('today-best-platform')).toBe('Not enough data yet')
-  expect(screen.queryByTestId('today-comparison')).toBeNull()
+test('empty account: activation state, no grid of zeros', () => {
+  const onImport = jest.fn(), onStartLive = jest.fn()
+  const { container } = renderTab({ onImport, onStartLive })
+  expect(screen.getByTestId('sessions-activation').textContent).toMatch(/No performance data yet/)
+  expect(screen.queryByTestId('today-stats')).toBeNull()
+  expect(screen.queryByTestId('today-by-platform')).toBeNull()
+  expect(screen.getAllByTestId('activation-preview')).toHaveLength(4)
+  expect(container.textContent).not.toMatch(/\$\d/) // previews describe features, no numbers
+  fireEvent.click(screen.getByTestId('activation-import')); expect(onImport).toHaveBeenCalled()
+  fireEvent.click(screen.getByTestId('activation-live')); expect(onStartLive).toHaveBeenCalled()
 })
 
 test('imported private charges are one PRIVATE session and count as private', () => {
@@ -212,11 +217,10 @@ test('mixed Live + CSV: Today is default, Overall switch shows overall history',
   expect(screen.queryByTestId('range-1')).toBeNull()
 })
 
-test('no data: Today hero at zero and the empty sessions message', () => {
+test('no data: no scope switch or range controls', () => {
   renderTab({})
-  expect(val('today-total')).toBe('$0.00')
-  expect(screen.getByTestId('history-empty')).toBeTruthy()
   expect(screen.queryByTestId('scope-switch')).toBeNull()
+  expect(screen.queryByTestId('range-group')).toBeNull()
 })
 
 test('Free history note follows the primary platform', () => {
@@ -241,10 +245,29 @@ test('one private charge reads "1 charge"', () => {
   expect(screen.getByTestId('session-history').textContent).toMatch(/1Charge(?!s)/)
 })
 
-test('no data: neutral badge instead of LIVE DATA', () => {
+test('no data: never signals live activity', () => {
   const { container } = renderTab({})
-  expect(screen.getByTestId('hero-no-data')).toBeTruthy()
-  expect(container.textContent).not.toMatch(/LIVE DATA/)
+  expect(container.textContent).not.toMatch(/LIVE DATA|LIVE NOW/)
+})
+
+test('light data: real numbers kept, empty cells become guidance', () => {
+  // one free-chat session today (2 tips, 45 min): fewer than 3 meaningful sessions
+  renderTab({ tips: freeChat })
+  expect(val('today-total')).toBe('$10.00')
+  expect(val('today-tips')).toBe('2')
+  expect(screen.getByTestId('today-private').getAttribute('data-hint')).toBe('1')
+  expect(val('today-private')).toMatch(/No private earnings yet/)
+  expect(screen.getByTestId('today-private-time').getAttribute('data-hint')).toBe('1')
+  expect(screen.getByTestId('perf-typical').textContent).toMatch(/1 of 3 so far/)
+  expect(screen.getByTestId('perf-momentum').textContent).toMatch(/1 of 6 so far/)
+})
+
+test('platform cards only for platforms with data', () => {
+  const cb = { id: 50, date_time: '2026-10-07T13:00:00Z', platform: 'chaturbate', username: 'Zed', usd: 2, tokens: 40, live_session_id: null, source: 'extension' }
+  renderTab({ tips: [...freeChat, cb] })
+  expect(screen.getByTestId('today-platform-chaturbate')).toBeTruthy()
+  expect(screen.getByTestId('today-platform-bongacams')).toBeTruthy()
+  expect(screen.queryByTestId('today-platform-myfreecams')).toBeNull() // no MyFreeCams data → no $0 card
 })
 
 test('money values never wrap', () => {

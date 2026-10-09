@@ -112,6 +112,20 @@ function Cell({ icon, value, label, testId, accent, sub, strong }) {
   )
 }
 
+// Shown in place of an empty metric while the creator has little data:
+// guidance, never a fake number.
+function HintCell({ icon, text, testId, action }) {
+  return (
+    <div data-testid={testId} data-hint="1" style={{ ...inset, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", minWidth: 0, borderStyle: "dashed" }}>
+      {icon && <span aria-hidden="true" style={{ fontSize: 18, width: 26, textAlign: "center", flexShrink: 0, opacity: 0.6 }}>{icon}</span>}
+      <div style={{ minWidth: 0, fontSize: 12.5, color: C.text, lineHeight: 1.35 }}>
+        {text}
+        {action && <div style={{ marginTop: 4 }}><button onClick={action.onClick} style={{ background: "transparent", border: "none", padding: 0, color: C.cyan, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{action.label} →</button></div>}
+      </div>
+    </div>
+  )
+}
+
 function TrendLine({ values }) {
   if (!values || values.length < 2 || values[values.length - 1] <= 0) return null
   const max = Math.max(...values)
@@ -128,7 +142,7 @@ function TrendLine({ values }) {
 }
 
 // ── Row 2: hero ──────────────────────────────────────────────────────────────
-function Hero({ stats, range, comparison, trend, live, now, noData = false }) {
+function Hero({ stats, range, comparison, trend, live, now, noData = false, light = false, onStartLive }) {
   const flash = useFlash(stats.totalUSD)
   const title = range === 1 ? "Today so far" : `Last ${range} days`
   return (
@@ -162,13 +176,17 @@ function Hero({ stats, range, comparison, trend, live, now, noData = false }) {
       </div>
       <div className="sx-cells" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         <Cell icon="👥" value={fmtUsd(stats.publicUSD)} label="Public Earnings" testId="today-public" />
-        <Cell icon="🔒" value={fmtUsd(stats.privateUSD)} label="Private Earnings" testId="today-private" accent="#c4b5fd" />
+        {light && stats.privateUSD === 0 ? <HintCell icon="🔒" text="No private earnings yet" testId="today-private" />
+          : <Cell icon="🔒" value={fmtUsd(stats.privateUSD)} label="Private Earnings" testId="today-private" accent="#c4b5fd" />}
         <Cell icon="💗" value={stats.tipCount} label="Tips" testId="today-tips" />
         <Cell icon="🧑‍🤝‍🧑" value={stats.uniqueTippers} label="Unique Tippers" testId="today-unique" />
-        <Cell icon="⏱" value={fmtMinutes(stats.streamedMinutes)} label="Streamed Time (Live)" testId="today-streamed"
-          sub={stats.activitySpanMinutes > 0 ? `+ ${fmtMinutes(stats.activitySpanMinutes, true)} est. tip activity (not stream time)` : null} />
-        <Cell icon="🎥" value={fmtMinutes(stats.privateMinutes)} label="Private Time (Live)" testId="today-private-time" />
-        <Cell icon="✅" value={stats.completedSessions} label="Completed Sessions" testId="today-completed" />
+        {light && stats.streamedMinutes === 0 && !(stats.activitySpanMinutes > 0) ? <HintCell icon="⏱" text="Stream time is tracked in Live Mode" testId="today-streamed" action={onStartLive ? { label: "Start Live Mode", onClick: onStartLive } : null} />
+          : <Cell icon="⏱" value={fmtMinutes(stats.streamedMinutes)} label="Streamed Time (Live)" testId="today-streamed"
+            sub={stats.activitySpanMinutes > 0 ? `+ ${fmtMinutes(stats.activitySpanMinutes, true)} est. tip activity (not stream time)` : null} />}
+        {light && !(stats.privateMinutes > 0) ? <HintCell icon="🎥" text="Private time is tracked in Live Mode" testId="today-private-time" />
+          : <Cell icon="🎥" value={fmtMinutes(stats.privateMinutes)} label="Private Time (Live)" testId="today-private-time" />}
+        {light && stats.completedSessions === 0 ? <HintCell icon="✅" text="A session counts once it lasts 30+ min with 2+ tips" testId="today-completed" />
+          : <Cell icon="✅" value={stats.completedSessions} label="Completed Sessions" testId="today-completed" />}
         <Cell icon="🏆" strong value={stats.bestPlatform ? pName(stats.bestPlatform) : "Not enough data yet"} label="Best Platform" testId="today-best-platform" accent={stats.bestPlatform ? C.pink : C.muted}
           sub={stats.bestPlatform ? `${(stats.platforms.find((p) => p.platform === stats.bestPlatform) || {}).share || 0}% of ${range === 1 ? "today's" : "these"} earnings` : null} />
       </div>
@@ -220,7 +238,7 @@ function PlatformCard({ platform, p, best, range }) {
 
 // ── Row 2 (Overall scope): same hero shell, overall history ──────────────────
 const dateText = (iso, tz) => new Date(iso).toLocaleDateString([], { timeZone: tz, month: "short", day: "numeric", year: "numeric" })
-function OverallHero({ o, sourceLabel, historyNote, tz }) {
+function OverallHero({ o, sourceLabel, historyNote, tz, light = false }) {
   return (
     <div data-testid="overall-stats" className="sx-hero" style={card({
       background: `radial-gradient(120% 140% at 0% 0%, rgba(34,211,238,0.20) 0%, transparent 45%), radial-gradient(120% 140% at 100% 100%, rgba(236,72,153,0.20) 0%, transparent 45%), ${HERO_GRADIENT}, rgba(10,13,26,0.86)`,
@@ -239,11 +257,13 @@ function OverallHero({ o, sourceLabel, historyNote, tz }) {
       </div>
       <div className="sx-cells" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         <Cell icon="👥" value={fmtUsd(o.publicUSD)} label="Public Earnings" testId="overall-public" />
-        <Cell icon="🔒" value={fmtUsd(o.privateUSD)} label="Private Earnings" testId="overall-private" accent="#c4b5fd" />
+        {light && o.privateUSD === 0 ? <HintCell icon="🔒" text="No private earnings yet" testId="overall-private" />
+          : <Cell icon="🔒" value={fmtUsd(o.privateUSD)} label="Private Earnings" testId="overall-private" accent="#c4b5fd" />}
         <Cell icon="💗" value={o.tipCount} label="Tips" testId="overall-tips" />
         <Cell icon="🧑‍🤝‍🧑" value={o.uniqueTippers} label="Unique Tippers" testId="overall-unique" />
         <Cell icon="✅" value={o.meaningfulSessions} label="Meaningful Sessions" sub="30+ min and 2+ tips" testId="overall-meaningful" />
-        <Cell icon="📊" value={o.medianSessionUSD == null ? "—" : fmtUsd(o.medianSessionUSD)} label="Median Session" sub={o.avgSessionUSD == null ? null : `avg ${fmtUsd(o.avgSessionUSD)}`} testId="overall-median" />
+        {o.medianSessionUSD == null ? <HintCell icon="📊" text="Median Session appears after your first meaningful session" testId="overall-median" />
+          : <Cell icon="📊" value={fmtUsd(o.medianSessionUSD)} label="Median Session" sub={o.avgSessionUSD == null ? null : `avg ${fmtUsd(o.avgSessionUSD)}`} testId="overall-median" />}
         <Cell icon="👑" value={o.topTipper ? o.topTipper.username : "—"} label="Top Tipper" sub={o.topTipper ? `${fmtUsd(o.topTipper.usd)} · ${pName(o.topTipper.platform)}` : null} testId="overall-top-tipper" />
         <Cell icon="🏆" strong value={o.largestTip ? fmtUsd(o.largestTip.usd) : "—"} label="Largest Tip" sub={o.largestTip ? `${o.largestTip.username} · ${pName(o.largestTip.platform)}` : null} testId="overall-largest" accent={C.pink} />
       </div>
@@ -263,23 +283,35 @@ function PerfCard({ title, color, testId, children }) {
     </div>
   )
 }
-const NotEnough = ({ need }) => <div style={{ color: C.muted, fontSize: 13 }}>Not enough data yet{need ? ` · needs ${need}` : ""}</div>
+function NotEnough({ need, have, onImport }) {
+  return (
+    <div style={{ color: C.muted, fontSize: 13, display: "flex", flexDirection: "column", gap: 8 }}>
+      <span>Not enough data yet{need ? ` · needs ${need} meaningful sessions` : ""}</span>
+      {need ? <>
+        <div style={{ height: 5, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}><div style={{ width: `${Math.min(100, Math.round((have / need) * 100))}%`, height: "100%", background: C.cyan }} /></div>
+        <span style={{ fontSize: 12 }}>{have} of {need} so far</span>
+      </> : null}
+      {onImport && <button onClick={onImport} style={{ alignSelf: "flex-start", background: "transparent", border: "none", padding: 0, color: C.cyan, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>Import more history →</button>}
+    </div>
+  )
+}
 const Big = ({ v, l, id }) => <div><div data-testid={id} style={{ fontSize: 28, fontWeight: 900, color: C.white, lineHeight: 1 }}>{v}</div><div style={{ fontSize: 12.5, color: C.text, marginTop: 4 }}>{l}</div></div>
-function SessionPerformanceCards({ perf }) {
+function SessionPerformanceCards({ perf, onImport }) {
   const { typical, momentum, audience } = perf
+  const have = perf.meaningfulSessions
   return (
     <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 14 }}>
       <PerfCard title="Typical Session" color={C.cyan} testId="perf-typical">
         {typical ? <>
           <Big v={fmtUsd(typical.medianUSD)} l="Median earnings per meaningful session" id="perf-typical-median" />
           <div style={{ fontSize: 12.5, color: C.text }}><T id="perf-typical-tips">{typical.medianTips}</T> tips in a typical session · from <T id="perf-typical-count">{typical.sessions}</T> sessions{typical.early ? " · Early signal" : ""}</div>
-        </> : <NotEnough need="3 meaningful sessions" />}
+        </> : <NotEnough need={3} have={have} onImport={onImport} />}
       </PerfCard>
       <PerfCard title="Recent Momentum" color={C.indigo} testId="perf-momentum">
         {momentum ? <>
           <Big v={momentum.deltaPct == null ? "—" : `${momentum.deltaPct >= 0 ? "↑" : "↓"} ${Math.abs(momentum.deltaPct)}%`} l={`Last ${momentum.window} sessions vs the ${momentum.window} before`} id="perf-momentum-delta" />
           <div style={{ fontSize: 12.5, color: C.text }}>avg <T id="perf-momentum-recent">{fmtUsd(momentum.recentAvgUSD)}</T> vs <T id="perf-momentum-prior">{fmtUsd(momentum.priorAvgUSD)}</T> per session</div>
-        </> : <NotEnough need="6 meaningful sessions" />}
+        </> : <NotEnough need={6} have={have} onImport={onImport} />}
       </PerfCard>
       <PerfCard title="Audience Strength" color={C.pink} testId="perf-audience">
         {audience ? <>
@@ -290,6 +322,38 @@ function SessionPerformanceCards({ perf }) {
           </div>
         </> : <NotEnough />}
       </PerfCard>
+    </div>
+  )
+}
+
+// ── No data yet: activation instead of a grid of zeros ───────────────────────
+const PREVIEW = [
+  ["💰", "Session earnings", "Every session's public and private earnings, compared with your typical session."],
+  ["🧑‍🤝‍🧑", "Fan behavior", "Who tips, how often they come back, and which fans drive each session."],
+  ["🔒", "Private earnings", "Private, group and spy revenue kept separate from tips."],
+  ["🗂", "Recent sessions", "A timeline of each session with its peak period and top contributors."],
+]
+function Activation({ onImport, onStartLive }) {
+  const btn = (primary) => ({ border: primary ? "none" : `1px solid ${C.line}`, background: primary ? HERO_GRADIENT : "rgba(255,255,255,0.04)", color: primary ? "#0b0e1a" : C.white, fontWeight: 800, fontSize: 14, padding: "10px 18px", borderRadius: 10, cursor: "pointer" })
+  return (
+    <div data-testid="sessions-activation" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={card({ padding: "22px 24px", border: "1px solid rgba(124,92,255,0.45)", background: `radial-gradient(120% 140% at 0% 0%, rgba(34,211,238,0.16) 0%, transparent 45%), rgba(10,13,26,0.86)` })}>
+        <div style={{ fontSize: 24, fontWeight: 900, color: C.white }}>No performance data yet</div>
+        <div style={{ fontSize: 14, color: C.text, marginTop: 4 }}>Import your tip history or start a Live Mode show and your sessions will appear here.</div>
+        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          <button data-testid="activation-import" onClick={onImport} style={btn(true)}>Import CSV history</button>
+          <button data-testid="activation-live" onClick={onStartLive} style={btn(false)}>Start Live Mode</button>
+        </div>
+      </div>
+      <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14 }}>
+        {PREVIEW.map(([icon, title, text]) => (
+          <div key={title} data-testid="activation-preview" style={{ ...inset, padding: "16px 18px", borderStyle: "dashed" }}>
+            <div style={{ fontSize: 20 }} aria-hidden="true">{icon}</div>
+            <div style={{ fontWeight: 900, color: C.white, fontSize: 15, marginTop: 6 }}>{title}</div>
+            <div style={{ color: C.text, fontSize: 12.5, marginTop: 4, lineHeight: 1.4 }}>{text}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -407,7 +471,7 @@ function Details({ e, tips, tz, today, signal }) {
   )
 }
 
-export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {} }) {
+export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null }) {
   const historyNote = isPro ? "Full history on every platform" : primaryPlatform
     ? `Free: full history on ${pName(primaryPlatform)}, last 31 days on other platforms`
     : "Free: last 31 days on every platform until you choose a primary platform"
@@ -442,6 +506,10 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   const overall = useMemo(() => overallSessionStats({ tips: T0, history, paidSessions: P0 }), [history]) // eslint-disable-line react-hooks/exhaustive-deps
   const perf = useMemo(() => sessionPerformance({ history, tips: T0, overall }), [history, overall]) // eslint-disable-line react-hooks/exhaustive-deps
   const showPerf = scope === "overall" || (mode.kind !== "none" && mode.singlePlatform)
+  const noData = mode.kind === "none" && !runningEntry && !showsLoading
+  const light = mode.kind !== "none" && perf.meaningfulSessions < 3
+  // Platform cards only for platforms the creator actually has data on.
+  const cardPlatforms = ["bongacams", "chaturbate", "myfreecams"].filter((p) => mode.platforms.includes(p))
   const sourceLabel = mode.kind === "mixed" ? "LIVE + IMPORTED HISTORY" : "IMPORTED HISTORY"
   const signal = scope === "overall" ? overallSignal(overall, perf) : todaySignal(stats, pName)
   const byPlatform = Object.fromEntries(stats.platforms.map((p) => [p.platform, p]))
@@ -473,7 +541,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
               {[["today", "Today"], ["overall", "Overall"]].map(([k, l]) => <span key={k} data-testid={`scope-${k}`}><Pill active={scope === k} onClick={() => setScopePick(k)}>{l}</Pill></span>)}
             </div>
           )}
-          {scope === "today" && <div data-testid="range-group" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)", alignItems: "center" }}>
+          {scope === "today" && !noData && <div data-testid="range-group" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)", alignItems: "center" }}>
             {mode.kind === "mixed" && <span style={{ fontSize: 11, color: C.muted, padding: "0 6px" }}>Range</span>}
             {RANGES.map(([d, l]) => <span key={d} data-testid={`range-${d}`}><Pill active={range === d} onClick={() => setRange(d)}>{mode.kind === "mixed" && d === 1 ? "1 Day" : l}</Pill></span>)}
           </div>}
@@ -484,10 +552,11 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
         </div>
       </div>
 
+      {noData ? <Activation onImport={onImport} onStartLive={onStartLive} /> : <>
       {/* Row 2 */}
       {scope === "overall"
-        ? <OverallHero o={overall} sourceLabel={sourceLabel} historyNote={historyNote} tz={tz} />
-        : <Hero stats={stats} range={range} comparison={comparison} trend={trend} live={snap} now={now} noData={mode.kind === "none"} />}
+        ? <OverallHero o={overall} sourceLabel={sourceLabel} historyNote={historyNote} tz={tz} light={light} />
+        : <Hero stats={stats} range={range} comparison={comparison} trend={trend} live={snap} now={now} light={light} onStartLive={onStartLive} />}
 
       {/* Row 3 */}
       {showPerf ? (
@@ -496,7 +565,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
             <span style={{ fontSize: 20, fontWeight: 900, color: C.white }}>Session Performance</span>
             <span style={{ fontSize: 12.5, color: C.text }}>{scope === "overall" ? "Across your available history" : "Your meaningful sessions"} · platform comparison lives in the Platforms tab</span>
           </div>
-          <SessionPerformanceCards perf={perf} />
+          <SessionPerformanceCards perf={perf} onImport={onImport} />
         </div>
       ) : (
       <div data-testid="today-by-platform">
@@ -504,8 +573,8 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
           <span style={{ fontSize: 20, fontWeight: 900, color: C.white }}>{range === 1 ? "Today by Platform" : `Last ${range} days by Platform`}</span>
           <span style={{ fontSize: 12.5, color: C.text }}>Compare your earnings across platforms</span>
         </div>
-        <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 14 }}>
-          {["bongacams", "chaturbate", "myfreecams"].filter((p) => SUPPORTED_PLATFORMS.includes(p)).map((p) => (
+        <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(cardPlatforms.length, 2)}, minmax(0,1fr))`, gap: 14 }}>
+          {cardPlatforms.map((p) => (
             <PlatformCard key={p} platform={p} p={byPlatform[p]} best={stats.bestPlatform === p} range={range} />
           ))}
         </div>
@@ -535,6 +604,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
           <Details e={selected} tips={T0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} />
         </div>
       </div>
+      </>}
     </div>
   )
 }
