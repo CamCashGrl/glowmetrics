@@ -92,3 +92,7 @@ export function platformColor(platform) {
   const canonical = PLATFORM_NAMES_LOWER[canonicalPlatform(platform).toLowerCase()]
   return (canonical && PLATFORM_COLORS[canonical]) || DEFAULT_PLATFORM_COLOR
 }
+
+// Standard plan list price (USD/month). Display copy on the pricing, landing
+// and onboarding pages must match; Stripe's STRIPE_MONTHLY_PRICE_ID is what is charged.
+export const STANDARD_MONTHLY_USD = 9.99
