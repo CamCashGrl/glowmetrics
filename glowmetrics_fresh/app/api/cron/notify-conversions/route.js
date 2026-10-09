@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+// Standard monthly plan price (Stripe price_1UOVqL…). Estimate only — assumes every conversion is monthly.
+const MONTHLY_PRICE_USD = 9.99
+
 export const dynamic = 'force-dynamic'
 
 async function logEmail(supabase, emailType, recipient, subject, status, resendResponse, errorMessage) {
@@ -109,8 +112,8 @@ export async function GET() {
   // SUCCESS: Conversions
   alertText += `✅ SUCCESSFUL CONVERSIONS: ${successfulConversions?.length || 0}\n`
   if (successfulConversions?.length) {
-    const totalMRR = successfulConversions.length * 19 // Assuming $19/month
-    alertText += `   Revenue: $${totalMRR}/month (${successfulConversions.length} × $19)\n\n`
+    const totalMRR = (successfulConversions.length * MONTHLY_PRICE_USD).toFixed(2)
+    alertText += `   Revenue: $${totalMRR}/month (${successfulConversions.length} × $${MONTHLY_PRICE_USD})\n\n`
     alertText += successfulConversions.slice(0, 15).map(c =>
       `   • User ${c.user_id} - ${c.new_plan} - ${new Date(c.created_at).toLocaleString()}`
     ).join('\n')
@@ -158,7 +161,7 @@ export async function GET() {
   alertText += `  Failed/Stale: ${failedConversions?.length || 0}\n`
   alertText += `  Abandonments: ${abandonedTrials?.length || 0}\n`
   alertText += `  Early Churns: ${earlyChurns?.length || 0}\n`
-  const projectedMRR = (successfulConversions?.length || 0) * 19
+  const projectedMRR = ((successfulConversions?.length || 0) * MONTHLY_PRICE_USD).toFixed(2)
   alertText += `  Projected MRR (from new conversions): $${projectedMRR}\n`
 
   await sendAlert(
