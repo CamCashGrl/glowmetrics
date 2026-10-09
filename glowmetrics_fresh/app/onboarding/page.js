@@ -527,6 +527,16 @@ function FeedbackBubble(){
 const CYAN='#21E6F3'
 const PINK='#FF2FAE'
 const GRAD='linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
+// Trial-screen copy kept in one object so variants can be swapped for A/B
+// tests later. Benefits only list features with real Pro gating in code:
+// FREE_ANALYSIS_WINDOW_DAYS (history), Platforms Intelligence (top fans
+// 3 vs 10), StreamPlanner isPro gating.
+const TRIAL_COPY={
+  headline:'Your first insight is just the beginning.',
+  sub:'Start your 7-day Pro trial and let CamCash build a deeper picture of your earnings, fans, platforms, and best streaming times.',
+  benefits:['Full earning history','Full multi-platform analytics','Complete fan insights','Stream Planner','Deeper earning-pattern analysis'],
+  cta:'Start my 7-day Pro trial →',
+}
 const EYE={fontSize:10,fontWeight:900,letterSpacing:'0.22em',textTransform:'uppercase',color:CYAN,marginBottom:10,textAlign:'center'}
 
 const CSS=`
@@ -731,6 +741,8 @@ export default function OnboardingPage(){
   const[loadingProgress,setLoadingProgress]=useState(0)
   const[howItWorksOpen,setHowItWorksOpen]=useState(false)
   const[dashboardTransitioning,setDashboardTransitioning]=useState(false)
+  // null until the user picks on the trial screen; 'trial' | 'free' after.
+  const[trialChoice,setTrialChoice]=useState(null)
   const csvRef=useRef()
 
   function enterDashboard(){
@@ -743,7 +755,7 @@ export default function OnboardingPage(){
 
   const platform=PLATFORMS[platformId]
   const primaryPlatformId=selectedPlatforms[0]||null
-  const stepNum={platforms:1,username:1,paste:2,csv:2,loading:2,platformSuccess:2,finalSummary:3,trial:3,step4:3,done:3}[step]||1
+  const stepNum={platforms:1,username:1,paste:2,csv:2,loading:2,platformSuccess:2,finalSummary:3,trial:3,freeReady:3,step4:3,done:3}[step]||1
   const showProgress=!['loading'].includes(step)
 
   useEffect(()=>{
@@ -789,6 +801,15 @@ export default function OnboardingPage(){
   useEffect(()=>{
     if(!user||step!=='trial')return
     track('pro_preview_viewed',{source:'onboarding',plan:'free',trial_length:7})
+    track('onboarding_trial_screen_viewed',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
+  },[step,user])
+
+  // onboarding_complete is set only once the user picks Trial or Free on the
+  // trial screen (handleStartTrial / handleChooseFree) — not on first import —
+  // so someone who leaves mid-flow is routed back into onboarding.
+  useEffect(()=>{
+    if(!user||step!=='platformSuccess'||queueIndex!==0)return
+    track('onboarding_first_insight_viewed',{primary_platform:platformId,has_insight:!!(preview?.bestHour&&preview?.bestHourConfident)})
   },[step,user])
 
   async function markDone(){
@@ -981,12 +1002,12 @@ export default function OnboardingPage(){
         err.code=json.code;err.upgradeUrl=json.upgradeUrl
         throw err
       }
-      await markDone()
       const inserted=json.inserted??p?.tipsDetected??0
       setImportResult({inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'paste'})
       if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
+      if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
       setPlatformResults(prev=>({...prev,[platformId]:{
         status:'connected',inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0,
         snapshot:p?.snapshot||null,topSpender:p?.topSpender||null,
@@ -1003,8 +1024,26 @@ export default function OnboardingPage(){
     }
   }
 
+  function goToTrial(){
+    track('onboarding_complete',{platforms:selectedPlatforms,primary:primaryPlatformId})
+    setStep('trial')
+  }
+
+  async function handleChooseFree(){
+    track('onboarding_trial_skipped')
+    track('onboarding_free_selected',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
+    setTrialChoice('free')
+    await markDone()
+    setStep('freeReady')
+  }
+
   async function handleStartTrial(){
     if(!user)return
+    track('onboarding_trial_started',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
+    setTrialChoice('trial')
+    // Mark complete before leaving for Stripe: both success_url and
+    // cancel_url return to /dashboard.
+    await markDone()
     // Reuse the existing upgrade_click taxonomy (already fired from the
     // dashboard's upgrade prompts) rather than a new onboarding-only event.
     track('upgrade_click',{source:'onboarding',placement:'trial',plan:'free'})
@@ -1052,12 +1091,12 @@ export default function OnboardingPage(){
       clearInterval(pi);setLoadingProgress(100)
       const json=await res.json()
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
-      await markDone()
       const inserted=json.inserted??preview?.tipsDetected??0
       setImportResult({inserted,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'csv'})
       if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
+      if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
       setPlatformResults(prev=>({...prev,[platformId]:{
         status:'connected',inserted,skipped:json.skipped??0,
         snapshot:json.snapshot||null,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo,source:'csv',
@@ -1413,7 +1452,20 @@ export default function OnboardingPage(){
                 </div>
               )}
 
-              <OBBtn onClick={()=>goToNextOrFinish()}>{nextUnhandledId?`Continue to ${PLATFORMS[nextUnhandledId].label} →`:'See your setup →'}</OBBtn>
+              {/* Primary import → straight to the trial offer. Secondary
+                  platforms stay saved in profiles.streaming_platforms and are
+                  offered again after the Trial/Free choice. */}
+              {trialChoice===null?(
+                <>
+                  <OBBtn onClick={goToTrial}>Continue →</OBBtn>
+                  {nextUnhandledId&&<OBLinks links={[{label:`Connect ${PLATFORMS[nextUnhandledId].label} later`,onClick:goToTrial}]}/>}
+                </>
+              ):(
+                <>
+                  <OBBtn onClick={enterDashboard}>Enter CamCash →</OBBtn>
+                  {nextUnhandledId&&<OBLinks links={[{label:`Connect ${PLATFORMS[nextUnhandledId].label}`,onClick:()=>{setQueueIndex(selectedPlatforms.indexOf(nextUnhandledId));startConnecting(nextUnhandledId)}}]}/>}
+                </>
+              )}
             </div>
           )})()}
 
@@ -1452,44 +1504,52 @@ export default function OnboardingPage(){
           )}
 
           {/* ══ TRIAL UPSELL ══ */}
-          {step==='trial'&&(
-            <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={{textAlign:'center',marginBottom:12}}>
-                <div style={{width:40,height:40,borderRadius:14,background:'linear-gradient(135deg,#21E6F3,#6C5CFF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff',margin:'0 auto 8px',boxShadow:'0 0 40px rgba(33,230,243,0.35)'}}>⚡</div>
-                <h1 style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em'}}>Start tracking your tips automatically with Live Mode.</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.6,maxWidth:420,margin:'0 auto'}}>Go live, track your tips as they happen, and see your earnings build in real time. Pro also unlocks your full history and deeper insights across every platform you connect.</p>
-              </div>
-              <div style={{marginBottom:12,borderRadius:14,background:'linear-gradient(135deg,rgba(33,230,243,0.08),rgba(124,92,255,0.08))',border:'1px solid rgba(167,139,250,0.2)',padding:'14px 20px'}}>
-                <div style={{position:'relative'}}>
-                  <div style={{position:'absolute',top:0,bottom:0,left:'66.667%',right:0,background:'rgba(33,230,243,0.055)',borderLeft:`1px solid rgba(33,230,243,0.3)`,borderRadius:'0 8px 8px 0',pointerEvents:'none'}}/>
-                  <div style={{position:'relative',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',fontSize:9,fontWeight:800,letterSpacing:'0.1em',textTransform:'uppercase',color:'rgba(148,163,184,0.55)',marginBottom:10,paddingBottom:8,borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
-                    <span></span>
-                    <span style={{textAlign:'center'}}>Free</span>
-                    <span style={{textAlign:'center',color:CYAN}}>Pro</span>
-                  </div>
-                  {[{label:'History',free:'Last 31 days',pro:'Full history'},{label:'Platforms',free:'Up to 3',pro:'Unlimited'},{label:'Top Fans',free:'3',pro:'10'},{label:'Whales',free:'3',pro:'5'}].map((r,i)=>(
-                    <div key={r.label} style={{position:'relative',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',alignItems:'center',padding:'8px 0',borderBottom:i<3?'1px solid rgba(255,255,255,0.05)':'none'}}>
-                      <span style={{fontSize:11,fontWeight:700,color:'rgba(226,232,240,0.85)'}}>{r.label}</span>
-                      <span style={{fontSize:11,color:'rgba(148,163,184,0.65)',textAlign:'center'}}>{r.free}</span>
-                      <span style={{fontSize:12,fontWeight:800,color:'#fff',textAlign:'center'}}>{r.pro}</span>
-                    </div>
-                  ))}
+          {step==='trial'&&(()=>{
+            const tipsAnalyzed=Object.values(platformResults).reduce((n,r)=>n+(r?.status==='connected'?(r.inserted||0):0),0)
+            const hasInsight=!!(preview?.bestHour&&preview?.bestHourConfident)
+            return(
+            <div style={{animation:'fadeUp 0.3s ease both',textAlign:'center'}}>
+              <div style={EYE}>Step 3 of 3</div>
+              <div style={{width:44,height:44,borderRadius:14,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,margin:'0 auto 10px',boxShadow:'0 0 28px rgba(124,92,255,0.45),0 0 50px rgba(255,47,174,0.2)'}}>👑</div>
+              <h1 style={{fontSize:'clamp(19px,2.8dvh,23px)',fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em',lineHeight:1.2}}>{TRIAL_COPY.headline}</h1>
+              <p className="ob-gap" style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.5,maxWidth:440,margin:'0 auto'}}>{TRIAL_COPY.sub}</p>
+              {/* Proof line — only real counts from this session's imports. */}
+              {(tipsAnalyzed>0||hasInsight)&&(
+                <div className="ob-gap" style={{display:'inline-flex',alignItems:'center',gap:8,padding:'7px 16px',borderRadius:10,border:'1px solid rgba(124,92,255,0.35)',background:'rgba(124,92,255,0.08)',fontSize:12,color:'rgba(226,232,240,0.9)'}}>
+                  <span style={{fontSize:14}}>📊</span>
+                  {tipsAnalyzed>0?<span>CamCash already analyzed <strong style={{color:CYAN}}>{tipsAnalyzed} tip{tipsAnalyzed===1?'':'s'}</strong> from your first import.</span>:<span>Your first earning pattern is ready.</span>}
+                </div>
+              )}
+              <div className="ob-gap" style={{borderRadius:14,background:'rgba(33,230,243,0.035)',border:'1px solid rgba(33,230,243,0.2)',padding:'12px 18px',textAlign:'left'}}>
+                <div style={{fontSize:9.5,fontWeight:900,letterSpacing:'0.16em',textTransform:'uppercase',color:CYAN,marginBottom:8}}>With CamCash Pro</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:'6px 16px'}}>
+                  {TRIAL_COPY.benefits.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:9,fontSize:12.5,color:'rgba(226,232,240,0.92)'}}><span style={{flexShrink:0,width:17,height:17,borderRadius:'50%',background:CYAN,color:'#04101b',fontSize:10,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center'}}>✓</span>{t}</div>))}
                 </div>
               </div>
-              <div style={{marginBottom:10,textAlign:'center'}}>
-                <div style={{fontSize:12,fontWeight:800,color:'#fff',marginBottom:4}}>Go deeper across your data.</div>
-                <p style={{fontSize:11.5,color:'rgba(166,168,189,0.8)',lineHeight:1.5,maxWidth:380,margin:'0 auto'}}>Compare platforms side by side and uncover deeper trends, fan re-engagement patterns, and what's driving your earnings.</p>
-              </div>
-              <div style={{marginBottom:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
-                <div style={{display:'flex',alignItems:'baseline',gap:4,justifyContent:'center',marginBottom:2}}>
-                  <span style={{fontSize:32,fontWeight:900,color:CYAN}}>$0</span>
-                  <span style={{fontSize:12,color:'rgba(148,163,184,0.6)'}}>for 7 days</span>
+              {/* Price matches /pricing (Standard monthly, plan_type standard_monthly). */}
+              <div className="ob-gap" style={{borderRadius:14,border:'1px solid rgba(167,139,250,0.45)',background:'rgba(255,255,255,0.02)',padding:'10px 14px',boxShadow:'0 0 18px rgba(124,92,255,0.12)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:14,flexWrap:'wrap'}}>
+                  <span style={{fontSize:26,fontWeight:900,color:'#fff'}}><span style={{color:CYAN,fontSize:32}}>$0</span> today</span>
+                  <span style={{width:1,height:28,background:'rgba(255,255,255,0.15)'}}/>
+                  <span style={{fontSize:26,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>7 days free</span>
                 </div>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.6)',marginBottom:4}}>Then $19.99/month. Cancel anytime.</div>
-                <div style={{fontSize:10,color:'rgba(148,163,184,0.5)',marginBottom:8}}>Don't continue? Your imported data stays yours — nothing is deleted.</div>
-                <OBBtn onClick={handleStartTrial} style={{marginBottom:8}}>Start My 7-Day Pro Trial →</OBBtn>
-                <button onClick={()=>{track('onboarding_trial_skipped');setStep('done')}} style={{width:'100%',height:44,borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,cursor:'pointer',transition:'all 0.18s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(33,230,243,0.07)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,0.12)';e.currentTarget.style.color='rgba(203,213,225,0.85)';e.currentTarget.style.background='rgba(255,255,255,0.04)'}}>Skip for now</button>
+                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginTop:2}}>Then $19.99/month • Cancel anytime before your trial ends.</div>
               </div>
+              <OBBtn onClick={handleStartTrial} style={{height:52,fontSize:15}}>{TRIAL_COPY.cta}</OBBtn>
+              <div style={{display:'flex',alignItems:'center',gap:12,maxWidth:300,margin:'10px auto 4px'}}>
+                <span style={{flex:1,height:1,background:'rgba(255,255,255,0.1)'}}/><span style={{fontSize:10,color:'rgba(148,163,184,0.6)'}}>or</span><span style={{flex:1,height:1,background:'rgba(255,255,255,0.1)'}}/>
+              </div>
+              <button onClick={handleChooseFree} style={{background:'none',border:'none',color:'rgba(203,213,225,0.8)',fontSize:12.5,fontWeight:700,cursor:'pointer',padding:'4px 8px'}}>Continue with Free</button>
+            </div>
+          )})()}
+
+          {/* ══ FREE READY ══ */}
+          {step==='freeReady'&&(
+            <div style={{animation:'fadeUp 0.3s ease both',textAlign:'center'}}>
+              <h1 style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:6}}>You're ready to use CamCash Free.</h1>
+              <p className="ob-gap" style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.55,maxWidth:400,margin:'0 auto'}}>You can upgrade whenever you want deeper history, cross-platform analytics and advanced insights.</p>
+              <OBBtn onClick={enterDashboard}>Enter CamCash →</OBBtn>
+              {nextUnhandledId&&<OBLinks links={[{label:`Connect ${PLATFORMS[nextUnhandledId].label}`,onClick:()=>{setQueueIndex(selectedPlatforms.indexOf(nextUnhandledId));startConnecting(nextUnhandledId)}}]}/>}
             </div>
           )}
 
