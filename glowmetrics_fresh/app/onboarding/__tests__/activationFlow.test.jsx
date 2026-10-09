@@ -53,7 +53,7 @@ const completionWrites = () => upserts.filter(u => u.table === 'beta_users' && u
 beforeEach(() => {
   upserts.length = 0
   track.mockClear()
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ inserted: 2, skipped: 0 }) })
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ inserted: 2, skipped: 0 }), text: async () => JSON.stringify({ inserted: 2, skipped: 0 }) })
 })
 
 async function importPrimaryWithSecondarySelected() {
@@ -97,7 +97,7 @@ test('choosing Free marks onboarding complete and still offers the secondary pla
 test('starting the trial marks onboarding complete before the Stripe redirect', async () => {
   await importPrimaryWithSecondarySelected()
   fireEvent.click(screen.getByRole('button', { name: /^Continue →$/ }))
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'stub' }) })
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'stub' }), text: async () => JSON.stringify({ error: 'stub' }) })
   window.alert = jest.fn()
   fireEvent.click(await screen.findByRole('button', { name: /Start my 7-day Pro trial/ }))
   await waitFor(() => expect(completionWrites()).toHaveLength(1))
