@@ -274,3 +274,30 @@ test('money values never wrap', () => {
   renderTab({ tips: csvTips })
   expect(screen.getByTestId('overall-public').style.whiteSpace).toBe('nowrap')
 })
+
+// ── Session Details tabs: Timeline buckets and Fans ──────────────────────────
+test('Details tabs: Overview (default), Timeline buckets, Fans with New/Returning', () => {
+  renderTab({ tips: csvTips, isPro: true })
+  // newest meaningful session: Sep 5 (Ann 6 @20:00, Ben 9 @20:35)
+  expect(screen.getByTestId('details-public')).toBeTruthy()
+  click('details-tab-timeline')
+  expect(val('buckets-span-label')).toBe('Earning activity span')
+  expect(screen.getAllByTestId('bucket-row')).toHaveLength(4) // 35 min → 10-minute buckets
+  expect(screen.queryByTestId('buckets-peak')).toBeNull() // only 2 earning buckets
+  expect(screen.queryByTestId('details-public')).toBeNull()
+  click('details-tab-fans')
+  const fans = screen.getAllByTestId('fan-driver')
+  expect(fans[0].textContent.startsWith('1Ben')).toBe(true)
+  expect(fans[1].textContent.startsWith('2Ann')).toBe(true)
+  expect(fans[0].textContent).toMatch(/\$9\.00/)
+  expect(fans[0].textContent).toMatch(/60% of session/)
+  expect(fans[0].textContent).toMatch(/RETURNING/) // Ben tipped on Sep 1
+  expect(fans[1].textContent).toMatch(/RETURNING/) // Ann tipped on Sep 1 and 3
+})
+
+test('Fans: first appearance is New; Free outside primary says "in your available history"', () => {
+  renderTab({ tips: csvTips.filter((t) => t.date_time.startsWith('2026-09-01')), isPro: false, primaryPlatform: 'BongaCams' })
+  click('details-tab-fans')
+  expect(screen.getAllByTestId('fan-status-new')).toHaveLength(2)
+  expect(screen.getByTestId('fan-drivers').textContent).toMatch(/NEW IN YOUR AVAILABLE HISTORY/)
+})

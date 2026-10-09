@@ -18,7 +18,7 @@ import { platformDisplayName, platformColor } from "../../lib/constants"
 import {
   SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, dailySessionStats,
   liveSessionSnapshot, withTodayDerived, todaySignal, vsYesterdayByNow, todayCumulative,
-  sessionTimeline, timeAgo, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
+  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
 } from "../../lib/sessions/normalize"
 import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
@@ -335,7 +335,7 @@ const PREVIEW = [
   ["🗂", "Recent sessions", "A timeline of each session with its peak period and top contributors."],
 ]
 function Activation({ onImport, onStartLive }) {
-  const btn = (primary) => ({ border: primary ? "none" : `1px solid ${C.line}`, background: primary ? HERO_GRADIENT : "rgba(255,255,255,0.04)", color: primary ? "#0b0e1a" : C.white, fontWeight: 800, fontSize: 14, padding: "10px 18px", borderRadius: 10, cursor: "pointer" })
+  const btn = (primary) => ({ border: primary ? "none" : `1px solid ${C.line}`, background: primary ? `linear-gradient(135deg, ${C.cyan}, #38D5E8)` : "rgba(255,255,255,0.04)", color: primary ? "#0b0e1a" : C.white, boxShadow: primary ? `0 0 18px ${C.cyan}55` : "none", fontWeight: 800, fontSize: 14, padding: "10px 18px", borderRadius: 10, cursor: "pointer" })
   return (
     <div data-testid="sessions-activation" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={card({ padding: "22px 24px", border: "1px solid rgba(124,92,255,0.45)", background: `radial-gradient(120% 140% at 0% 0%, rgba(34,211,238,0.16) 0%, transparent 45%), rgba(10,13,26,0.86)` })}>
@@ -414,7 +414,97 @@ function Timeline({ data }) {
   )
 }
 
-function Details({ e, tips, tz, today, signal }) {
+const clock = (iso, tz) => new Date(iso).toLocaleTimeString([], { timeZone: tz, hour: "numeric", minute: "2-digit" })
+
+// Timeline tab: the selected session in time buckets.
+function BucketsView({ e, tips, tz }) {
+  const d = sessionBuckets(e, { tips })
+  if (!d) return <div data-testid="buckets-empty" style={{ color: C.muted, fontSize: 13 }}>No time-stamped activity in this session.</div>
+  const max = Math.max(...d.buckets.map((b) => b.totalUSD), 0.01)
+  const spanText = d.exact ? fmtDuration(d.spanMinutes * 60) : fmtMinutes(d.spanMinutes, true)
+  const anyEstimated = d.buckets.some((b) => b.privateEstimated && b.privateUSD > 0)
+  return (
+    <div data-testid="buckets" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: C.text }}>
+        <span><T id="buckets-span-label">{d.label}</T>: <span style={{ color: C.white, fontWeight: 800 }}><T id="buckets-span">{spanText}</T></span> · {clock(d.start, tz)}–{clock(d.end, tz)}</span>
+        <span>{d.single ? "Too short to split into time buckets" : `${d.bucketMinutes}-minute buckets`}</span>
+      </div>
+      {d.peak && d.peak.sharePct != null && (
+        <div data-testid="buckets-peak" style={{ ...inset, border: `1px solid ${C.pink}66`, padding: "8px 12px", fontSize: 13, color: C.white }}>
+          <span style={{ color: C.pink, fontWeight: 800 }}>Peak period:</span> {clock(d.peak.start, tz)}–{clock(d.peak.end, tz)} generated <strong>{d.peak.sharePct}%</strong> of this session&apos;s earnings ({fmtUsd(d.peak.totalUSD)}).
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 74 }} aria-hidden="true">
+        {d.buckets.map((b, i) => {
+          const isPeak = d.peak && b.start === d.peak.start
+          return (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%" }}>
+              <div style={{ height: `${(b.privateUSD / max) * 100}%`, minHeight: b.privateUSD > 0 ? 3 : 0, background: `linear-gradient(180deg, ${C.pink}, ${C.violet})`, borderRadius: "3px 3px 0 0", opacity: b.privateEstimated ? 0.75 : 1 }} />
+              <div style={{ height: `${(b.publicUSD / max) * 100}%`, minHeight: b.publicUSD > 0 ? 3 : 0, background: `linear-gradient(180deg, ${C.cyan}, ${C.indigo})`, borderRadius: b.privateUSD > 0 ? 0 : "3px 3px 0 0", boxShadow: isPeak ? `0 0 10px ${C.pink}` : "none" }} />
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table data-testid="buckets-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, color: C.text }}>
+          <thead><tr style={{ textAlign: "left", color: C.muted }}>
+            <th style={{ padding: "4px 6px" }}>Time</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Public</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Private</th>
+            <th style={{ padding: "4px 6px", textAlign: "right" }}>{e.type === "private" ? "Charges" : "Tips"}</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Fans</th><th style={{ padding: "4px 6px" }}>Top fan</th>
+          </tr></thead>
+          <tbody>
+            {d.buckets.map((b, i) => (
+              <tr key={i} data-testid="bucket-row" style={{ borderTop: `1px solid ${C.line}`, color: d.peak && b.start === d.peak.start ? C.white : C.text }}>
+                <td style={{ padding: "5px 6px", whiteSpace: "nowrap" }}>{clock(b.start, tz)}–{clock(b.end, tz)}</td>
+                <td style={{ padding: "5px 6px", textAlign: "right" }}>{fmtUsd(b.publicUSD)}</td>
+                <td style={{ padding: "5px 6px", textAlign: "right" }}>{b.privateUSD > 0 ? `${b.privateEstimated ? "~" : ""}${fmtUsd(b.privateUSD)}` : "—"}</td>
+                <td style={{ padding: "5px 6px", textAlign: "right" }}>{b.count}</td>
+                <td style={{ padding: "5px 6px", textAlign: "right" }}>{b.uniqueFans}</td>
+                <td style={{ padding: "5px 6px" }}>{b.topFan ? `${b.topFan.username} ${fmtUsd(b.topFan.usd)}` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {anyEstimated && <div style={{ fontSize: 11.5, color: C.muted }}>~ Live private earnings are estimated and spread across the minutes each private interval covered.</div>}
+      {!d.exact && <div style={{ fontSize: 11.5, color: C.muted }}>Imported history shows when earnings happened, not proof of continuous streaming.</div>}
+    </div>
+  )
+}
+
+// Fans tab: who drove the selected session.
+function FanDriversView({ e, tips, paidSessions, isPro, primaryPlatform }) {
+  const fans = sessionFanDrivers(e, { tips, paidSessions })
+  if (!fans.length) return <div data-testid="fans-empty" style={{ color: C.muted, fontSize: 13 }}>No fan-level detail for this session{e.type === "live" ? " (private time in Live Mode is not attributed to a fan)" : ""}.</div>
+  // Free sees full history only on the primary platform; elsewhere "new" may just be outside the window.
+  const newLabel = (platform) => !isPro && String(platform).toLowerCase() !== String(primaryPlatform || "").toLowerCase() ? "New in your available history" : "New"
+  return (
+    <div data-testid="fan-drivers" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {fans.map((f, i) => (
+        <div key={`${f.platform}:${f.username}`} data-testid="fan-driver" style={{ ...inset, padding: "10px 14px", display: "grid", gridTemplateColumns: "22px minmax(0,1fr) auto", gap: 10, alignItems: "center" }}>
+          <span style={{ color: C.muted, fontWeight: 800 }}>{i + 1}</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 900, color: C.white }}>{f.username}</span>
+              <PlatformCell platform={pName(f.platform)} />
+              <Badge text={f.returning ? "RETURNING" : newLabel(f.platform).toUpperCase()} color={f.returning ? C.green : C.cyan} testId={`fan-status-${f.returning ? "returning" : "new"}`} />
+            </div>
+            <div style={{ fontSize: 12, color: C.text, marginTop: 3 }}>{f.count} {e.type === "private" ? (f.count === 1 ? "charge" : "charges") : (f.count === 1 ? "tip" : "tips")}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontWeight: 900, color: C.white }}>{fmtUsd(f.usd)}</div>
+            {f.sharePct != null && <div style={{ fontSize: 11.5, color: C.text }}>{f.sharePct}% of session</div>}
+          </div>
+        </div>
+      ))}
+      {e.type === "live" && e.privateUSD > 0 && <div style={{ fontSize: 11.5, color: C.muted }}>Live private earnings ({fmtUsd(e.privateUSD)}) are not attributed to individual fans, so shares can add up to less than 100%.</div>}
+    </div>
+  )
+}
+
+const DETAIL_TABS = [["overview", "Overview"], ["timeline", "Timeline"], ["fans", "Fans"]]
+
+function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null }) {
+  const [tab, setTab] = useState("overview")
   if (!e) return <div style={{ color: C.text, fontSize: 13 }}>Select a session to see its details.</div>
   const t = TYPE[e.type]
   const status = e.running ? { label: "LIVE NOW", color: C.green } : e.isNew ? { label: "JUST ENDED", color: C.pink } : t
@@ -440,6 +530,12 @@ function Details({ e, tips, tz, today, signal }) {
           <div style={{ fontSize: 11.5, color: C.text }}>Total Earned</div>
         </div>
       </div>
+      <div data-testid="details-tabs" style={{ display: "flex", gap: 4 }}>
+        {DETAIL_TABS.map(([k, l]) => <span key={k} data-testid={`details-tab-${k}`}><Pill active={tab === k} onClick={() => setTab(k)}>{l}</Pill></span>)}
+      </div>
+      {tab === "timeline" && <BucketsView e={e} tips={tips} tz={tz} />}
+      {tab === "fans" && <FanDriversView e={e} tips={tips} paidSessions={paidSessions} isPro={isPro} primaryPlatform={primaryPlatform} />}
+      {tab === "overview" && <>
       <div className="sx-dgrid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
         <Cell value={fmtUsd(e.publicUSD)} label="Public" testId="details-public" />
         <Cell value={fmtUsd(e.privateUSD)} label="Private" testId="details-private" accent={C.pink} />
@@ -468,6 +564,7 @@ function Details({ e, tips, tz, today, signal }) {
           </div>
         </div>
       )}
+      </>}
     </div>
   )
 }
@@ -602,7 +699,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
         </div>
         <div data-testid="session-details" style={card({ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(12,15,28,0.78)", boxShadow: "none" })}>
           <div style={{ fontSize: 19, fontWeight: 900, color: C.white }}>Session Details</div>
-          <Details e={selected} tips={T0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} />
+          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} />
         </div>
       </div>
       </>}

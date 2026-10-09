@@ -205,6 +205,25 @@ async function main() {
         check(`${name} · Session Performance cards replace platform comparison`, (await page.getByTestId('session-performance').count()) > 0 && (await page.getByTestId('today-by-platform').count()) === 0);
       }
       await page.getByTestId('sessions-overview').screenshot({ path: path.join(OUT, `sessions-${name}${name === 'mixed' ? '-overall' : ''}.png`) });
+      if (name === 'csvFree') {
+        // Selected session = newest meaningful one: Chaturbate, Ann $10 @20:00 + Ben $5 @20:40 (raw fixture rows).
+        const tabClick = async (id) => { const t = page.getByTestId(id); await t.locator('button').first().click().catch(async () => t.click()); };
+        await tabClick('details-tab-timeline');
+        await page.getByTestId('buckets').waitFor({ state: 'visible' });
+        await domCheck(page, name, 'Timeline', { 'buckets-span-label': 'Earning activity span', 'buckets-span': '~40m' }, {});
+        const rows = await page.getByTestId('bucket-row').allTextContents();
+        check(`${name} · Timeline has 4 ten-minute buckets (40 min span)`, rows.length === 4, JSON.stringify(rows));
+        check(`${name} · first bucket $10.00 from Ann, last bucket $5.00 from Ben`, /\$10\.00.*Ann \$10\.00/.test(rows[0] || '') && /\$5\.00.*Ben \$5\.00/.test(rows[3] || ''), JSON.stringify(rows));
+        check(`${name} · no peak share claimed with only 2 earning buckets`, (await page.getByTestId('buckets-peak').count()) === 0);
+        await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-timeline.png') });
+        await tabClick('details-tab-fans');
+        await page.getByTestId('fan-drivers').waitFor({ state: 'visible' });
+        const fans = await page.getByTestId('fan-driver').allTextContents();
+        check(`${name} · Fans ranked by session USD: Ann then Ben`, fans.length === 2 && fans[0].startsWith('1Ann') && fans[1].startsWith('2Ben'), JSON.stringify(fans));
+        check(`${name} · Ann $10.00, 67% of session, Returning`, /\$10\.00/.test(fans[0]) && /67% of session/.test(fans[0]) && /RETURNING/.test(fans[0]), fans[0]);
+        check(`${name} · Ben $5.00, 33% of session, Returning`, /\$5\.00/.test(fans[1]) && /33% of session/.test(fans[1]) && /RETURNING/.test(fans[1]), fans[1]);
+        await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-fans.png') });
+      }
       await ctx.close();
     }
   } catch (err) {

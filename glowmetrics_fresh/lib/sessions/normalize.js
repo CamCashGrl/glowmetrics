@@ -753,3 +753,135 @@ export function overallSignal(overall, perf) {
   return null
 }
 
+
+// ── SELECTED-SESSION BREAKDOWN ──────────────────────────────────────────
+
+// The money events of one history entry, each with a time and (when known)
+// the fan. Live private intervals have real start/end but no per-fan detail.
+function entryEvents(entry, tips = []) {
+  const at = (x) => new Date(x).getTime()
+  if (entry.type === 'live') {
+    return {
+      tips: tips.filter((t) => t.live_session_id === entry.sourceId)
+        .map((t) => ({ ms: at(t.date_time || t.dateRaw), usd: Number(t.usd) || 0, platform: norm(t.platform), username: t.username })),
+      intervals: (entry.privateIntervals || []).filter((iv) => iv.startedAt && iv.endedAt)
+        .map((iv) => ({ start: at(iv.startedAt), end: at(iv.endedAt), usd: Number(iv.earningsUsd) || 0 })),
+      charges: [],
+    }
+  }
+  if (entry.type === 'private') {
+    return {
+      tips: [], intervals: [],
+      charges: (entry.charges || []).map((c) => ({ ms: at(c.date_time), usd: Number(c.usd) || 0, platform: entry.platforms[0], username: entry.fan })),
+    }
+  }
+  return {
+    tips: (entry.session?.tips || []).map((t) => ({ ms: at(t.date_time || t.dateRaw), usd: Number(t.usd) || 0, platform: norm(t.platform), username: t.username })),
+    intervals: [], charges: [],
+  }
+}
+
+// Time buckets for one selected session.
+//   span: Live = exact show start→end ("Duration"); everything else = first→
+//         last money event ("Earning activity span", never stream duration).
+//   size: span < 60 min → 10 min; 60–180 → 15; > 180 → 30.
+//   One timestamp or span < 10 min → a single bucket, no peak claim.
+//   Live private intervals are spread over every bucket they overlap in
+//   proportion to time (estimated); imported charges use their timestamps.
+//   Peak = highest-earning bucket; its share is shown only with >= 3
+//   earning buckets.
+export function sessionBuckets(entry, { tips = [] } = {}) {
+  if (!entry) return null
+  const ev = entryEvents(entry, tips)
+  const points = [...ev.tips, ...ev.charges].filter((e) => !isNaN(e.ms))
+  const times = [...points.map((p) => p.ms), ...ev.intervals.flatMap((i) => [i.start, i.end])]
+  if (!times.length) return null
+  const exact = entry.type === 'live'
+  const start = exact ? Math.min(new Date(entry.startTime).getTime(), ...times) : Math.min(...times)
+  const end = exact ? Math.max(new Date(entry.endTime || entry.startTime).getTime(), ...times) : Math.max(...times)
+  const spanMinutes = (end - start) / 60000
+  const single = spanMinutes < 10
+  const size = spanMinutes < 60 ? 10 : spanMinutes <= 180 ? 15 : 30
+  const width = size * 60000
+  const n = single ? 1 : Math.max(1, Math.ceil((end - start) / width))
+  const buckets = Array.from({ length: n }, (_, i) => ({
+    start: new Date(single ? start : start + i * width).toISOString(),
+    end: new Date(single ? end : Math.min(end, start + (i + 1) * width)).toISOString(),
+    publicUSD: 0, privateUSD: 0, privateEstimated: false, count: 0, fans: new Map(),
+  }))
+  const idx = (ms) => single ? 0 : Math.min(n - 1, Math.max(0, Math.floor((ms - start) / width)))
+  for (const p of points) {
+    const b = buckets[idx(p.ms)]
+    if (ev.charges.includes(p)) b.privateUSD += p.usd; else b.publicUSD += p.usd
+    b.count += 1
+    if (p.username) {
+      const k = fanKey(p.platform, p.username)
+      const f = b.fans.get(k) || { username: p.username, platform: p.platform, usd: 0 }
+      f.usd += p.usd
+      b.fans.set(k, f)
+    }
+  }
+  for (const iv of ev.intervals) {
+    if (iv.end <= iv.start) { const b = buckets[idx(iv.start)]; b.privateUSD += iv.usd; b.privateEstimated = true; continue }
+    for (let i = idx(iv.start); i <= idx(iv.end); i++) {
+      const bs = single ? start : start + i * width, be = single ? end : bs + width
+      const overlap = Math.max(0, Math.min(be, iv.end) - Math.max(bs, iv.start))
+      if (overlap > 0) { buckets[i].privateUSD += iv.usd * (overlap / (iv.end - iv.start)); buckets[i].privateEstimated = true }
+    }
+  }
+  const out = buckets.map((b) => {
+    const fans = [...b.fans.values()].sort((x, y) => y.usd - x.usd || norm(x.username).localeCompare(norm(y.username)))
+    return {
+      start: b.start, end: b.end,
+      publicUSD: money(b.publicUSD), privateUSD: money(b.privateUSD), privateEstimated: b.privateEstimated,
+      totalUSD: money(b.publicUSD + b.privateUSD), count: b.count, uniqueFans: fans.length,
+      topFan: fans[0] ? { username: fans[0].username, platform: fans[0].platform, usd: money(fans[0].usd) } : null,
+    }
+  })
+  const total = out.reduce((a, b) => a + b.totalUSD, 0)
+  const earning = out.filter((b) => b.totalUSD > 0)
+  const peak = !single && earning.length ? earning.reduce((a, b) => (b.totalUSD > a.totalUSD ? b : a)) : null
+  return {
+    exact, label: exact ? 'Duration' : 'Earning activity span',
+    start: new Date(start).toISOString(), end: new Date(end).toISOString(), spanMinutes,
+    bucketMinutes: single ? null : size, single, buckets: out,
+    peak: peak ? { start: peak.start, end: peak.end, totalUSD: peak.totalUSD, sharePct: earning.length >= 3 && total > 0 ? Math.round((peak.totalUSD / total) * 100) : null } : null,
+  }
+}
+
+// Fans who drove one selected session, ranked by USD contributed to it.
+//   share     = fan USD / session total (Live private intervals carry no fan
+//               detail, so Live shares can sum to less than 100%).
+//   returning = this platform:username has a tip or private charge strictly
+//               before the session's first money event, within the data
+//               passed in (plan-gated history); otherwise new.
+export function sessionFanDrivers(entry, { tips = [], paidSessions = [] } = {}) {
+  if (!entry) return []
+  const ev = entryEvents(entry, tips)
+  const points = [...ev.tips, ...ev.charges].filter((p) => p.username && !isNaN(p.ms))
+  if (!points.length) return []
+  const firstMs = Math.min(...points.map((p) => p.ms))
+  const earliest = new Map()
+  const seen = (platform, username, x) => {
+    const ms = new Date(x).getTime()
+    if (isNaN(ms)) return
+    const k = fanKey(platform, username)
+    if (!earliest.has(k) || ms < earliest.get(k)) earliest.set(k, ms)
+  }
+  for (const t of tips) seen(t.platform, t.username, t.date_time || t.dateRaw)
+  for (const p of paidSessions) seen(p.platform, p.username, p.date_time)
+  const fans = new Map()
+  for (const p of points) {
+    const k = fanKey(p.platform, p.username)
+    const f = fans.get(k) || { username: p.username, platform: p.platform, usd: 0, count: 0 }
+    f.usd += p.usd
+    f.count += 1
+    fans.set(k, f)
+  }
+  const total = Number(entry.totalUSD) || 0
+  return [...fans.entries()].map(([k, f]) => ({
+    username: f.username, platform: f.platform, usd: money(f.usd), count: f.count,
+    sharePct: total > 0 ? Math.round((f.usd / total) * 100) : null,
+    returning: earliest.has(k) && earliest.get(k) < firstMs,
+  })).sort((a, b) => b.usd - a.usd || norm(a.username).localeCompare(norm(b.username)))
+}
