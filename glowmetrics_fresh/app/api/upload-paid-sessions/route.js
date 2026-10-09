@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 // Token rates — always imported from constants, never hardcoded
-import { tokenRate } from '../../../lib/constants'
+import { tokenRate, canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
 import { platformLimitMessage } from '../../../lib/planLimits'
 
 const BATCH_SIZE = 250
@@ -28,6 +28,13 @@ export async function POST(req) {
   const file = fd.get('file')
   if (!file) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
+  }
+
+  // The caller names the platform; rows are never labelled with a platform
+  // the file did not come from, and never stored as an unknown platform.
+  const platform = canonicalPlatform((fd.get('platform') || '').toString().trim())
+  if (!platform || !Object.keys(PLATFORM_TOKEN_RATES).includes(platform)) {
+    return NextResponse.json({ error: 'A supported platform is required.', code: 'platform_required' }, { status: 400 })
   }
 
   // ── PARSE CSV ─────────────────────────────────────────────
@@ -60,14 +67,14 @@ export async function POST(req) {
     // Always derive USD from tokens if not present, using constants.js rate
     const usd = rawUsd > 0
       ? parseFloat(rawUsd.toFixed(4))
-      : parseFloat((tokens * tokenRate('BongaCams')).toFixed(4))
+      : parseFloat((tokens * tokenRate(platform)).toFixed(4))
 
     if (tokens < 1 && usd <= 0) continue
 
     rows.push({
       user_id:      user.id,
       date_time:    parsedDate.toISOString(),
-      platform:     'BongaCams',
+      platform,
       username:     username.toLowerCase().trim(),
       session_type,
       tokens,
@@ -122,7 +129,7 @@ export async function POST(req) {
     inserted,
     skipped,
     total:    rows.length,
-    platform: 'BongaCams',
+    platform,
   }
 
   if (errors.length > 0) {

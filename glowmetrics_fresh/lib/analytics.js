@@ -490,7 +490,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
       ? (row.platform.toLowerCase().includes('bonga') ? 'BongaCams'
         : row.platform.toLowerCase().includes('chaturbate') ? 'Chaturbate'
         : row.platform.toLowerCase().includes('mfc') || row.platform.toLowerCase().includes('freecams') ? 'MyFreeCams'
-        : row.platform || platform)
+        : canonicalPlatform(row.platform) || platform)
       : platform
 
     // Determine if this is a paid session based on platform-specific patterns:

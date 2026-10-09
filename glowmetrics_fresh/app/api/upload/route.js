@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
-import { canonicalPlatform } from '../../../lib/constants'
+import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
+
+const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
@@ -67,9 +69,28 @@ async function handleUpload(req) {
   // detection is a fallback for callers that don't pass one, and can't find
   // any platform keywords in a clean, already-normalized CSV (e.g. the
   // onboarding paste flow, which sends parsed rows rather than raw text).
-  const explicitPlatform = (fd.get('platform') || '').toString().trim()
-  const textDetectedPlatform = explicitPlatform || detectPlatform(raw)
-  const parsed = parseCSV(raw)
+  // A platform that can't be determined is never stored: rows saved as
+  // 'Unknown' land in their own "Unknown" platform everywhere (Command Center,
+  // breakdowns) and get DEFAULT_TOKEN_RATE instead of the platform's rate.
+  // Order: the user's choice, then the file contents, then the file name
+  // (e.g. "MFC2024-2026.csv" with no platform words inside), else ask.
+  const explicitPlatform = canonicalPlatform((fd.get('platform') || '').toString().trim()) || ''
+  if (explicitPlatform && !KNOWN_PLATFORMS.includes(explicitPlatform)) {
+    return NextResponse.json({ error: `Unsupported platform: ${explicitPlatform}`, code: 'platform_required' }, { status: 400 })
+  }
+  const contentPlatform = detectPlatform(raw)
+  let textDetectedPlatform = explicitPlatform || contentPlatform
+  if (textDetectedPlatform === 'Unknown') textDetectedPlatform = detectPlatform((file.name || '').toString())
+  if (!KNOWN_PLATFORMS.includes(textDetectedPlatform)) {
+    return NextResponse.json({
+      error: "We couldn't tell which platform this file is from. Choose the platform in the Platform menu and upload again.",
+      code: 'platform_required',
+    }, { status: 400 })
+  }
+  // The parser keeps its content-detected platform when it has one (same
+  // parse as before); otherwise it uses the resolved platform so token→USD
+  // uses that platform's rate rather than the default.
+  const parsed = parseCSV(raw, contentPlatform !== 'Unknown' ? contentPlatform : textDetectedPlatform)
 
   // Log parse attempt to track platform support and format issues
   const formatAnalysis = analyzeFormat(raw)
@@ -148,6 +169,9 @@ async function handleUpload(req) {
   // BongaCams token rate only for the exact name 'BongaCams'. The dedup key
   // does not include platform, so re-uploads still dedup against old rows.
   rows.forEach(r => { r.platform = canonicalPlatform(r.platform) })
+  // A per-row platform column with an unrecognised value falls back to the
+  // file's platform instead of being stored as a new, unknown platform.
+  rows.forEach(r => { if (!KNOWN_PLATFORMS.includes(r.platform)) r.platform = detectedPlatform })
 
   // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
   // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to
