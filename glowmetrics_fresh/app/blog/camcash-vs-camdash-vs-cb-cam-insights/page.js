@@ -80,7 +80,7 @@ const COMPARISON_ROWS = [
   ['Tip-menu analytics', 'No', 'Not publicly verified', 'Not publicly verified'],
   ['Studio features', 'No', 'Not publicly verified', 'Not publicly verified'],
   ['Free plan', 'Yes — limited to 1 platform and a capped tip history', 'Not publicly verified', 'Not publicly verified'],
-  ['Paid pricing', '$19.99/mo or $99/yr (see Pricing section)', 'Not publicly verified', 'Not publicly verified'],
+  ['Paid pricing', '$9.99/mo or $99/yr (see Pricing section)', 'Not publicly verified', 'Not publicly verified'],
   ['Main limitation (as far as we could verify)', 'No Stripchat/CamSoda support yet; free tier is capped', 'Not publicly verified in this update', 'Not publicly verified in this update'],
   ['Best suited for', 'Multi-platform creators wanting one dashboard', 'See CamDash section', 'See CB Cam Insights section'],
 ]
@@ -347,7 +347,7 @@ export default function CamCashVsCamDashPost() {
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
             {[
-              { name: 'CamCash', price: 'Free (limited) / $19.99/mo', sub: 'Free: 1 platform, unlimited history on it. Standard: $19.99/mo or $99/yr for all supported platforms.', highlight: true },
+              { name: 'CamCash', price: 'Free (limited) / $9.99/mo', sub: 'Free: 1 platform, unlimited history on it. Standard: $9.99/mo or $99/yr for all supported platforms.', highlight: true },
               { name: 'CamDash', price: 'Not publicly verified', sub: 'Confirm current pricing on camdash.app.', highlight: false },
               { name: 'CB Cam Insights', price: 'Not publicly verified', sub: 'Confirm current pricing on cbcaminsights.com.', highlight: false },
             ].map(({ name, price, sub, highlight }) => (
