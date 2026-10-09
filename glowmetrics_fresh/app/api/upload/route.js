@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
+import { canonicalPlatform } from '../../../lib/constants'
 import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
@@ -143,6 +144,10 @@ async function handleUpload(req) {
   // ── DETECT PLATFORM ─────────────────────────────────────────────────────
   const detectedPlatform = textDetectedPlatform
   rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
+  // Store canonical names ('BC' → 'BongaCams'): insert_tips_dedup picks the
+  // BongaCams token rate only for the exact name 'BongaCams'. The dedup key
+  // does not include platform, so re-uploads still dedup against old rows.
+  rows.forEach(r => { r.platform = canonicalPlatform(r.platform) })
 
   // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
   // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to

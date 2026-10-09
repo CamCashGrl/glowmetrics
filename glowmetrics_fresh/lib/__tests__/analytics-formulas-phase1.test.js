@@ -205,7 +205,7 @@ describe('PHASE 1: Formula Validation', () => {
       expect(sessions[1].platform).toBe('BongaCams')
     })
 
-    test('Session should split if gap exceeds SESSION_GAP_MS (3 hours)', () => {
+    test('Session should split if gap exceeds SESSION_GAP_MS (60 minutes)', () => {
       const baseTime = new Date('2026-09-01T10:00:00Z')
       const tips = [
         {
@@ -215,11 +215,11 @@ describe('PHASE 1: Formula Validation', () => {
           usd: 20,
           tokens: 400,
         },
-        // Gap of 4 hours (exceeds 3-hour SESSION_GAP_MS)
+        // Gap of 61 minutes (exceeds 60-minute SESSION_GAP_MS)
         {
           platform: 'Chaturbate',
           username: 'user1',
-          date_time: new Date(baseTime.getTime() + 4 * 60 * 60000).toISOString(),
+          date_time: new Date(baseTime.getTime() + 61 * 60000).toISOString(),
           usd: 20,
           tokens: 400,
         },
@@ -227,10 +227,10 @@ describe('PHASE 1: Formula Validation', () => {
 
       const sessions = detectSessions(tips)
       expect(sessions.length).toBe(2)
-      expect(SESSION_GAP_MS).toBe(3 * 60 * 60 * 1000) // Verify the constant
+      expect(SESSION_GAP_MS).toBe(60 * 60 * 1000) // Verify the constant
     })
 
-    test('Session should NOT split if gap is under SESSION_GAP_MS (2.5 hours)', () => {
+    test('Session should NOT split if gap is exactly SESSION_GAP_MS (60 minutes)', () => {
       const baseTime = new Date('2026-09-01T10:00:00Z')
       const tips = [
         {
@@ -240,11 +240,11 @@ describe('PHASE 1: Formula Validation', () => {
           usd: 20,
           tokens: 400,
         },
-        // Gap of 2.5 hours (under 3-hour limit)
+        // Gap of exactly 60 minutes (not more than the limit)
         {
           platform: 'Chaturbate',
           username: 'user1',
-          date_time: new Date(baseTime.getTime() + 2.5 * 60 * 60000).toISOString(),
+          date_time: new Date(baseTime.getTime() + 60 * 60000).toISOString(),
           usd: 20,
           tokens: 400,
         },
@@ -292,14 +292,14 @@ describe('PHASE 1: Formula Validation', () => {
         {
           platform: 'Chaturbate',
           username: 'user1',
-          date_time: new Date(baseTime.getTime() + 20 * 60000).toISOString(),
+          date_time: new Date(baseTime.getTime() + 35 * 60000).toISOString(),
           usd: 25,
           tokens: 500,
         },
       ]
 
       const result = aggregateRows(tips)
-      // Should have: tipCount = 2, durationMinutes ~ 20, totalUSD = 50
+      // Should have: tipCount = 2, durationMinutes = 35 (meaningful), totalUSD = 50
       // All eligible criteria met
       expect(result.hourlyRateSessionCount).toBeGreaterThan(0)
     })

@@ -54,7 +54,7 @@ const glassCard = {
 
 // The CamCash brand gradient (branding spec): cyan -> purple -> pink.
 const CTA_GRADIENT  = "linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)"
-const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
+export const HERO_GRADIENT = "linear-gradient(120deg, rgba(34,211,238,0.10) 0%, rgba(124,92,255,0.12) 46%, rgba(236,72,153,0.10) 100%)"
 
 const fmtUsd  = (n) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmtUsd0 = (n) => {
@@ -81,7 +81,7 @@ const TIER_COPY = {
   early:   "Early signal",
 }
 
-const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
+export const card = (extra = {}) => ({ ...glassCard, borderRadius: 16, ...extra })
 
 const label = {
   fontSize: 10.5, fontWeight: 800, letterSpacing: "0.14em",
@@ -116,7 +116,7 @@ function GhostButton({ children, onClick }) {
 }
 
 // One measured fact. Never a claim without a number behind it.
-function Chip({ icon, title, value, sub, accent = C.pink }) {
+export function Chip({ icon, title, value, sub, accent = C.pink }) {
   return (
     <div style={card({ padding: "18px 20px", display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 })}>
       <div style={{ fontSize: 19, flexShrink: 0, marginTop: 1 }}>{icon}</div>
@@ -131,7 +131,7 @@ function Chip({ icon, title, value, sub, accent = C.pink }) {
   )
 }
 
-function Stat({ value, label: l, delta, accent = C.white }) {
+export function Stat({ value, label: l, delta, accent = C.white }) {
   return (
     <div style={card({ padding: "18px 16px" })}>
       <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>

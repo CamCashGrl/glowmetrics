@@ -4,10 +4,10 @@
 
 // Token rates live in ONE place — lib/constants.js
 // Do not define rates here. Import only.
-import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate } from './constants'
+import { PLATFORM_TOKEN_RATES, DEFAULT_TOKEN_RATE, tokenRate, canonicalPlatform } from './constants'
 // Session grouping lives in ONE place — lib/analytics/sessions.js
 // Shared with app/live/page.js. Do not redefine this logic here.
-import { detectSessions, SESSION_GAP_MS } from './analytics/sessions'
+import { detectSessions, SESSION_GAP_MS, isValidSession } from './analytics/sessions'
 
 // ===============================
 // TIMEZONE HELPERS
@@ -1312,8 +1312,8 @@ export function aggregateRows(tips, tz = null) {
     const mins = s.durationMinutes || 0
     const usd  = s.totalUSD || 0
     if (mins < 2 && usd === 0) return 'invalid'
-    if (mins < 15 && usd < 10) return 'low_signal'
-    return 'meaningful'
+    // Canonical rule: meaningful = duration >= 30 min AND tips >= 2.
+    return isValidSession(s) ? 'meaningful' : 'low_signal'
   }
   const scoreSession = (s) => {
     const mins = s.durationMinutes || 0
@@ -1639,15 +1639,15 @@ export function aggregateRows(tips, tz = null) {
     avgUsd: d.count > 0 ? parseFloat((d.usd / d.count).toFixed(2)) : 0
   })).sort((a, b) => b.usd - a.usd)
 
-  // Same breakdown split by platform. Built from the meaningful sessions'
-  // own tips rather than every tip, so each platform's mix sums to the same
-  // revenue that platform reports in `platforms` — a mix built from all tips
-  // would total more than the earnings shown beside it.
+  // Same breakdown split by platform. Built from every tip, grouped with the
+  // same platform key as `platforms` (which sums ALL tips — "financial
+  // truth"), so each platform's mix sums to exactly the earnings that
+  // platform reports beside it.
   // Percentages are shares of that platform's own revenue, so a row never
   // reads as a share of the whole business on a single-platform view.
   const platformTipTypeMap = {}
-  meaningfulSessions.forEach(s => (s.tips || []).forEach(t => {
-    const plat = s.platform || t.platform || 'Unknown'
+  tips.forEach(t => {
+    const plat = t.platform || 'Chaturbate'
     const type = t.tip_type || 'Tip'
     if (!platformTipTypeMap[plat]) platformTipTypeMap[plat] = { total: 0, types: {} }
     if (!platformTipTypeMap[plat].types[type]) platformTipTypeMap[plat].types[type] = { usd: 0, count: 0, fans: new Set() }
@@ -1655,7 +1655,7 @@ export function aggregateRows(tips, tz = null) {
     platformTipTypeMap[plat].types[type].usd += t.usd || 0
     platformTipTypeMap[plat].types[type].count += 1
     platformTipTypeMap[plat].types[type].fans.add((t.username || '').toLowerCase())
-  }))
+  })
 
   const platformTipTypes = {}
   Object.entries(platformTipTypeMap).forEach(([plat, d]) => {
@@ -2148,8 +2148,33 @@ export function computeSnapshotStats(rows, windowDays = 31) {
 // not calendar-anchored). Pro users see full history.
 // This is a DISPLAY/ANALYSIS window, not a storage limit: all rows are persisted,
 // only what the analysis consumes changes.
-export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
+// Start of the free-tier window per platform, anchored to that platform's
+// latest row. Shared by applyFreeAnalysisWindow and anything that must apply
+// the identical window to a different row set (e.g. private earnings).
+export function freeWindowStartByPlatform(rows = [], { windowDays = 31 } = {}) {
+  const latest = {}
+  for (const row of rows) {
+    const platform = row.platform || 'unknown'
+    const d = new Date(row.date_time || row.date || row.ts)
+    if (isNaN(d.getTime())) continue
+    if (!latest[platform] || d > latest[platform]) latest[platform] = d
+  }
+  const starts = {}
+  for (const platform in latest) {
+    starts[platform] = new Date(latest[platform].getTime() - (windowDays - 1) * 86400000)
+  }
+  return starts
+}
+
+// Free tier: every platform keeps a rolling `windowDays` (anchored to its own
+// latest row) EXCEPT the creator's primary platform (`unlimitedPlatform`, from
+// lib/planLimits.js resolvePlatformRoles), which keeps its full history.
+// With no primary (null) every platform is windowed — the pre-existing rule.
+// This is the ONLY implementation of Free history gating; everything that
+// shows Free data must go through it (see accessibleDataset below).
+export function applyFreeAnalysisWindow(rows = [], { windowDays = 31, unlimitedPlatform = null } = {}) {
   if (!rows.length) return []
+  const unlimited = unlimitedPlatform ? canonicalPlatform(unlimitedPlatform) : null
 
   // Group by platform, compute window per platform (anchored to that platform's latest activity)
   const byPlatform = {}
@@ -2172,6 +2197,7 @@ export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
     })
 
     if (!sorted.length) continue
+    if (unlimited && canonicalPlatform(platform) === unlimited) { windowed.push(...sorted); continue }
 
     const latestDate = new Date(sorted[sorted.length - 1].date_time || sorted[sorted.length - 1].date || sorted[sorted.length - 1].ts)
     const windowStart = new Date(latestDate.getTime() - (windowDays - 1) * 86400000)
@@ -2229,5 +2255,40 @@ export function summarizeWindowExclusion(allRows = [], windowedRows = []) {
     excludedCount: excluded.length,
     oldestExcludedDate: oldestDate,
     byPlatform,
+  }
+}
+
+// The accessible dataset for a plan. Tips go through applyFreeAnalysisWindow;
+// private charges, Live private intervals and finalized Live shows are cut at
+// the SAME per-platform start the tips produced (a platform with no tips is
+// anchored on its own latest private row), so nothing hidden can leak through
+// another table. Pro gets everything unchanged.
+export function accessibleDataset({
+  tips = [], paidSessions = [], liveIntervals = [], shows = [],
+  isPro = false, unlimitedPlatform = null, windowDays = 31,
+} = {}) {
+  if (isPro) return { tips, paidSessions, liveIntervals, shows, windowStarts: null, unlimitedPlatform: null }
+  const unlimited = unlimitedPlatform ? canonicalPlatform(unlimitedPlatform) : null
+  const starts = { ...freeWindowStartByPlatform(paidSessions, { windowDays }), ...freeWindowStartByPlatform(tips, { windowDays }) }
+  const byKey = {}
+  for (const [p, d] of Object.entries(starts)) byKey[canonicalPlatform(p).toLowerCase()] = d
+  const allowed = (platform, at) => {
+    const c = canonicalPlatform(platform || 'unknown')
+    if (unlimited && c === unlimited) return true
+    const start = byKey[c.toLowerCase()]
+    const d = new Date(at)
+    return !!start && !isNaN(d.getTime()) && d >= start
+  }
+  return {
+    tips: applyFreeAnalysisWindow(tips, { windowDays, unlimitedPlatform: unlimited }),
+    paidSessions: paidSessions.filter((r) => allowed(r.platform, r.date_time)),
+    liveIntervals: liveIntervals.filter((r) => allowed(r.platform, r.ended_at || r.endedAt)),
+    shows: shows.filter((s) => {
+      const plats = (s.platformRevenue || []).map((x) => x.platform)
+      if (!plats.length && s.platform) plats.push(s.platform)
+      return plats.some((p) => allowed(p, s.startedAt))
+    }),
+    windowStarts: byKey,
+    unlimitedPlatform: unlimited,
   }
 }

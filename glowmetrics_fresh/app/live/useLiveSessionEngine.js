@@ -6,8 +6,8 @@ import { shapeLiveSession } from '../../lib/liveSession/shape'
 const HEARTBEAT_INTERVAL_MS = 20000
 const STOP_SUMMARY_DISPLAY_MS = 5000
 // Resolution choices that end the session. 'still_live' is the only
-// non-terminal choice — it returns the session to whatever it actually was
-// before the outage (decided server-side, see resolve() below).
+// non-terminal choice — it returns the session to LIVE, preserving
+// whatever live_substate (active/paused) it actually had before the outage.
 const TERMINAL_RESOLUTION_CHOICES = new Set([
   'ended', 'end_at_last_heartbeat', 'choose_end_time', 'mark_invalid',
 ])
@@ -17,27 +17,28 @@ const TERMINAL_RESOLUTION_CHOICES = new Set([
 // page's view close enough to real without hammering the route.
 const POLL_INTERVAL_MS = 15000
 
-// Encapsulates the entire V2 Live Mode session lifecycle: Restore, Go Live,
-// Pause, Resume, Stop, Resolve, and the website heartbeat. The engine
-// choice (V2 vs legacy) is decided once, during the initial restore(), and
-// never re-evaluated for the lifetime of this hook instance — matching the
-// mid-session engine-locking requirement. Callers read `engineMode` to
-// decide which UI tree and which click handlers to use; this hook never
-// touches stream_sessions and never calls the legacy handlers itself.
+// The single, canonical Live Mode session lifecycle: Go Live, Pause, Resume,
+// Stop, Resolve, and the website heartbeat. There is no other engine, no
+// flag, and no legacy fallback — every account uses exactly this path.
 export function useLiveSessionEngine() {
-  const [phase, setPhase] = useState('loading') // 'loading' | 'idle' | 'active' | 'needs_resolution' | 'resolved' | 'justEnded' | 'legacy'
+  // 'loading' | 'idle' | 'starting' | 'active' | 'inactive_warning' | 'resolved' | 'justEnded'
+  const [phase, setPhase] = useState('loading')
   const [serverSession, setServerSession] = useState(null)
-  const [engineEnabledForNewSession, setEngineEnabledForNewSession] = useState(false)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState(null)
   // Set only for a terminal resolve() outcome, so the UI can show which of
   // the 4 terminal choices just happened; cleared once the transient
   // 'resolved' display window ends. Never touched by 'still_live'.
   const [lastResolution, setLastResolution] = useState(null)
+  // Open private interval of the running session, if any.
+  const [privateInterval, setPrivateInterval] = useState(null)
+  // Summary of the show this page just stopped (rebuilt server-side from
+  // persisted data), and a counter bumped whenever any show finishes —
+  // stopped here, resolved, or ended elsewhere — so dashboards refetch.
+  const [lastCompletedShow, setLastCompletedShow] = useState(null)
+  const [completedShowsVersion, setCompletedShowsVersion] = useState(0)
+  const markShowCompleted = useCallback(() => setCompletedShowsVersion((v) => v + 1), [])
   const [, setTick] = useState(0) // drives re-render only; the live timer is recomputed from serverSession each tick, never written to the DB
-
-  // Locked once by restore(); never reassigned afterward.
-  const engineModeRef = useRef(null) // 'v2' | 'legacy'
 
   const heartbeatIntervalRef = useRef(null)
   const heartbeatInFlightRef = useRef(false)
@@ -79,6 +80,16 @@ export function useLiveSessionEngine() {
     heartbeatIntervalRef.current = setInterval(sendHeartbeatOnce, HEARTBEAT_INTERVAL_MS)
   }, [sendHeartbeatOnce])
 
+  // Maps a server status to the UI phase. 'live' + 'starting' both keep the
+  // website heartbeat running — the website's own heartbeat is independent
+  // of whether the extension has connected yet, since a stalled extension
+  // shouldn't also stall the dashboard's own proof-of-life.
+  const phaseForStatus = (status) => {
+    if (status === 'inactive_warning') return 'inactive_warning'
+    if (status === 'starting') return 'starting'
+    return 'active' // 'live' — UI branches further on session.live_substate for active/paused
+  }
+
   const restore = useCallback(async () => {
     setPhase('loading')
     try {
@@ -86,34 +97,20 @@ export function useLiveSessionEngine() {
       const data = await res.json()
 
       if (!res.ok) {
-        engineModeRef.current = 'legacy'
-        setPhase('legacy')
+        setPhase('idle')
         return
       }
 
-      setEngineEnabledForNewSession(!!data.engineEnabledForNewSession)
-
       if (data.session) {
-        // An unresolved V2 session already exists — always finish it with V2,
-        // regardless of engineEnabledForNewSession's current value.
-        engineModeRef.current = 'v2'
         setServerSession(data.session)
-        if (data.session.status === 'needs_resolution') {
-          setPhase('needs_resolution')
-        } else {
-          setPhase('active') // covers both 'active' and 'paused'; UI branches further on session.status
-          startHeartbeat()
-        }
-      } else if (data.engineEnabledForNewSession) {
-        engineModeRef.current = 'v2'
-        setPhase('idle')
+        setPrivateInterval(data.privateInterval || null)
+        setPhase(phaseForStatus(data.session.status))
+        startHeartbeat()
       } else {
-        engineModeRef.current = 'legacy'
-        setPhase('legacy')
+        setPhase('idle')
       }
     } catch (_) {
-      engineModeRef.current = 'legacy'
-      setPhase('legacy')
+      setPhase('idle')
     }
   }, [startHeartbeat])
 
@@ -126,44 +123,51 @@ export function useLiveSessionEngine() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Notices a session started/paused/resumed/stopped from a different
-  // surface (the extension, or another open tab) — restore() only ever runs
-  // once, on mount, so without this a page open before that action happened
-  // would show nothing until manually reloaded. Skipped while an action
-  // initiated from *this* instance is in flight (its own response already
-  // drives state) and while a stop's justEnded summary, or a resolve()'s
-  // terminal-outcome summary, is being displayed (a poll landing mid-summary
-  // would otherwise cut it short by clearing serverSession/phase early).
+  // Notices a session started/paused/resumed/stopped/ended from a different
+  // surface (the extension, or another open tab, or the backend cron sweep)
+  // — restore() only ever runs once, on mount, so without this a page open
+  // before that action happened would show nothing until manually reloaded.
+  // Skipped while an action initiated from *this* instance is in flight (its
+  // own response already drives state) and while a stop's justEnded summary,
+  // or a resolve()'s terminal-outcome summary, is being displayed (a poll
+  // landing mid-summary would otherwise cut it short by clearing
+  // serverSession/phase early).
   const poll = useCallback(async () => {
-    if (engineModeRef.current !== 'v2') return
     if (actionPendingRef.current) return
     if (phaseRef.current === 'loading' || phaseRef.current === 'justEnded' || phaseRef.current === 'resolved') return
     try {
       const res = await fetch('/api/live/session', { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
-      setEngineEnabledForNewSession(!!data.engineEnabledForNewSession)
       if (data.session) {
         setServerSession(data.session)
-        setPhase(data.session.status === 'needs_resolution' ? 'needs_resolution' : 'active')
+        setPrivateInterval(data.privateInterval || null)
+        setPhase(phaseForStatus(data.session.status))
         startHeartbeat()
       } else {
+        // A session this page knew about ended elsewhere (extension, other
+        // tab, inactivity sweep): its finalized show is new data.
+        if (phaseRef.current !== 'idle') markShowCompleted()
         setServerSession(null)
+        setPrivateInterval(null)
         setPhase('idle')
         stopHeartbeat()
       }
     } catch (_) {
       // a failed poll is never surfaced — the next tick retries
     }
-  }, [startHeartbeat, stopHeartbeat])
+  }, [startHeartbeat, stopHeartbeat, markShowCompleted])
 
   useEffect(() => {
     const id = setInterval(poll, POLL_INTERVAL_MS)
     return () => clearInterval(id)
   }, [poll])
 
+  // 1. Create record. 2. Mark session STARTING. 3. Notify extension (the
+  // API route itself flips status starting->live once the extension's first
+  // heartbeat actually lands — see send_extension_heartbeat). No other path.
   const goLive = useCallback(async (platform) => {
-    if (actionPending || engineModeRef.current !== 'v2') return
+    if (actionPending) return
     setActionPending(true)
     setActionError(null)
     try {
@@ -173,23 +177,12 @@ export function useLiveSessionEngine() {
       })
       const data = await res.json()
       if (!res.ok) {
-        if (data.engineDisabled) {
-          // Flag was disabled between page load and this click — fall back
-          // to legacy for the rest of this mount rather than erroring.
-          engineModeRef.current = 'legacy'
-          setPhase('legacy')
-        } else {
-          setActionError(data.error)
-        }
+        setActionError(data.error)
         return
       }
       setServerSession(data.session)
-      if (data.session.status === 'needs_resolution') {
-        setPhase('needs_resolution')
-      } else {
-        setPhase('active')
-        startHeartbeat()
-      }
+      setPhase(phaseForStatus(data.session.status))
+      startHeartbeat()
       return data.session
     } finally {
       setActionPending(false)
@@ -197,7 +190,7 @@ export function useLiveSessionEngine() {
   }, [actionPending, startHeartbeat])
 
   const pause = useCallback(async () => {
-    if (actionPending || engineModeRef.current !== 'v2' || serverSession?.status !== 'active') return
+    if (actionPending || serverSession?.status !== 'live' || serverSession?.live_substate !== 'active') return
     setActionPending(true)
     setActionError(null)
     try {
@@ -212,7 +205,7 @@ export function useLiveSessionEngine() {
   }, [actionPending, serverSession])
 
   const resume = useCallback(async () => {
-    if (actionPending || engineModeRef.current !== 'v2' || serverSession?.status !== 'paused') return
+    if (actionPending || serverSession?.status !== 'live' || serverSession?.live_substate !== 'paused') return
     setActionPending(true)
     setActionError(null)
     try {
@@ -226,7 +219,7 @@ export function useLiveSessionEngine() {
   }, [actionPending, serverSession])
 
   const stop = useCallback(async () => {
-    if (actionPending || engineModeRef.current !== 'v2') return
+    if (actionPending) return
     setActionPending(true)
     setActionError(null)
     try {
@@ -235,6 +228,7 @@ export function useLiveSessionEngine() {
       stopHeartbeat()
       if (!res.ok) { setActionError(data.error); return }
 
+      setPrivateInterval(null)
       if (data.alreadyStopped) {
         setServerSession(null)
         setPhase('idle')
@@ -242,6 +236,8 @@ export function useLiveSessionEngine() {
       }
 
       setServerSession(data.session)
+      setLastCompletedShow(data.summary || null)
+      markShowCompleted()
       setPhase('justEnded')
       stopSummaryTimeoutRef.current = setTimeout(() => {
         setPhase('idle')
@@ -250,16 +246,16 @@ export function useLiveSessionEngine() {
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, stopHeartbeat])
+  }, [actionPending, stopHeartbeat, markShowCompleted])
 
   const resolve = useCallback(async (choice, endTime) => {
     // actionPending is also the duplicate-submission guard: a second click
     // (or a second tab) while the first request is still in flight is a
     // no-op here, and the RPC itself is safe against a genuine race — once
-    // one caller resolves the session out of 'needs_resolution', any other
+    // one caller resolves the session out of 'inactive_warning', any other
     // caller's resolve_live_session() finds nothing to act on and returns
     // null, handled below as the "nothing left to resolve" branch.
-    if (actionPending || engineModeRef.current !== 'v2') return
+    if (actionPending) return
     setActionPending(true)
     setActionError(null)
     try {
@@ -272,8 +268,8 @@ export function useLiveSessionEngine() {
 
       if (!data.resolved || !data.session) {
         // Nothing was actually resolved — e.g. a duplicate submission that
-        // lost the race to another tab/device. Resync to idle rather than
-        // guess at a phase.
+        // lost the race to another tab/device, or the backend sweep already
+        // auto-ended it. Resync to idle rather than guess at a phase.
         stopHeartbeat()
         setServerSession(null)
         setLastResolution(null)
@@ -285,6 +281,8 @@ export function useLiveSessionEngine() {
         stopHeartbeat()
         setServerSession(data.session)
         setLastResolution({ choice, session: data.session })
+        setPrivateInterval(null)
+        markShowCompleted()
         setPhase('resolved')
         stopSummaryTimeoutRef.current = setTimeout(() => {
           setPhase('idle')
@@ -294,27 +292,22 @@ export function useLiveSessionEngine() {
         return
       }
 
-      // 'still_live' — the RPC returns the session in whatever status it
-      // actually had before the outage (active or paused; see
-      // resolve_live_session()'s status_before_resolution branch), never
-      // assumed to be active. phase='active' here is the same generic
-      // "live, unresolved" bucket used by restore()/poll() — the UI always
-      // branches on serverSession.status, not on phase, to tell active and
-      // paused apart.
+      // 'still_live' — back to LIVE, preserving whatever live_substate
+      // (active/paused) it actually had before the outage.
       setServerSession(data.session)
       setPhase('active')
       startHeartbeat()
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, startHeartbeat, stopHeartbeat])
+  }, [actionPending, startHeartbeat, stopHeartbeat, markShowCompleted])
 
   // Never deletes a live_tips row — sets tips_cleared_at on the current
   // session (see app/api/live/session/clear-tips/route.js). Allowed in any
-  // unresolved phase, not just 'active', since a paused or needs_resolution
+  // unresolved phase, not just 'active', since a paused or inactive_warning
   // session can still have a tip feed worth resetting.
   const clearTips = useCallback(async () => {
-    if (actionPending || engineModeRef.current !== 'v2' || !serverSession) return
+    if (actionPending || !serverSession) return
     setActionPending(true)
     setActionError(null)
     try {
@@ -332,16 +325,46 @@ export function useLiveSessionEngine() {
     clearTimeout(stopSummaryTimeoutRef.current)
   }, [stopHeartbeat])
 
+  const startPrivate = useCallback(async (ratePerMinute, platform) => {
+    if (actionPending) return
+    setActionPending(true)
+    setActionError(null)
+    try {
+      const res = await fetch('/api/live/session/private/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ratePerMinute, platform }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setActionError(data.error); return }
+      setPrivateInterval(data.privateInterval || null)
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending])
+
+  const endPrivate = useCallback(async () => {
+    if (actionPending) return
+    setActionPending(true)
+    setActionError(null)
+    try {
+      const res = await fetch('/api/live/session/private/end', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setActionError(data.error); return }
+      setPrivateInterval(null)
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending])
+
   const duration = serverSession ? shapeLiveSession(serverSession) : null
 
   return {
     phase,
     serverSession,
-    engineEnabledForNewSession,
     actionPending,
     actionError,
     lastResolution,
-    engineMode: engineModeRef.current,
     duration,
     goLive,
     pause,
@@ -350,5 +373,10 @@ export function useLiveSessionEngine() {
     resolve,
     clearTips,
     logout,
+    privateInterval,
+    startPrivate,
+    endPrivate,
+    lastCompletedShow,
+    completedShowsVersion,
   }
 }

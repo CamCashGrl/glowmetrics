@@ -15,7 +15,17 @@
 // Exported so any other grouping that needs "how long a gap means a new
 // visit" (e.g. per-fan visit detection in lib/analytics.js) uses this same
 // value rather than a second hardcoded constant.
-export const SESSION_GAP_MS = 3 * 60 * 60 * 1000
+// Canonical rule (formula-requirments): a gap of more than 60 minutes starts
+// a new session.
+export const SESSION_GAP_MS = 60 * 60 * 1000
+
+// Canonical valid-session rule: duration >= 30 min AND tips >= 2.
+export const MIN_VALID_SESSION_MINUTES = 30
+export const MIN_VALID_SESSION_TIPS = 2
+export function isValidSession(s) {
+  return (Number(s?.durationMinutes) || 0) >= MIN_VALID_SESSION_MINUTES
+    && (Number(s?.tipCount) || 0) >= MIN_VALID_SESSION_TIPS
+}
 
 export function detectSessions(tips) {
   if (!tips || tips.length === 0) return []

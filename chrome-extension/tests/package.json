@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node popup-harness.mjs && node background-harness.mjs && node content-harness.mjs"
+    "test": "node popup-harness.mjs && node background-harness.mjs && node content-harness.mjs",
+    "test:staging": "node staging-smoke-test.mjs"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "playwright-core": "^1.47.0"
   }
 }

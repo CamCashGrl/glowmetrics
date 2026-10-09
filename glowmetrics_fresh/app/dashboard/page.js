@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, accessibleDataset } from "../../lib/analytics"
+import { totalEarned, privateEarningRows } from "../../lib/sessions/normalize"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
 import { computeRoomHealth, ROOM_STATES, MOMENTUM_DIRECTIONS } from "../../lib/analytics/roomHealth"
@@ -13,16 +14,22 @@ import { computeCoachingState } from "../../lib/coaching/triggers"
 import dynamic from "next/dynamic"
 import Sidebar from "./Sidebar"
 import SiteFooter from "../components/SiteFooter"
-import { PLATFORM_TOKEN_RATES, tokenRate, platformColor, platformDisplayName } from "../../lib/constants"
+import { PLATFORM_TOKEN_RATES, tokenRate, platformColor, platformDisplayName, canonicalPlatform } from "../../lib/constants"
 import { track as gtmTrack } from '../../lib/track'
 import { trackTrialEvent } from '../../lib/analytics-client'
 import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedInsightCard, DashboardProgressCard } from './DashboardPreview'
 import PlatformsIntelligence from './PlatformsIntelligence'
 import CommandCenter from './CommandCenter'
 import SubscriptionManager from './SubscriptionManager'
-import { platformLimitMessage, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
+import { platformLimitMessage, FREE_PLATFORM_LIMIT, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import { LatestShowDelta } from './LatestShows'
+import SessionsOverview from './SessionsOverview'
+import PlannedStreams from './PlannedStreams'
+import { PrimaryPlatformBanner } from './PrimaryPlatformPrompt'
+import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
+import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
 
@@ -1408,6 +1415,17 @@ function FanRow({ w, rank, onView, onMessage, onNote }) {
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
+  // Saved, dated stream plans (Stream Planner "Plan a stream"); the only
+  // source for the Sessions Schedule tab.
+  const [plannedStreams, setPlannedStreams] = useState([])
+  const loadPlannedStreams = useCallback(async () => {
+    if (!user?.id) return
+    const { data, error } = await supabase.from('planned_streams')
+      .select('id, platform, start_at, end_at, source, created_at')
+      .eq('user_id', user.id).order('start_at', { ascending: false }).limit(500)
+    if (!error) setPlannedStreams(data || [])
+  }, [user?.id])
+  useEffect(() => { loadPlannedStreams() }, [loadPlannedStreams])
   const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
   const [paidSessions, setPaidSessions] = useState([])
@@ -1469,15 +1487,46 @@ export default function Dashboard() {
   // Real session engine (live_sessions table) — same hook /app/live/page.js
   // uses. Mirrors its status into the legacy liveActive/liveStartTime state
   // below so a session started from the extension (or any other surface)
-  // shows up here too, instead of only after a tip arrives. No-ops entirely
-  // for legacy (non-V2) accounts, since engineMode is locked once per mount.
+  // shows up here too, instead of only after a tip arrives. Same rule as
+  // app/live/page.js.
   const liveEngine = useLiveSessionEngine()
   useEffect(() => {
-    if (liveEngine.engineMode !== 'v2') return
     const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'active' || status === 'paused')
+    setLiveActive(status === 'live' || status === 'starting')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
-  }, [liveEngine.engineMode, liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  // Finalized shows from persisted data; refetched whenever a show finishes.
+  const recentShows = useRecentShows(liveEngine.completedShowsVersion, { enabled: !!user })
+  // Closed private intervals of finalized Live shows — the Live term of
+  // Total Earned. Reloaded whenever a show finishes.
+  const [livePrivateIntervals, setLivePrivateIntervals] = useState([])
+  // Detailed per-session analytics are progressive disclosure on Sessions.
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(false)
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/live/sessions/private-earnings', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d?.intervals) setLivePrivateIntervals(d.intervals) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [user, liveEngine.completedShowsVersion])
+  // Opening Sessions shows every new show in full; after a moment on screen
+  // they count as viewed for this account (all devices).
+  const newShowIdsKey = recentShows.newIds.join(',')
+  useEffect(() => {
+    if (activeTab !== 'sessions' || !newShowIdsKey) return
+    const t = setTimeout(() => recentShows.acknowledge(newShowIdsKey.split(',')), 3000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, newShowIdsKey])
+  // A finished show changes the canonical tips behind every historical KPI:
+  // reload them from the database rather than adding anything in memory.
+  useEffect(() => {
+    if (!user || liveEngine.completedShowsVersion === 0) return
+    loadData(user.id, true, { silent: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveEngine.completedShowsVersion, user?.id])
   // Timezone for the session start/duration readout — same localStorage key
   // app/live/page.js uses, so a choice made on either surface carries over.
   const [liveTimezone, setLiveTimezone] = useState(() => {
@@ -1563,11 +1612,35 @@ export default function Dashboard() {
 
   const isBetaUser = true
   const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
+  // Free tier: the primary platform (lib/planLimits.js resolver — onboarding
+  // selection only, never inferred from revenue) keeps full history; others
+  // keep 31 days. No primary on file → every platform is windowed.
+  const freeUnlimitedPlatform = isPro ? null : resolvePlanPlatformRoles(profile?.streaming_platforms, profile?.primary_pro_platform).primary
   const uploadLimit = Infinity
 
   // Compute windowed tips for free users; windowSummary feeds teaser signal detection
-  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31 })
+  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
   const windowSummary = summarizeWindowExclusion(tips, analysisTips)
+  // Re-run the engine when the plan or primary platform changes after tips
+  // loaded (profile arrives separately; choosing a primary updates it), so
+  // every tab reflects the same gating without a reload.
+  const gatingKeyRef = useRef(null)
+  // Current gating for async loaders (their closures can predate the profile).
+  const gatingRef = useRef({ isPro, unlimited: freeUnlimitedPlatform })
+  gatingRef.current = { isPro, unlimited: freeUnlimitedPlatform }
+  useEffect(() => {
+    const key = `${isPro}|${freeUnlimitedPlatform || ''}`
+    if (gatingKeyRef.current === null) { gatingKeyRef.current = key; return }
+    if (gatingKeyRef.current === key || !tips.length) { gatingKeyRef.current = key; return }
+    gatingKeyRef.current = key
+    try {
+      let tz = 'UTC'
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch (_) {}
+      const r = runEngine(isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform }), tz)
+      if (r) setAnalytics(r)
+    } catch (e) { console.error('gating re-run failed:', e) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPro, freeUnlimitedPlatform])
 
   // whales must be declared before use here — buildProTeasers reads it below,
   // and this runs unconditionally on every render (including before the
@@ -1913,6 +1986,7 @@ export default function Dashboard() {
         const batch = pendingTipInsertsRef.current
         if (!batch.length) return
         pendingTipInsertsRef.current = []
+        batch.forEach(r => { r.platform = canonicalPlatform(r.platform) })
 
         setTips(prev => {
           const existingKeys = new Set(prev.map(t => `${t.date_time}|${t.username}|${t.tokens}`))
@@ -1930,7 +2004,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31 })
+            const analysisTips = gatingRef.current.isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -1989,7 +2063,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31 })
+            const analysisTips = gatingRef.current.isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -2122,6 +2196,8 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         from += PAGE
       }
+      // One name per platform ('BC' → 'BongaCams') before any analytics run.
+      allData.forEach(t => { t.platform = canonicalPlatform(t.platform) })
       // CHECKPOINT 1: Immediately after Supabase tips fetch
       console.log('[DASH TRACE] tips fetch', {
         count: allData?.length,
@@ -2146,7 +2222,7 @@ export default function Dashboard() {
         setTips(allData)
         try {
           // Apply 31-day rolling window for free users (per-platform, activity-anchored)
-          const analysisTips = isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31 })
+          const analysisTips = gatingRef.current.isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
           // CHECKPOINT 2: Immediately before runEngine()
           console.log('[DASH TRACE] before engine', {
             count: analysisTips.length,
@@ -2187,6 +2263,7 @@ export default function Dashboard() {
         if (!data || data.length < PAGE) break
         paidFrom += PAGE
       }
+      allPaidSessions.forEach(p => { p.platform = canonicalPlatform(p.platform) })
       setPaidSessions(allPaidSessions)
 
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
@@ -2404,7 +2481,23 @@ const stopImportMessageRotation = () => {
   const alerts = liveAnalytics?.whaleAlerts || analytics?.whaleAlerts || []
   const lossAlerts = liveAnalytics?.lossAlerts || analytics?.lossAlerts || []
   const nextMoves = liveAnalytics?.nextMoves || analytics?.nextMoves || []
-  const totalRevenue = analytics?.totalUSD || 0
+  // Total Earned = public tip earnings + private earnings (lib/sessions/normalize.js).
+  // Free tier: private earnings use the same per-platform window as the tips.
+  // One gated dataset for everything that shows history (header total,
+  // Sessions): same windows as the analytics engine, applied to every table.
+  // (memoOn, not useMemo: this runs after the `if (loading) return` above.)
+  const accessible = memoOn(derivedCacheRef.current, 'accessible',
+    [tips, paidSessions, livePrivateIntervals, recentShows.shows, isPro, freeUnlimitedPlatform],
+    () => accessibleDataset({
+      tips, paidSessions, liveIntervals: livePrivateIntervals, shows: recentShows.shows,
+      isPro, unlimitedPlatform: freeUnlimitedPlatform,
+    }))
+  const earned = totalEarned({
+    publicUSD: analytics?.totalUSD || 0,
+    privateRows: privateEarningRows({ paidSessions: accessible.paidSessions, liveIntervals: accessible.liveIntervals }),
+  })
+  const totalRevenue = analytics?.totalUSD || 0 // public tips only (shares, per-session averages)
+  const totalEarnedUSD = earned.totalUSD        // header / share card: public + private
   // Store data in window object for debugging
   if (typeof window !== 'undefined') {
     window.__dashboardDebug = {
@@ -2753,12 +2846,11 @@ const stopImportMessageRotation = () => {
 
     // Re-engage list — fans who tip 50+ tokens avg per session, appear in 2+ streams, and are overdue
     // "Every 2-3 streams" = session-level frequency, not tip count
-    const SESSION_GAP_MS = 3 * 60 * 60 * 1000
     const reengageFans = (whales || [])
       .filter(w => {
         if (!w.tips || w.tips.length < 2) return false
 
-        // Group this fan's tips into sessions (3hr gap = new session)
+        // Group this fan's tips into sessions (shared SESSION_GAP_MS = new session)
         const sorted = [...w.tips].sort((a, b) =>
           new Date(a.date_time || a.dateRaw) - new Date(b.date_time || b.dateRaw)
         )
@@ -3246,7 +3338,7 @@ const stopImportMessageRotation = () => {
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
           const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
-          const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
+          const safeRevenue = (!isNaN(totalEarnedUSD) && isFinite(totalEarnedUSD)) ? totalEarnedUSD : 0
           return (
             <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
               <div style={{ display: 'flex', alignItems: 'center', height: 48, gap: 8 }}>
@@ -3324,8 +3416,20 @@ const stopImportMessageRotation = () => {
           />
         )}
 
+        {(activeTab === "overview" || activeTab === "sessions") && (
+          <PrimaryPlatformBanner isPro={isPro} primary={freeUnlimitedPlatform}
+            onSaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))} />
+        )}
         {activeTab === "overview" && (
           <div style={{ animation: "fadeUp 0.3s ease" }}>
+            {recentShows.delta && (
+              <div style={{ marginBottom: 16 }}>
+                <LatestShowDelta
+                  delta={recentShows.delta}
+                  onDismiss={() => recentShows.acknowledge([recentShows.delta.sessionId])}
+                />
+              </div>
+            )}
 
 
             {/* ═══════════════════════════════════════
@@ -3341,9 +3445,12 @@ const stopImportMessageRotation = () => {
               const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
               const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
-              const safeRevenue = (!isNaN(totalRevenue) && isFinite(totalRevenue)) ? totalRevenue : 0
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
-              const topPct = safeRevenue > 0 ? Math.max(1, Math.min(25, Math.round(100 - (safeRevenue / 50)))) : null
+              // First-party comparison only (the creator's own previous month).
+              // CamCash has no cross-creator dataset, so no ranking is ever shown.
+              const prevMonthLine = (isFinite(prevMonthRev) && prevMonthRev > 0)
+                ? `vs $${prevMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} last month`
+                : null
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
               const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
 
@@ -3379,7 +3486,7 @@ const stopImportMessageRotation = () => {
               const cardDefs = [
                 { label:"Earnings This Month", accent:'#f472b6', glowClass:'card-glow-pink', trend:growthPct,
                   value: `$${safeThisMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`,
-                  sub: topPct ? `Top ${topPct}% of models on this platform` : 'Upload more data to rank',
+                  sub: prevMonthLine,
                   icon:'💰', isHero:true },
                 { label:"Avg Per Session", accent:'#22d3ee', glowClass:'card-glow-cyan', trend:avgSessionGrowth,
                   value: meaningfulSessions.length > 0 ? `$${avgSessionUSD.toFixed(2)}` : '—',
@@ -3413,7 +3520,7 @@ const stopImportMessageRotation = () => {
                         <div className={s.isHero ? 'hero-revenue-shimmer' : ''} style={{ fontSize: 'clamp(20px, 2.4vw, 26px)', fontWeight: 900, lineHeight: 1.1, marginBottom: 4, ...(s.isHero ? {} : { color: s.accent }) }}>
                           {s.value}<TrendBadge pct={s.trend} />
                         </div>
-                        <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>
+                        {s.sub && <div style={{ fontSize: 11.5, color: C.text, lineHeight: 1.35 }}>{s.sub}</div>}
                       </div>
                     ))}
                   </div>
@@ -3426,7 +3533,7 @@ const stopImportMessageRotation = () => {
             {/* ═══════════════════════════════════════
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
-            {tips.length > 0 && <DashboardGrowthCharts tips={tips} sessions={sessions} />}
+            {accessible.tips.length > 0 && <DashboardGrowthCharts tips={accessible.tips} sessions={sessions} />}
 
             {/* ═══════════════════════════════════════
                 YOUR NEXT BEST MOVE — Command Center
@@ -4064,7 +4171,7 @@ const stopImportMessageRotation = () => {
         {activeTab === "platforms" && (
           <PlatformsIntelligence
             analytics={analytics}
-            tips={tips}
+            tips={accessible.tips}
             isPro={isPro}
             onOpenPlanner={() => handleTabChange('planner')}
           />
@@ -5246,7 +5353,31 @@ const stopImportMessageRotation = () => {
           )
         })()}
 
-        {activeTab === "sessions" && (() => {
+        {activeTab === "sessions" && (
+          <SessionsOverview
+            tips={accessible.tips}
+            shows={accessible.shows}
+            paidSessions={accessible.paidSessions}
+            isPro={isPro}
+            primaryPlatform={freeUnlimitedPlatform}
+            onPrimarySaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))}
+            onImport={() => handleTabChange('upload')}
+            onStartLive={() => handleTabChange('live')}
+            plannedStreams={plannedStreams}
+            onOpenPlanner={() => handleTabChange('planner')}
+            tz={liveTimezone}
+            showsLoading={recentShows.loading}
+            showsError={recentShows.error}
+            live={liveEngine.phase === 'active' && liveEngine.duration
+              ? { session: liveEngine.duration, privateInterval: liveEngine.privateInterval }
+              : null}
+          />
+        )}
+
+        {/* The legacy detailed breakdown below is no longer opened from the
+            Sessions tab (replaced by the Session Details panel). Kept, not
+            deleted, pending approval to remove it. */}
+        {activeTab === "sessions" && sessions.length > 0 && showDetailedBreakdown && (() => {
           const displaySessions = meaningfulOnly
             ? (analytics?.meaningfulSessions || sessions)
             : (analytics?.allValidSessions   || sessions)
@@ -5395,8 +5526,8 @@ const stopImportMessageRotation = () => {
             <div>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
                 <div>
-                  <h1 style={{ fontSize: 28, fontWeight: 800, color: C.white, marginBottom: 4 }}>🎥 Session Breakdown</h1>
-                  <p style={{ fontSize: 13, color: C.muted }}>What happened in each stream and how to earn more next time</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: C.white, marginBottom: 4 }}>Session Breakdown (detailed)</h2>
+                  <p style={{ fontSize: 13, color: C.muted }}>Timeline and coaching for each tip-based session. Estimated from tip timestamps.</p>
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 12px', borderRadius:20, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
                   <label style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:12, color:C.muted }}>
@@ -5427,7 +5558,7 @@ const stopImportMessageRotation = () => {
               )}
 
               {/* SESSION CARDS */}
-              {displaySessions.length === 0 && (
+              {displaySessions.length === 0 && sessions.length > 0 && (
                 <div style={{ ...glassCard, borderRadius: 14, padding: 40, textAlign: "center" }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>🎥</div>
                   <div style={{ fontSize: 16, fontWeight: 700, color: C.white }}>{sessions.length > 0 ? 'No meaningful sessions match this filter' : 'No sessions yet'}</div>
@@ -6246,7 +6377,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={tips} sessions={sessions} whales={whales} />
+            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={accessible.tips} sessions={sessions} whales={whales} />
           </div>
         )}
 
@@ -6355,8 +6486,8 @@ const stopImportMessageRotation = () => {
         {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
         {activeTab === 'planner' && (
           _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={analysisTips} isPro={isPro} />
+            ? <div style={{ padding: '32px 0' }}>{user && <PlannedStreams userId={user.id} plans={plannedStreams} onChanged={loadPlannedStreams} defaultPlatform={freeUnlimitedPlatform || 'Chaturbate'} />}<LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
+            : <StreamPlanner tips={analysisTips} isPro={isPro} planned={user ? { userId: user.id, plans: plannedStreams, onChanged: loadPlannedStreams, defaultPlatform: freeUnlimitedPlatform || 'Chaturbate' } : null} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
@@ -6919,7 +7050,7 @@ const stopImportMessageRotation = () => {
         const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
         const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
         const cardLines = [
-          `💰 Total Earned: $${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          `💰 Total Earned: $${totalEarnedUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           topFan ? `🏆 Top Fan: ${topFan.username} ($${topFan.totalUSD.toFixed(2)})` : null,
           bestDayLabel ? `📅 Best Day: ${bestDayLabel}s` : null,
           `👥 ${whales.length} total fans across ${platforms}`,

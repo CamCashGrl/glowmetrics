@@ -60,7 +60,7 @@ function Panel({ children, style, accent }) {
   )
 }
 
-function MetricStrip({ items }) {
+export function MetricStrip({ items }) {
   return (
     <div className="pi-strip" style={{
       display: 'grid', gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
@@ -167,7 +167,7 @@ function TrendCell({ trend }) {
   )
 }
 
-function PlatformCell({ platform }) {
+export function PlatformCell({ platform }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <span style={{ width: 6, height: 6, borderRadius: 3, background: accentFor(platform), flexShrink: 0 }} />

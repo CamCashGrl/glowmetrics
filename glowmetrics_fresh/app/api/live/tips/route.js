@@ -253,7 +253,7 @@ export async function GET(req) {
       .from('live_sessions')
       .select('id, tips_cleared_at')
       .eq('user_id', user.id)
-      .in('status', ['starting', 'active', 'paused', 'stopping', 'needs_resolution'])
+      .in('status', ['starting', 'live', 'inactive_warning', 'ending'])
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();

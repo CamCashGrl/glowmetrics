@@ -308,9 +308,9 @@ describe('Daily Brief Regression Tests', () => {
 
     test('session average calculated from actual sessions', () => {
       const tips = [
-        // One meaningful session with multiple tips (30 min total)
+        // One meaningful session: 2 tips, 35 min apart (>= 30 min AND >= 2 tips)
         { platform: 'Chaturbate', username: 'u1', date_time: '2026-09-13T10:00:00Z', usd: 30, tokens: 600, durationMinutes: 15 },
-        { platform: 'Chaturbate', username: 'u1', date_time: '2026-09-13T10:10:00Z', usd: 70, tokens: 1400, durationMinutes: 15 },
+        { platform: 'Chaturbate', username: 'u1', date_time: '2026-09-13T10:35:00Z', usd: 70, tokens: 1400, durationMinutes: 15 },
         // Another meaningful session (30 min)
         { platform: 'Chaturbate', username: 'u1', date_time: '2026-09-12T14:00:00Z', usd: 100, tokens: 2000, durationMinutes: 30 },
       ]

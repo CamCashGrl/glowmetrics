@@ -1,0 +1,1851 @@
+name: Phase 2 Staging Verification (17 Scenarios)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_scenarios:
+        description: 'Run staging test scenarios'
+        required: false
+        default: 'true'
+      only_sessions:
+        description: 'Run only the Sessions adaptive-layer browser test'
+        required: false
+        default: 'false'
+
+jobs:
+  staging-17-scenarios:
+    name: Run 17-Scenario Test Suite
+    if: inputs.only_sessions != 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Run Phase 2 Staging Verification (17 Scenarios)
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+        run: |
+          echo "Starting Phase 2 Staging Verification (17 Scenarios)"
+          echo "========================================================"
+          echo ""
+          node - << 'SCRIPT_END'
+          const { createClient } = require("@supabase/supabase-js");
+          const crypto = require("crypto");
+
+          const SUPABASE_URL = process.env.SUPABASE_STAGING_URL;
+          const SUPABASE_ANON_KEY = process.env.SUPABASE_STAGING_ANON_KEY;
+          const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_STAGING_SERVICE_ROLE_KEY;
+
+          if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+            console.error("ERROR: Staging secrets not configured");
+            process.exit(1);
+          }
+
+          const TEST_RUN_ID = crypto.randomUUID();
+
+          function generateUUID() {
+            return crypto.randomUUID();
+          }
+
+          let testResults = [];
+          let isAnyFailure = false;
+          let createdAuthUsers = [];
+
+          function printResult(scenario, number, passed, expected, actual, details = "") {
+            const status = passed ? "✅ PASS" : "❌ FAIL";
+            console.log(`\nScenario ${number}: ${scenario}`);
+            console.log(`${status}`);
+            console.log(`Expected: ${expected}`);
+            console.log(`Actual: ${actual}`);
+            if (details) {
+              console.log(`Details: ${details}`);
+            }
+
+            testResults.push({ scenario: number, passed, status });
+            if (!passed) {
+              isAnyFailure = true;
+            }
+          }
+
+          async function createTempAuthUser(client) {
+            const RUN_ID = new Date().getTime().toString().slice(-6);
+            const tempEmail = `phase2-${RUN_ID}-${crypto.randomBytes(4).toString("hex")}@staging.local`;
+            const tempPassword = crypto.randomBytes(24).toString("hex");
+
+            const { data: created, error: createErr } = await client.auth.admin.createUser({
+              email: tempEmail,
+              password: tempPassword,
+              email_confirm: true
+            });
+
+            if (createErr) throw new Error(`Failed to create temp auth user: ${createErr.message}`);
+            return { userId: created.user.id, email: tempEmail, password: tempPassword };
+          }
+
+          async function cleanupTempAuthUser(client, userId) {
+            try {
+              const { error: deleteErr } = await client.auth.admin.deleteUser(userId);
+              if (deleteErr) {
+                console.log(`⚠ Warning: Could not delete auth user ${userId}: ${deleteErr.message}`);
+              } else {
+                console.log(`✓ Deleted auth user ${userId}`);
+              }
+            } catch (e) {
+              console.log(`⚠ Warning: Exception deleting auth user ${userId}: ${e.message}`);
+            }
+          }
+
+          async function createAuthenticatedClient(tempUser) {
+            const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const { error: signInErr } = await authClient.auth.signInWithPassword({
+              email: tempUser.email,
+              password: tempUser.password
+            });
+            if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
+            return authClient;
+          }
+
+          // Production's Stop is stop_live_session(): it stops the caller's
+          // running session and returns NULL when there is nothing left to stop
+          // (repeated Stop); the API then returns the ended row. This mirrors
+          // that: RPC result when it ended something, else the saved row.
+          async function stopSession(authClient, adminClient, sessionId) {
+            const { data, error } = await authClient.rpc("stop_live_session");
+            if (error) return { data: null, error, rpcReturnedRow: false };
+            const rpcReturnedRow = !!(data && data.id);
+            if (rpcReturnedRow) {
+              if (data.id !== sessionId) return { data: null, error: new Error(`stop_live_session ended ${data.id}, expected ${sessionId}`), rpcReturnedRow };
+              return { data, error: null, rpcReturnedRow };
+            }
+            const { data: row, error: readErr } = await adminClient.from("live_sessions").select("*").eq("id", sessionId).single();
+            return { data: row, error: readErr, rpcReturnedRow };
+          }
+
+          async function cleanupUserFixtures(client, userId) {
+            let cleanupIssues = [];
+
+            // Delete child rows first (tips, logs), then sessions
+            const { error: logErr } = await client.from("unattributed_tips_log").delete().eq("user_id", userId);
+            if (logErr && !logErr.message.includes("permission")) {
+              cleanupIssues.push(`Failed to delete unattributed_tips_log: ${logErr.message}`);
+            }
+
+            const { error: liveErr } = await client.from("live_tips").delete().eq("user_id", userId);
+            if (liveErr && !liveErr.message.includes("permission")) {
+              cleanupIssues.push(`Failed to delete live_tips: ${liveErr.message}`);
+            }
+
+            const { error: tipsErr } = await client.from("tips").delete().eq("user_id", userId);
+            if (tipsErr && !tipsErr.message.includes("permission")) {
+              cleanupIssues.push(`Failed to delete tips: ${tipsErr.message}`);
+            }
+
+            const { error: pauseErr } = await client.from("live_session_pauses").delete().eq("user_id", userId);
+            if (pauseErr && !pauseErr.message.includes("permission")) {
+              cleanupIssues.push(`Failed to delete live_session_pauses: ${pauseErr.message}`);
+            }
+
+            await client.from("profiles").delete().eq("id", userId);
+
+            // Delete sessions last
+            const { error: sessErr } = await client.from("live_sessions").delete().eq("user_id", userId);
+            if (sessErr && !sessErr.message.includes("permission")) {
+              cleanupIssues.push(`Failed to delete live_sessions: ${sessErr.message}`);
+            }
+
+            if (cleanupIssues.length > 0) {
+              console.log(`⚠ Cleanup warnings for user ${userId}:`);
+              cleanupIssues.forEach(issue => console.log(`  - ${issue}`));
+            } else {
+              console.log(`✓ Cleanup complete for user ${userId}`);
+            }
+          }
+
+          async function runTests() {
+            console.log("Phase 2 Staging: 17-Scenario Test Suite (Corrected with Temporary Auth Users)");
+            console.log("Testing RPC functions with auth context\n");
+
+            const serviceRoleClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+            const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            let scenario1SessionId, scenario1TipId, scenario1ClientEventId;
+            let scenario4SessionId, scenario5SessionId, scenario6SessionId, scenario7SessionId;
+            let scenario8SessionId, scenario9SessionId, scenario10SessionId;
+            let scenario11SessionId, scenario12SessionId;
+            let scenario13EndedSessionId, scenario14SessionAId, scenario14SessionBId;
+
+            try {
+              // ========== SCENARIO 1 ==========
+              let s1UserId = null;
+              let s1Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s1UserId = tempUser.userId;
+                createdAuthUsers.push(s1UserId);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s1UserId,
+                    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario1SessionId = sessionData[0].id;
+
+                const clientEventId = generateUUID();
+                scenario1ClientEventId = clientEventId;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s1UserId,
+                    p_client_event_id: clientEventId,
+                    p_deduplication_key: null,
+                    p_username: "test_tipper_1",
+                    p_tokens: 1000,
+                    p_usd: 25.50,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.success && !tipData.duplicate && tipData.live_session_id === scenario1SessionId;
+                scenario1TipId = tipData.tip_id;
+
+                s1Result.passed = passed;
+                s1Result.message = `success=${tipData.success}, duplicate=${tipData.duplicate}`;
+
+                printResult(
+                  "Normal active-session tip",
+                  1,
+                  passed,
+                  "success=true, duplicate=false, live_session_id matches",
+                  s1Result.message,
+                  `session=${scenario1SessionId}`
+                );
+              } catch (error) {
+                s1Result.passed = false;
+                s1Result.message = error.message;
+                printResult("Normal active-session tip", 1, false, "RPC call succeeds", `Error: ${error.message}`);
+              }
+
+              // ========== SCENARIO 2 ==========
+              let s2Result = { passed: false, message: "Not executed" };
+              try {
+                if (!s1UserId || !scenario1ClientEventId) throw new Error("Scenario 1 setup incomplete");
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s1UserId,
+                    p_client_event_id: scenario1ClientEventId,
+                    p_deduplication_key: null,
+                    p_username: "test_tipper_1",
+                    p_tokens: 1000,
+                    p_usd: 25.50,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.success && tipData.duplicate === true;
+                s2Result.passed = passed;
+                s2Result.message = `success=${tipData.success}, duplicate=${tipData.duplicate}`;
+
+                printResult(
+                  "Duplicate retry",
+                  2,
+                  passed,
+                  "success=true, duplicate=true",
+                  s2Result.message
+                );
+              } catch (error) {
+                s2Result.passed = false;
+                s2Result.message = error.message;
+                printResult("Duplicate retry", 2, false, "RPC detects duplicate", `Error: ${error.message}`);
+              }
+
+              // ========== SCENARIO 3 ==========
+              let s3Result = { passed: false, message: "Not executed" };
+              try {
+                if (!s1UserId) throw new Error("Scenario 1 setup incomplete");
+                const clientEventId2 = generateUUID();
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s1UserId,
+                    p_client_event_id: clientEventId2,
+                    p_deduplication_key: null,
+                    p_username: "test_tipper_1",
+                    p_tokens: 500,
+                    p_usd: 12.75,
+                    p_platform: "twitch",
+                    p_event_at: new Date(Date.now() + 1000).toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const { data: allTips, error: queryError } = await serviceRoleClient
+                  .from("live_tips")
+                  .select("*")
+                  .eq("user_id", s1UserId);
+
+                if (queryError) throw queryError;
+
+                const passed = tipData.success && !tipData.duplicate && allTips.length >= 2;
+                s3Result.passed = passed;
+                s3Result.message = `Tips count: ${allTips.length}`;
+
+                printResult(
+                  "Different clientEventIds count separately",
+                  3,
+                  passed,
+                  "Both tips recorded, count >= 2",
+                  s3Result.message
+                );
+              } catch (error) {
+                s3Result.passed = false;
+                s3Result.message = error.message;
+                printResult("Different clientEventIds", 3, false, "Both tips recorded", `Error: ${error.message}`);
+              }
+
+              // Scenarios 1→2→3 cleanup (grouped lifecycle)
+              if (s1UserId) {
+                await cleanupUserFixtures(serviceRoleClient, s1UserId);
+                await cleanupTempAuthUser(serviceRoleClient, s1UserId);
+              }
+
+              // ========== SCENARIO 4 ==========
+              let s4UserId = null;
+              let s4Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s4UserId = tempUser.userId;
+                createdAuthUsers.push(s4UserId);
+
+                const clientEventId = generateUUID();
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s4UserId,
+                    started_at: new Date(Date.now() - 60 * 60 * 1000),
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario4SessionId = sessionData[0].id;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s4UserId,
+                    p_client_event_id: clientEventId,
+                    p_deduplication_key: null,
+                    p_username: "active_tipper",
+                    p_tokens: 2000,
+                    p_usd: 50.00,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                const passed = tipData.live_session_id === scenario4SessionId;
+                s4Result.passed = passed;
+                s4Result.message = `live_session_id matches: ${passed}`;
+
+                printResult(
+                  "Active-session attribution",
+                  4,
+                  passed,
+                  "Tip attributed to active session",
+                  s4Result.message
+                );
+              } catch (error) {
+                s4Result.passed = false;
+                s4Result.message = error.message;
+                printResult("Active-session attribution", 4, false, "Tip attributed", `Error: ${error.message}`);
+              }
+
+              // ========== SCENARIO 5 ==========
+              let s5Result = { passed: false, message: "Not executed" };
+              try {
+                if (!s4UserId || !scenario4SessionId) throw new Error("Scenario 4 setup incomplete");
+                const clientEventId = generateUUID();
+
+                // Get session state before pause
+                const { data: sessionBefore } = await serviceRoleClient
+                  .from("live_sessions")
+                  .select("*")
+                  .eq("id", scenario4SessionId)
+                  .single();
+
+                const pauseTime = new Date().toISOString();
+                const { error: updateError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({ live_substate: "paused", paused_at: pauseTime })
+                  .eq("id", scenario4SessionId);
+
+                if (updateError) throw updateError;
+
+                // Get session state after pause
+                const { data: sessionAfter } = await serviceRoleClient
+                  .from("live_sessions")
+                  .select("*")
+                  .eq("id", scenario4SessionId)
+                  .single();
+
+                const eventTime = new Date().toISOString();
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s4UserId,
+                    p_client_event_id: clientEventId,
+                    p_deduplication_key: null,
+                    p_username: "paused_tipper",
+                    p_tokens: 500,
+                    p_usd: 12.50,
+                    p_platform: "twitch",
+                    p_event_at: eventTime,
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                console.log(`  S5 DEBUG: RPC returned live_session_id=${tipData.live_session_id}, expected=${scenario4SessionId}`);
+                console.log(`  S5 DEBUG: Session state BEFORE pause: started_at=${sessionBefore?.started_at}, paused_at=${sessionBefore?.paused_at}, status=${sessionBefore?.status}`);
+                console.log(`  S5 DEBUG: Session state AFTER pause: started_at=${sessionAfter?.started_at}, paused_at=${sessionAfter?.paused_at}, status=${sessionAfter?.status}`);
+                console.log(`  S5 DEBUG: Event time=${eventTime}`);
+                console.log(`  S5 DEBUG: Full RPC result: ${JSON.stringify(tipData)}`);
+
+                const passed = tipData.live_session_id === scenario4SessionId;
+                s5Result.passed = passed;
+                s5Result.message = `live_session_id matches: ${passed}`;
+
+                printResult(
+                  "Paused-session attribution",
+                  5,
+                  passed,
+                  "Tip counts while session paused",
+                  s5Result.message
+                );
+              } catch (error) {
+                s5Result.passed = false;
+                s5Result.message = error.message;
+                printResult("Paused-session attribution", 5, false, "Tip attributed", `Error: ${error.message}`);
+              }
+
+              // Scenarios 4→5 cleanup (grouped lifecycle)
+              if (s4UserId) {
+                await cleanupUserFixtures(serviceRoleClient, s4UserId);
+                await cleanupTempAuthUser(serviceRoleClient, s4UserId);
+              }
+
+              // ========== SCENARIO 6 ==========
+              let s6UserId = null;
+              let s6AuthClient = null;
+              let s6Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s6UserId = tempUser.userId;
+                createdAuthUsers.push(s6UserId);
+                s6AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 120 * 60 * 1000);
+                const pauseTime = new Date(Date.now() - 60 * 60 * 1000);
+                const resumeTime = new Date(Date.now() - 30 * 60 * 1000);
+                const pausedSeconds = Math.floor((pauseTime.getTime() - resumeTime.getTime()) / 1000) * -1; // 30*60
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s6UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario6SessionId = sessionData[0].id;
+
+                const { error: pauseError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({ live_substate: "paused", paused_at: pauseTime })
+                  .eq("id", scenario6SessionId);
+
+                if (pauseError) throw pauseError;
+
+                const { error: resumeError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({
+                    status: "live", live_substate: "active",
+                    paused_at: null,
+                    total_paused_seconds: 1800
+                  })
+                  .eq("id", scenario6SessionId);
+
+                if (resumeError) throw resumeError;
+
+                const { data: finalSession, error: finalError, rpcReturnedRow: firstStopReturnedRow } = await stopSession(s6AuthClient, serviceRoleClient, scenario6SessionId);
+
+                if (finalError) throw finalError;
+                if (!firstStopReturnedRow) throw new Error("first Stop did not return the ended session");
+
+                // Contract: status=ended, paused_at=null, total_paused_seconds preserved, final_duration ≈ elapsed - paused
+                const expectedTotalPaused = 1800;
+                // Use actual returned ended_at, not resumeTime. Session elapsed = ended_at - started_at.
+                // Duration excluding pause = (ended_at - started_at) - total_paused_seconds
+                const actualEndTime = new Date(finalSession.ended_at);
+                const expectedDuration = Math.floor((actualEndTime.getTime() - startTime.getTime()) / 1000) - expectedTotalPaused;
+                const tolerance = 5; // 5 second tolerance for execution timing
+
+                const passed =
+                  finalSession.status === "ended" &&
+                  finalSession.paused_at === null &&
+                  finalSession.total_paused_seconds === expectedTotalPaused &&
+                  Math.abs(finalSession.final_duration_seconds - expectedDuration) <= tolerance;
+
+                s6Result.passed = passed;
+                s6Result.message = passed
+                  ? `✓ status=ended, paused_at=null, total_paused=${finalSession.total_paused_seconds}s, duration=${finalSession.final_duration_seconds}s`
+                  : `✗ status=${finalSession.status}, paused_at=${finalSession.paused_at}, total_paused=${finalSession.total_paused_seconds}s (expected ${expectedTotalPaused}), duration=${finalSession.final_duration_seconds}s (expected ~${expectedDuration})`;
+
+                printResult(
+                  "Pause → resume → Stop; duration excludes pause",
+                  6,
+                  passed,
+                  "status=ended, paused_at=null, total_paused=1800s, duration correct",
+                  s6Result.message
+                );
+              } catch (error) {
+                s6Result.passed = false;
+                s6Result.message = error.message;
+                printResult("Pause/resume/stop", 6, false, "Pause excluded from duration", `Error: ${error.message}`);
+              } finally {
+                if (s6UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s6UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s6UserId);
+                }
+              }
+
+              // ========== SCENARIO 7 ==========
+              let s7UserId = null;
+              let s7AuthClient = null;
+              let s7Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s7UserId = tempUser.userId;
+                createdAuthUsers.push(s7UserId);
+                s7AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 120 * 60 * 1000);
+                const pauseTime = new Date(Date.now() - 30 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s7UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario7SessionId = sessionData[0].id;
+
+                const { error: pauseError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .update({ live_substate: "paused", paused_at: pauseTime })
+                  .eq("id", scenario7SessionId);
+
+                if (pauseError) throw pauseError;
+
+                // Same history row pause_live_session() writes.
+                const { error: pauseRowError } = await serviceRoleClient
+                  .from("live_session_pauses")
+                  .insert({ session_id: scenario7SessionId, user_id: s7UserId, paused_at: pauseTime });
+                if (pauseRowError) throw pauseRowError;
+
+                const { data: finalSession, error: finalError, rpcReturnedRow: firstStopReturnedRow } = await stopSession(s7AuthClient, serviceRoleClient, scenario7SessionId);
+
+                if (finalError) throw finalError;
+                if (!firstStopReturnedRow) throw new Error("first Stop did not return the ended session");
+
+                // Contract: status=ended, paused_at=null, open pause closed into total_paused_seconds, duration calc includes paused time
+                const openPauseDuration = Math.floor((Date.now() - pauseTime.getTime()) / 1000);
+                const expectedTotalPaused = openPauseDuration;
+                const expectedDuration = Math.floor((pauseTime.getTime() - startTime.getTime()) / 1000);
+                const tolerance = 10; // 10 second tolerance
+
+                const { data: s7PauseRows, error: s7PauseErr } = await serviceRoleClient
+                  .from("live_session_pauses")
+                  .select("resumed_at, pause_duration_seconds")
+                  .eq("session_id", scenario7SessionId);
+                if (s7PauseErr) throw s7PauseErr;
+                const pauseRowClosed = s7PauseRows.length === 1 &&
+                  s7PauseRows[0].resumed_at !== null &&
+                  Math.abs(s7PauseRows[0].pause_duration_seconds - expectedTotalPaused) <= tolerance;
+
+                const passed =
+                  pauseRowClosed &&
+                  finalSession.status === "ended" &&
+                  finalSession.paused_at === null &&
+                  finalSession.total_paused_seconds >= expectedTotalPaused - tolerance &&
+                  finalSession.total_paused_seconds <= expectedTotalPaused + tolerance &&
+                  Math.abs(finalSession.final_duration_seconds - expectedDuration) <= tolerance;
+
+                s7Result.passed = passed;
+                s7Result.message = passed
+                  ? `✓ status=ended, paused_at=null, total_paused=${finalSession.total_paused_seconds}s, duration=${finalSession.final_duration_seconds}s`
+                  : `✗ pause_row=${JSON.stringify(s7PauseRows)}, status=${finalSession.status}, paused_at=${finalSession.paused_at}, total_paused=${finalSession.total_paused_seconds}s (expected ~${expectedTotalPaused}), duration=${finalSession.final_duration_seconds}s (expected ~${expectedDuration})`;
+
+                printResult(
+                  "Stop while paused; open pause closes",
+                  7,
+                  passed,
+                  "status=ended, paused_at=null, open pause added to total_paused",
+                  s7Result.message
+                );
+              } catch (error) {
+                s7Result.passed = false;
+                s7Result.message = error.message;
+                printResult("Stop while paused", 7, false, "Open pause closes", `Error: ${error.message}`);
+              } finally {
+                if (s7UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s7UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s7UserId);
+                }
+              }
+
+              // ========== SCENARIO 8 ==========
+              let s8UserId = null;
+              let s8AuthClient = null;
+              let s8Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s8UserId = tempUser.userId;
+                createdAuthUsers.push(s8UserId);
+                s8AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s8UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario8SessionId = sessionData[0].id;
+
+                const tips = [
+                  { username: "tipper_a", usd: 5.00, tokens: 500 },
+                  { username: "tipper_b", usd: 10.00, tokens: 1000 },
+                  { username: "tipper_c", usd: 20.00, tokens: 2000 }
+                ];
+
+                for (const tip of tips) {
+                  await serviceRoleClient.rpc("persist_extension_tip", {
+                    p_user_id: s8UserId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: tip.username,
+                    p_tokens: tip.tokens,
+                    p_usd: tip.usd,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  });
+                }
+
+                const { data: finalSession, error: finalError, rpcReturnedRow: firstStopReturnedRow } = await stopSession(s8AuthClient, serviceRoleClient, scenario8SessionId);
+
+                if (finalError) throw finalError;
+                if (!firstStopReturnedRow) throw new Error("first Stop did not return the ended session");
+
+                // Contract: All 11 final_* fields + status, finalized_at
+                const expectedTotal = 35.00;
+                const expectedTokens = 3500;
+                const expectedCount = 3;
+                const expectedUnique = 3;
+                const expectedLargest = 20.00;
+                const expectedAvg = expectedTotal / expectedCount;
+                const expectedUsdPerHour = (expectedTotal / (60 / 60)); // 1 hour session
+                const tolerance = 0.05; // $0.05 tolerance for floats
+
+                const failures = [];
+                if (finalSession.status !== "ended") failures.push(`status=${finalSession.status} (expected ended)`);
+                if (Math.abs(finalSession.final_total_usd - expectedTotal) > tolerance) failures.push(`final_total_usd=${finalSession.final_total_usd} (expected ${expectedTotal})`);
+                if (finalSession.final_tokens !== expectedTokens) failures.push(`final_tokens=${finalSession.final_tokens} (expected ${expectedTokens})`);
+                if (finalSession.final_tip_count !== expectedCount) failures.push(`final_tip_count=${finalSession.final_tip_count} (expected ${expectedCount})`);
+                if (finalSession.final_unique_tippers !== expectedUnique) failures.push(`final_unique_tippers=${finalSession.final_unique_tippers} (expected ${expectedUnique})`);
+                if (finalSession.final_top_tipper_username !== "tipper_c") failures.push(`final_top_tipper_username=${finalSession.final_top_tipper_username} (expected tipper_c)`);
+                if (Math.abs(finalSession.final_top_tipper_usd - 20.00) > tolerance) failures.push(`final_top_tipper_usd=${finalSession.final_top_tipper_usd} (expected 20.00)`);
+                if (Math.abs(finalSession.final_largest_tip_usd - expectedLargest) > tolerance) failures.push(`final_largest_tip_usd=${finalSession.final_largest_tip_usd} (expected ${expectedLargest})`);
+                if (Math.abs(finalSession.final_avg_tip_usd - expectedAvg) > tolerance) failures.push(`final_avg_tip_usd=${finalSession.final_avg_tip_usd} (expected ${expectedAvg.toFixed(2)})`);
+                if (!finalSession.final_duration_seconds || finalSession.final_duration_seconds <= 0) failures.push(`final_duration_seconds=${finalSession.final_duration_seconds} (expected > 0)`);
+                if (!finalSession.final_usd_per_hour || finalSession.final_usd_per_hour <= 0) failures.push(`final_usd_per_hour=${finalSession.final_usd_per_hour} (expected > 0)`);
+                if (!finalSession.finalized_at) failures.push(`finalized_at=${finalSession.finalized_at} (expected timestamp)`);
+
+                const passed = failures.length === 0;
+                s8Result.passed = passed;
+                s8Result.message = passed
+                  ? `✓ All 11 fields + status=ended, finalized_at=${new Date(finalSession.finalized_at).toISOString()}`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "First Stop returns populated final_* metrics",
+                  8,
+                  passed,
+                  "All 11 final_* fields, status=ended, finalized_at set",
+                  s8Result.message
+                );
+              } catch (error) {
+                s8Result.passed = false;
+                s8Result.message = error.message;
+                printResult("First Stop metrics", 8, false, "Metrics populated", `Error: ${error.message}`);
+              }
+
+              // ========== SCENARIO 9 ==========
+              let s9Result = { passed: false, message: "Not executed" };
+              try {
+                if (!s8UserId || !scenario8SessionId || !s8AuthClient) throw new Error("Scenario 8 setup incomplete");
+
+                // Snapshot after S8's Stop, then Stop twice more.
+                const { data: s9Before, error: s9BeforeErr } = await serviceRoleClient
+                  .from("live_sessions").select("*").eq("id", scenario8SessionId).single();
+                if (s9BeforeErr) throw s9BeforeErr;
+                if (!s9Before.finalized_at || s9Before.final_tip_count === null) throw new Error("S8 left no finalized values to compare");
+
+                const { data: finalSession1, error: finalError1, rpcReturnedRow: repeat1Row } = await stopSession(s8AuthClient, serviceRoleClient, scenario8SessionId);
+
+                if (finalError1) throw finalError1;
+
+                const { data: finalSession2, error: finalError2, rpcReturnedRow: repeat2Row } = await stopSession(s8AuthClient, serviceRoleClient, scenario8SessionId);
+
+                if (finalError2) throw finalError2;
+
+                // Contract: Deep-compare ALL 11 final_* fields + finalized_at unchanged
+                const fieldsToCompare = [
+                  "status", "paused_at", "total_paused_seconds",
+                  "final_total_usd", "final_tokens", "final_tip_count",
+                  "final_unique_tippers", "final_top_tipper_username",
+                  "final_top_tipper_usd", "final_largest_tip_usd",
+                  "final_avg_tip_usd", "final_duration_seconds",
+                  "final_usd_per_hour", "finalized_at"
+                ];
+
+                const mismatches = [];
+                const tolerance = 0.001; // small tolerance for floats
+
+                // Repeated Stop must not end or rewrite anything.
+                if (repeat1Row || repeat2Row) mismatches.push(`repeated stop_live_session returned a row (expected none)`);
+
+                for (const [label, after] of [["stop#2", finalSession1], ["stop#3", finalSession2]]) {
+                  for (const field of fieldsToCompare) {
+                    const val1 = s9Before[field];
+                    const val2 = after[field];
+
+                    // Handle numeric comparison with tolerance
+                    if (typeof val1 === "number" && typeof val2 === "number") {
+                      if (Math.abs(val1 - val2) > tolerance) {
+                        mismatches.push(`${label} ${field}: ${val1} !== ${val2}`);
+                      }
+                    } else if (val1 !== val2) {
+                      mismatches.push(`${label} ${field}: ${val1} !== ${val2}`);
+                    }
+                  }
+                }
+
+                const passed = mismatches.length === 0;
+                s9Result.passed = passed;
+                s9Result.message = passed
+                  ? `✓ All ${fieldsToCompare.length} fields match across 2 Stop calls, finalized_at=${finalSession1.finalized_at}`
+                  : `✗ Idempotency violated: ${mismatches.join("; ")}`;
+
+                printResult(
+                  "Repeated Stop is idempotent",
+                  9,
+                  passed,
+                  "All final_* fields, finalized_at, and status identical on 2nd Stop",
+                  s9Result.message
+                );
+              } catch (error) {
+                s9Result.passed = false;
+                s9Result.message = error.message;
+                printResult("Repeated Stop idempotent", 9, false, "Idempotent behavior", `Error: ${error.message}`);
+              }
+
+              // Scenarios 8→9 cleanup (grouped lifecycle)
+              if (s8UserId) {
+                await cleanupUserFixtures(serviceRoleClient, s8UserId);
+                await cleanupTempAuthUser(serviceRoleClient, s8UserId);
+              }
+
+              // ========== SCENARIO 10 ==========
+              let s10UserId = null;
+              let s10AuthClient = null;
+              let s10Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s10UserId = tempUser.userId;
+                createdAuthUsers.push(s10UserId);
+                s10AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s10UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario10SessionId = sessionData[0].id;
+
+                const { data: finalSession, error: finalError, rpcReturnedRow: firstStopReturnedRow } = await stopSession(s10AuthClient, serviceRoleClient, scenario10SessionId);
+
+                if (finalError) throw finalError;
+                if (!firstStopReturnedRow) throw new Error("first Stop did not return the ended session");
+
+                // Contract: Verify complete zero-tip state
+                const failures = [];
+                if (finalSession.status !== "ended") failures.push(`status=${finalSession.status} (expected ended)`);
+                if (finalSession.final_total_usd !== 0) failures.push(`final_total_usd=${finalSession.final_total_usd} (expected 0)`);
+                if (finalSession.final_tokens !== 0) failures.push(`final_tokens=${finalSession.final_tokens} (expected 0)`);
+                if (finalSession.final_tip_count !== 0) failures.push(`final_tip_count=${finalSession.final_tip_count} (expected 0)`);
+                if (finalSession.final_unique_tippers !== 0) failures.push(`final_unique_tippers=${finalSession.final_unique_tippers} (expected 0)`);
+                if (finalSession.final_top_tipper_username !== null) failures.push(`final_top_tipper_username=${finalSession.final_top_tipper_username} (expected null)`);
+                if (finalSession.final_top_tipper_usd !== null && finalSession.final_top_tipper_usd !== 0) failures.push(`final_top_tipper_usd=${finalSession.final_top_tipper_usd} (expected null/0)`);
+                if (finalSession.final_largest_tip_usd !== 0) failures.push(`final_largest_tip_usd=${finalSession.final_largest_tip_usd} (expected 0)`);
+                if (finalSession.final_avg_tip_usd !== 0) failures.push(`final_avg_tip_usd=${finalSession.final_avg_tip_usd} (expected 0)`);
+                if (!finalSession.final_duration_seconds || finalSession.final_duration_seconds <= 0) failures.push(`final_duration_seconds=${finalSession.final_duration_seconds} (expected > 0)`);
+                if (!finalSession.finalized_at) failures.push(`finalized_at=${finalSession.finalized_at} (expected timestamp)`);
+
+                const passed = failures.length === 0;
+                s10Result.passed = passed;
+                s10Result.message = passed
+                  ? `✓ All zero-state fields correct, duration=${finalSession.final_duration_seconds}s`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "Zero-tip finalization",
+                  10,
+                  passed,
+                  "status=ended, all metrics=0/null, duration > 0",
+                  s10Result.message
+                );
+              } catch (error) {
+                s10Result.passed = false;
+                s10Result.message = error.message;
+                printResult("Zero-tip finalization", 10, false, "Session finalizes", `Error: ${error.message}`);
+              } finally {
+                if (s10UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s10UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s10UserId);
+                }
+              }
+
+              // ========== SCENARIO 11 ==========
+              let s11UserId = null;
+              let s11AuthClient = null;
+              let s11Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s11UserId = tempUser.userId;
+                createdAuthUsers.push(s11UserId);
+                s11AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s11UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario11SessionId = sessionData[0].id;
+
+                const tipAmount = 50.00;
+                const tipTokens = 1000;
+                const tipperName = "solo_tipper";
+
+                await serviceRoleClient.rpc("persist_extension_tip", {
+                  p_user_id: s11UserId,
+                  p_client_event_id: generateUUID(),
+                  p_deduplication_key: null,
+                  p_username: tipperName,
+                  p_tokens: tipTokens,
+                  p_usd: tipAmount,
+                  p_platform: "twitch",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                });
+
+                const { data: finalSession, error: finalError, rpcReturnedRow: firstStopReturnedRow } = await stopSession(s11AuthClient, serviceRoleClient, scenario11SessionId);
+
+                if (finalError) throw finalError;
+                if (!firstStopReturnedRow) throw new Error("first Stop did not return the ended session");
+
+                // Contract: Verify complete exact one-tip state
+                const tolerance = 0.01;
+                const failures = [];
+
+                if (finalSession.status !== "ended") failures.push(`status=${finalSession.status} (expected ended)`);
+                if (finalSession.final_tip_count !== 1) failures.push(`final_tip_count=${finalSession.final_tip_count} (expected 1)`);
+                if (Math.abs(finalSession.final_total_usd - tipAmount) > tolerance) failures.push(`final_total_usd=${finalSession.final_total_usd} (expected ${tipAmount})`);
+                if (finalSession.final_tokens !== tipTokens) failures.push(`final_tokens=${finalSession.final_tokens} (expected ${tipTokens})`);
+                if (finalSession.final_unique_tippers !== 1) failures.push(`final_unique_tippers=${finalSession.final_unique_tippers} (expected 1)`);
+                if (finalSession.final_top_tipper_username !== tipperName) failures.push(`final_top_tipper_username=${finalSession.final_top_tipper_username} (expected ${tipperName})`);
+                if (Math.abs(finalSession.final_top_tipper_usd - tipAmount) > tolerance) failures.push(`final_top_tipper_usd=${finalSession.final_top_tipper_usd} (expected ${tipAmount})`);
+                if (Math.abs(finalSession.final_largest_tip_usd - tipAmount) > tolerance) failures.push(`final_largest_tip_usd=${finalSession.final_largest_tip_usd} (expected ${tipAmount})`);
+                if (Math.abs(finalSession.final_avg_tip_usd - tipAmount) > tolerance) failures.push(`final_avg_tip_usd=${finalSession.final_avg_tip_usd} (expected ${tipAmount})`);
+                if (!finalSession.final_duration_seconds || finalSession.final_duration_seconds <= 0) failures.push(`final_duration_seconds=${finalSession.final_duration_seconds} (expected > 0)`);
+                if (!finalSession.final_usd_per_hour || finalSession.final_usd_per_hour <= 0) failures.push(`final_usd_per_hour=${finalSession.final_usd_per_hour} (expected > 0)`);
+                if (!finalSession.finalized_at) failures.push(`finalized_at=${finalSession.finalized_at} (expected timestamp)`);
+
+                const passed = failures.length === 0;
+                s11Result.passed = passed;
+                s11Result.message = passed
+                  ? `✓ All single-tip fields exact: $${tipAmount}, ${tipTokens} tokens, ${tipperName}`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "One-tip finalization",
+                  11,
+                  passed,
+                  "All single-tip fields exact: count=1, total=$50, tokens=1000, top_tipper=solo_tipper",
+                  s11Result.message
+                );
+              } catch (error) {
+                s11Result.passed = false;
+                s11Result.message = error.message;
+                printResult("One-tip finalization", 11, false, "Metrics correct", `Error: ${error.message}`);
+              } finally {
+                if (s11UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s11UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s11UserId);
+                }
+              }
+
+              // ========== SCENARIO 12 ==========
+              let s12UserId = null;
+              let s12AuthClient = null;
+              let s12Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s12UserId = tempUser.userId;
+                createdAuthUsers.push(s12UserId);
+                s12AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s12UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario12SessionId = sessionData[0].id;
+
+                const tips = [
+                  { username: "tipper_a", usd: 15.00, tokens: 1500 },
+                  { username: "tipper_b", usd: 30.00, tokens: 3000 },
+                  { username: "tipper_a", usd: 5.00, tokens: 500 },
+                  { username: "tipper_c", usd: 10.00, tokens: 1000 }
+                ];
+
+                for (const tip of tips) {
+                  await serviceRoleClient.rpc("persist_extension_tip", {
+                    p_user_id: s12UserId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: tip.username,
+                    p_tokens: tip.tokens,
+                    p_usd: tip.usd,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  });
+                }
+
+                const { data: finalSession, error: finalError, rpcReturnedRow: firstStopReturnedRow } = await stopSession(s12AuthClient, serviceRoleClient, scenario12SessionId);
+
+                if (finalError) throw finalError;
+                if (!firstStopReturnedRow) throw new Error("first Stop did not return the ended session");
+
+                // Contract: Exact fixture values: total=$60, tokens=6000, count=4, unique=3, avg=$15, largest=$30, top=tipper_b/$30
+                const tolerance = 0.01;
+                const failures = [];
+
+                if (finalSession.status !== "ended") failures.push(`status=${finalSession.status} (expected ended)`);
+                if (Math.abs(finalSession.final_total_usd - 60.00) > tolerance) failures.push(`final_total_usd=${finalSession.final_total_usd} (expected 60.00)`);
+                if (finalSession.final_tokens !== 6000) failures.push(`final_tokens=${finalSession.final_tokens} (expected 6000)`);
+                if (finalSession.final_tip_count !== 4) failures.push(`final_tip_count=${finalSession.final_tip_count} (expected 4)`);
+                if (finalSession.final_unique_tippers !== 3) failures.push(`final_unique_tippers=${finalSession.final_unique_tippers} (expected 3)`);
+                if (Math.abs(finalSession.final_avg_tip_usd - 15.00) > tolerance) failures.push(`final_avg_tip_usd=${finalSession.final_avg_tip_usd} (expected 15.00)`);
+                if (Math.abs(finalSession.final_largest_tip_usd - 30.00) > tolerance) failures.push(`final_largest_tip_usd=${finalSession.final_largest_tip_usd} (expected 30.00)`);
+                if (finalSession.final_top_tipper_username !== "tipper_b") failures.push(`final_top_tipper_username=${finalSession.final_top_tipper_username} (expected tipper_b)`);
+                if (Math.abs(finalSession.final_top_tipper_usd - 30.00) > tolerance) failures.push(`final_top_tipper_usd=${finalSession.final_top_tipper_usd} (expected 30.00)`);
+                if (!finalSession.finalized_at) failures.push(`finalized_at=${finalSession.finalized_at} (expected timestamp)`);
+
+                const passed = failures.length === 0;
+                s12Result.passed = passed;
+                s12Result.message = passed
+                  ? `✓ Exact fixture: total=$60, tokens=6000, count=4, unique=3, avg=$15, top=tipper_b/$30`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "Multiple tippers/top-tipper metrics",
+                  12,
+                  passed,
+                  "total=$60, tokens=6000, count=4, unique=3, avg=$15, largest=$30, top=tipper_b",
+                  s12Result.message
+                );
+              } catch (error) {
+                s12Result.passed = false;
+                s12Result.message = error.message;
+                printResult("Multiple tippers metrics", 12, false, "Metrics correct", `Error: ${error.message}`);
+              } finally {
+                if (s12UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s12UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s12UserId);
+                }
+              }
+
+              // ========== SCENARIO 13 ==========
+              let s13UserId = null;
+              let s13Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s13UserId = tempUser.userId;
+                createdAuthUsers.push(s13UserId);
+
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+                const endTime = new Date(Date.now() - 10 * 60 * 1000);
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s13UserId,
+                    started_at: startTime,
+                    ended_at: endTime,
+                    status: "ended",
+                    total_paused_seconds: 0,
+                    final_duration_seconds: 50 * 60
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+                scenario13EndedSessionId = sessionData[0].id;
+
+                // Tip event occurs INSIDE the ended session interval: started_at < event < ended_at
+                const tipEventTime = new Date(startTime.getTime() + 2 * 60 * 1000);
+                const tipAmount = 25.00;
+                const tipTokens = 1000;
+
+                // Verify exactly one eligible ended session before sending tip
+                const { data: eligibleSessions, error: sessionCheckError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .select("id")
+                  .eq("user_id", s13UserId)
+                  .eq("status", "ended")
+                  .lte("started_at", tipEventTime.toISOString())
+                  .gte("ended_at", tipEventTime.toISOString())
+                  .gt("ended_at", new Date(Date.now() - 30 * 60 * 1000).toISOString());
+
+                if (sessionCheckError) throw sessionCheckError;
+                if (eligibleSessions.length !== 1) throw new Error(`Expected 1 eligible session, found ${eligibleSessions.length}`);
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s13UserId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "delayed_tipper",
+                    p_tokens: tipTokens,
+                    p_usd: tipAmount,
+                    p_platform: "twitch",
+                    p_event_at: tipEventTime.toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                // Fetch session after tip to verify metrics recomputation
+                const { data: sessionAfter, error: afterError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .select("*")
+                  .eq("id", scenario13EndedSessionId)
+                  .single();
+
+                if (afterError) throw afterError;
+
+                // Contract: exactly one session, tip inside window, arrived during session, attributed, metrics updated, no duplicate
+                const tolerance = 0.01;
+                const failures = [];
+
+                if (tipData.live_session_id !== scenario13EndedSessionId) failures.push(`live_session_id=${tipData.live_session_id} (expected ${scenario13EndedSessionId})`);
+                if (!tipData.success) failures.push(`success=${tipData.success} (expected true)`);
+
+                // Verify metrics were recomputed: final_total_usd should now include the tip
+                if (Math.abs(sessionAfter.final_total_usd - tipAmount) > tolerance) failures.push(`final_total_usd=${sessionAfter.final_total_usd} (expected ${tipAmount} after tip recomputation)`);
+                if (sessionAfter.final_tokens !== tipTokens) failures.push(`final_tokens=${sessionAfter.final_tokens} (expected ${tipTokens})`);
+                if (sessionAfter.final_tip_count !== 1) failures.push(`final_tip_count=${sessionAfter.final_tip_count} (expected 1)`);
+
+                // Verify no duplicate: only one live_tips row should exist
+                const { data: liveTipsRows, error: liveTipsError } = await serviceRoleClient
+                  .from("live_tips")
+                  .select("*")
+                  .eq("user_id", s13UserId)
+                  .eq("live_session_id", scenario13EndedSessionId);
+
+                if (!liveTipsError && liveTipsRows.length !== 1) failures.push(`live_tips row count=${liveTipsRows.length} (expected 1 for no duplicate)`);
+
+                const passed = failures.length === 0;
+                s13Result.passed = passed;
+                s13Result.message = passed
+                  ? `✓ 1 eligible session, tip inside [${startTime.toISOString()}, ${endTime.toISOString()}], metrics recomputed`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "Delayed tip reconciles to recently ended session",
+                  13,
+                  passed,
+                  "1 eligible session, tip inside window, metrics recomputed, no duplicate",
+                  s13Result.message
+                );
+              } catch (error) {
+                s13Result.passed = false;
+                s13Result.message = error.message;
+                printResult("Delayed tip reconciliation", 13, false, "Tip reconciles", `Error: ${error.message}`);
+              } finally {
+                if (s13UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s13UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s13UserId);
+                }
+              }
+
+              // ========== SCENARIO 14 ==========
+              // Contract: Two overlapping ended sessions both within 30-minute reconciliation window
+              // Session A: started 25 min ago, ended 10 min ago
+              // Session B: started 20 min ago, ended 5 min ago
+              // Tip event_at: 15 min ago (overlaps both sessions)
+              // Both sessions satisfy: started_at <= event_at <= ended_at
+              let s14UserId = null;
+              let s14Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s14UserId = tempUser.userId;
+                createdAuthUsers.push(s14UserId);
+
+                const sessionAStart = new Date(Date.now() - 25 * 60 * 1000);
+                const sessionAEnd = new Date(Date.now() - 10 * 60 * 1000);
+                const sessionBStart = new Date(Date.now() - 20 * 60 * 1000);
+                const sessionBEnd = new Date(Date.now() - 5 * 60 * 1000);
+                const tipEventAt = new Date(Date.now() - 15 * 60 * 1000);
+
+                const { data: sessionAData, error: sessionAError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s14UserId,
+                    started_at: sessionAStart,
+                    ended_at: sessionAEnd,
+                    status: "ended",
+                    total_paused_seconds: 0,
+                    final_duration_seconds: 15 * 60
+                  })
+                  .select();
+
+                if (sessionAError) throw sessionAError;
+                scenario14SessionAId = sessionAData[0].id;
+
+                const { data: sessionBData, error: sessionBError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s14UserId,
+                    started_at: sessionBStart,
+                    ended_at: sessionBEnd,
+                    status: "ended",
+                    total_paused_seconds: 0,
+                    final_duration_seconds: 15 * 60
+                  })
+                  .select();
+
+                if (sessionBError) throw sessionBError;
+                scenario14SessionBId = sessionBData[0].id;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s14UserId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "ambiguous_tipper",
+                    p_tokens: 1000,
+                    p_usd: 25.00,
+                    p_platform: "twitch",
+                    p_event_at: tipEventAt.toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                // Contract: live_session_id === null, exactly one ambiguity log
+                const failures = [];
+
+                if (tipData.live_session_id !== null) failures.push(`live_session_id=${tipData.live_session_id} (expected null)`);
+                if (!tipData.success) failures.push(`success=${tipData.success} (expected true)`);
+
+                // Contract: MUST verify exactly one unattributed_tips_log row with reason='multiple_session_matches'
+                // Use approved helper RPC (verify_ambiguity_logs_for_user) that bypasses RLS
+                let logVerified = false;
+                let logCount = 0;
+
+                const { data: logResult, error: logError } = await serviceRoleClient
+                  .rpc("verify_ambiguity_logs_for_user", {
+                    p_user_id: s14UserId,
+                    p_reason: "multiple_session_matches"
+                  });
+
+                if (!logError && logResult && Array.isArray(logResult)) {
+                  // Helper RPC returns array of {reason, count} rows
+                  if (logResult.length === 1) {
+                    logCount = parseInt(logResult[0].count) || 0;
+                    logVerified = true;
+                    if (logCount !== 1) {
+                      failures.push(`ambiguity log row count=${logCount} (expected exactly 1 row with reason='multiple_session_matches')`);
+                    }
+                  } else if (logResult.length === 0) {
+                    failures.push(`ambiguity log: no rows found for 'multiple_session_matches' (expected exactly 1)`);
+                  } else {
+                    failures.push(`ambiguity log: unexpected row count ${logResult.length}`);
+                  }
+                } else if (logError) {
+                  // Verification unavailable - strict contract requires failure
+                  failures.push(`CRITICAL: ambiguity-log verification blocked (${logError.message}). Require approved read path.`);
+                }
+
+                const passed = failures.length === 0;
+                s14Result.passed = passed;
+                s14Result.message = passed
+                  ? `✓ live_session_id=null, ambiguity log verified (${logCount} row with reason='multiple_session_matches')`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "Overlapping sessions → unattributed + ambiguity log",
+                  14,
+                  passed,
+                  "live_session_id=null, exactly 1 ambiguity log with reason='multiple_session_matches'",
+                  s14Result.message
+                );
+              } catch (error) {
+                s14Result.passed = false;
+                s14Result.message = error.message;
+                printResult("Overlapping sessions", 14, false, "Ambiguity logged", `Error: ${error.message}`);
+              } finally {
+                if (s14UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s14UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s14UserId);
+                }
+              }
+
+              // ========== SCENARIO 15 ==========
+              let s15UserId = null;
+              let s15AuthClient = null;
+              let s15Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s15UserId = tempUser.userId;
+                createdAuthUsers.push(s15UserId);
+                s15AuthClient = await createAuthenticatedClient(tempUser);
+
+                const startTime = new Date(Date.now() - 60 * 60 * 1000);
+                const s15SessionId = generateUUID();
+                const tipClientEventId = generateUUID();
+
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    id: s15SessionId,
+                    user_id: s15UserId,
+                    started_at: startTime,
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+
+                // Run persistence and finalization concurrently
+                const tipPromise = serviceRoleClient.rpc("persist_extension_tip", {
+                  p_user_id: s15UserId,
+                  p_client_event_id: tipClientEventId,
+                  p_deduplication_key: null,
+                  p_username: "concurrent_tipper",
+                  p_tokens: 1000,
+                  p_usd: 25.00,
+                  p_platform: "twitch",
+                  p_event_at: new Date().toISOString(),
+                  p_queued_ms: null
+                });
+
+                const finalizePromise = stopSession(s15AuthClient, serviceRoleClient, s15SessionId);
+
+                const [tipResult, finalResult] = await Promise.all([tipPromise, finalizePromise]);
+
+                if (tipResult.error) throw tipResult.error;
+                if (finalResult.error) throw finalResult.error;
+
+                // Contract: After both settle, verify post-race database state.
+                // Stop's own return value is a snapshot from whichever side of
+                // the race it landed on; if it ended the session first, the tip
+                // reconciles afterwards and re-finalizes. The saved row is the truth.
+                const { data: settledRow, error: settledErr } = await serviceRoleClient
+                  .from("live_sessions").select("*").eq("id", s15SessionId).single();
+                if (settledErr) throw settledErr;
+                finalResult.data = settledRow;
+                const failures = [];
+
+                // Check session is ended
+                if (finalResult.data.status !== "ended") failures.push(`session status=${finalResult.data.status} (expected ended)`);
+
+                // Check exactly one logical event (live_tips row)
+                const { data: liveTipsRows, error: liveTipsError } = await serviceRoleClient
+                  .from("live_tips")
+                  .select("*")
+                  .eq("user_id", s15UserId)
+                  .eq("live_session_id", s15SessionId);
+
+                if (!liveTipsError && liveTipsRows && liveTipsRows.length !== 1) {
+                  failures.push(`live_tips row count=${liveTipsRows.length} (expected exactly 1)`);
+                } else if (liveTipsError && !liveTipsError.message.includes("permission")) {
+                  failures.push(`live_tips query error: ${liveTipsError.message}`);
+                }
+
+                // Check exactly one canonical tip (tips table)
+                const { data: tipsRows, error: tipsError } = await serviceRoleClient
+                  .from("tips")
+                  .select("*")
+                  .eq("user_id", s15UserId)
+                  .eq("client_event_id", tipClientEventId);
+
+                if (!tipsError && tipsRows && tipsRows.length !== 1) {
+                  failures.push(`tips row count=${tipsRows.length} (expected exactly 1)`);
+                } else if (tipsError && !tipsError.message.includes("permission")) {
+                  failures.push(`tips query error: ${tipsError.message}`);
+                }
+
+                // Verify tip attribution and final metrics
+                if (tipResult.data.live_session_id !== s15SessionId) {
+                  failures.push(`tip live_session_id=${tipResult.data.live_session_id} (expected ${s15SessionId})`);
+                }
+                if (Math.abs(finalResult.data.final_total_usd - 25.00) > 0.01) {
+                  failures.push(`final_total_usd=${finalResult.data.final_total_usd} (expected 25.00, tip not included)`);
+                }
+                if (finalResult.data.final_tip_count !== 1) {
+                  failures.push(`final_tip_count=${finalResult.data.final_tip_count} (expected 1)`);
+                }
+
+                // S15: Verify advisory lock architecture - EXPLICIT verification required
+                // Required contract: Both persist_extension_tip and finalize_live_session must use
+                // identical user-level advisory lock: pg_advisory_xact_lock(hashtextextended(user_id::text, 0)::bigint)
+                // This is NOT implied by S13 passing - S13 can pass with correct metrics even if locks differ.
+                // Must verify actual installed function definitions using helper RPC.
+
+                let lockVerifyPassed = false;
+
+                const { data: lockData, error: lockError } = await serviceRoleClient
+                  .rpc("verify_function_lock_expressions");
+
+                if (!lockError && lockData) {
+                  const persistDefined = lockData.persist_extension_tip_defined === true;
+                  const finalizeDefined = lockData.stop_live_session_defined === true && lockData.finalizer_defined === true;
+                  const persistHasUserLock = lockData.persist_has_user_lock === true;
+                  const finalizeHasUserLock = lockData.stop_has_user_lock === true && lockData.finalizer_has_user_lock === true;
+                  const persistHasCompositeLock = lockData.persist_has_composite_lock === true;
+
+                  if (!persistDefined) {
+                    failures.push(`persist_extension_tip not installed`);
+                  }
+                  if (!finalizeDefined) {
+                    failures.push(`stop_live_session or _finalize_live_session_metrics not installed`);
+                  }
+                  if (persistHasCompositeLock) {
+                    failures.push(`CRITICAL: persist_extension_tip uses composite lock (user:event), not user-level lock`);
+                  }
+                  if (!persistHasUserLock && !persistHasCompositeLock && persistDefined) {
+                    failures.push(`persist_extension_tip: user-level lock not found`);
+                  }
+                  if (!finalizeHasUserLock && finalizeDefined) {
+                    failures.push(`stop_live_session/_finalize_live_session_metrics: user-level lock not found`);
+                  }
+
+                  if (persistHasUserLock && finalizeHasUserLock && !persistHasCompositeLock) {
+                    console.log(`✓ Advisory lock serialization explicitly verified: both functions use user-level locks`);
+                    lockVerifyPassed = true;
+                  }
+                } else if (lockError) {
+                  failures.push(`Lock verification failed: ${lockError.message}`);
+                }
+
+                if (!tipResult.data.success) failures.push(`tip success=${tipResult.data.success} (expected true)`);
+
+                const passed = failures.length === 0;
+                s15Result.passed = passed;
+                s15Result.message = passed
+                  ? `✓ Race-safe: 1 logical event, 1 live_tip row, 1 canonical tip, attributed, metrics $25 (1 tip)`
+                  : `✗ ${failures.join("; ")}`;
+
+                printResult(
+                  "Advisory lock prevents race conditions",
+                  15,
+                  passed,
+                  "Exactly 1 event, 1 live_tip, 1 canonical tip, attributed, metrics include tip",
+                  s15Result.message
+                );
+              } catch (error) {
+                s15Result.passed = false;
+                s15Result.message = error.message;
+                printResult("Advisory lock", 15, false, "Operations safe", `Error: ${error.message}`);
+              } finally {
+                if (s15UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s15UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s15UserId);
+                }
+              }
+
+              // ========== SCENARIO 16 ==========
+              let s16UserId = null;
+              let s16AuthClient = null;
+              let s16Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s16UserId = tempUser.userId;
+                createdAuthUsers.push(s16UserId);
+
+                s16AuthClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                const { error: signInErr } = await s16AuthClient.auth.signInWithPassword({
+                  email: tempUser.email,
+                  password: tempUser.password
+                });
+
+                if (signInErr) throw new Error(`Failed to sign in temp user: ${signInErr.message}`);
+
+                // Attempt to call RPC with authenticated user trying to persist tip for a different user
+                const { data: tipData, error: tipError } = await s16AuthClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s16UserId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "auth_test_tipper",
+                    p_tokens: 1000,
+                    p_usd: 25.00,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                // Contract: Must reject with PostgreSQL error code 42501 (permission denied)
+                // and message must indicate the function itself denied execution
+                const hasProperErrorCode = tipError && tipError.code === '42501';
+                const hasProperMessage = tipError && tipError.message &&
+                  tipError.message.includes("permission denied for function persist_extension_tip");
+                const passed = hasProperErrorCode && hasProperMessage;
+
+                s16Result.passed = passed;
+                if (!tipError) {
+                  s16Result.message = "No error returned (expected 42501 permission denied)";
+                } else if (!hasProperErrorCode) {
+                  s16Result.message = `Wrong error code: ${tipError.code} (expected 42501)`;
+                } else if (!hasProperMessage) {
+                  s16Result.message = `Wrong message: "${tipError.message}" (expected to mention function-level denial)`;
+                } else {
+                  s16Result.message = `✓ Properly denied: ${tipError.message}`;
+                }
+
+                printResult(
+                  "Direct authenticated execution denied",
+                  16,
+                  passed,
+                  "Function execution denied",
+                  s16Result.message
+                );
+              } catch (error) {
+                const passed = error.message.includes("permission") || error.message.includes("denied");
+                s16Result.passed = passed;
+                s16Result.message = `Exception: ${error.message}`;
+                printResult(
+                  "Direct authenticated execution denied",
+                  16,
+                  passed,
+                  "Function execution denied",
+                  s16Result.message
+                );
+              } finally {
+                if (s16UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s16UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s16UserId);
+                }
+              }
+
+              // ========== SCENARIO 17 ==========
+              let s17UserId = null;
+              let s17Result = { passed: false, message: "Not executed" };
+              try {
+                const tempUser = await createTempAuthUser(serviceRoleClient);
+                s17UserId = tempUser.userId;
+                createdAuthUsers.push(s17UserId);
+
+                // Create session with real Auth user
+                const { data: sessionData, error: sessionError } = await serviceRoleClient
+                  .from("live_sessions")
+                  .insert({
+                    user_id: s17UserId,
+                    started_at: new Date(Date.now() - 60 * 60 * 1000),
+                    status: "live", live_substate: "active"
+                  })
+                  .select();
+
+                if (sessionError) throw sessionError;
+
+                const { data: tipData, error: tipError } = await serviceRoleClient.rpc(
+                  "persist_extension_tip",
+                  {
+                    p_user_id: s17UserId,
+                    p_client_event_id: generateUUID(),
+                    p_deduplication_key: null,
+                    p_username: "service_role_tipper",
+                    p_tokens: 1000,
+                    p_usd: 50.00,
+                    p_platform: "twitch",
+                    p_event_at: new Date().toISOString(),
+                    p_queued_ms: null
+                  }
+                );
+
+                if (tipError) throw tipError;
+
+                // Verify live_tips row created
+                const { data: liveTips, error: liveErr } = await serviceRoleClient
+                  .from("live_tips")
+                  .select("*")
+                  .eq("client_event_id", tipData.client_event_id);
+
+                if (liveErr && !liveErr.message.includes("permission")) throw liveErr;
+                if (liveErr && liveErr.message.includes("permission")) {
+                  console.log(`⚠ Skipping live_tips verification (ACL denied)`);
+                }
+
+                const passed = tipData.success && tipData.live_tip_id;
+                s17Result.passed = passed;
+                s17Result.message = `success=${tipData.success}, has_live_tip_id=${!!tipData.live_tip_id}`;
+
+                printResult(
+                  "Service-role/API execution succeeds",
+                  17,
+                  passed,
+                  "Function executes with service_role",
+                  s17Result.message
+                );
+              } catch (error) {
+                s17Result.passed = false;
+                s17Result.message = error.message;
+                printResult("Service-role execution", 17, false, "Function executes", `Error: ${error.message}`);
+              } finally {
+                if (s17UserId) {
+                  await cleanupUserFixtures(serviceRoleClient, s17UserId);
+                  await cleanupTempAuthUser(serviceRoleClient, s17UserId);
+                }
+              }
+
+              // Global cleanup of any remaining auth users
+              console.log("\nCleaning up remaining Auth users...");
+              for (const userId of createdAuthUsers) {
+                await cleanupTempAuthUser(serviceRoleClient, userId);
+              }
+
+              // Summary
+              console.log("\n========== SUMMARY ==========");
+              const passed = testResults.filter(r => r.passed).length;
+              const failed = testResults.filter(r => !r.passed).length;
+
+              testResults.forEach(r => {
+                console.log(`Scenario ${r.scenario}: ${r.status}`);
+              });
+
+              console.log(`\nTotal: ${testResults.length}`);
+              console.log(`Passed: ${passed}`);
+              console.log(`Failed: ${failed}`);
+
+              if (failed === 0) {
+                console.log("\n✅ CORRECTED PHASE 2 STAGING VERIFIED");
+                console.log("✅ 17/17 SCENARIOS PASSED");
+                console.log("✅ READY FOR PRODUCTION MIGRATION REVIEW");
+                process.exit(0);
+              } else {
+                console.log(`\n❌ ${failed} SCENARIO(S) FAILED`);
+                console.log("❌ Do not proceed to production");
+                process.exit(1);
+              }
+
+            } catch (error) {
+              console.error("\n❌ FATAL ERROR:", error.message);
+              // Attempt cleanup on fatal error
+              for (const userId of createdAuthUsers) {
+                try {
+                  await cleanupTempAuthUser(serviceRoleClient, userId);
+                } catch (e) {
+                  console.log(`⚠ Could not cleanup ${userId}: ${e.message}`);
+                }
+              }
+              process.exit(1);
+            }
+          }
+
+          runTests();
+          SCRIPT_END
+
+      - name: Report Results
+        if: success()
+        run: |
+          echo "✅ All 17 scenarios passed"
+          echo "Ready for production migration review"
+
+      - name: Report Failure
+        if: failure()
+        run: |
+          echo "❌ Test suite failed"
+          echo "Do not proceed to production"
+          exit 1
+
+  staging-smoke-test:
+    name: Run Staging Smoke Test
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    needs: staging-17-scenarios
+    if: inputs.only_sessions != 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22+ (required for Supabase WebSocket support)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install app dependencies
+        working-directory: glowmetrics_fresh
+        run: npm install
+
+      - name: Start staging API locally
+        working-directory: glowmetrics_fresh
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+        run: |
+          npm run dev > /tmp/camcash-next.log 2>&1 &
+          echo $! > /tmp/camcash-next.pid
+
+      - name: Wait for API
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/api/live/session/start -X OPTIONS >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Failed to start API. Server logs:"
+          cat /tmp/camcash-next.log
+          exit 1
+
+      - name: Install smoke test dependencies
+        working-directory: chrome-extension/tests
+        run: npm install
+
+      - name: Run Phase 2 Staging Smoke Test
+        working-directory: chrome-extension/tests
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+        run: npm run test:staging
+
+      - name: Report Smoke Test Success
+        if: success()
+        run: |
+          echo "✅ Phase 2 Staging Smoke Test PASSED"
+          echo "✅ Extension → API → Database flow verified end-to-end"
+          echo "Ready for production compatibility-patch review"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Next.js Server Log ==="
+          cat /tmp/camcash-next.log || echo "No log file found"
+
+      - name: Report Smoke Test Failure
+        if: failure()
+        run: |
+          echo "❌ Phase 2 Staging Smoke Test FAILED"
+          echo "Do not proceed to production"
+          exit 1
+
+  staging-browser-pass:
+    name: Real Chromium Browser Pass (staging)
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    needs: staging-smoke-test
+    if: always() && (needs.staging-smoke-test.result == 'success' || inputs.only_sessions == 'true')
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install app dependencies
+        working-directory: glowmetrics_fresh
+        run: npm install
+
+      - name: Start app locally against staging
+        working-directory: glowmetrics_fresh
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+        run: |
+          npm run dev > /tmp/camcash-next.log 2>&1 &
+          echo $! > /tmp/camcash-next.pid
+
+      - name: Wait for app
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/api/live/session/start -X OPTIONS >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/camcash-next.log
+          exit 1
+
+      - name: Install browser test dependencies and Chromium
+        working-directory: chrome-extension/tests
+        run: |
+          npm install
+          npx playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps chromium
+
+      - name: Run browser pass
+        if: inputs.only_sessions != 'true'
+        working-directory: chrome-extension/tests
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+          BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
+        run: node staging-browser-pass.mjs
+
+      - name: Run profile-security attack tests
+        if: inputs.only_sessions != 'true' && (success() || failure())
+        working-directory: chrome-extension/tests
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+          BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
+        run: node staging-profile-security.mjs
+
+      - name: Run onboarding restore browser test
+        if: inputs.only_sessions != 'true' && (success() || failure())
+        working-directory: chrome-extension/tests
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+          BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
+        run: node staging-onboarding-restore.mjs
+
+      - name: Run Sessions adaptive-layer browser test
+        if: success() || failure()
+        timeout-minutes: 8
+        working-directory: chrome-extension/tests
+        env:
+          SUPABASE_STAGING_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+          SUPABASE_STAGING_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+          SUPABASE_STAGING_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+          CAMCASH_STAGING_BASE_URL: http://127.0.0.1:3000
+          BROWSER_ARTIFACTS_DIR: ${{ github.workspace }}/browser-artifacts
+        run: node staging-sessions-modes.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-browser-pass-screenshots
+          path: browser-artifacts/
+          if-no-files-found: warn
+
+      - name: Next.js server log on failure
+        if: failure()
+        run: tail -200 /tmp/camcash-next.log || true

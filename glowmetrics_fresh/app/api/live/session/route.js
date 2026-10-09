@@ -3,10 +3,9 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../lib/liveSession/shape'
-import { isEngineV2AllowedForUser } from '../../../../lib/liveSession/flag'
 import { corsHeaders } from '../../../../lib/liveSession/cors'
 
-const UNRESOLVED_STATUSES = ['starting', 'active', 'paused', 'stopping', 'needs_resolution']
+const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
@@ -44,14 +43,19 @@ export async function GET(req) {
     return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store', ...cors } })
   }
 
-  // Evaluated separately and always, but this value only ever governs
-  // whether a NEW session may be started — never whether `session` above
-  // (if not null) should be shown or abandoned. Named explicitly to avoid
-  // any ambiguity that an existing V2 session could be at risk from it.
-  const engineEnabledForNewSession = await isEngineV2AllowedForUser(user.id)
+  let privateInterval = null
+  if (data?.id) {
+    const { data: open } = await supabase
+      .from('live_private_intervals')
+      .select('id,live_session_id,platform,started_at,rate_per_minute')
+      .eq('live_session_id', data.id)
+      .is('ended_at', null)
+      .maybeSingle()
+    privateInterval = open || null
+  }
 
   return NextResponse.json(
-    { session: shapeLiveSession(data), engineEnabledForNewSession },
+    { session: shapeLiveSession(data), privateInterval },
     { headers: { 'Cache-Control': 'no-store', ...cors } }
   )
 }

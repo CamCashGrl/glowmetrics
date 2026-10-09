@@ -62,7 +62,15 @@ export async function POST(request) {
       })
       customerId = customer.id
 
-      const { error: updateError } = await supabase
+      // stripe_customer_id is a server-only billing column (browser roles have
+      // no UPDATE on it — migration 20261010), so it is written with the
+      // service role, scoped to the authenticated caller's own id.
+      const admin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      )
+      const { error: updateError } = await admin
         .from('profiles')
         .update({ stripe_customer_id: customerId })
         .eq('id', user.id)

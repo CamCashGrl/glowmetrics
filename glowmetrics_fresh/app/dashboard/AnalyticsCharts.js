@@ -497,7 +497,7 @@ function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
           <div style={{ width: `${100 - knownDurationPct}%`, background: MUTED }} />
         </div>
         <div style={{ color: MUTED, fontSize: 11.5, marginTop: 4 }}>
-          Session boundaries are inferred from tip timestamps (a platform change or 3-hour gap starts a new session) — not a verified stream start/end time.
+          Session boundaries are inferred from tip timestamps (a platform change or a gap of more than 60 minutes starts a new session) — not a verified stream start/end time.
         </div>
       </div>
     </div>

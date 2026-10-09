@@ -19,18 +19,18 @@ export function isProPlan(plan) {
 }
 
 // ── Platform role resolution ─────────────────────────────────────────────────
-// Extracts primary (index 0) and secondary (index 1+) platforms from the
-// user's streaming_platforms array and primary_pro_platform marker.
-// Falls back to inferring from tip totals if these columns are missing
-// (for accounts that onboarded before multi-platform selection existed).
+// THE single source of truth for primary-platform identity (Free history
+// gating, Platform Intelligence, everything). Canonical field:
+// profiles.primary_pro_platform, set only by POST /api/profile/primary-platform.
+// It is NEVER inferred from streaming_platforms order, revenue, activity or
+// earnings: primary_pro_platform NULL → primary null → on Free every platform
+// stays on the 31-day window. streaming_platforms only supplies display order
+// for the secondary list.
 export function resolvePlatformRoles(streamingPlatforms, primaryProPlatform) {
-  if (!streamingPlatforms || !Array.isArray(streamingPlatforms) || streamingPlatforms.length === 0) {
-    return { primary: null, secondary: [] }
-  }
-
-  const primary = streamingPlatforms[0] || primaryProPlatform || null
-  const secondary = streamingPlatforms.slice(1) || []
-
+  const list = Array.isArray(streamingPlatforms) ? streamingPlatforms.filter(Boolean) : []
+  const primary = (primaryProPlatform && String(primaryProPlatform).trim()) || null
+  const lower = primary ? String(primary).toLowerCase() : null
+  const secondary = list.filter((p) => String(p).toLowerCase() !== lower)
   return { primary, secondary }
 }
 

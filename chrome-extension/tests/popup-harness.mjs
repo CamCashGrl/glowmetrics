@@ -99,7 +99,7 @@ async function main() {
     await page.evaluate(() => {
       window.__mock.delays['live_start'] = 2000; // slow reply, so we can observe the pending state
       window.__mock.handlers['live_start'] = () => ({
-        session: { id: 'sess-1', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 0 },
+        session: { id: 'sess-1', status: 'live', live_substate: 'active', started_at: new Date().toISOString(), active_duration_seconds: 0 },
       });
     });
     await page.locator('.session-btn-start').click();
@@ -138,7 +138,7 @@ async function main() {
     await page.exposeFunction('__recordCall', () => { callCount++; });
     await page.evaluate(() => {
       window.__mock.delays['live_start'] = 1000;
-      window.__mock.handlers['live_start'] = () => { window.__recordCall(); return { session: { id: 's', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 0 } }; };
+      window.__mock.handlers['live_start'] = () => { window.__recordCall(); return { session: { id: 's', status: 'live', live_substate: 'active', started_at: new Date().toISOString(), active_duration_seconds: 0 } }; };
     });
     await page.locator('.session-btn-start').click();
     await page.locator('.session-btn-start').click({ force: true }); // second click while disabled/pending
@@ -150,12 +150,12 @@ async function main() {
   // ---- Test 5: Pause -> website-equivalent status flip renders Resume/Stop ----
   {
     const page = await freshPage(browser, {
-      liveSession: { id: 'sess-2', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 30 },
+      liveSession: { id: 'sess-2', status: 'live', live_substate: 'active', started_at: new Date().toISOString(), active_duration_seconds: 30 },
     });
     check('T5: Pause button present while active', await page.locator('.session-btn-pause').count() === 1);
     await page.evaluate(() => {
       window.__mock.handlers['live_pause'] = () => ({
-        session: { id: 'sess-2', status: 'paused', started_at: new Date().toISOString(), active_duration_seconds: 30, paused_at: new Date().toISOString() },
+        session: { id: 'sess-2', status: 'live', live_substate: 'paused', started_at: new Date().toISOString(), active_duration_seconds: 30, paused_at: new Date().toISOString() },
       });
     });
     await page.locator('.session-btn-pause').click();
@@ -169,7 +169,7 @@ async function main() {
   // ---- Test 6: Stop ends the session and falls back to Start Stream ----
   {
     const page = await freshPage(browser, {
-      liveSession: { id: 'sess-3', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 60 },
+      liveSession: { id: 'sess-3', status: 'live', live_substate: 'active', started_at: new Date().toISOString(), active_duration_seconds: 60 },
     });
     await page.evaluate(() => {
       window.__mock.handlers['live_stop'] = () => ({ session: { id: 'sess-3', status: 'ended' } });
@@ -184,7 +184,7 @@ async function main() {
   // ---- Test 7: coaching prompt Performed/Skip UI wiring ----
   {
     const page = await freshPage(browser, {
-      liveSession: { id: 'sess-4', status: 'active', started_at: new Date().toISOString(), active_duration_seconds: 10 },
+      liveSession: { id: 'sess-4', status: 'live', live_substate: 'active', started_at: new Date().toISOString(), active_duration_seconds: 10 },
       coachingPrompt: { id: 'evt-1', type: 'whale_dep', message: 'Test prompt', compact_message: 'Test', title: 'Test', shown_at: new Date().toISOString() },
     });
     check('T7: coach action buttons visible when a prompt is active', await page.locator('#coach-actions').evaluate(el => getComputedStyle(el).display !== 'none'));
