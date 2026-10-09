@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import { readUploadJson } from '../../lib/readUploadJson'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats } from '../../lib/analytics'
@@ -701,20 +702,6 @@ function OBTrust(){
 }
 
 // ── Main component ─────────────────────────────────────────────
-// A timed-out (504), too-large (413) or crashed upload returns a non-JSON
-// body from the platform, and res.json() then throws a raw parse error that
-// reads as a broken CSV. Mirrors the dashboard uploader's handling.
-async function readUploadJson(res){
-  const raw=await res.text()
-  try{return raw?JSON.parse(raw):{}}
-  catch{
-    const tooLong=res.status===504||res.status===413||!raw
-    return{error:tooLong
-      ?'The server stopped responding while importing this file — it may be too large to process in one upload. Try splitting it into smaller date ranges.'
-      :`Server returned an unreadable response (HTTP ${res.status}).`}
-  }
-}
-
 export default function OnboardingPage(){
   const router=useRouter()
   const[user,setUser]=useState(null)

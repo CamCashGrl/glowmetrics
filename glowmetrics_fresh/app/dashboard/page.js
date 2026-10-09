@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import { readUploadJson } from "../../lib/readUploadJson"
 import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, accessibleDataset } from "../../lib/analytics"
 import { totalEarned, privateEarningRows } from "../../lib/sessions/normalize"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
@@ -2357,22 +2358,10 @@ const stopImportMessageRotation = () => {
         body: fd,
       })
 
-      // A timed-out or crashed function returns an empty/truncated body, and
-      // res.json() then throws "Unexpected end of JSON input" — which reads as
-      // a broken CSV when the file was actually fine. Read as text first and
-      // report what really happened.
-      const raw = await res.text()
-      let result
-      try {
-        result = raw ? JSON.parse(raw) : {}
-      } catch (parseErr) {
-        const tooLong = res.status === 504 || res.status === 413 || !raw
-        result = {
-          error: tooLong
-            ? 'The server stopped responding while importing this file — it may be too large to process in one upload. Try splitting it into smaller date ranges.'
-            : `Server returned an unreadable response (HTTP ${res.status}).`,
-        }
-      }
+      // A timed-out, too-large or crashed upload returns a non-JSON or empty
+      // body; readUploadJson turns that into a clear error instead of a parse
+      // crash that reads as a broken CSV.
+      const result = await readUploadJson(res)
 
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
