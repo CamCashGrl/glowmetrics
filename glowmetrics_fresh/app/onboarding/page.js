@@ -1544,7 +1544,7 @@ export default function OnboardingPage(){
                   <span style={{width:1,height:28,background:'rgba(255,255,255,0.15)'}}/>
                   <span style={{fontSize:26,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>7 days free</span>
                 </div>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginTop:2}}>Then $19.99/month • Cancel anytime before your trial ends.</div>
+                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginTop:2}}>Then $9.99/month • Cancel anytime before your trial ends.</div>
               </div>
               <OBBtn onClick={handleStartTrial} style={{height:52,fontSize:15}}>{TRIAL_COPY.cta}</OBBtn>
               <div style={{display:'flex',alignItems:'center',gap:12,maxWidth:300,margin:'10px auto 4px'}}>

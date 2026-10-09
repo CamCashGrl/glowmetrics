@@ -416,7 +416,7 @@ function PricingSection({
                   letterSpacing: '-1px',
                 }}
               >
-                $19.99
+                $9.99
               </span>
 
               <span
@@ -482,7 +482,7 @@ function PricingSection({
                 {checkoutLoading ===
                 'standard_monthly'
                   ? 'Redirecting…'
-                  : 'Choose Monthly — $19.99'}
+                  : 'Choose Monthly — $9.99'}
               </Button>
 
               <Button
@@ -602,7 +602,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How much is Standard?',
-    a: 'Standard is $19.99 per month or $99 per year. Both billing options unlock the same Standard features.',
+    a: 'Standard is $9.99 per month or $99 per year. Both billing options unlock the same Standard features.',
   },
   {
     q: 'Can I switch between monthly and annual billing?',
