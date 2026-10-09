@@ -219,18 +219,32 @@ export function parseRows(rawText,platformId){
   const rows=[];let skipped=0
   const dateLineRe=/^([A-Za-z]{3}\s+\d{1,2},\s+\d{4},\s+\d{1,2}:\d{2}\s+[AP]M)/i
   const tipFromRe=/^Tip From:\s*(.+)/i
-  const tokensLineRe=/^(\d+)\s+(\d+)$/
-  const isMultiLine=lines.some(l=>tipFromRe.test(l))
+  const membershipRe=/^Fan Club Membership:\s*(.+)/i
+  const adminAdjustmentRe=/^Admin Adjustment:/i
+  const transferRe=/^Transfer tokens to/i
+  const tokensLineRe=/^(-?\d+)\s+(\d+)$/
+  const isMultiLine=lines.some(l=>tipFromRe.test(l)||membershipRe.test(l))
   if(isMultiLine){
     let i=0
     while(i<lines.length){
       const dateMatch=lines[i].match(dateLineRe)
       if(dateMatch){
-        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||'';const tipMatch=actionLine.match(tipFromRe)
-        if(ts&&tipMatch){
-          const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note='';let tMatch=tokensLine.match(tokensLineRe)
-          if(!tMatch&&lines[i+3]){note=tokensLine;tokensLine=lines[i+3]||'';tMatch=tokensLine.match(tokensLineRe)}
-          if(tMatch){const tokens=parseInt(tMatch[1],10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+        const ts=tryParseDate(dateMatch[1]);const actionLine=lines[i+1]||''
+        if(ts){
+          const tipMatch=actionLine.match(tipFromRe)
+          const memberMatch=actionLine.match(membershipRe)
+          const isAdmin=actionLine.match(adminAdjustmentRe)
+          const isTransfer=actionLine.match(transferRe)
+          if(tipMatch){
+            const username=tipMatch[1].trim();let tokensLine=lines[i+2]||'';let note='';let tMatch=tokensLine.match(tokensLineRe)
+            if(!tMatch&&lines[i+3]){note=tokensLine;tokensLine=lines[i+3]||'';tMatch=tokensLine.match(tokensLineRe)}
+            if(tMatch){const tokens=parseInt(tMatch[1],10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note})}else skipped++}else skipped++
+          }else if(memberMatch){
+            const username=memberMatch[1].trim();let tokensLine=lines[i+2]||'';const tMatch=tokensLine.match(tokensLineRe)
+            if(tMatch){const tokens=parseInt(tMatch[1],10);if(tokens>=1){const usd=+(tokens*rate).toFixed(2);rows.push({ts,username,tokens,usd,note:'Fan Club Membership'})}else skipped++}else skipped++
+          }else if(isAdmin||isTransfer){
+            skipped++
+          }
         }
         i++
       }else i++
