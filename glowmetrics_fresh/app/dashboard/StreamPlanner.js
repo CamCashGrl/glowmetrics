@@ -14,6 +14,7 @@ import {
 // whole) and are left as-is; flagged in the report as a parallel formula
 // worth reconciling in a dedicated follow-up rather than blindly merged here.
 import { calculateConfidence } from "../../lib/analytics"
+import PlannedStreams from "./PlannedStreams"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -1035,9 +1036,11 @@ function StreamPlannerContent({ tips, isPro }) {
 // inside StreamPlannerContent (Very Low/Low/Medium/High) now decides what
 // personalized claim, if any, is shown — the Pro teaser only appears at
 // Medium confidence, next to a real (not fabricated) personalized result.
-export default function StreamPlanner({ tips = [], isPro = false }) {
+export default function StreamPlanner({ tips = [], isPro = false, planned = null }) {
+  // Saved dated plans are available whatever the tip history size.
+  const plans = planned ? <div style={{ background:BG, padding:"24px 24px 0" }}><PlannedStreams {...planned} /></div> : null
   if (tips.length < 20) {
-    return (
+    return (<>{plans}
       <div style={{ background:BG, minHeight:"100%", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
         <div style={{ ...cardS(), textAlign:"center", padding:"48px 32px", maxWidth:440 }}>
           <div style={{ fontSize:32, marginBottom:12 }}>📊</div>
@@ -1047,8 +1050,8 @@ export default function StreamPlanner({ tips = [], isPro = false }) {
           </div>
         </div>
       </div>
-    )
+    </>)
   }
 
-  return <StreamPlannerContent tips={tips} isPro={isPro} />
+  return <>{plans}<StreamPlannerContent tips={tips} isPro={isPro} /></>
 }

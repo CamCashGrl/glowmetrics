@@ -318,3 +318,35 @@ test('no vs-typical marker without enough history', () => {
   expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
   expect(screen.getByTestId('details-vs-empty')).toBeTruthy()
 })
+
+// ── Schedule tab ─────────────────────────────────────────────────────────────
+const plan = (s, e, platform = 'Chaturbate') => ({ id: s, platform, planned_start_at: s, planned_end_at: e })
+test('Schedule: "No saved plan" when the creator has never saved one', () => {
+  renderTab({ tips: csvTips })
+  click('details-tab-schedule')
+  expect(screen.getByTestId('schedule').getAttribute('data-status')).toBe('no_plans')
+  expect(val('schedule-badge')).toBe('NO SAVED PLAN')
+})
+test('Schedule: "Unscheduled" only when plans exist but none matched', () => {
+  renderTab({ tips: csvTips, plannedStreams: [plan('2026-08-01T20:00:00Z', '2026-08-01T22:00:00Z')] })
+  click('details-tab-schedule')
+  expect(val('schedule-badge')).toBe('UNSCHEDULED')
+})
+test('Schedule: imported session says activity began, never that the stream started', () => {
+  // newest csv session starts 2026-09-05T20:00Z
+  const { container } = renderTab({ tips: csvTips, plannedStreams: [plan('2026-09-05T19:30:00Z', '2026-09-05T22:00:00Z')] })
+  click('details-tab-schedule')
+  expect(val('schedule-badge')).toBe('ACTIVITY AFTER PLANNED START')
+  expect(val('schedule-text')).toBe('Activity began inside your planned window, 30 min after your planned start.')
+  expect(screen.getByTestId('schedule').textContent).not.toMatch(/Started|went live at/)
+  expect(container).toBeTruthy()
+})
+test('Schedule: Live show uses the exact start and shows end difference and overlap', () => {
+  renderTab({ tips: [...liveTips, ...freeChat], shows: [show], plannedStreams: [plan('2026-10-07T16:55:00Z', '2026-10-07T18:30:00Z')] })
+  // select the Live show row
+  fireEvent.click(screen.getByTestId('history-live:show-a'))
+  click('details-tab-schedule')
+  expect(val('schedule-badge')).toBe('ON SCHEDULE ✓')
+  expect(val('schedule-text')).toMatch(/Started .* \(5 min late\)/)
+  expect(val('schedule-overlap')).toBe('63%') // 17:00–18:00 of a 95-min window
+})

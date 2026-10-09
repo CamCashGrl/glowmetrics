@@ -26,6 +26,7 @@ import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
+import PlannedStreams from './PlannedStreams'
 import { PrimaryPlatformBanner } from './PrimaryPlatformPrompt'
 import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
@@ -1414,6 +1415,17 @@ function FanRow({ w, rank, onView, onMessage, onNote }) {
 export default function Dashboard() {
   const router = useRouter()
   const [user, setUser] = useState(null)
+  // Saved, dated stream plans (Stream Planner "Plan a stream"); the only
+  // source for the Sessions Schedule tab.
+  const [plannedStreams, setPlannedStreams] = useState([])
+  const loadPlannedStreams = useCallback(async () => {
+    if (!user?.id) return
+    const { data, error } = await supabase.from('planned_streams')
+      .select('id, platform, planned_start_at, planned_end_at, source, created_at')
+      .eq('user_id', user.id).order('planned_start_at', { ascending: false }).limit(500)
+    if (!error) setPlannedStreams(data || [])
+  }, [user?.id])
+  useEffect(() => { loadPlannedStreams() }, [loadPlannedStreams])
   const [profile, setProfile] = useState(null)
   const [tips, setTips] = useState([])
   const [paidSessions, setPaidSessions] = useState([])
@@ -5351,6 +5363,8 @@ const stopImportMessageRotation = () => {
             onPrimarySaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))}
             onImport={() => handleTabChange('upload')}
             onStartLive={() => handleTabChange('live')}
+            plannedStreams={plannedStreams}
+            onOpenPlanner={() => handleTabChange('planner')}
             tz={liveTimezone}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}
@@ -6472,8 +6486,8 @@ const stopImportMessageRotation = () => {
         {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
         {activeTab === 'planner' && (
           _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={analysisTips} isPro={isPro} />
+            ? <div style={{ padding: '32px 0' }}>{user && <PlannedStreams userId={user.id} plans={plannedStreams} onChanged={loadPlannedStreams} defaultPlatform={freeUnlimitedPlatform || 'Chaturbate'} />}<LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
+            : <StreamPlanner tips={analysisTips} isPro={isPro} planned={user ? { userId: user.id, plans: plannedStreams, onChanged: loadPlannedStreams, defaultPlatform: freeUnlimitedPlatform || 'Chaturbate' } : null} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked

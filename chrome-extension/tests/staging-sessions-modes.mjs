@@ -126,6 +126,10 @@ async function makeUser(name, sc) {
     })));
     if (sErr) throw new Error(`paid ${name}: ${sErr.message}`);
   }
+  if ((sc.plans || []).length) {
+    const { error: plErr } = await admin.from('planned_streams').insert(sc.plans.map(([d, s, e, platform]) => ({ user_id: id, platform, planned_start_at: at(d, s), planned_end_at: at(d, e), source: 'manual' })));
+    if (plErr) throw new Error(`plans ${name}: ${plErr.message}`);
+  }
   // Persisted rows must equal the fixture exactly (no normalization, nothing dropped).
   const want = sc.tips.map(([d, hm, platform, username, usd, source]) => `${new Date(at(d, hm)).toISOString()}|${platform}|${username}|${Number(usd).toFixed(2)}|${source}`).sort();
   const { data: got, error: rErr } = await client.from('tips').select('date_time, platform, username, usd, source').eq('user_id', id);
@@ -227,6 +231,24 @@ async function main() {
         check(`${name} · Ben $5.00, 33% of session, Returning`, /\$5\.00/.test(fans[1]) && /33% of session/.test(fans[1]) && /RETURNING/.test(fans[1]), fans[1]);
         await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-fans.png') });
       }
+      if (name === 'csvFree') {
+        // Plan 19:30–22:00 UTC on the day of the newest session (first tip 20:00 UTC).
+        const tabClick = async (id) => { const t = page.getByTestId(id); await t.locator('button').first().click().catch(async () => t.click()); };
+        await tabClick('details-tab-schedule');
+        await page.getByTestId('schedule').waitFor({ state: 'visible' });
+        await domCheck(page, name, 'Schedule', { 'schedule-badge': 'ACTIVITY AFTER PLANNED START', 'schedule-text': 'Activity began inside your planned window, 30 min after your planned start.' }, {});
+        check(`${name} · Schedule never says the stream started (imported)`, !/Started/.test(await page.getByTestId('schedule').textContent()));
+        await page.getByTestId('session-details').screenshot({ path: path.join(OUT, 'sessions-details-schedule-imported.png') });
+      }
+      if (name === 'singleFree' || name === 'peakPro') {
+        const tabClick = async (id) => { const t = page.getByTestId(id); await t.locator('button').first().click().catch(async () => t.click()); };
+        await tabClick('details-tab-schedule');
+        await page.getByTestId('schedule').waitFor({ state: 'visible' });
+        const want = name === 'singleFree' ? 'NO SAVED PLAN' : 'UNSCHEDULED';
+        await domCheck(page, name, 'Schedule', { 'schedule-badge': want }, {});
+        await page.getByTestId('session-details').screenshot({ path: path.join(OUT, `sessions-details-schedule-${want === 'NO SAVED PLAN' ? 'no-plan' : 'unscheduled'}.png`) });
+        await tabClick('details-tab-overview');
+      }
       if (name === 'peakPro') {
         // Newest session (raw rows): 20:00 Ann 4, 20:05 Ben 2, 20:12 Ben 12, 20:14 Cy 9, 20:31 Ann 12, 20:45 Dee 3.5 = $42.50 over 45 min.
         const tabClick = async (id) => { const t = page.getByTestId(id); await t.locator('button').first().click().catch(async () => t.click()); };
@@ -261,12 +283,42 @@ async function main() {
       }
       await ctx.close();
     }
+    // planned_streams: browser users keep history honest.
+    console.log('\nplanned_streams security (browser user, proven from the database)');
+    const [ua, ub] = users;
+    const future = new Date(Date.now() + 3 * 86400000).toISOString();
+    const futureEnd = new Date(Date.now() + 3 * 86400000 + 7200000).toISOString();
+    const pastStart = new Date(Date.now() - 2 * 86400000).toISOString();
+    const pastEnd = new Date(Date.now() - 2 * 86400000 + 7200000).toISOString();
+    let r = await ua.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', planned_start_at: pastStart, planned_end_at: pastEnd }).select();
+    check('Back-dated plan (start in the past) is refused', !!r.error, JSON.stringify(r.data));
+    r = await ua.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', planned_start_at: future, planned_end_at: futureEnd }).select();
+    check('Future plan can be saved', !r.error && r.data?.length === 1, r.error?.message);
+    const futureId = r.data?.[0]?.id;
+    r = await ua.client.from('planned_streams').update({ planned_end_at: new Date(Date.now() + 3 * 86400000 + 3600000).toISOString() }).eq('id', futureId).select();
+    check('Future plan can be edited', !r.error && r.data?.length === 1, r.error?.message);
+    const { data: seededPast } = await admin.from('planned_streams').select('id, planned_start_at, planned_end_at').eq('user_id', ua.id).lt('planned_start_at', new Date().toISOString()).limit(1);
+    const pastId = seededPast?.[0]?.id;
+    r = await ua.client.from('planned_streams').update({ planned_start_at: new Date(Date.now() - 2 * 86400000).toISOString() }).eq('id', pastId).select();
+    const pastAfter = (await admin.from('planned_streams').select('planned_start_at').eq('id', pastId).single()).data;
+    check('Past plan cannot be edited (DB unchanged)', (!!r.error || (r.data || []).length === 0) && pastAfter?.planned_start_at === seededPast?.[0]?.planned_start_at, JSON.stringify({ r: r.data, pastAfter }));
+    r = await ua.client.from('planned_streams').update({ planned_start_at: future }).eq('id', pastId).select();
+    check('Past plan cannot be moved into the future either', (!!r.error || (r.data || []).length === 0));
+    r = await ua.client.from('planned_streams').delete().eq('id', pastId).select();
+    check('Past plan cannot be deleted (still in DB)', (await admin.from('planned_streams').select('id').eq('id', pastId)).data?.length === 1, JSON.stringify(r));
+    r = await ub.client.from('planned_streams').select('id').eq('user_id', ua.id);
+    check("Another creator's plans are invisible", (r.data || []).length === 0, JSON.stringify(r.data));
+    r = await ub.client.from('planned_streams').insert({ user_id: ua.id, platform: 'Chaturbate', planned_start_at: future, planned_end_at: futureEnd }).select();
+    check("Cannot create a plan for another creator", !!r.error);
+    r = await ua.client.from('planned_streams').delete().eq('id', futureId).select();
+    check('Future plan can be deleted', !r.error && (await admin.from('planned_streams').select('id').eq('id', futureId)).data?.length === 0, r.error?.message);
   } catch (err) {
     fail++;
     console.error('❌ Unhandled error:', err.message);
   } finally {
     if (browser) await browser.close();
     for (const u of users) {
+      await admin.from('planned_streams').delete().eq('user_id', u.id);
       await u.client.from('tips').delete().eq('user_id', u.id);
       await u.client.from('paid_sessions').delete().eq('user_id', u.id);
       await admin.from('tips').delete().eq('user_id', u.id);

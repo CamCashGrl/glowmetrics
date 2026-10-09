@@ -1,5 +1,5 @@
 {
-  "_doc": "Shared by the jest reconciliation test (helper values) and chrome-extension/tests/staging-sessions-modes.mjs (raw + DOM). tips: [daysAgo, 'HH:MM' UTC or minutesAgo when daysAgo=0, platform, username, usd, source]. paid: [daysAgo, 'HH:MM', platform, username, usd, session_type].",
+  "_doc": "Shared by the jest reconciliation test (helper values) and chrome-extension/tests/staging-sessions-modes.mjs (raw + DOM). tips: [daysAgo, 'HH:MM' UTC or minutesAgo when daysAgo=0, platform, username, usd, source]. paid: [daysAgo, 'HH:MM', platform, username, usd, session_type]. plans: [daysAgo, 'HH:MM' start, 'HH:MM' end, platform] seeded server-side (past plans cannot be created from the browser).",
   "scenarios": {
     "csvFree": {
       "plan": "free",
@@ -118,6 +118,14 @@
           "PrivFay",
           6,
           "private"
+        ]
+      ],
+      "plans": [
+        [
+          3,
+          "19:30",
+          "22:00",
+          "Chaturbate"
         ]
       ]
     },
@@ -466,7 +474,15 @@
           "dashboard"
         ]
       ],
-      "paid": []
+      "paid": [],
+      "plans": [
+        [
+          40,
+          "20:00",
+          "22:00",
+          "Chaturbate"
+        ]
+      ]
     },
     "noData": {
       "plan": "free",

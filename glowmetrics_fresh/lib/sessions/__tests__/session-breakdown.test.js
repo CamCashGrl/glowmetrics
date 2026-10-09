@@ -137,3 +137,31 @@ describe('sessionVsTypical', () => {
     expect(sessionVsTypical(lone.find((e) => e.tipCount === 1), lone)).toBeNull()
   })
 })
+
+import { matchPlannedStream } from '../normalize'
+describe('matchPlannedStream', () => {
+  const plan = (id, s, e, platform = 'Chaturbate') => ({ id, platform, planned_start_at: s, planned_end_at: e })
+  const csv = buildSessionHistory({ tips: [tip(1, '2026-10-01T20:28:00Z', 'Ann', 5), tip(2, '2026-10-01T21:00:00Z', 'Ben', 5)] })[0]
+  test('no saved plans at all → no_plans (not "unscheduled")', () => {
+    expect(matchPlannedStream(csv, [])).toEqual({ status: 'no_plans' })
+  })
+  test('plans exist but none on that platform/time → unscheduled', () => {
+    expect(matchPlannedStream(csv, [plan('a', '2026-10-01T20:00:00Z', '2026-10-01T22:00:00Z', 'BongaCams')]).status).toBe('unscheduled')
+    expect(matchPlannedStream(csv, [plan('a', '2026-10-02T20:00:00Z', '2026-10-02T22:00:00Z')]).status).toBe('unscheduled')
+  })
+  test('±15 min on schedule, > 15 min late, early up to 2 h', () => {
+    expect(matchPlannedStream(csv, [plan('a', '2026-10-01T20:20:00Z', '2026-10-01T22:00:00Z')])).toMatchObject({ status: 'on_schedule', startDiffMin: 8, insideWindow: true })
+    expect(matchPlannedStream(csv, [plan('a', '2026-10-01T20:00:00Z', '2026-10-01T22:00:00Z')])).toMatchObject({ status: 'late', startDiffMin: 28, exact: false })
+    expect(matchPlannedStream(csv, [plan('a', '2026-10-01T21:30:00Z', '2026-10-01T23:00:00Z')])).toMatchObject({ status: 'early', startDiffMin: -62, insideWindow: false })
+    expect(matchPlannedStream(csv, [plan('a', '2026-10-01T22:40:00Z', '2026-10-01T23:00:00Z')]).status).toBe('unscheduled') // > 2 h early
+  })
+  test('nearest planned start wins', () => {
+    const r = matchPlannedStream(csv, [plan('a', '2026-10-01T19:00:00Z', '2026-10-01T23:00:00Z'), plan('b', '2026-10-01T20:30:00Z', '2026-10-01T21:30:00Z')])
+    expect(r.plan.id).toBe('b')
+  })
+  test('Live: exact start, end difference and overlap of the planned window', () => {
+    const show = { id: 'S', platform: 'chaturbate', startedAt: '2026-10-01T20:07:00Z', endedAt: '2026-10-01T21:38:00Z', durationSeconds: 5460, totalUsd: 0, publicUsd: 0, privateUsd: 0, platformRevenue: [{ platform: 'chaturbate', usd: 0, tips: 0 }] }
+    const live = buildSessionHistory({ shows: [show] })[0]
+    expect(matchPlannedStream(live, [plan('a', '2026-10-01T20:00:00Z', '2026-10-01T22:00:00Z')])).toMatchObject({ status: 'on_schedule', exact: true, startDiffMin: 7, endDiffMin: -22, overlapPct: 76 })
+  })
+})

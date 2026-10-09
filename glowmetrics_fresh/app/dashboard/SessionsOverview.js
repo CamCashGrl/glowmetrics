@@ -18,7 +18,7 @@ import { platformDisplayName, platformColor } from "../../lib/constants"
 import {
   SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, dailySessionStats,
   liveSessionSnapshot, withTodayDerived, todaySignal, vsYesterdayByNow, todayCumulative,
-  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
+  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, matchPlannedStream, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
 } from "../../lib/sessions/normalize"
 import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
@@ -515,9 +515,57 @@ function FanDriversView({ e, tips, paidSessions, isPro, primaryPlatform }) {
   )
 }
 
-const DETAIL_TABS = [["overview", "Overview"], ["timeline", "Timeline"], ["fans", "Fans"]]
+// Schedule tab: the selected session vs the creator's saved dated plans.
+const mins = (n) => `${Math.abs(n)} min`
+function ScheduleView({ e, plans, tz, onOpenPlanner }) {
+  const m = matchPlannedStream(e, plans)
+  if (!m || m.status === "no_plans") {
+    return (
+      <div data-testid="schedule" data-status="no_plans" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Badge text="NO SAVED PLAN" color={C.muted} testId="schedule-badge" />
+        <div style={{ color: C.text, fontSize: 13 }}>Save planned streams in Stream Planner to see whether your sessions start on schedule.</div>
+        {onOpenPlanner && <button onClick={onOpenPlanner} style={{ alignSelf: "flex-start", background: "transparent", border: "none", padding: 0, color: C.cyan, fontWeight: 800, fontSize: 12.5, cursor: "pointer" }}>Plan a stream →</button>}
+      </div>
+    )
+  }
+  if (m.status === "unscheduled") {
+    return (
+      <div data-testid="schedule" data-status="unscheduled" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Badge text="UNSCHEDULED" color={C.gold} testId="schedule-badge" />
+        <div data-testid="schedule-text" style={{ color: C.text, fontSize: 13 }}>No saved plan matched this session.</div>
+      </div>
+    )
+  }
+  const planned = `Planned ${clock(m.plan.start, tz)}–${clock(m.plan.end, tz)}`
+  const color = m.status === "on_schedule" ? C.green : m.status === "late" ? "#F87171" : C.cyan
+  if (m.exact) {
+    const badge = m.status === "on_schedule" ? "ON SCHEDULE ✓" : m.status === "late" ? "STARTED LATE" : "STARTED EARLY"
+    const diff = m.startDiffMin === 0 ? "on time" : `${mins(m.startDiffMin)} ${m.startDiffMin > 0 ? "late" : "early"}`
+    return (
+      <div data-testid="schedule" data-status={m.status} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <Badge text={badge} color={color} testId="schedule-badge" />
+        <div data-testid="schedule-text" style={{ color: C.white, fontSize: 13.5 }}>{planned} · Started {clock(e.startTime, tz)} ({diff})</div>
+        {m.endDiffMin != null && <div style={{ color: C.text, fontSize: 12.5 }}>Ended {m.endDiffMin === 0 ? "on time" : `${mins(m.endDiffMin)} ${m.endDiffMin > 0 ? "late" : "early"}`} · covered <T id="schedule-overlap">{m.overlapPct}%</T> of the planned window</div>}
+      </div>
+    )
+  }
+  // Imported / free-chat: only when earning activity began, never "went live".
+  const badge = m.status === "on_schedule" ? "ACTIVITY ON TIME" : m.status === "late" ? "ACTIVITY AFTER PLANNED START" : "ACTIVITY BEFORE PLANNED START"
+  const lead = m.insideWindow ? "Activity began inside your planned window" : "Activity began outside your planned window"
+  const diff = m.startDiffMin === 0 ? "at your planned start" : `${mins(m.startDiffMin)} ${m.startDiffMin > 0 ? "after" : "before"} your planned start`
+  return (
+    <div data-testid="schedule" data-status={m.status} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Badge text={badge} color={color} testId="schedule-badge" />
+      <div data-testid="schedule-text" style={{ color: C.white, fontSize: 13.5 }}>{lead}, {diff}.</div>
+      <div style={{ color: C.text, fontSize: 12.5 }}>{planned} · first earning activity {clock(e.startTime, tz)}</div>
+      <div style={{ color: C.muted, fontSize: 11.5 }}>Imported history shows when earnings began, not when you went live.</div>
+    </div>
+  )
+}
 
-function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null, vs = null }) {
+const DETAIL_TABS = [["overview", "Overview"], ["timeline", "Timeline"], ["fans", "Fans"], ["schedule", "Schedule"]]
+
+function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null, vs = null, plans = [], onOpenPlanner = null }) {
   const [tab, setTab] = useState("overview")
   if (!e) return <div style={{ color: C.text, fontSize: 13 }}>Select a session to see its details.</div>
   const t = TYPE[e.type]
@@ -548,6 +596,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
         {DETAIL_TABS.map(([k, l]) => <span key={k} data-testid={`details-tab-${k}`}><Pill active={tab === k} onClick={() => setTab(k)}>{l}</Pill></span>)}
       </div>
       {tab === "timeline" && <BucketsView e={e} tips={tips} tz={tz} />}
+      {tab === "schedule" && <ScheduleView e={e} plans={plans} tz={tz} onOpenPlanner={onOpenPlanner} />}
       {tab === "fans" && <FanDriversView e={e} tips={tips} paidSessions={paidSessions} isPro={isPro} primaryPlatform={primaryPlatform} />}
       {tab === "overview" && <>
       {vs ? <div style={{ ...inset, padding: "8px 12px" }}><VsTypical vs={vs} e={e} long testId="details-vs" /></div>
@@ -585,7 +634,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
   )
 }
 
-export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null }) {
+export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null, plannedStreams = [], onOpenPlanner = null }) {
   const historyNote = isPro ? "Full history on every platform" : primaryPlatform
     ? `Free: full history on ${pName(primaryPlatform)}, last 31 days on other platforms`
     : "Free: last 31 days on every platform until you choose a primary platform"
@@ -716,7 +765,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
         </div>
         <div data-testid="session-details" style={card({ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(12,15,28,0.78)", boxShadow: "none" })}>
           <div style={{ fontSize: 19, fontWeight: 900, color: C.white }}>Session Details</div>
-          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} />
+          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} plans={plannedStreams} onOpenPlanner={onOpenPlanner} />
         </div>
       </div>
       </>}

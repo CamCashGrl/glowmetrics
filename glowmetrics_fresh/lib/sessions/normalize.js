@@ -912,3 +912,42 @@ export function sessionVsTypical(entry, history = []) {
     outcome: entry.totalUSD > med ? 'above' : entry.totalUSD < med ? 'below' : 'par',
   }
 }
+
+// ── SCHEDULE STATUS (saved planned_streams only) ────────────────────────
+// Matches a session to the creator's saved dated plans. Recommendation
+// windows and planner preferences are never treated as plans.
+//   start used: Live = exact show start; everything else = first money event
+//               (labeled as when activity began, never as the stream start).
+//   candidates: same platform, session start between 2 h before the planned
+//               start and the planned end; nearest planned start wins.
+//   status: no_plans (creator has never saved a plan) | unscheduled (plans
+//           exist, none matched) | on_schedule (within ±15 min) | early
+//           (> 15 min and <= 2 h before) | late (> 15 min after, before end).
+//   Live only: end difference and overlap % of the planned window.
+export const SCHEDULE_ON_TIME_MIN = 15
+export const SCHEDULE_EARLY_MAX_MIN = 120
+export function matchPlannedStream(entry, plans = []) {
+  if (!entry) return null
+  if (!plans.length) return { status: 'no_plans' }
+  const exact = entry.type === 'live'
+  const startMs = new Date(entry.startTime).getTime()
+  const plats = new Set((entry.platforms || []).map(norm))
+  const candidates = plans.map((p) => ({ ...p, s: new Date(p.planned_start_at).getTime(), e: new Date(p.planned_end_at).getTime() }))
+    .filter((p) => plats.has(norm(p.platform)) && startMs >= p.s - SCHEDULE_EARLY_MAX_MIN * 60000 && startMs <= p.e)
+  if (!candidates.length) return { status: 'unscheduled', exact }
+  const plan = candidates.sort((a, b) => Math.abs(startMs - a.s) - Math.abs(startMs - b.s))[0]
+  const startDiffMin = Math.round((startMs - plan.s) / 60000)
+  const status = Math.abs(startDiffMin) <= SCHEDULE_ON_TIME_MIN ? 'on_schedule' : startDiffMin < 0 ? 'early' : 'late'
+  const out = {
+    status, exact, startDiffMin,
+    plan: { id: plan.id, platform: plan.platform, start: plan.planned_start_at, end: plan.planned_end_at },
+    insideWindow: startMs >= plan.s && startMs <= plan.e,
+  }
+  if (exact && entry.endTime) {
+    const endMs = new Date(entry.endTime).getTime()
+    out.endDiffMin = Math.round((endMs - plan.e) / 60000)
+    const overlap = Math.max(0, Math.min(endMs, plan.e) - Math.max(startMs, plan.s))
+    out.overlapPct = Math.round((overlap / (plan.e - plan.s)) * 100)
+  }
+  return out
+}
