@@ -254,9 +254,9 @@ async function main() {
       if (name === 'singleFree') {
         // 7 Chaturbate imported sessions: 30, 20, 20, 10 (newest first) then 10, 10, 40.
         const marks = await page.locator('[data-testid^="row-vs-"]').allTextContents();
-        check(`${name} · newest session marked ▲ +100% vs typical (30 vs median 15 of the other 6)`, marks[0] === '▲ +100% vs typical', JSON.stringify(marks));
-        check(`${name} · second session ▲ +33% vs typical (20 vs median 15)`, marks[1] === '▲ +33% vs typical', JSON.stringify(marks));
-        check(`${name} · fourth session ▼ -50% vs typical (10 vs median 20)`, marks[3] === '▼ -50% vs typical', JSON.stringify(marks));
+        check(`${name} · newest session marked ▲ +100% vs typical (30 vs median 15 of the other 6)`, marks[0] === '▲ +100%vs typical', JSON.stringify(marks));
+        check(`${name} · second session ▲ +33% vs typical (20 vs median 15)`, marks[1] === '▲ +33%vs typical', JSON.stringify(marks));
+        check(`${name} · fourth session ▼ -50% vs typical (10 vs median 20)`, marks[3] === '▼ -50%vs typical', JSON.stringify(marks));
         table.push({ scenario: name, scope: 'Recent Sessions', metric: 'row vs typical (rows 1,2,4)', raw: '▲ +100% | ▲ +33% | ▼ -50%', dom: [marks[0], marks[1], marks[3]].join(' | ') });
       }
       await ctx.close();

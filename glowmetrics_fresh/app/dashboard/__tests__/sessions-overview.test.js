@@ -308,7 +308,7 @@ test('Recent Sessions rows marked above/below typical once 5 comparable sessions
   renderTab({ tips })
   const marks = screen.getAllByTestId(/^row-vs-/)
   expect(marks[0].getAttribute('data-outcome')).toBe('above')
-  expect(marks[0].textContent).toBe('▲ +167% vs typical')
+  expect(marks[0].textContent).toBe('▲ +167%vs typical')
   expect(val('details-vs')).toMatch(/\+167% vs typical \(median \$15\.00 of 6 of your Chaturbate imported sessions\)/)
   expect(marks.some((m) => m.getAttribute('data-outcome') === 'below')).toBe(true)
 })

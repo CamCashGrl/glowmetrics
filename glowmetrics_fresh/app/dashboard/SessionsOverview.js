@@ -367,8 +367,8 @@ function VsTypical({ vs, testId, long = false, e }) {
   const pct = vs.outcome === "par" ? "On par" : `${vs.deltaPct > 0 ? "+" : ""}${vs.deltaPct}%`
   const scope = vs.basis === "same" && e ? `your ${pName(e.platforms[0])} ${e.type === "live" ? "Live" : e.type === "free_chat" ? "free-chat" : "imported"} sessions` : "all your meaningful sessions"
   return (
-    <span data-testid={testId} data-outcome={vs.outcome} title={`Median of ${vs.sessions} of ${scope}: ${fmtUsd(vs.medianUSD)}`} style={{ color, fontWeight: 800, fontSize: long ? 12.5 : 10.5, whiteSpace: "nowrap" }}>
-      {arrow} {pct}{long ? ` vs typical (median ${fmtUsd(vs.medianUSD)} of ${vs.sessions} of ${scope})` : " vs typical"}
+    <span data-testid={testId} data-outcome={vs.outcome} title={`Median of ${vs.sessions} of ${scope}: ${fmtUsd(vs.medianUSD)}`} style={{ display: long ? "inline" : "block", color, fontWeight: 800, fontSize: long ? 12.5 : 10.5, whiteSpace: "nowrap", lineHeight: 1.25 }}>
+      {arrow} {pct}{long ? ` vs typical (median ${fmtUsd(vs.medianUSD)} of ${vs.sessions} of ${scope})` : <span style={{ display: "block", color: C.text, fontWeight: 600 }}>vs typical</span>}
     </span>
   )
 }
@@ -380,7 +380,7 @@ function SessionRow({ e, tz, selected, onSelect, vs }) {
   return (
     <button data-testid={`history-${e.id}`} onClick={onSelect} aria-pressed={selected} className="sx-row" style={{
       ...inset, width: "100%", textAlign: "left", cursor: "pointer", padding: "10px 14px", display: "grid",
-      gridTemplateColumns: "32px minmax(0,1fr) 92px 50px 44px 10px", gap: 8, alignItems: "center", color: C.white,
+      gridTemplateColumns: "32px minmax(0,1fr) 72px 50px 44px 10px", gap: 8, alignItems: "center", color: C.white,
       ...(selected ? { border: `1px solid ${C.pink}`, boxShadow: `0 0 0 1px ${C.indigo}55, 0 0 22px ${C.pink}40`, background: "rgba(30,18,52,0.75)" } : {}),
     }}>
       <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.05)", color: e.type === "imported" ? C.text : C.cyan, fontSize: 14 }}>{e.type === "imported" ? "▤" : e.type === "private" ? "🔒" : "▶"}</span>
