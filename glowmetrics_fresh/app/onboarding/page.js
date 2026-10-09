@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats } from '../../lib/analytics'
+import { FREE_ANALYSIS_WINDOW_DAYS } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
@@ -550,8 +551,13 @@ const CSS=`
   input::placeholder{color:rgba(100,116,139,0.4)}
   input:focus,textarea:focus{outline:none}
   button{font-family:inherit;cursor:pointer}
-  ::-webkit-scrollbar{width:4px}
-  ::-webkit-scrollbar-thumb{background:rgba(33,230,243,0.25);border-radius:2px}
+  .ob-card{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.10) transparent;scrollbar-gutter:auto}
+  .ob-card::-webkit-scrollbar{width:6px}
+  .ob-card::-webkit-scrollbar-track{background:transparent;margin:24px 0}
+  .ob-card::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.10);border-radius:6px}
+  .ob-card::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.18)}
+  textarea::-webkit-scrollbar{width:4px}
+  textarea::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px}
   .stat-card{
     background:linear-gradient(160deg,rgba(255,255,255,0.055),rgba(255,255,255,0.022));
     border:1px solid rgba(255,255,255,0.10);
@@ -588,9 +594,15 @@ const CSS=`
     .ob-plat-row{flex-direction:column!important}
   }
   @media(min-width:601px){
-    .ob-card-shell{max-width:600px!important}
-    main{padding:10px 16px 10px!important}
-    .ob-card{padding:18px 28px 14px!important;max-height:calc(100vh - 20px)!important}
+    .ob-card-shell{max-width:min(600px,calc(100vw - 32px))!important}
+    main{padding:12px 16px!important}
+    .ob-card{padding:clamp(14px,2.4dvh,22px) 28px clamp(12px,2dvh,18px)!important}
+  }
+  .ob-card{max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px)}
+  .ob-gap{margin-bottom:clamp(10px,1.8dvh,16px)!important}
+  @media(max-height:820px){
+    .ob-stepper{margin-bottom:8px!important}
+    .ob-stepper-circle{width:26px!important;height:26px!important}
   }
 `
 
@@ -675,7 +687,7 @@ function OBLinks({links}){
 }
 
 function OBTrust(){
-  return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:14,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
+  return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
 }
 
 // ── Main component ─────────────────────────────────────────────
@@ -1099,9 +1111,7 @@ export default function OnboardingPage(){
 
       {/* ── CARD ── */}
       <div className="ob-card-shell" style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div style={{position:'absolute',left:-2,top:'6%',bottom:'6%',width:3,borderRadius:4,background:'linear-gradient(180deg,transparent,rgba(33,230,243,0.9),transparent)',zIndex:-1}}/>
-        <div style={{position:'absolute',right:-2,top:'6%',bottom:'6%',width:3,borderRadius:4,background:'linear-gradient(180deg,transparent,rgba(255,47,174,0.9),transparent)',zIndex:-1}}/>
-        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',maxHeight:'calc(100vh - 64px)',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
           <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
@@ -1197,11 +1207,11 @@ export default function OnboardingPage(){
           {step==='username'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={EYE}>Step 2 of 3 — Chaturbate{queuePosLabel}</div>
-              <div style={{textAlign:'center',marginBottom:22}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Connect your Chaturbate data':`You also stream on ${platform.label}`}</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
+              <div className="ob-gap" style={{textAlign:'center'}}>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:6}}>{isPrimaryInQueue?'Connect your Chaturbate data':`You also stream on ${platform.label}`}</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.55,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
               </div>
-              <div style={{marginBottom:22}}>
+              <div className="ob-gap">
                 <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:7,letterSpacing:'0.08em',textTransform:'uppercase'}}>Chaturbate username</div>
                 <div style={{position:'relative'}}>
                   <input value={cbUsername} onChange={e=>{setCbUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g,''));setCbUsernameError('')}} onKeyDown={e=>e.key==='Enter'&&handleUsernameSubmit()} placeholder="your_username" autoFocus
@@ -1347,14 +1357,14 @@ export default function OnboardingPage(){
             const recent=snap?.recent
             return(
             <div style={{animation:'fadeUp 0.35s ease both',textAlign:'center'}}>
-              <div style={{width:56,height:56,borderRadius:20,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,color:'#fff',margin:'0 auto 14px',boxShadow:'0 0 40px rgba(33,230,243,0.35),0 0 70px rgba(255,47,174,0.2)'}}>✓</div>
+              <div style={{width:44,height:44,borderRadius:16,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff',margin:'0 auto 10px',boxShadow:'0 0 40px rgba(33,230,243,0.35),0 0 70px rgba(255,47,174,0.2)'}}>✓</div>
               <div style={EYE}>{isPrimaryInQueue?'Primary Platform':'Secondary Platform'}</div>
               <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:6}}>{isPrimaryInQueue?`Your ${platform.label} data is ready`:`${platform.label} data connected`}</h1>
               {full&&full.days>0&&(
-                <p style={{fontSize:12,color:'rgba(148,163,184,0.75)',marginBottom:18}}>{fmtDate(full.from)} — {fmtDate(full.to)} · {full.days} day{full.days===1?'':'s'} of data imported</p>
+                <p style={{fontSize:12,color:'rgba(148,163,184,0.75)',marginBottom:12}}>{fmtDate(full.from)} — {fmtDate(full.to)} · {full.days} day{full.days===1?'':'s'} of data imported</p>
               )}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:16}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:12}}>
                 <div className="stat-card" style={{padding:'12px 10px'}}>
                   <div style={{fontSize:9,color:'rgba(148,163,184,0.6)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>Earnings</div>
                   <div style={{fontSize:18,fontWeight:900,color:CYAN}}>${(full?.usd??currentResult.totalUsd??0).toFixed(2)}</div>
@@ -1365,7 +1375,7 @@ export default function OnboardingPage(){
                 </div>
               </div>
 
-              <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',padding:'14px 16px',marginBottom:16,textAlign:'left'}}>
+              <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',padding:'12px 14px',marginBottom:12,textAlign:'left'}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
                   <div style={{fontSize:10,fontWeight:900,color:'rgba(33,230,243,0.9)',textTransform:'uppercase',letterSpacing:'0.1em'}}>Your first snapshot</div>
                   <button onClick={()=>setHowItWorksOpen(v=>{const next=!v;if(next)track('onboarding_how_it_works_opened',{platform:platformId});return next})} style={{background:'none',border:'none',color:'rgba(148,163,184,0.6)',fontSize:10,cursor:'pointer',padding:0}}>ⓘ How this works</button>
@@ -1375,21 +1385,24 @@ export default function OnboardingPage(){
                     CamCash keeps your imported history so your insights can get smarter as you add more data. Your Free dashboard focuses on your most recent 31 days so you can quickly see what's happening now. Older imported history is preserved where available and can power deeper trends as you unlock more of CamCash.
                   </div>
                 )}
-                {recent&&!recent.isPartial?(
-                  <>
-                    <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:2}}>Most recent 31 days</div>
-                    <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:8}}>{fmtDate(recent.from)} — {fmtDate(recent.to)}</div>
-                  </>
-                ):(
-                  <>
-                    <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:2}}>Your available data</div>
-                    <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginBottom:8}}>You're starting with {recent?.days||0} day{recent?.days===1?'':'s'} of data. Add more history later to uncover deeper trends.</div>
-                  </>
+                {/* First insight — reuses buildPreview's existing bestHour /
+                    bestHourConfident (≥2 distinct days) for the platform just
+                    imported. preview is reset per platform in startConnecting
+                    and is null for CSV imports, so nothing is shown unless the
+                    data for THIS platform supports it. No new metric logic. */}
+                {full&&full.days>0&&(
+                  <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:6}}>You imported {full.days} day{full.days===1?'':'s'} of streaming history.</div>
                 )}
-                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
-                  <div><div style={{fontSize:9,color:'rgba(148,163,184,0.55)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Earnings</div><div style={{fontSize:14,fontWeight:800,color:CYAN}}>${(recent?.usd||0).toFixed(2)}</div></div>
-                  <div><div style={{fontSize:9,color:'rgba(148,163,184,0.55)',textTransform:'uppercase',letterSpacing:'0.08em'}}>Tips</div><div style={{fontSize:14,fontWeight:800,color:'#4ade80'}}>{recent?.tips||0}</div></div>
-                </div>
+                {preview?.bestHour&&preview.bestHourConfident?(
+                  <div style={{fontSize:12,color:'rgba(203,213,225,0.88)',lineHeight:1.55}}>⚡ Your biggest tips land around <strong style={{color:PINK}}>{preview.bestHour}</strong>, across more than one day of streaming.</div>
+                ):(
+                  <div style={{fontSize:11.5,color:'rgba(148,163,184,0.78)',lineHeight:1.55}}>We need a little more history to identify your strongest earning patterns. Keep using Live Mode or import more history.</div>
+                )}
+                {/* Only surface the Free 31-day window figures when they
+                    actually differ from the full-import totals above. */}
+                {recent&&!recent.isPartial&&full&&full.days>FREE_ANALYSIS_WINDOW_DAYS&&(
+                  <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid rgba(255,255,255,0.06)',fontSize:11,color:'rgba(148,163,184,0.75)'}}>Free dashboard view (most recent {FREE_ANALYSIS_WINDOW_DAYS} days): <span style={{color:CYAN,fontWeight:700}}>${(recent.usd||0).toFixed(2)}</span> · <span style={{color:'#4ade80',fontWeight:700}}>{recent.tips||0} tips</span></div>
+                )}
               </div>
 
               {!isPrimaryInQueue&&(
