@@ -83,6 +83,14 @@ const EXPECT = {
     },
     contains: { 'overall-history-note': 'Full history on every platform' },
   },
+  lightFree: {
+    overall: { 'overall-source': 'IMPORTED HISTORY', 'overall-total': '$15.00', 'overall-tips': '2', 'overall-unique': '2', 'overall-meaningful': '1', 'overall-median': '$15.00' },
+    contains: {
+      'overall-private': 'No private earnings yet',
+      'perf-typical': '2 more sessions needed for Typical Session',
+      'perf-momentum': '5 more sessions needed for Recent Momentum',
+    },
+  },
   noData: { contains: { 'sessions-activation': 'No performance data yet' }, present: ['activation-import', 'activation-live'], absent: ['today-stats', 'today-by-platform', 'session-history'] },
 };
 
