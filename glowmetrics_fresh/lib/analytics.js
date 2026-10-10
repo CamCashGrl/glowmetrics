@@ -36,11 +36,25 @@ export function calculateConfidence(validSessionCount, streamedHours) {
   return { level: 'Medium', label: 'Likely pattern' }
 }
 
+// Building an Intl.DateTimeFormat is expensive; constructing one per tip made
+// aggregateRows take 10–36s on ~12k tips (#667). Reuse one per (kind, tz).
+// Same locale and options as before, so output is unchanged; an invalid tz
+// still throws from the constructor into each caller's existing catch.
+const localTimeFormatters = new Map()
+function localTimeFormatter(kind, tz, locale, options) {
+  const key = `${kind}|${tz}`
+  let fmt = localTimeFormatters.get(key)
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, { timeZone: tz, ...options })
+    localTimeFormatters.set(key, fmt)
+  }
+  return fmt
+}
+
 export function toLocalHour(dateStr, tz) {
   try {
     const date = new Date(dateStr)
-    const formatted = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
+    const formatted = localTimeFormatter('hour', tz, 'en-US', {
       hour: 'numeric',
       hour12: false
     }).format(date)
@@ -52,8 +66,7 @@ export function toLocalHour(dateStr, tz) {
 export function toLocalDow(dateStr, tz) {
   try {
     const date = new Date(dateStr)
-    const dayName = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
+    const dayName = localTimeFormatter('weekday', tz, 'en-US', {
       weekday: 'long'
     }).format(date)
     return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -63,9 +76,7 @@ export function toLocalDow(dateStr, tz) {
 
 function toLocalDateStr(dateStr, tz) {
   try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz
-    }).format(new Date(dateStr)) // returns YYYY-MM-DD
+    return localTimeFormatter('date', tz, 'en-CA', {}).format(new Date(dateStr)) // returns YYYY-MM-DD
   } catch { return new Date(dateStr).toISOString().slice(0, 10) }
 }
 

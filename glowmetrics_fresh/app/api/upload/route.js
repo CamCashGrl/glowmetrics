@@ -267,7 +267,7 @@ async function handleUpload(req) {
       )
       const monthsCovered = [...monthsSet].sort()
 
-      await supabase.from('csv_uploads').insert({
+      const { error: logInsertError } = await supabase.from('csv_uploads').insert({
         user_id:        user.id,
         upload_ref:     crypto.randomUUID(),
         platform:       detectedPlatform,
@@ -282,10 +282,16 @@ async function handleUpload(req) {
         total_tokens:   summaryTotalTokens,
         status,
       })
-      console.log(`[UPLOAD] Logged csv_upload record (${status}) for ${detectedPlatform} — ${monthsCovered.length} months covered`)
+      // supabase-js reports insert failures in { error } rather than throwing,
+      // so without this check a failed audit row vanished silently (#672).
+      if (logInsertError) {
+        console.error('[UPLOAD] Failed to log csv_upload record:', logInsertError.message)
+      } else {
+        console.log(`[UPLOAD] Logged csv_upload record (${status}) for ${detectedPlatform} — ${monthsCovered.length} months covered`)
+      }
     } catch (logErr) {
       // Non-fatal — don't fail the whole upload if logging fails
-      console.warn('[UPLOAD] Failed to log csv_upload record:', logErr.message)
+      console.error('[UPLOAD] Failed to log csv_upload record:', logErr.message)
     }
   }
 
