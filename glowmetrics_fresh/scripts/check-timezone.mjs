@@ -38,6 +38,10 @@ const BASELINE = {
   'app/dashboard/page.js': 15,
   'lib/analytics.js': 8,  // Reduced from 9: replaced getUTCHours() with toLocalHour() in identifyWhales()
   'app/dashboard/DashboardGrowthCharts.js': 2,
+  // Verbatim copy of the previous toLocalHour/toLocalDow (incl. their UTC
+  // fallback for an invalid tz) so the test can prove the cached-formatter
+  // versions return identical results (#667). Not creator-facing.
+  'lib/__tests__/local-time-helpers-equivalence.test.js': 2,
 }
 
 // Genuinely correct uses: the tz helpers' own fallback when Intl is missing,
