@@ -2385,8 +2385,10 @@ const stopImportMessageRotation = () => {
       track('csv_imported', { rows: result.inserted, platform: result.platform || 'Unknown' })
       gtmTrack('csv_upload_success', { platform: result.platform || 'unknown', row_count: result.inserted })
 
+      // Skipped rows are already-saved duplicates (e.g. a re-upload after an
+      // interrupted import), not lost data — say so plainly (#669).
       const msg = result.skipped > 0
-        ? `✅ Imported ${result.inserted} tips (${result.skipped} duplicates skipped)`
+        ? `✅ All ${result.inserted + result.skipped} tips imported (${result.skipped} were already saved from an earlier upload)`
         : `✅ Imported ${result.inserted} tips from ${result.platform}!`
       showToast(msg)
       setLastUploadResult({
@@ -5977,7 +5979,7 @@ const stopImportMessageRotation = () => {
                     </div>
                   )}
                   {lastUploadResult.skipped > 0 && (
-                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} duplicates skipped</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{lastUploadResult.skipped} were already saved from an earlier upload — nothing was lost</div>
                   )}
                   <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
                     <Button onClick={() => handleTabChange('overview')} style={{ padding: "12px 26px", fontSize: 14 }}>View Dashboard</Button>
