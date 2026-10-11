@@ -753,7 +753,7 @@ export default function LandingClient() {
     'name': 'CamCash',
     'url': 'https://www.camcashgrl.com',
     'logo': 'https://www.camcashgrl.com/logo.png',
-    'description': 'Free analytics dashboard for cam models on Chaturbate, BongaCams, MyFreeCams, CamSoda, and Stripchat',
+    'description': 'Free analytics dashboard for cam models on Chaturbate, BongaCams, MyFreeCams, and CamSoda',
     'sameAs': ['https://twitter.com/daphneslive'],
     'contactPoint': {
       '@type': 'ContactPoint',
@@ -1145,7 +1145,7 @@ export default function LandingClient() {
           <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "22px 28px", margin: 0 }}>
             {[
               ["Category", "Analytics software for cam models & content creators"],
-              ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
+              ["Built for", "Chaturbate, BongaCams, MyFreeCams & CamSoda"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
               ["Price", "Free forever: full history on 1 primary platform, last 31 days on your other platforms. Standard is $9.99/mo (or $99/yr) and unlocks full history on every platform"],

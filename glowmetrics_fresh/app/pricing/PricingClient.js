@@ -611,7 +611,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What platforms does CamCash support?',
-    a: 'CamCash currently supports Chaturbate, BongaCams, MyFreeCams, and Stripchat. Additional platforms may be added based on creator demand.',
+    a: 'CamCash currently supports Chaturbate, BongaCams, and MyFreeCams. Additional platforms may be added based on creator demand.',
   },
   {
     q: 'Is my data private?',
@@ -816,7 +816,7 @@ function FinalCTA({ user }) {
         }}
       >
         Free plan always available · No credit card
-        required · Four platforms supported
+        required · Three platforms supported
       </p>
     </section>
   )

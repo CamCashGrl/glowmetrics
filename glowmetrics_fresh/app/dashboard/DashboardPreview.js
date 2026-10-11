@@ -438,8 +438,8 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
     { label: 'Start your first Live Mode session', done: liveModeSessions >= 1 },
     { label: 'Unlock full insights', done: readiness === 'full_data' },
     isPro
-      ? { label: 'Pro multi-platform tracking enabled', done: true }
-      : { label: 'Upgrade to Pro for multi-platform tracking', done: false, isPro: true },
+      ? { label: 'Pro: full history on every platform', done: true }
+      : { label: 'Upgrade to Pro for full history on every platform', done: false, isPro: true },
   ]
   const progressPct = Math.round((progressItems.filter(i => i.done).length / progressItems.length) * 100)
 
@@ -467,7 +467,8 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
   }
   const nextAction = getNextAction()
 
-  const ALL_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams', 'Stripchat', 'CamSoda']
+  // Only platforms the backend accepts (api/profile/primary-platform ALLOWED, lib/sessions/normalize SUPPORTED_PLATFORMS).
+  const ALL_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams']
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "'Inter',system-ui,sans-serif", color: C.white, boxSizing: 'border-box', position: 'relative' }}>
@@ -521,12 +522,12 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
               ) : platformCount === 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track 1 platform for free. Choose your first platform to start building your dashboard.</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track up to 3 platforms for free: full history on your primary platform, the last 31 days on the others. Choose your first platform to start building your dashboard.</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · 1 platform active</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. Upgrade to Pro when you're ready to track more platforms and compare where you earn best.</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} of 3 platforms</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. You can add up to 3 platforms for free (full history on your primary, the last 31 days on the others). Upgrade to Pro for full history on every platform.</div>
                 </>
               )}
             </div>
@@ -543,7 +544,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
           </div>
           {!isPro && (
             <div style={{ marginTop: 12, fontSize: 11, color: C.muted, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              Your free plan includes 1 active platform. Pro unlocks multi-platform tracking and comparisons. You can keep tracking 1 platform for free forever.
+              Your free plan includes up to 3 platforms: full history on your primary platform and the last 31 days on the others, free forever. Pro unlocks full history on every platform.
             </div>
           )}
         </div>
@@ -620,7 +621,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
           <SnapshotMetricCard
             label="Platforms"
             value={platformCount > 0 ? platforms.join(', ') : 'None yet'}
-            helper={isPro ? 'Pro multi-platform tracking enabled' : 'Free plan tracks 1 platform'}
+            helper={isPro ? 'Pro: full history on every platform' : 'Free: up to 3 platforms · full history on primary, 31 days on others'}
             status={platformCount > 0 ? 'ready' : 'locked'}
           />
         </div>
@@ -711,7 +712,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
           <TopAccent color="rgba(124,92,255,0.4)" />
           {platformCount === 0 ? (
             <>
-              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose 1 platform to track for free</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.white, marginBottom: 6 }}>Choose a platform to start tracking for free</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 10, marginTop: 14 }}>
                 {ALL_PLATFORMS.map(p => (
                   <button key={p} onClick={onAddHistory} style={{ padding: '10px 14px', borderRadius: 12, border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(34,211,238,0.05)', color: C.white, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>

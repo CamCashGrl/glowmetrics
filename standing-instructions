@@ -208,9 +208,12 @@ return "tiny-import";
 
 ## PAYMENT GATING
 
-**Free tier limits:**
-- 3 CSV uploads max
-- 500 tip cap
+**Free tier limits** (owner decision 2026-10-11; enforced by lib/planLimits.js,
+lib/analytics.js applyFreeAnalysisWindow and the enforce_free_tier_platform_limit trigger):
+- Up to 3 platforms (1 Primary + 2 Secondary)
+- Primary platform: full history
+- Secondary platforms: rolling last 31 days
+- No tip cap, no lifetime CSV upload cap
 - Pro-gated tabs: enforced, never bypass
 
 **Capability model** — use `getUserCapabilities()` from the shared capability helper. Never scatter plan checks in individual components.
@@ -326,8 +329,9 @@ All paste text sent as plain text to `/api/upload`. Platform detection is server
 ## FREE TIER ENFORCEMENT
 
 ```
-3 CSV uploads max
-500 tip cap
+Up to 3 platforms (1 Primary + 2 Secondary)
+Primary platform: full history · Secondary platforms: rolling last 31 days
+No tip cap · no lifetime CSV upload cap
 Pro-gated tabs: never bypass in any path, including API routes
 ```
 
