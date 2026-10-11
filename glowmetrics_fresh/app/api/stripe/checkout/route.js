@@ -94,14 +94,35 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid subscription plan selected.' }, { status: 400 })
     }
 
-    const priceId = PRICE_MAP[planType]
-    if (!priceId || !priceId.startsWith('price_')) {
-      console.error(`Checkout: missing or invalid price for ${planType}`)
+    let priceId = PRICE_MAP[planType]
+
+    // The advertised price is the contract: $9.99/month, $99/year. The
+    // monthly env var pointed at a $19.99 price, so every price is checked
+    // against Stripe before checkout. Monthly falls back to the $9.99 price's
+    // lookup key; anything still not matching is refused (never overcharge).
+    const ADVERTISED = {
+      standard_monthly: { amount: 999,  interval: 'month', lookupKey: 'Monthly_Premuim' },
+      standard_annual:  { amount: 9900, interval: 'year',  lookupKey: null },
+    }
+    const expected = ADVERTISED[planType]
+    const matches = (p) => p && p.active && p.currency === 'usd'
+      && p.unit_amount === expected.amount && p.recurring?.interval === expected.interval
+    let price = null
+    if (priceId && priceId.startsWith('price_')) {
+      price = await stripe.prices.retrieve(priceId).catch(() => null)
+    }
+    if (!matches(price) && expected.lookupKey) {
+      const found = await stripe.prices.list({ lookup_keys: [expected.lookupKey], active: true, limit: 1 })
+      price = found.data[0] || null
+    }
+    if (!matches(price)) {
+      console.error(`Checkout: no active Stripe price matches the advertised ${planType} amount (${expected.amount})`)
       return NextResponse.json(
         { error: `The ${planType.includes('annual') ? 'annual' : 'monthly'} Stripe price is not configured correctly.` },
         { status: 500 }
       )
     }
+    priceId = price.id
 
     // Create checkout session with 7-day trial
     // Card is collected immediately but not charged until after 7 days
