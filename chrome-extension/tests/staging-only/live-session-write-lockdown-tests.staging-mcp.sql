@@ -136,6 +136,12 @@ BEGIN
         AND c.grantee IN ('anon','authenticated') AND c.privilege_type <> 'SELECT') THEN
     RAISE EXCEPTION 'FAIL browser roles hold column write privileges';
   END IF; n := n + 1;
+  IF has_schema_privilege('anon', 'public', 'CREATE')
+     OR has_schema_privilege('authenticated', 'public', 'CREATE')
+     OR EXISTS (SELECT 1 FROM pg_namespace ns, aclexplode(ns.nspacl) x
+                WHERE ns.nspname = 'public' AND x.grantee = 0 AND x.privilege_type = 'CREATE') THEN
+    RAISE EXCEPTION 'FAIL PUBLIC/anon/authenticated can CREATE in schema public';
+  END IF; n := n + 1;
   IF (SELECT final_total_usd = 99999 OR final_duration_seconds <> 3240 FROM public.live_sessions WHERE id = v_ended) THEN
     RAISE EXCEPTION 'FAIL finalized earnings changed';
   END IF; n := n + 1;

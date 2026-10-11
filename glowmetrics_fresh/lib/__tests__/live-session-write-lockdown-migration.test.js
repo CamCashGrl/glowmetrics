@@ -86,6 +86,40 @@ describe('live session write lockdown migration', () => {
     expect(reconcile).toContain('perform public.check_live_mode_pro_entitlement(v_uid);')
   })
 
+  // The DEFINER functions run with search_path = public, pg_temp. Every
+  // relation and every non-builtin function they reference must be
+  // schema-qualified, so nothing can ever resolve through pg_temp (or any
+  // other schema) instead of the intended public object. Builtins resolve
+  // from pg_catalog, which is implicitly searched first.
+  describe('lifecycle bodies are fully schema-qualified', () => {
+    const NAMES = [...LIFECYCLE, '_finalize_live_session_metrics(uuid)'].map((s) => s.split('(')[0])
+    const BUILTINS = new Set([
+      'now', 'greatest', 'extract', 'coalesce', 'nullif', 'trim', 'pg_advisory_xact_lock',
+      'hashtextextended', 'count', 'sum', 'max', 'avg', 'min', 'lower', 'round',
+      'jsonb_object_agg', 'jsonb_build_object', 'exists', 'in', 'values', 'not',
+      // SQL keywords that precede '(' inside builtins: EXTRACT(EPOCH FROM (..)), COUNT(DISTINCT (..))
+      'from', 'distinct',
+    ])
+    const bodies = {}
+    const re = /CREATE OR REPLACE FUNCTION public\.(\w+)\([\s\S]*?AS \$function\$([\s\S]*?)\$function\$/g
+    let m
+    while ((m = re.exec(reconcile))) bodies[m[1]] = m[2].replace(/--[^\n]*/g, '')
+
+    test.each(NAMES)('%s', (name) => {
+      const body = bodies[name]
+      expect(body).toBeDefined()
+      const unqualifiedRelations = [...body.matchAll(/\b(?:from|join|update|into)\s+([a-z_][\w.]*)/gi)]
+        .map((x) => x[1])
+        .filter((x) => !/^(public|auth)\./i.test(x) && !/^v_/i.test(x))
+      expect(unqualifiedRelations).toEqual([])
+      const unqualifiedCalls = [...body.matchAll(/\b([a-z_]\w*\.)?([a-z_]\w*)\s*\(/gi)]
+        .filter((x) => !x[1])
+        .map((x) => x[2].toLowerCase())
+        .filter((c) => !BUILTINS.has(c))
+      expect(unqualifiedCalls).toEqual([])
+    })
+  })
+
   test('lockdown does not redefine any function body (attributes only)', () => {
     expect(lockdown).not.toMatch(/CREATE (OR REPLACE )?FUNCTION/i)
   })

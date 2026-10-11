@@ -144,6 +144,21 @@ BEGIN
   PERFORM lockdown_test.check(
     NOT has_function_privilege('anon', 'public.start_live_session(text)', 'EXECUTE'),
     'anon cannot execute start_live_session');
+
+  -- The DEFINER functions search `public, pg_temp`: no untrusted role may be
+  -- able to create objects in `public` that could shadow the intended ones.
+  PERFORM lockdown_test.check(
+    NOT has_schema_privilege('anon', 'public', 'CREATE')
+    AND NOT has_schema_privilege('authenticated', 'public', 'CREATE')
+    AND NOT EXISTS (SELECT 1 FROM pg_namespace ns, aclexplode(ns.nspacl) x
+                    WHERE ns.nspname = 'public' AND x.grantee = 0 AND x.privilege_type = 'CREATE'),
+    'PUBLIC / anon / authenticated cannot CREATE in schema public');
+  PERFORM lockdown_test.check(
+    NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace
+                  AND pg_get_userbyid(c.relowner) IN ('anon', 'authenticated'))
+    AND NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+                  AND pg_get_userbyid(p.proowner) IN ('anon', 'authenticated')),
+    'browser roles own no objects in schema public');
 END $$;
 
 -- ═════════════════════════════════════════════════════════════════════════
