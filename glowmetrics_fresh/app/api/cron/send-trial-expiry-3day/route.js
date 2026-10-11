@@ -95,7 +95,7 @@ export async function GET() {
 
 Your GlowMetrics trial expires on ${expiryDate}. Don't lose access to your analytics!
 
-Upgrade now to keep your insights, data, and all premium features.
+Upgrade now to keep your insights, data, and all Pro features.
 
 Click here to upgrade: https://glowmetrics.co/upgrade
 

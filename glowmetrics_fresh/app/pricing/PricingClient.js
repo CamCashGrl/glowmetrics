@@ -217,6 +217,7 @@ function PricingSection({
 }) {
   const freeFeatures = [
     'Track up to 3 platforms (1 Primary + 2 Secondary)',
+    'Full history on your Primary platform',
     'Upload tip history by CSV',
     'Basic earnings dashboard',
     'Basic session analytics',
@@ -224,13 +225,13 @@ function PricingSection({
     'Real-time alerts',
     'Basic Live Mode coaching',
     'Top 3 fans',
-    '31-day rolling analysis per platform',
+    'Last 31 days on your Secondary platforms',
     'Basic fan insights',
   ]
 
   const standardFeatures = [
     'Unlimited platform tracking',
-    'Full permanent history (beyond 31 days)',
+    'Full permanent history on every platform',
     'Advanced churn and re-engagement insights',
     'Full fan profiles and CRM tools',
     'Cross-platform earnings comparisons',
@@ -404,7 +405,7 @@ function PricingSection({
                 margin: '0 0 12px',
               }}
             >
-              Standard
+              Pro
             </p>
 
             <div style={{ marginBottom: 6 }}>
@@ -519,7 +520,7 @@ function PromiseSection() {
   const promises = [
     'The free plan will always exist and remain genuinely useful',
     'Core live tracking and basic coaching stay free',
-    'Standard unlocks full history, deeper insights, and multi-platform tracking',
+    'Pro unlocks full history on every platform and deeper insights',
     'No surprise feature locks after launch',
     '30 days notice before material pricing or plan changes',
     'Built by cam models, for cam models',
@@ -590,19 +591,19 @@ function PromiseSection() {
 const FAQ_ITEMS = [
   {
     q: 'Will the free plan always be available?',
-    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes tracking up to 3 platforms, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, and 31-day rolling analysis per platform.',
+    a: 'Yes. The free plan will always exist and remain genuinely useful. It includes tracking up to 3 platforms, CSV uploads, basic earnings and session analytics, live tip detection, real-time alerts, basic Live Mode coaching, top-three fan insights, full history on your Primary platform, and the last 31 days on your Secondary platforms.',
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports up to 3 platforms (1 Primary and 2 Secondary). Standard unlocks unlimited platform tracking and adds advanced cross-platform comparisons.',
+    a: 'The free plan supports up to 3 platforms: full history on your 1 Primary platform and the last 31 days on your 2 Secondary platforms. Pro unlocks full history on every platform and adds advanced cross-platform comparisons.',
   },
   {
-    q: 'What does the Standard plan include?',
-    a: 'Standard includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
+    q: 'What does CamCash Pro include?',
+    a: 'Pro includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
   },
   {
-    q: 'How much is Standard?',
-    a: 'Standard is $9.99 per month or $99 per year. Both billing options unlock the same Standard features.',
+    q: 'How much is Pro?',
+    a: 'CamCash Pro is $9.99 per month or $99 per year. Both billing options unlock the same Pro features.',
   },
   {
     q: 'Can I switch between monthly and annual billing?',
@@ -610,7 +611,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'What platforms does CamCash support?',
-    a: 'CamCash currently supports Chaturbate, BongaCams, MyFreeCams, and Stripchat. Additional platforms may be added based on creator demand.',
+    a: 'CamCash currently supports Chaturbate, BongaCams, and MyFreeCams. Additional platforms may be added based on creator demand.',
   },
   {
     q: 'Is my data private?',
@@ -815,7 +816,7 @@ function FinalCTA({ user }) {
         }}
       >
         Free plan always available · No credit card
-        required · Four platforms supported
+        required · Three platforms supported
       </p>
     </section>
   )

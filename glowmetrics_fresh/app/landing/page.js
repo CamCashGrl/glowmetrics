@@ -880,7 +880,7 @@ export default function LandingPage() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. Premium analytics are optional and unlock deeper insights." },
+    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. CamCash Pro is optional and unlocks deeper insights." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
@@ -1007,10 +1007,10 @@ export default function LandingPage() {
           <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "22px 28px", margin: 0 }}>
             {[
               ["Category", "Analytics software for cam models & content creators"],
-              ["Built for", "Chaturbate, BongaCams, MyFreeCams, CamSoda & Stripchat"],
+              ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever for 1 platform. Premium plans unlock multi-platform tracking and advanced features."],
+              ["Price", "Free forever: full history on your 1 primary platform, plus the last 31 days on your other platforms. Pro ($9.99/mo) unlocks full history on every platform."],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
@@ -1091,8 +1091,8 @@ export default function LandingPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 20 }}>
           {[
             { num: "1", accent: T.cyan, icon: "🧩", title: "Download Extension", body: "Auto-detect tips instantly. Works without an account. Use immediately.", link: ["/extension", "Download free →"] },
-            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Premium optional" },
-            { num: "3", accent: T.pink, icon: "🚀", title: "Try Premium Free", body: "Start your free trial of premium features. Cancel anytime.", link: ["/pricing", "Start free trial →"] },
+            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Pro optional" },
+            { num: "3", accent: T.pink, icon: "🚀", title: "Try Pro Free", body: "Start your free trial of CamCash Pro. Cancel anytime.", link: ["/pricing", "Start free trial →"] },
           ].map(({ num, accent, icon, title, body, link, note }) => (
             <div key={title} style={{ background: `${accent}0d`, border: `1px solid ${accent}30`, borderRadius: 18, padding: "28px 24px", textAlign: "center", position: "relative" }}>
               <div style={{ width: 30, height: 30, borderRadius: 9, background: T.gradientPrimary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#06101A", margin: "0 auto 14px", boxShadow: "0 0 14px rgba(22,244,255,0.3)" }}>{num}</div>
