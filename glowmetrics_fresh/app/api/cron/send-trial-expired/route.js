@@ -93,7 +93,7 @@ export async function GET() {
 
 Your GlowMetrics trial has ended. Your account is currently on a free plan with limited features.
 
-Upgrade now to get back your full analytics, insights, and all premium tools.
+Upgrade now to get back your full analytics, insights, and all Pro tools.
 
 👉 Reactivate subscription: https://glowmetrics.co/upgrade
 

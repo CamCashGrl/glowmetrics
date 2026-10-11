@@ -1,4 +1,6 @@
--- NOT YET APPLIED — awaiting owner approval (counts reported 2026-10-11).
+-- APPLIED to prod 2026-10-11 after owner approval. Verified: 53 users assigned
+-- (45 Chaturbate, 6 BongaCams, 2 MyFreeCams), all match the backup table, none
+-- Unknown, none multi-platform; 124 free users still have no primary.
 --
 -- Free users with NO primary platform get every platform cut to 31 days, so
 -- they never receive the free tier's one full-history platform. Owner rule

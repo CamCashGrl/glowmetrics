@@ -405,7 +405,7 @@ function PricingSection({
                 margin: '0 0 12px',
               }}
             >
-              Standard
+              Pro
             </p>
 
             <div style={{ marginBottom: 6 }}>
@@ -520,7 +520,7 @@ function PromiseSection() {
   const promises = [
     'The free plan will always exist and remain genuinely useful',
     'Core live tracking and basic coaching stay free',
-    'Standard unlocks full history on every platform and deeper insights',
+    'Pro unlocks full history on every platform and deeper insights',
     'No surprise feature locks after launch',
     '30 days notice before material pricing or plan changes',
     'Built by cam models, for cam models',
@@ -595,15 +595,15 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How many platforms can I track for free?',
-    a: 'The free plan supports up to 3 platforms: full history on your 1 Primary platform and the last 31 days on your 2 Secondary platforms. Standard unlocks full history on every platform and adds advanced cross-platform comparisons.',
+    a: 'The free plan supports up to 3 platforms: full history on your 1 Primary platform and the last 31 days on your 2 Secondary platforms. Pro unlocks full history on every platform and adds advanced cross-platform comparisons.',
   },
   {
-    q: 'What does the Standard plan include?',
-    a: 'Standard includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
+    q: 'What does CamCash Pro include?',
+    a: 'Pro includes all supported platforms, full permanent tip history, expanded fan profiles, CRM tools, cross-platform earnings comparisons, advanced Live Mode coaching, private-session analytics, churn and re-engagement insights, full best-time analysis, Stream Planner, Money Map, and advanced reports.',
   },
   {
-    q: 'How much is Standard?',
-    a: 'Standard is $9.99 per month or $99 per year. Both billing options unlock the same Standard features.',
+    q: 'How much is Pro?',
+    a: 'CamCash Pro is $9.99 per month or $99 per year. Both billing options unlock the same Pro features.',
   },
   {
     q: 'Can I switch between monthly and annual billing?',

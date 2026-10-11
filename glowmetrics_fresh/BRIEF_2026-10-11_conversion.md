@@ -84,3 +84,17 @@ Completed: diagnosis. In progress: none.
 - The Stripe product is named "1 Month Subscription" and its default price is $19.99. The annual price uses the same product.
 - The synced claude.ai skill "basic-requirments" still says "3 CSV / 500 tip cap". The owner must edit it in claude.ai.
 - The /analytics funnel page queries from the browser, so it only ever showed the viewer's own rows. It should move to a server/admin route.
+
+---
+# Update 5 (owner approvals 1-8)
+## Done
+- Primary-platform backfill APPLIED: 53 users (45 Chaturbate, 6 BongaCams, 2 MyFreeCams). 32 of them now see 140,522 older tips on their primary platform.
+- Paid plan renamed to "Pro" / "CamCash Pro" on landing, pricing, FAQ, dashboard banner and trial emails. Internal value `pro` unchanged.
+- CamSoda removed from marketing, SEO, the upload picker and Live-mode pickers (onboarding never listed it).
+- Webhook: user lookup by Stripe customer ID, failures return 500 (Stripe retries), idempotent retries, stale-subscription guard. 17 scenario tests.
+## Pending
+- Delete the 2 diagnostic analytics rows. The tool's delete confirmation times out; the owner can run the statement manually.
+- Resync niemeyerb101 from Stripe after the webhook fix is merged and deployed.
+## Follow-up tasks
+- FOLLOW-UP (GTM): decide whether signup_success (lib/track.js) and signup_completed (lib/tracking.js; dataLayer + direct gtag) are two intentional funnel stages or one conversion counted twice in GA/GTM. Check the GTM container tags and triggers.
+- FOLLOW-UP (Stripe config): rename product prod_U6uyHO58kgqGC8 "1 Month Subscription" → "CamCash Pro". Set its default price to the $9.99 monthly price (price_1UOVqL…). Update the Vercel env STRIPE_MONTHLY_PRICE_ID. Note the annual price uses the same product. Keep the checkout price guard.

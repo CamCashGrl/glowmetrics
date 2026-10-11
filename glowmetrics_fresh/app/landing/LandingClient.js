@@ -753,7 +753,7 @@ export default function LandingClient() {
     'name': 'CamCash',
     'url': 'https://www.camcashgrl.com',
     'logo': 'https://www.camcashgrl.com/logo.png',
-    'description': 'Free analytics dashboard for cam models on Chaturbate, BongaCams, MyFreeCams, and CamSoda',
+    'description': 'Free analytics dashboard for cam models on Chaturbate, BongaCams, and MyFreeCams',
     'sameAs': ['https://twitter.com/daphneslive'],
     'contactPoint': {
       '@type': 'ContactPoint',
@@ -772,7 +772,7 @@ export default function LandingClient() {
         'name': 'Is CamCash free to use?',
         'acceptedAnswer': {
           '@type': 'Answer',
-          'text': 'Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier keeps full history on your 1 primary platform and the last 31 days on your other platforms (live via the extension, or by uploading your tip data). Full history on every platform and premium analytics are optional upgrades.'
+          'text': 'Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier keeps full history on your 1 primary platform and the last 31 days on your other platforms (live via the extension, or by uploading your tip data). Full history on every platform and deeper analytics come with the optional CamCash Pro upgrade.'
         }
       },
       {
@@ -788,7 +788,7 @@ export default function LandingClient() {
         'name': 'Can I track more than one platform for free?',
         'acceptedAnswer': {
           '@type': 'Answer',
-          'text': 'Yes. The free tier keeps full history on the 1 primary platform you choose and the last 31 days on your other platforms. The Standard plan ($9.99/month) unlocks full history on every platform.'
+          'text': 'Yes. The free tier keeps full history on the 1 primary platform you choose and the last 31 days on your other platforms. CamCash Pro ($9.99/month) unlocks full history on every platform.'
         }
       },
       {
@@ -986,9 +986,9 @@ export default function LandingClient() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier keeps full history on your 1 primary platform and the last 31 days on your other platforms (live via the extension, or by uploading your tip data). Full history on every platform and premium analytics are optional upgrades." },
+    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier keeps full history on your 1 primary platform and the last 31 days on your other platforms (live via the extension, or by uploading your tip data). Full history on every platform and deeper analytics come with the optional CamCash Pro upgrade." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
-    { q: "Can I track more than one platform for free?", a: "Yes. The free tier keeps full history on the 1 primary platform you choose and the last 31 days on your other platforms. The Standard plan ($9.99/month) unlocks full history on every platform." },
+    { q: "Can I track more than one platform for free?", a: "Yes. The free tier keeps full history on the 1 primary platform you choose and the last 31 days on your other platforms. CamCash Pro ($9.99/month) unlocks full history on every platform." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
 
@@ -1145,10 +1145,10 @@ export default function LandingClient() {
           <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "22px 28px", margin: 0 }}>
             {[
               ["Category", "Analytics software for cam models & content creators"],
-              ["Built for", "Chaturbate, BongaCams, MyFreeCams & CamSoda"],
+              ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever: full history on 1 primary platform, last 31 days on your other platforms. Standard is $9.99/mo (or $99/yr) and unlocks full history on every platform"],
+              ["Price", "Free forever: full history on 1 primary platform, last 31 days on your other platforms. Pro is $9.99/mo (or $99/yr) and unlocks full history on every platform"],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>
@@ -1229,8 +1229,8 @@ export default function LandingClient() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 20 }}>
           {[
             { num: "1", accent: T.cyan, icon: "🧩", title: "Download Extension", body: "Auto-detect tips instantly. Works without an account. Use immediately.", link: ["/extension", "Download free →"] },
-            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Premium optional" },
-            { num: "3", accent: T.pink, icon: "🚀", title: "Upgrade Anytime", body: "Standard is $9.99/month (or $99/year) when you're ready for full history on every platform.", link: ["/pricing", "See pricing →"] },
+            { num: "2", accent: T.purple, icon: "📊", title: "Create Free Account", body: "Save your analytics, track growth, unlock AI intelligence. Free forever.", link: null, note: "Free forever + Pro optional" },
+            { num: "3", accent: T.pink, icon: "🚀", title: "Upgrade Anytime", body: "CamCash Pro is $9.99/month (or $99/year) when you're ready for full history on every platform.", link: ["/pricing", "See pricing →"] },
           ].map(({ num, accent, icon, title, body, link, note }) => (
             <div key={title} style={{ background: `${accent}0d`, border: `1px solid ${accent}30`, borderRadius: 18, padding: "28px 24px", textAlign: "center", position: "relative" }}>
               <div style={{ width: 30, height: 30, borderRadius: 9, background: T.gradientPrimary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: "#06101A", margin: "0 auto 14px", boxShadow: "0 0 14px rgba(22,244,255,0.3)" }}>{num}</div>
