@@ -43,3 +43,23 @@ Completed: diagnosis. In progress: none.
 5. niemeyerb101 is past_due but still pro. Decide on grace or downgrade.
 6. Onboarding paste-parse failures (17 users).
 7. BC/Unknown platform rows.
+
+---
+# Update 3
+## Done (in PR #674, NOT live until merged and deployed)
+- Checkout price guard: only $9.99/mo or $99/yr can be charged; the $19.99 price is bypassed.
+- Free-tier copy on landing, pricing and the dashboard limit banner now says: full history on 1 primary platform, 31 days on the others.
+## Findings
+- The free-tier rule (primary platform full history, others 31 days) was already enforced in the dashboard (lib/analytics.js applyFreeAnalysisWindow).
+- 177 of 230 free users (57 with data) have NO primary platform set, so every platform is cut to 31 days. They never get the unlimited platform.
+- Enforcement is client-side only: full history is downloaded to the browser and then hidden.
+- The basic-requirments skill says the free tier is "3 CSV uploads, 500 tip cap". That contradicts the code (uploadLimit = Infinity). The skill or the code needs updating.
+- The pricing page lists Stripchat as supported, but the backend accepts only CB, BC and MFC.
+- In-app DashboardPreview copy still says "1 platform" (not changed).
+- No access to Vercel env vars (403), so STRIPE_MONTHLY_PRICE_ID still points at $19.99. The code guard covers it.
+## Next, most important first
+1. Merge #674 after the preview build is green.
+2. Decide: auto-set the primary platform for free users who use only one platform (irreversible by design).
+3. Analytics read-policy exposure.
+4. Fix funnel tracking.
+5. niemeyerb101 past_due; DashboardPreview copy; Stripchat claim; BC/Unknown rows.
