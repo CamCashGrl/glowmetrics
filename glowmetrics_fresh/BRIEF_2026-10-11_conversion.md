@@ -63,3 +63,24 @@ Completed: diagnosis. In progress: none.
 3. Analytics read-policy exposure.
 4. Fix funnel tracking.
 5. niemeyerb101 past_due; DashboardPreview copy; Stripchat claim; BC/Unknown rows.
+
+---
+# Update 4 (owner decisions 1-8)
+## Done
+- Funnel tracking root cause found and fixed in code (PR #674): /api/track wrote a nonexistent page_url column and ignored event_name. All website events since Sep 18 were lost. Live once merged.
+- analytics_events public read closed (APPLIED to prod, verified). Funnel tables can now accept own-row inserts (APPLIED).
+- Stripchat claim removed. Setup screen and requirements docs corrected.
+## Waiting on owner
+- Apply primary-platform backfill: 53 single-platform users (3 multi-platform, 3 Unknown-only, 118 no data are untouched).
+- Paid-plan name: Standard (public pricing, checkout) vs Pro (in-app, DB) vs Premium (landing step 3).
+- Webhook entitlement fix (proposal below). niemeyerb101 is untouched.
+## Webhook entitlement findings
+- niemeyerb101: the Sep 27 subscription.updated event was dropped (no metadata.userId, email not resolved). The route returned 202, so Stripe never retried. The Oct 1 manual sync left profile=pro on purpose.
+- Systemic: (a) unresolved user and failed writes return 2xx, so Stripe does not retry; (b) no fallback lookup by profiles.stripe_customer_id; (c) the daily drift cron only emails and never corrects.
+- Proposed minimal fix: resolveUser falls back to stripe_customer_id; failure paths return 500 so Stripe retries; then a one-off resync of niemeyerb101 from Stripe after owner approval.
+## Other flags
+- CamCash claims CamSoda support, but CamSoda has the same import gap as Stripchat.
+- GTM duplicates: signup sends both signup_success (lib/track) and signup_completed (lib/tracking, also via a direct gtag call).
+- The Stripe product is named "1 Month Subscription" and its default price is $19.99. The annual price uses the same product.
+- The synced claude.ai skill "basic-requirments" still says "3 CSV / 500 tip cap". The owner must edit it in claude.ai.
+- The /analytics funnel page queries from the browser, so it only ever showed the viewer's own rows. It should move to a server/admin route.
