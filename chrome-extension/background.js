@@ -145,9 +145,14 @@ async function refreshSession() {
 // All calls go through /api/live/session/*, the same routes and RPCs the
 // website uses — no separate/duplicate session logic here. A 401 triggers
 // one refresh-and-retry, same pattern as syncTip below.
+// On failure this returns { error } instead of the response body. Callers
+// only ever read data?.session / data?.prompt / data?.event, so they treat
+// it exactly like a missing response; the popup shows `error` so a failed
+// Start/Pause/Stop is never silent.
+const SIGNED_OUT_MESSAGE = 'You are signed out. Sign in again to start Live Mode.';
 async function liveSessionCall(path, method, body) {
   await restorePromise;
-  if (!session) return null;
+  if (!session) return { error: SIGNED_OUT_MESSAGE };
 
   const doFetch = () => fetch(`${API_BASE}${path}`, {
     method,
@@ -163,12 +168,14 @@ async function liveSessionCall(path, method, body) {
     }
     if (!res.ok) {
       console.error('[CamCash] live session call failed:', path, res.status);
-      return null;
+      if (res.status === 401) return { error: SIGNED_OUT_MESSAGE };
+      const payload = await res.json().catch(() => null);
+      return { error: payload?.error || `Request failed (${res.status}). Please try again.` };
     }
     return await res.json();
   } catch (e) {
     console.error('[CamCash] live session call error:', path, e.message);
-    return null;
+    return { error: 'Could not reach CamCash. Check your connection and try again.' };
   }
 }
 

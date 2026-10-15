@@ -726,6 +726,49 @@ async function main() {
     check('M7: top tipper chosen by USD, not raw tokens', st.topTipper?.username === 'CbSmaller');
   }
 
+  // ---- S1–S3: a failed Start reports why instead of silently doing nothing ----
+  {
+    // S1: no stored login at all — no network call, a signed-out message.
+    const { sandbox, state } = makeContext({ initialStorage: {} });
+    let calledStart = false;
+    state.fetchHandler = (url) => {
+      if (url.includes('/api/live/session/start')) calledStart = true;
+      return { ok: true, json: async () => ({}) };
+    };
+    loadBackground(sandbox);
+    await tick(30);
+    const res = await new Promise((resolve) => state.onMessage({ action: 'live_start', platform: 'chaturbate' }, {}, resolve));
+    check('S1: signed out → no start request is sent', calledStart === false);
+    check('S1: signed out → reply carries a sign-in message', /signed out/i.test(res?.error || ''));
+    check('S1: signed out → no session in reply', !res?.session);
+  }
+  {
+    // S2: stored token rejected (401) and the refresh token is also gone.
+    const { sandbox, state } = makeContext({ initialStorage: { session: 'expired-token', refresh_token: 'revoked', user: { id: 'u1', email: 'test@test.com' } } });
+    state.fetchHandler = (url) => {
+      if (url.includes('/auth/v1/token')) return { ok: false, status: 400, json: async () => ({ error_code: 'refresh_token_not_found' }) };
+      if (url.includes('/api/live/session')) return { ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) };
+      return { ok: true, json: async () => ({}) };
+    };
+    loadBackground(sandbox);
+    await tick(30);
+    const res = await new Promise((resolve) => state.onMessage({ action: 'live_start', platform: 'chaturbate' }, {}, resolve));
+    check('S2: expired login that cannot refresh → sign-in message', /signed out/i.test(res?.error || ''));
+  }
+  {
+    // S3: server refuses with a reason (e.g. the Pro gate) → that reason reaches the popup.
+    const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
+    state.fetchHandler = (url) => {
+      if (url.includes('/api/live/session/start')) return { ok: false, status: 403, json: async () => ({ error: 'Live Mode is a Pro feature. Upgrade to Pro to start a live session.', code: 'LIVE_MODE_REQUIRES_PRO' }) };
+      if (url.includes('/api/live/session')) return { ok: true, json: async () => ({ session: null }) };
+      return { ok: true, json: async () => ({}) };
+    };
+    loadBackground(sandbox);
+    await tick(30);
+    const res = await new Promise((resolve) => state.onMessage({ action: 'live_start', platform: 'chaturbate' }, {}, resolve));
+    check('S3: server reason is passed through to the popup', /Pro feature/.test(res?.error || ''));
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 }

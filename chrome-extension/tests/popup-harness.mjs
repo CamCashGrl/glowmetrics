@@ -199,6 +199,29 @@ async function main() {
     await page.close();
   }
 
+  // ---- T8: a failed Start shows the reason instead of doing nothing ----
+  {
+    const page = await freshPage(browser);
+    await page.evaluate(() => {
+      window.__mock.handlers['live_start'] = () => ({ error: 'You are signed out. Sign in again to start Live Mode.' });
+    });
+    await page.locator('.session-btn-start').click();
+    await page.waitForTimeout(200);
+    const err = page.locator('#live-action-error');
+    check('T8: failure message is visible', await err.isVisible());
+    check('T8: failure message explains why', /signed out/i.test(await err.innerText()));
+    check('T8: Start Stream is clickable again', await page.locator('.session-btn-start').isEnabled());
+    // The next attempt clears the old message.
+    await page.evaluate(() => {
+      window.__mock.delays['live_start'] = 500;
+      window.__mock.handlers['live_start'] = () => ({ session: { id: 's', status: 'starting', started_at: new Date().toISOString() } });
+    });
+    await page.locator('.session-btn-start').click();
+    await page.waitForTimeout(100);
+    check('T8: message cleared on the next attempt', !(await err.isVisible()));
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
