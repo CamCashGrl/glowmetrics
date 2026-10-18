@@ -14,7 +14,7 @@ import { Pill } from "./StreamPlanner"
 
 const OPTIONS = [["chaturbate", "Chaturbate"], ["bongacams", "BongaCams"], ["myfreecams", "MyFreeCams"]]
 const DISMISS_KEY = "cc_primary_platform_prompt_dismissed"
-const EXPLAIN = "Your primary platform keeps full available history. Other platforms use a rolling 31-day window on Free."
+const EXPLAIN = "Free/trial detailed analytics use a rolling 31-day window on your selected platform. Platform Comparison uses each uploaded platform’s own 31-day window."
 
 async function savePrimary(platform) {
   const res = await fetch("/api/profile/primary-platform", {

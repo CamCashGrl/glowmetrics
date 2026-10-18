@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
+import { buildCappedAnalyticsDatasets } from "../../lib/freeAnalyticsGate"
 import { readUploadJson } from "../../lib/readUploadJson"
-import { parseCSV, detectPlatform, aggregateRows as runEngine, applyFreeAnalysisWindow, summarizeWindowExclusion, accessibleDataset } from "../../lib/analytics"
+import { parseCSV, detectPlatform, aggregateRows as runEngine, summarizeWindowExclusion, accessibleDataset } from "../../lib/analytics"
 import { totalEarned, privateEarningRows } from "../../lib/sessions/normalize"
 import { logParseAttempt, analyzeFormat } from "../../lib/parseTracking"
 import { buildProTeasers } from "../../lib/proTeasers"
@@ -22,7 +23,7 @@ import { getDashboardReadiness, getModuleLockState, canShowHourlyRate, LockedIns
 import PlatformsIntelligence from './PlatformsIntelligence'
 import CommandCenter from './CommandCenter'
 import SubscriptionManager from './SubscriptionManager'
-import { platformLimitMessage, FREE_PLATFORM_LIMIT, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
+import { platformLimitMessage, FREE_PLATFORM_LIMIT, hasPaidProAccess, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import { LatestShowDelta } from './LatestShows'
@@ -1612,36 +1613,44 @@ export default function Dashboard() {
   const sessionPhaseCacheRef = useRef({ value: null, deps: null })
 
   const isBetaUser = true
-  const isPro = profile?.plan === 'pro' || profile?.plan === 'unlimited'
-  // Free tier: the primary platform (lib/planLimits.js resolver — onboarding
-  // selection only, never inferred from revenue) keeps full history; others
-  // keep 31 days. No primary on file → every platform is windowed.
-  const freeUnlimitedPlatform = isPro ? null : resolvePlanPlatformRoles(profile?.streaming_platforms, profile?.primary_pro_platform).primary
+  const isPaidPro = hasPaidProAccess({
+    plan: profile?.plan,
+    subscriptionStatus: profile?.subscription_status,
+  })
+  const isPro = isPaidPro
+  // Free/trial detailed analytics use one selected platform, always capped.
+  const selectedAnalyticsPlatform = isPaidPro ? null : resolvePlanPlatformRoles(profile?.streaming_platforms, profile?.primary_pro_platform).primary
   const uploadLimit = Infinity
 
-  // Compute windowed tips for free users; windowSummary feeds teaser signal detection
-  const analysisTips = isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform })
-  const windowSummary = summarizeWindowExclusion(tips, analysisTips)
-  // Re-run the engine when the plan or primary platform changes after tips
-  // loaded (profile arrives separately; choosing a primary updates it), so
-  // every tab reflects the same gating without a reload.
-  const gatingKeyRef = useRef(null)
-  // Current gating for async loaders (their closures can predate the profile).
-  const gatingRef = useRef({ isPro, unlimited: freeUnlimitedPlatform })
-  gatingRef.current = { isPro, unlimited: freeUnlimitedPlatform }
+  const { comparisonTips, detailedAnalysisTips } = React.useMemo(() => isPaidPro
+    ? { comparisonTips: tips, detailedAnalysisTips: tips }
+    : buildCappedAnalyticsDatasets(tips, { selectedAnalyticsPlatform }),
+  [tips, isPaidPro, selectedAnalyticsPlatform])
+  const analysisTips = detailedAnalysisTips
+  const windowSummary = summarizeWindowExclusion(tips, comparisonTips)
+  // Keep async initial/import/realtime refreshes on the latest entitlement.
+  const gatingRef = useRef({ isPaidPro, selectedAnalyticsPlatform })
+  gatingRef.current = { isPaidPro, selectedAnalyticsPlatform }
   useEffect(() => {
-    const key = `${isPro}|${freeUnlimitedPlatform || ''}`
-    if (gatingKeyRef.current === null) { gatingKeyRef.current = key; return }
-    if (gatingKeyRef.current === key || !tips.length) { gatingKeyRef.current = key; return }
-    gatingKeyRef.current = key
+    setSelectedWhale(null)
+    setMessageTarget(null)
+  }, [isPaidPro, selectedAnalyticsPlatform])
+  const updateProfile = (data) => {
+    gatingRef.current = {
+      isPaidPro: hasPaidProAccess({ plan: data.plan, subscriptionStatus: data.subscription_status }),
+      selectedAnalyticsPlatform: resolvePlanPlatformRoles(data.streaming_platforms, data.primary_pro_platform).primary,
+    }
+    setProfile(data)
+  }
+  // Re-run after profile/selection changes, including when loaded tips are empty.
+  useEffect(() => {
     try {
       let tz = 'UTC'
       try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch (_) {}
-      const r = runEngine(isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform }), tz)
-      if (r) setAnalytics(r)
+      const r = runEngine(detailedAnalysisTips, tz)
+      setAnalytics(r)
     } catch (e) { console.error('gating re-run failed:', e) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPro, freeUnlimitedPlatform])
+  }, [detailedAnalysisTips])
 
   // whales must be declared before use here — buildProTeasers reads it below,
   // and this runs unconditionally on every render (including before the
@@ -1943,11 +1952,6 @@ export default function Dashboard() {
           router.replace(`/dashboard${rest ? `?${rest}` : ''}`)
         }
       }
-      supabase.from('profiles')
-        .select('plan, primary_pro_platform, streaming_platforms')
-        .eq('id', user.id)
-        .maybeSingle()
-        .then(({ data }) => { if (data) setProfile(data) })
       loadData(user.id)
       // Load monthly goal from DB
       supabase.from('user_goals').select('*').eq('user_id', user.id).eq('goal_type', 'monthly').maybeSingle()
@@ -2005,7 +2009,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = gatingRef.current.isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
+            const analysisTips = gatingRef.current.isPaidPro ? updated : buildCappedAnalyticsDatasets(updated, gatingRef.current).detailedAnalysisTips
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = { length: updated.length, lastId: updated[updated.length - 1]?.id ?? null }
@@ -2036,6 +2040,10 @@ export default function Dashboard() {
           clearTimeout(tipFlushTimerRef.current)
           tipFlushTimerRef.current = setTimeout(flushPendingTipInserts, wait)
         })
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        }, ({ new: data }) => updateProfile(data))
         .subscribe()
       realtimeChannelRef.current = channel
 
@@ -2064,7 +2072,7 @@ export default function Dashboard() {
               const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
               if (resolved) userTz = resolved
             }
-            const analysisTips = gatingRef.current.isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
+            const analysisTips = gatingRef.current.isPaidPro ? prev : buildCappedAnalyticsDatasets(prev, gatingRef.current).detailedAnalysisTips
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
             lastEngineTipsFingerprintRef.current = fingerprint
@@ -2162,7 +2170,7 @@ export default function Dashboard() {
   }, [activeTab, liveActive])
 
   useEffect(() => {
-    if (analytics) setLiveAnalytics(analytics)
+    setLiveAnalytics(analytics)
   }, [analytics])
 
   // Stop the rotating-microcopy interval if the dashboard unmounts mid-import
@@ -2182,6 +2190,10 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
+      const { data: currentProfile } = await supabase.from('profiles')
+        .select('plan, subscription_status, primary_pro_platform, streaming_platforms')
+        .eq('id', uid).maybeSingle()
+      if (currentProfile) updateProfile(currentProfile)
       let userTz = 'UTC'
       if (typeof Intl !== 'undefined') {
         const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -2223,7 +2235,7 @@ export default function Dashboard() {
         setTips(allData)
         try {
           // Apply 31-day rolling window for free users (per-platform, activity-anchored)
-          const analysisTips = gatingRef.current.isPro ? allData : applyFreeAnalysisWindow(allData, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
+          const analysisTips = gatingRef.current.isPaidPro ? allData : buildCappedAnalyticsDatasets(allData, gatingRef.current).detailedAnalysisTips
           // CHECKPOINT 2: Immediately before runEngine()
           console.log('[DASH TRACE] before engine', {
             count: analysisTips.length,
@@ -2268,7 +2280,7 @@ export default function Dashboard() {
       setPaidSessions(allPaidSessions)
 
       const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
-      setEngineInsights(engineData)
+      setEngineInsights(gatingRef.current.isPaidPro ? engineData : null)
       setLastRefreshed(new Date())
     } finally {
       if (silent) setIsRefreshing(false)
@@ -2486,11 +2498,30 @@ const stopImportMessageRotation = () => {
   // Sessions): same windows as the analytics engine, applied to every table.
   // (memoOn, not useMemo: this runs after the `if (loading) return` above.)
   const accessible = memoOn(derivedCacheRef.current, 'accessible',
-    [tips, paidSessions, livePrivateIntervals, recentShows.shows, isPro, freeUnlimitedPlatform],
-    () => accessibleDataset({
-      tips, paidSessions, liveIntervals: livePrivateIntervals, shows: recentShows.shows,
-      isPro, unlimitedPlatform: freeUnlimitedPlatform,
-    }))
+    [tips, paidSessions, livePrivateIntervals, recentShows.shows, isPaidPro, selectedAnalyticsPlatform],
+    () => {
+      const capped = accessibleDataset({
+        tips, paidSessions, liveIntervals: livePrivateIntervals, shows: recentShows.shows,
+        isPro: isPaidPro,
+      })
+      if (isPaidPro) return capped
+      const selected = selectedAnalyticsPlatform ? canonicalPlatform(selectedAnalyticsPlatform) : null
+      const onSelectedPlatform = (row) => selected && canonicalPlatform(row.platform) === selected
+      return {
+        ...capped,
+        tips: detailedAnalysisTips,
+        paidSessions: capped.paidSessions.filter(onSelectedPlatform),
+        liveIntervals: capped.liveIntervals.filter(onSelectedPlatform),
+        // Multi-platform show totals cannot be exposed as single-platform detail.
+        shows: capped.shows.filter((show) => {
+          const platforms = show.platformRevenue?.length ? show.platformRevenue : [show]
+          return platforms.every(onSelectedPlatform)
+        }),
+      }
+    })
+  const comparisonAnalytics = memoOn(derivedCacheRef.current, 'comparisonAnalytics',
+    [comparisonTips, isPaidPro, isPaidPro ? analytics : null], () => isPaidPro ? analytics : runEngine(comparisonTips))
+
   const earned = totalEarned({
     publicUSD: analytics?.totalUSD || 0,
     privateRows: privateEarningRows({ paidSessions: accessible.paidSessions, liveIntervals: accessible.liveIntervals }),
@@ -2566,9 +2597,9 @@ const stopImportMessageRotation = () => {
   // so hour/day reflects when money actually came in, not when the session started
   // Use UTC to match the database timestamps
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [analysisTips], () => {
     const pt = {}
-    tips.forEach(t => {
+    analysisTips.forEach(t => {
       if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
       const dt = new Date(t.date_time || t.dateRaw)
       const hour = dt.getUTCHours()
@@ -2579,11 +2610,11 @@ const stopImportMessageRotation = () => {
     return pt
   })
 
-  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, tips], () => whales.filter(w => {
+  const filteredWhales = memoOn(derivedCacheRef.current, 'filteredWhales', [whales, whaleFilter, platformFilter, chartDrillDay, analysisTips], () => whales.filter(w => {
     if (whaleFilter !== "ALL" && w.tier !== whaleFilter) return false
     if (platformFilter !== "ALL" && w.platform !== platformFilter) return false
     if (chartDrillDay) {
-      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
+      const fanTips = (w.tips && w.tips.length > 0) ? w.tips : analysisTips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
       const tippedOnDay = fanTips.some(t => {
         const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
         return dayShort === chartDrillDay
@@ -2778,7 +2809,7 @@ const stopImportMessageRotation = () => {
   // ============================================================
 
   const buildDailyBrief = () => {
-    if (!tips || tips.length === 0 || !analytics) return null
+    if (!analysisTips || analysisTips.length === 0 || !analytics) return null
     const now = new Date()
     const utcHour = now.getHours() // local hour — analytics hours are already local
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
@@ -2808,7 +2839,7 @@ const stopImportMessageRotation = () => {
     // BEST PLATFORM: Use the platform with highest lifetime revenue (ALL tips)
     // This is the true platform comparison metric
     const platTotalUSD = {}
-    tips.forEach(t => { const p = t.platform || 'Chaturbate'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
+    analysisTips.forEach(t => { const p = t.platform || 'Chaturbate'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
     const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chaturbate'
     const displayPlat = topEarningPlat
 
@@ -2917,7 +2948,7 @@ const stopImportMessageRotation = () => {
     // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
     const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
-    tips.forEach(t => {
+    analysisTips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
       const day = UTC_DAYS_LONG[d.getUTCDay()]
@@ -2938,7 +2969,7 @@ const stopImportMessageRotation = () => {
     // FIX: use avg USD per hour-session (not raw cumulative totals)
     // FIX: use getUTCHours() — tips are stored in UTC
     const platHourUSD = {}; const platHourSessions = {}
-    tips.forEach(t => {
+    analysisTips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
       // Floor to UTC hour-bucket key for deduplication
@@ -2987,7 +3018,7 @@ const stopImportMessageRotation = () => {
     topWhales.forEach(w => {
       const fanTips = (w.tips && w.tips.length > 0)
         ? w.tips
-        : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+        : analysisTips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
       if (fanTips.length < 3) return
 
       // Use local hours — tips' date_time is UTC but getHours() converts to browser local
@@ -3024,7 +3055,7 @@ const stopImportMessageRotation = () => {
 
     // --- PLATFORM DOMINANCE ALERT ---
     const platTotals = {}
-    tips.forEach(t => {
+    analysisTips.forEach(t => {
       platTotals[t.platform] = (platTotals[t.platform] || 0) + (t.usd || 0)
     })
     const sortedPlats = Object.entries(platTotals).sort((a, b) => b[1] - a[1])
@@ -3044,10 +3075,10 @@ const stopImportMessageRotation = () => {
     return alerts.sort((a, b) => a.priority - b.priority).slice(0, 6)
   }
 
-  const whatsNextAlerts = memoOn(derivedCacheRef.current, 'whatsNextAlerts', [whales, tips], buildWhatsNextAlerts)
+  const whatsNextAlerts = memoOn(derivedCacheRef.current, 'whatsNextAlerts', [whales, analysisTips], buildWhatsNextAlerts)
   const reengageList = memoOn(derivedCacheRef.current, 'reengageList', [whales], buildReengageList)
   // re-runs every minuteTick (as well as when the underlying data changes)
-  const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [tips, analytics, whales, minuteTick], buildDailyBrief)
+  const dailyBrief = memoOn(derivedCacheRef.current, 'dailyBrief', [analysisTips, analytics, whales, minuteTick], buildDailyBrief)
 
   // ── CANONICAL PEAK HOUR ──────────────────────────────────────────────────────
   // Single source of truth used by the header, Daily Brief, and Losing Money.
@@ -3057,7 +3088,7 @@ const stopImportMessageRotation = () => {
   // with p_timezone above, so daily_plan.best_hour comes back local (not UTC);
   // dailyBrief.bh and analytics.bestHour.hour were already local via toLocalHour().
   const canonicalPeakHourLocal = (
-    engineInsights?.daily_plan?.best_hour ??
+    (isPaidPro ? engineInsights?.daily_plan?.best_hour : null) ??
     dailyBrief?.bh ??
     (analytics?.bestHour ? parseInt(analytics.bestHour.hour) : null)
   )
@@ -3066,18 +3097,18 @@ const stopImportMessageRotation = () => {
     : null
 
   // re-runs every minuteTick (as well as when the underlying data changes)
-  const realTimeAlerts = memoOn(derivedCacheRef.current, 'realTimeAlerts', [tips, whales, minuteTick], buildRealTimeAlerts)
+  const realTimeAlerts = memoOn(derivedCacheRef.current, 'realTimeAlerts', [analysisTips, whales, minuteTick], buildRealTimeAlerts)
   void minuteTick // ensures re-render when minute changes
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
   const _momNow = new Date()
   const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
   const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
-    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
+    derivedCacheRef.current, 'momentum', [analysisTips, _momMonthKey], () => {
       const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
       const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
+      const momThisRev = analysisTips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
+      const momPrevRev = analysisTips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
       const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
       return { momThisRev, momPrevRev, growthPct }
     })
@@ -3085,21 +3116,21 @@ const stopImportMessageRotation = () => {
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
     dashboardReadiness, _isLowData, _plannerLock, _moneyMapLock,
-  } = memoOn(derivedCacheRef.current, 'readiness', [tips, analytics, isPro], () => {
-    const drDates      = tips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
+  } = memoOn(derivedCacheRef.current, 'readiness', [analysisTips, analytics, isPro], () => {
+    const drDates      = analysisTips.map(t => new Date(t.date_time || t.dateRaw)).filter(d => !isNaN(d)).sort((a, b) => a - b)
     const drRangeDays  = drDates.length >= 2 ? Math.round((drDates[drDates.length - 1] - drDates[0]) / 86400000) : 0
     const drStreamDays = new Set(drDates.map(d => d.toDateString())).size
-    const drPlatCount  = [...new Set(tips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length
+    const drPlatCount  = [...new Set(analysisTips.map(t => t.platform).filter(p => p && p !== 'Unknown'))].length
     const readiness = getDashboardReadiness({
-      totalTips:     tips.length,
+      totalTips:     analysisTips.length,
       totalSessions: analytics?.meaningfulSessionCount || 0,
-      totalFans:     analytics?.uniqueFanCount || [...new Set(tips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
+      totalFans:     analytics?.uniqueFanCount || [...new Set(analysisTips.map(t => (t.username || '').toLowerCase()).filter(Boolean))].length,
       totalEarnings: analytics?.totalUSD || 0,
       dateRangeDays: drRangeDays,
       streamDays:    drStreamDays,
     })
     const isLowData  = readiness !== 'ready'
-    const modLockArgs = { totalTips: tips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
+    const modLockArgs = { totalTips: analysisTips.length, totalSessions: analytics?.meaningfulSessionCount || 0, totalFans: analytics?.uniqueFanCount || 0, totalEarnings: analytics?.totalUSD || 0, totalStreamMinutes: analytics?.totalStreamMinutes || 0, importedPlatformCount: drPlatCount, isPro, liveModeSessions: 0 }
     const plannerLock  = getModuleLockState({ module: 'streamPlanner',  ...modLockArgs })
     const moneyMapLock = getModuleLockState({ module: 'moneyMap',       ...modLockArgs })
     return { dashboardReadiness: readiness, _isLowData: isLowData, _plannerLock: plannerLock, _moneyMapLock: moneyMapLock }
@@ -3336,7 +3367,7 @@ const stopImportMessageRotation = () => {
           const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
-          const bestPlat = brief?.displayPlat || (tips.length > 0 ? tips[0]?.platform : null)
+          const bestPlat = brief?.displayPlat || (analysisTips.length > 0 ? analysisTips[0]?.platform : null)
           const safeRevenue = (!isNaN(totalEarnedUSD) && isFinite(totalEarnedUSD)) ? totalEarnedUSD : 0
           return (
             <div className="sticky-command-bar" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 12, marginLeft: -32, marginRight: -32, width: 'calc(100% + 64px)', maxWidth: 'none', padding: '0 32px', background: 'rgba(5,7,15,0.86)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', borderBottom: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
@@ -3406,7 +3437,7 @@ const stopImportMessageRotation = () => {
              compete with tab-specific content (e.g. the Fans tab) ── */}
         {_isLowData && activeTab === 'overview' && (
           <DashboardProgressCard
-            totalTips={tips.length}
+            totalTips={analysisTips.length}
             totalSessions={analytics?.meaningfulSessionCount || 0}
             totalFans={analytics?.uniqueFanCount || 0}
             totalEarnings={analytics?.totalUSD || 0}
@@ -3416,7 +3447,7 @@ const stopImportMessageRotation = () => {
         )}
 
         {(activeTab === "overview" || activeTab === "sessions") && (
-          <PrimaryPlatformBanner isPro={isPro} primary={freeUnlimitedPlatform}
+          <PrimaryPlatformBanner isPro={isPro} primary={selectedAnalyticsPlatform}
             onSaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))} />
         )}
         {activeTab === "overview" && (
@@ -3441,8 +3472,8 @@ const stopImportMessageRotation = () => {
               const now = new Date()
               const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
               const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const thisMonthRev = analysisTips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = analysisTips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
               // First-party comparison only (the creator's own previous month).
@@ -3451,7 +3482,7 @@ const stopImportMessageRotation = () => {
                 ? `vs $${prevMonthRev.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} last month`
                 : null
               const sessionsLast30 = sessions.filter(s => (Date.now() - new Date(s.startTime)) / 86400000 <= 30).length
-              const fansActiveLast30 = new Set(tips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
+              const fansActiveLast30 = new Set(analysisTips.filter(t => (Date.now() - new Date(t.date_time || t.dateRaw)) / 86400000 <= 30).map(t => t.username)).size
 
               // ── Per-card month-over-month trend ──
               // Meaningful sessions only (analytics.meaningfulSessions), matching the
@@ -3468,8 +3499,8 @@ const stopImportMessageRotation = () => {
               const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
                 ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
 
-              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
-              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              const thisMonthFans = new Set(analysisTips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
+              const prevMonthFans = new Set(analysisTips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
               const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
 
               // trend badge renderer
@@ -3551,7 +3582,7 @@ const stopImportMessageRotation = () => {
                   const isDupe = merged.some(m => m.text && a.message && m.text.toLowerCase().includes((a.title || '').toLowerCase().slice(0, 20)))
                   if (!isDupe) merged.push({ icon: a.icon, color: a.color || C.cyan, text: `${a.title} — ${a.message}`, cta: false, source: 'alert' })
                 })
-                if (engineInsights?.go_live_status?.status) {
+                if (isPaidPro && engineInsights?.go_live_status?.status) {
                   const gl = engineInsights.go_live_status
                   const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
                   const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
@@ -3741,7 +3772,7 @@ const stopImportMessageRotation = () => {
               {(() => {
                 const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
                 const platDayUSD = {}; const platDayDates = {}
-                tips.forEach(t => {
+                analysisTips.forEach(t => {
                   const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
                   const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
                   if (!platDayUSD[p]) platDayUSD[p] = {}
@@ -3817,7 +3848,7 @@ const stopImportMessageRotation = () => {
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
-                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : analysisTips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
                   fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
@@ -4171,6 +4202,8 @@ const stopImportMessageRotation = () => {
           <PlatformsIntelligence
             analytics={analytics}
             tips={accessible.tips}
+            comparisonAnalytics={comparisonAnalytics}
+            comparisonTips={comparisonTips}
             isPro={isPro}
             onOpenPlanner={() => handleTabChange('planner')}
           />
@@ -4180,7 +4213,7 @@ const stopImportMessageRotation = () => {
           <SubscriptionManager
             isPro={isPro}
             subscriptionData={null}
-            onClose={() => handleTabChange('overview')}
+            onClose={() => { handleTabChange('overview'); if (user) loadData(user.id, true, { silent: true }) }}
           />
         )}
 
@@ -5358,7 +5391,7 @@ const stopImportMessageRotation = () => {
             shows={accessible.shows}
             paidSessions={accessible.paidSessions}
             isPro={isPro}
-            primaryPlatform={freeUnlimitedPlatform}
+            primaryPlatform={selectedAnalyticsPlatform}
             onPrimarySaved={(d) => setProfile(prev => ({ ...(prev || {}), ...d }))}
             onImport={() => handleTabChange('upload')}
             onStartLive={() => handleTabChange('live')}
@@ -6491,8 +6524,8 @@ const stopImportMessageRotation = () => {
         {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
         {activeTab === 'planner' && (
           _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}>{user && <PlannedStreams userId={user.id} plans={plannedStreams} onChanged={loadPlannedStreams} defaultPlatform={freeUnlimitedPlatform || 'Chaturbate'} />}<LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={analysisTips} isPro={isPro} planned={user ? { userId: user.id, plans: plannedStreams, onChanged: loadPlannedStreams, defaultPlatform: freeUnlimitedPlatform || 'Chaturbate' } : null} />
+            ? <div style={{ padding: '32px 0' }}>{user && <PlannedStreams userId={user.id} plans={plannedStreams} onChanged={loadPlannedStreams} defaultPlatform={selectedAnalyticsPlatform || 'Chaturbate'} />}<LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
+            : <StreamPlanner tips={analysisTips} isPro={isPro} planned={user ? { userId: user.id, plans: plannedStreams, onChanged: loadPlannedStreams, defaultPlatform: selectedAnalyticsPlatform || 'Chaturbate' } : null} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
@@ -6519,7 +6552,7 @@ const stopImportMessageRotation = () => {
       {/* WHALE PROFILE MODAL */}
       {selectedWhale && (() => {
         const w = selectedWhale
-        const whaleTips = tips.filter(t => t.username === w.username && t.platform === w.platform)
+        const whaleTips = analysisTips.filter(t => t.username === w.username && t.platform === w.platform)
         const sortedTips = [...whaleTips].sort((a, b) => new Date(b.date_time) - new Date(a.date_time))
         const firstTip = whaleTips.length ? whaleTips.reduce((a, b) => new Date(a.date_time) < new Date(b.date_time) ? a : b) : null
         // A fan reached from Private Sessions may have no free-chat tip
@@ -6554,7 +6587,7 @@ const stopImportMessageRotation = () => {
         // Fan-key match: platform + normalized username (never merge across
         // platforms). Mirrors the whaleTips filter above exactly, over
         // paid_sessions instead of tips.
-        const fanPaidSessions = paidSessions.filter(s => (s.username || '').toLowerCase() === w.username.toLowerCase() && s.platform === w.platform)
+        const fanPaidSessions = accessible.paidSessions.filter(s => (s.username || '').toLowerCase() === w.username.toLowerCase() && s.platform === w.platform)
         const fanPrivateUSD = fanPaidSessions.reduce((sum, s) => sum + (parseFloat(s.usd) || 0), 0)
         const fanPrivateTokens = fanPaidSessions.reduce((sum, s) => sum + (parseInt(s.tokens) || 0), 0)
         const fanPrivateSorted = [...fanPaidSessions].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
@@ -7052,7 +7085,7 @@ const stopImportMessageRotation = () => {
       {shareModalOpen && (() => {
         const topFan = whales[0]
         const bestDayLabel = analyticsbestDay?.day || null
-        const platforms = [...new Set(tips.map(t => t.platform))].join(" & ")
+        const platforms = [...new Set(analysisTips.map(t => t.platform))].join(" & ")
         const oneTimerPct = whales.length > 0 ? Math.round((whales.filter(w => w.tipCount === 1).length / whales.length) * 100) : 0
         const cardLines = [
           `💰 Total Earned: $${totalEarnedUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
