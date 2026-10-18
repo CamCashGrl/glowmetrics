@@ -59,7 +59,9 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
 
   const status = data?.subscription_status || 'none'
   const isTrialing = status === 'trialing'
-  const paidPro = isPro && status !== 'trialing'
+  // Paid Pro is an entitlement, not a plan-label shortcut. A stale `plan='pro'`
+  // record with status none/past_due/canceled must never render as paid-active.
+  const paidPro = isPro && status === 'active'
 
   const getStatusColor = (s) => {
     switch (s) {
