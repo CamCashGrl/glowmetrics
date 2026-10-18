@@ -1,34 +1,67 @@
 // ============================================================
 // CAMCASH — PLAN LIMITS & FREEMIUM GATING
-// Single source of truth for all Free vs Pro plan constants.
+// Single source of truth for Free / Trial / Pro product limits.
 // ============================================================
 
-// Free users may import/track every supported platform. The restriction is
-// historical depth, not platform count: every platform is limited to a
-// rolling 31-day analysis window on Free; Pro gets full history.
-// Infinity is retained for backward compatibility with older components that
-// still compare a tracked-platform count against this constant.
+// STORAGE / IMPORT POLICY
+// Free and trial users may upload data from every supported platform and may
+// upload more than 31 days. CamCash stores that data so it can be unlocked
+// after upgrade and used to build truthful, aggregate upgrade teasers.
+// Do NOT use this constant to limit uploads.
 export const FREE_PLATFORM_LIMIT = Number.POSITIVE_INFINITY
 
-// Analysis window for Free tier. Applies to every supported platform.
+// ANALYTICS POLICY
+// Free gets real analytics for ONE selected platform, limited to a rolling
+// 31-day window. Other platforms/history stay stored and can contribute only
+// to the explicitly-free platform comparison and locked teaser metadata.
+export const FREE_ANALYTICS_PLATFORM_LIMIT = 1
 export const FREE_ANALYSIS_WINDOW_DAYS = 31
 
-// Live Mode tasting allowance for Free accounts.
+// Free users may see this one full insight surface. Everything else should be
+// rendered as a locked teaser built from real stored data, not fake examples.
+export const FREE_FULL_INSIGHT_IDS = Object.freeze(['platformComparison'])
+
+// Trial policy: demonstrate the product without giving away full-history value.
+// Stripe currently creates a 7-day trial. Trial analytics are still capped to
+// one platform + 31 days, with a maximum of two 30-minute Live Mode sessions
+// during the trial. Paid Pro is the only tier with unlimited history/Live Mode.
+export const TRIAL_DAYS = 7
+export const TRIAL_ANALYSIS_WINDOW_DAYS = 31
+export const TRIAL_LIVE_STREAMS_TOTAL = 2
+export const TRIAL_LIVE_STREAM_MINUTES = 30
+
+// Free Live Mode tasting allowance.
 export const FREE_LIVE_STREAMS_PER_WEEK = 2
 export const FREE_LIVE_STREAM_MINUTES = 30
 export const FREE_LIVE_STREAM_SECONDS = FREE_LIVE_STREAM_MINUTES * 60
 
-// Current conversion price shown on contextual upgrade surfaces.
 export const PRO_MONTHLY_PRICE = 9.99
+export const PRO_ANNUAL_PRICE = 99
 
 // ── Plan classification ──────────────────────────────────────────────────────
+// NOTE: profile.plan alone cannot distinguish a Stripe trial from paid Pro in
+// the legacy schema because the webhook currently writes plan='pro' for both.
+// Use hasPaidProAccess() anywhere subscription_status is available.
 export function isProPlan(plan) {
   return plan === 'pro' || plan === 'unlimited'
 }
 
+export function isTrialStatus(subscriptionStatus, trialEndsAt = null, now = new Date()) {
+  if (subscriptionStatus !== 'trialing') return false
+  if (!trialEndsAt) return true
+  const end = new Date(trialEndsAt)
+  return !Number.isNaN(end.getTime()) && end > now
+}
+
+export function hasPaidProAccess({ plan, subscriptionStatus } = {}) {
+  if (plan === 'unlimited') return true
+  return plan === 'pro' && subscriptionStatus === 'active'
+}
+
 // ── Platform role resolution ─────────────────────────────────────────────────
-// Kept for display-order compatibility only. Free history gating must never
-// grant a primary platform deeper history than another platform.
+// primary_pro_platform is now the ONE platform whose 31-day analytics are
+// visible on Free/trial. It no longer receives unlimited history.
+// Other uploaded platforms remain stored for platform comparison + teasers.
 export function resolvePlatformRoles(streamingPlatforms, primaryProPlatform) {
   const list = Array.isArray(streamingPlatforms) ? streamingPlatforms.filter(Boolean) : []
   const primary = (primaryProPlatform && String(primaryProPlatform).trim()) || null
@@ -37,19 +70,24 @@ export function resolvePlatformRoles(streamingPlatforms, primaryProPlatform) {
   return { primary, secondary }
 }
 
-// Old callers still surface this message for a platform lock. There is no
-// platform-count lock anymore, so point users at the real Free limitation.
 export function platformLimitMessage() {
-  return `Free includes all supported platforms with a rolling ${FREE_ANALYSIS_WINDOW_DAYS}-day history. Upgrade to Pro for full history.`
+  return `Free includes real analytics for 1 platform with a rolling ${FREE_ANALYSIS_WINDOW_DAYS}-day window. Upload other platforms too — CamCash stores them for comparison and unlocks their full insights with Pro.`
 }
 
 export function freeHistoryMessage() {
-  return `Free shows the most recent ${FREE_ANALYSIS_WINDOW_DAYS} days on every platform. Unlock full history with Pro for $${PRO_MONTHLY_PRICE.toFixed(2)}/mo.`
+  return `Free shows a rolling ${FREE_ANALYSIS_WINDOW_DAYS} days for your 1 analytics platform. Older history and other-platform data stay safely stored and unlock with Pro for $${PRO_MONTHLY_PRICE.toFixed(2)}/mo.`
+}
+
+export function trialLimitMessage() {
+  return `The ${TRIAL_DAYS}-day trial is capped to 1 analytics platform, ${TRIAL_ANALYSIS_WINDOW_DAYS} days of data, and ${TRIAL_LIVE_STREAMS_TOTAL} Live Mode sessions up to ${TRIAL_LIVE_STREAM_MINUTES} minutes each. Upgrade to keep full Pro access.`
+}
+
+export function canShowFullInsight({ insightId, paidPro = false } = {}) {
+  if (paidPro) return true
+  return FREE_FULL_INSIGHT_IDS.includes(insightId)
 }
 
 // ── Module data thresholds ───────────────────────────────────────────────────
-// Minimum data requirements to unlock each dashboard module.
-// Never reimplement these thresholds locally in components.
 export const MODULE_DATA_THRESHOLDS = {
   bestStreamingTimes: { tips: 25, sessions: 3 },
   avgHourlyRate: { sessions: 3, streamMinutes: 60 },
