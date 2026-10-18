@@ -55,8 +55,12 @@ export function useLiveSessionEngine() {
           stopHeartbeat()
           setPrivateInterval(null)
           setServerSession(data.session || null)
+          setLastCompletedShow(data.summary || null)
           markShowCompleted()
-          setActionError('Your 30-minute Free Live Mode session is complete. Upgrade to Pro for unlimited Live Mode.')
+          const trial = data?.allowance?.isTrial || data?.code === 'TRIAL_LIVE_DURATION_LIMIT'
+          setActionError(trial
+            ? 'Your 30-minute trial Live Mode session is complete. Paid Pro removes the timer.'
+            : 'Your 30-minute Free Live Mode session is complete. Upgrade to Pro for unlimited Live Mode.')
           setPhase('justEnded')
           stopSummaryTimeoutRef.current = setTimeout(() => {
             setPhase('idle')
