@@ -22,7 +22,7 @@ export async function POST(req) {
     platform = body?.platform ?? null
     broadcasterPageDetected = !!body?.broadcasterPageDetected
   } catch (_) {
-    // malformed/missing body — treated as "not detected", never as "detected"
+    // malformed/missing body — treated as not detected
   }
 
   const { data, error } = await supabase.rpc('send_extension_heartbeat', {
@@ -35,9 +35,20 @@ export async function POST(req) {
   }
 
   if (data?.id) {
-    const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle()
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('plan,subscription_status,trial_ends_at')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profileError || !profile) {
+      return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 500, headers: cors })
+    }
+
     const allowance = buildLiveModeAllowance({
-      plan: profile?.plan || 'free',
+      plan: profile.plan || 'free',
+      subscriptionStatus: profile.subscription_status || 'none',
+      trialEndsAt: profile.trial_ends_at || null,
       sessions: [data],
       currentSession: data,
       now: new Date(),
@@ -52,7 +63,7 @@ export async function POST(req) {
       return NextResponse.json({
         session: shapeLiveSession(stopped),
         endedByFreeLimit: true,
-        code: 'FREE_LIVE_DURATION_LIMIT',
+        code: allowance.isTrial ? 'TRIAL_LIVE_DURATION_LIMIT' : 'FREE_LIVE_DURATION_LIMIT',
         allowance,
       }, { headers: cors })
     }
