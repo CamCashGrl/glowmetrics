@@ -1,8 +1,8 @@
 /**
- * Entitlement sync: every Stripe subscription state maps to the right plan,
- * users resolve by metadata.userId → stripe_customer_id → email, a failure is
- * never acknowledged with 2xx (Stripe only retries non-2xx), and a retried
- * event is idempotent.
+ * Entitlement sync: only a paid active Stripe subscription maps to Pro.
+ * Trialing stays on the capped trial entitlement path (profile plan remains
+ * free while subscription_status=trialing), failures are retryable, and
+ * repeated Stripe events are idempotent.
  */
 jest.mock('next/server', () => ({ NextResponse: { json: (body, init) => ({ body, status: init?.status || 200 }) } }))
 
@@ -13,7 +13,6 @@ const mockStripe = {
 }
 jest.mock('stripe', () => jest.fn().mockImplementation(() => mockStripe))
 
-// ── in-memory Supabase ──────────────────────────────────────────────────────
 let db
 let failProfileWrites
 function query(table) {
@@ -78,11 +77,11 @@ const profile = () => db.profiles[0]
 
 describe.each([
   ['active', 'pro'],
-  ['trialing', 'pro'],
+  ['trialing', 'free'],
   ['past_due', 'free'],
   ['unpaid', 'free'],
   ['canceled', 'free'],
-  ['incomplete_expired', 'free'], // trial ended without a payment method
+  ['incomplete_expired', 'free'],
 ])('customer.subscription.updated → %s', (status, plan) => {
   test(`sets plan=${plan} and subscription_status=${status}`, async () => {
     const res = await send('customer.subscription.updated', sub(status))
@@ -92,11 +91,13 @@ describe.each([
   })
 })
 
-test('expired trial: trialing → past_due drops Pro', async () => {
+test('trialing keeps capped entitlement until successful payment', async () => {
   await send('customer.subscription.updated', sub('trialing', { trial_end: 2000 }))
-  expect(profile().plan).toBe('pro')
-  await send('customer.subscription.updated', sub('past_due'))
   expect(profile().plan).toBe('free')
+  expect(profile().subscription_status).toBe('trialing')
+  await send('customer.subscription.updated', sub('active'))
+  expect(profile().plan).toBe('pro')
+  expect(profile().subscription_status).toBe('active')
 })
 
 test('successful payment recovery: past_due → active restores Pro', async () => {
@@ -122,7 +123,7 @@ test('missing metadata.userId resolves by Stripe customer id (no email needed)',
 test('completely unresolved customer is NOT acknowledged — Stripe must retry', async () => {
   const res = await send('customer.subscription.updated', sub('past_due', { metadata: {}, customer: 'cus_unknown' }))
   expect(res.status).toBeGreaterThanOrEqual(500)
-  expect(profile().plan).toBe('pro') // nothing written
+  expect(profile().plan).toBe('pro')
   expect(db.webhook_events[0].status).toBe('user_resolution_failed')
 })
 
@@ -144,10 +145,10 @@ test('idempotent: a retried event after success changes nothing and logs once', 
   const event = { id: 'evt_dup', type: 'customer.subscription.updated', data: { object: sub('past_due') } }
   const req = () => ({ text: async () => JSON.stringify(event), headers: { get: () => 'sig' } })
   await POST(req())
-  profile().plan = 'pro' // simulate a later legitimate change
+  profile().plan = 'pro'
   const res = await POST(req())
   expect(res.body.status).toBe('duplicate')
-  expect(profile().plan).toBe('pro') // the duplicate did not re-apply past_due
+  expect(profile().plan).toBe('pro')
   expect(db.subscription_events.filter((e) => e.stripe_event_id === 'evt_dup')).toHaveLength(1)
   expect(db.webhook_events.filter((e) => e.stripe_event_id === 'evt_dup')).toHaveLength(1)
 })
