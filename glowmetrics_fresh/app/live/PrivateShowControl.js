@@ -38,7 +38,8 @@ export default function PrivateShowControl({ engine, platform }) {
     ? (Number(open.rate_per_minute) || 0) * elapsedSeconds / 60
     : 0
 
-  const valid = username.trim().length > 0 && username.trim().length <= 80 && rate !== '' && Number.isFinite(Number(rate)) && Number(rate) >= 0
+  const numericRate = Number(rate)
+  const valid = username.trim().length > 0 && username.trim().length <= 80 && rate !== '' && Number.isFinite(numericRate) && numericRate >= 0 && numericRate <= 1000
   const mins = Math.floor(elapsedSeconds / 60)
   const secs = String(elapsedSeconds % 60).padStart(2, '0')
 
@@ -78,7 +79,7 @@ export default function PrivateShowControl({ engine, platform }) {
             <input data-testid="private-rate" type="number" min="0" max="1000" step="0.01" inputMode="decimal" placeholder="$/min"
               value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Private rate in USD per minute" style={inputStyle} />
             <button data-testid="private-start" disabled={engine.actionPending || !valid}
-              onClick={() => engine.startPrivate(Number(rate), selectedPlatform, username.trim())}
+              onClick={() => engine.startPrivate(numericRate, selectedPlatform, username.trim())}
               style={{ padding: '8px 10px', borderRadius: 9, border: '1px solid rgba(236,72,153,.5)', background: valid ? 'rgba(236,72,153,.18)' : 'rgba(255,255,255,.04)', color: valid ? '#F9A8D4' : '#64748B', fontWeight: 900, cursor: engine.actionPending || !valid ? 'not-allowed' : 'pointer' }}>
               Start Private
             </button>
