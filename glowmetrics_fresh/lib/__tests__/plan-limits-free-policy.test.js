@@ -13,6 +13,7 @@ import {
   platformLimitMessage,
   freeHistoryMessage,
   trialLimitMessage,
+  hasPaidProAccess,
 } from '../planLimits'
 
 describe('canonical Free + trial product policy', () => {
@@ -46,6 +47,19 @@ describe('canonical Free + trial product policy', () => {
     expect(trialLimitMessage()).toMatch(/7-day trial/i)
     expect(trialLimitMessage()).toMatch(/1 analytics platform/i)
     expect(trialLimitMessage()).toMatch(/31 days/i)
+  })
+
+  test('plan=pro with trialing status is not paid Pro', () => {
+    expect(hasPaidProAccess({ plan: 'pro', subscriptionStatus: 'trialing' })).toBe(false)
+  })
+
+  test('plan=pro with active status is paid Pro', () => {
+    expect(hasPaidProAccess({ plan: 'pro', subscriptionStatus: 'active' })).toBe(true)
+  })
+
+  test('legacy unlimited plan remains paid Pro', () => {
+    expect(hasPaidProAccess({ plan: 'unlimited', subscriptionStatus: 'trialing' })).toBe(true)
+    expect(hasPaidProAccess({ plan: 'unlimited', subscriptionStatus: null })).toBe(true)
   })
 
   test('conversion copy uses the approved $9.99 monthly price', () => {
