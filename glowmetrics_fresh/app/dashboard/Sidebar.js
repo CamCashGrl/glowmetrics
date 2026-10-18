@@ -105,7 +105,10 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
       </div>
 
       {isPro ? (
-        <button onClick={() => onTabChange('subscription')} style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", marginBottom: 8, fontSize: 11.5, fontWeight: 700, color: C.purple, cursor: "pointer", width: "100%", transition: "all 0.15s" }}>
+        <button onClick={() => onTabChange('subscription')}
+          style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, background: "rgba(168,85,247,0.07)", border: "1px solid rgba(168,85,247,0.2)", marginBottom: 8, fontSize: 11.5, fontWeight: 700, color: C.purple, cursor: "pointer", width: "100%", transition: "all 0.15s" }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(168,85,247,0.14)"; e.currentTarget.style.borderColor = "rgba(168,85,247,0.4)" }}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(168,85,247,0.07)"; e.currentTarget.style.borderColor = "rgba(168,85,247,0.2)" }}>
           <span>✦</span><span>Pro plan active</span>
         </button>
       ) : (
