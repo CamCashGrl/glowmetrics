@@ -1,12 +1,16 @@
 import {
   FREE_LIVE_STREAMS_PER_WEEK,
   FREE_LIVE_STREAM_SECONDS,
-  isProPlan,
+  TRIAL_DAYS,
+  TRIAL_LIVE_STREAMS_TOTAL,
+  TRIAL_LIVE_STREAM_MINUTES,
+  hasPaidProAccess,
+  isTrialStatus,
 } from './planLimits'
 
 export function startOfUtcWeek(date = new Date()) {
   const d = new Date(date)
-  const day = d.getUTCDay() // Sun=0
+  const day = d.getUTCDay()
   const daysSinceMonday = (day + 6) % 7
   d.setUTCHours(0, 0, 0, 0)
   d.setUTCDate(d.getUTCDate() - daysSinceMonday)
@@ -18,6 +22,12 @@ export function endOfUtcWeek(date = new Date()) {
   const end = new Date(start)
   end.setUTCDate(end.getUTCDate() + 7)
   return end
+}
+
+export function trialWindowStart(trialEndsAt, trialDays = TRIAL_DAYS) {
+  const end = new Date(trialEndsAt)
+  if (!Number.isFinite(end.getTime())) return null
+  return new Date(end.getTime() - trialDays * 24 * 60 * 60 * 1000)
 }
 
 export function activeSecondsForSession(session, now = new Date()) {
@@ -37,43 +47,82 @@ export function activeSecondsForSession(session, now = new Date()) {
   return Math.max(0, Math.floor((endMs - startMs) / 1000 - pausedSeconds))
 }
 
-export function buildLiveModeAllowance({ plan = 'free', sessions = [], currentSession = null, now = new Date() } = {}) {
-  const pro = isProPlan(plan)
-  if (pro) {
+export function buildLiveModeAllowance({
+  plan = 'free',
+  subscriptionStatus = 'none',
+  trialEndsAt = null,
+  sessions = [],
+  currentSession = null,
+  now = new Date(),
+} = {}) {
+  const paidPro = hasPaidProAccess({ plan, subscriptionStatus })
+  const trialing = isTrialStatus(subscriptionStatus, trialEndsAt, now)
+  const currentActiveSeconds = currentSession ? activeSecondsForSession(currentSession, now) : 0
+
+  if (paidPro) {
     return {
       isPro: true,
+      isTrial: false,
+      scope: 'unlimited',
+      sessionLimit: null,
+      usedInScope: null,
+      remainingInScope: null,
       weeklyLimit: null,
       usedThisWeek: null,
       remainingThisWeek: null,
       streamLimitSeconds: null,
-      currentActiveSeconds: currentSession ? activeSecondsForSession(currentSession, now) : 0,
+      currentActiveSeconds,
       currentRemainingSeconds: null,
       locked: false,
-      resetAt: endOfUtcWeek(now).toISOString(),
+      limitReached: false,
+      resetAt: null,
     }
   }
 
-  const weekStartMs = startOfUtcWeek(now).getTime()
-  const weekEndMs = endOfUtcWeek(now).getTime()
-  const weekly = sessions.filter((session) => {
+  let scope = 'week'
+  let scopeStartMs = startOfUtcWeek(now).getTime()
+  let scopeEndMs = endOfUtcWeek(now).getTime()
+  let sessionLimit = FREE_LIVE_STREAMS_PER_WEEK
+  let streamLimitSeconds = FREE_LIVE_STREAM_SECONDS
+  let resetAt = endOfUtcWeek(now).toISOString()
+
+  if (trialing) {
+    const trialStart = trialWindowStart(trialEndsAt)
+    const trialEnd = new Date(trialEndsAt)
+    scope = 'trial'
+    scopeStartMs = trialStart?.getTime() ?? now.getTime()
+    scopeEndMs = trialEnd.getTime()
+    sessionLimit = TRIAL_LIVE_STREAMS_TOTAL
+    streamLimitSeconds = TRIAL_LIVE_STREAM_MINUTES * 60
+    resetAt = trialEnd.toISOString()
+  }
+
+  const inScope = sessions.filter((session) => {
     const started = new Date(session?.started_at).getTime()
-    return Number.isFinite(started) && started >= weekStartMs && started < weekEndMs
+    return Number.isFinite(started) && started >= scopeStartMs && started < scopeEndMs
   })
-  const usedThisWeek = weekly.length
-  const currentActiveSeconds = currentSession ? activeSecondsForSession(currentSession, now) : 0
+  const usedInScope = inScope.length
+  const remainingInScope = Math.max(0, sessionLimit - usedInScope)
 
   return {
     isPro: false,
-    weeklyLimit: FREE_LIVE_STREAMS_PER_WEEK,
-    usedThisWeek,
-    remainingThisWeek: Math.max(0, FREE_LIVE_STREAMS_PER_WEEK - usedThisWeek),
-    streamLimitSeconds: FREE_LIVE_STREAM_SECONDS,
+    isTrial: trialing,
+    scope,
+    sessionLimit,
+    usedInScope,
+    remainingInScope,
+    // Backward-compatible week fields for older clients. Trial clients should
+    // use the generic scope fields so they never imply a weekly reset.
+    weeklyLimit: scope === 'week' ? sessionLimit : null,
+    usedThisWeek: scope === 'week' ? usedInScope : null,
+    remainingThisWeek: scope === 'week' ? remainingInScope : null,
+    streamLimitSeconds,
     currentActiveSeconds,
     currentRemainingSeconds: currentSession
-      ? Math.max(0, FREE_LIVE_STREAM_SECONDS - currentActiveSeconds)
-      : FREE_LIVE_STREAM_SECONDS,
-    locked: !currentSession && usedThisWeek >= FREE_LIVE_STREAMS_PER_WEEK,
-    limitReached: !!currentSession && currentActiveSeconds >= FREE_LIVE_STREAM_SECONDS,
-    resetAt: endOfUtcWeek(now).toISOString(),
+      ? Math.max(0, streamLimitSeconds - currentActiveSeconds)
+      : streamLimitSeconds,
+    locked: !currentSession && usedInScope >= sessionLimit,
+    limitReached: !!currentSession && currentActiveSeconds >= streamLimitSeconds,
+    resetAt,
   }
 }
