@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../lib/liveSession/auth'
-import { buildLiveModeAllowance, startOfUtcWeek } from '../../../../lib/liveModeAllowance'
+import { buildLiveModeAllowance, startOfUtcWeek, trialWindowStart } from '../../../../lib/liveModeAllowance'
+import { isTrialStatus } from '../../../../lib/planLimits'
 import { corsHeaders } from '../../../../lib/liveSession/cors'
 
 const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
@@ -17,15 +18,26 @@ export async function GET(req) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
 
   const now = new Date()
-  const weekStart = startOfUtcWeek(now).toISOString()
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('plan,subscription_status,trial_ends_at')
+    .eq('id', user.id)
+    .maybeSingle()
 
-  const [{ data: profile, error: profileError }, { data: sessions, error: sessionsError }, { data: currentSession, error: currentError }] = await Promise.all([
-    supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle(),
+  if (profileError) {
+    return NextResponse.json({ error: 'Unable to load Live Mode allowance.' }, { status: 500, headers: cors })
+  }
+
+  const trialing = isTrialStatus(profile?.subscription_status, profile?.trial_ends_at, now)
+  const trialStart = trialing ? trialWindowStart(profile?.trial_ends_at) : null
+  const allowanceStart = trialStart || startOfUtcWeek(now)
+
+  const [{ data: sessions, error: sessionsError }, { data: currentSession, error: currentError }] = await Promise.all([
     supabase
       .from('live_sessions')
       .select('id,started_at,ended_at,total_paused_seconds,paused_at,live_substate,status')
       .eq('user_id', user.id)
-      .gte('started_at', weekStart)
+      .gte('started_at', allowanceStart.toISOString())
       .order('started_at', { ascending: false }),
     supabase
       .from('live_sessions')
@@ -37,12 +49,14 @@ export async function GET(req) {
       .maybeSingle(),
   ])
 
-  if (profileError || sessionsError || currentError) {
+  if (sessionsError || currentError) {
     return NextResponse.json({ error: 'Unable to load Live Mode allowance.' }, { status: 500, headers: cors })
   }
 
   const allowance = buildLiveModeAllowance({
     plan: profile?.plan || 'free',
+    subscriptionStatus: profile?.subscription_status || 'none',
+    trialEndsAt: profile?.trial_ends_at || null,
     sessions: sessions || [],
     currentSession: currentSession || null,
     now,
