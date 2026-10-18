@@ -18,10 +18,24 @@ function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+function milestoneFor(allowance) {
+  if (!allowance || allowance.isPro) return null
+  const remaining = allowance.currentRemainingSeconds
+  const active = allowance.currentActiveSeconds
+  if (allowance.locked) return 'weekly_locked'
+  if (active > 0 && remaining <= 120) return 'two_minutes_left'
+  if (active > 0 && remaining <= 300) return 'five_minutes_left'
+  if (active > 0 && remaining <= 600) return 'ten_minutes_left'
+  if (active >= 900) return 'halfway'
+  if (allowance.usedThisWeek === 1 && active === 0) return 'one_stream_left'
+  return null
+}
+
 export default function LiveModeAllowanceBar() {
   const router = useRouter()
   const [allowance, setAllowance] = useState(null)
   const trackedRef = useRef(false)
+  const milestoneRef = useRef(new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -49,6 +63,19 @@ export default function LiveModeAllowanceBar() {
     track('live_allowance_bar_impression', {
       used_this_week: allowance.usedThisWeek,
       remaining_this_week: allowance.remainingThisWeek,
+    })
+  }, [allowance])
+
+  useEffect(() => {
+    const milestone = milestoneFor(allowance)
+    if (!milestone || milestoneRef.current.has(milestone)) return
+    milestoneRef.current.add(milestone)
+    track('live_allowance_milestone', {
+      milestone,
+      used_this_week: allowance.usedThisWeek,
+      remaining_this_week: allowance.remainingThisWeek,
+      current_active_seconds: allowance.currentActiveSeconds,
+      current_remaining_seconds: allowance.currentRemainingSeconds,
     })
   }, [allowance])
 
@@ -82,6 +109,7 @@ export default function LiveModeAllowanceBar() {
 
   const upgrade = () => {
     track('live_allowance_upgrade_click', {
+      milestone: milestoneFor(allowance) || 'default',
       used_this_week: allowance.usedThisWeek,
       current_active_seconds: allowance.currentActiveSeconds,
       locked: !!allowance.locked,
