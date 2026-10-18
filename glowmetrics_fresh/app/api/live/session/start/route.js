@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
-import { buildLiveModeAllowance, startOfUtcWeek } from '../../../../../lib/liveModeAllowance'
+import { buildLiveModeAllowance, startOfUtcWeek, trialWindowStart } from '../../../../../lib/liveModeAllowance'
+import { isTrialStatus } from '../../../../../lib/planLimits'
 
 const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
 
@@ -31,38 +32,52 @@ export async function POST(req) {
     return NextResponse.json(body, { status, headers: cors })
   }
 
-  // Reopening an already-running session never consumes another weekly slot.
+  // Reopening an already-running session never consumes another allowance slot.
   if (existing) {
     return NextResponse.json({ session: shapeLiveSession(existing) }, { headers: cors })
   }
 
-  // Enforce the Free weekly allowance before creating a new session.
   const now = new Date()
-  const weekStart = startOfUtcWeek(now).toISOString()
-  const [{ data: profile, error: profileError }, { data: weeklySessions, error: weeklyError }] = await Promise.all([
-    supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle(),
-    supabase
-      .from('live_sessions')
-      .select('id,started_at,ended_at,total_paused_seconds,paused_at,live_substate,status')
-      .eq('user_id', user.id)
-      .gte('started_at', weekStart),
-  ])
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('plan,subscription_status,trial_ends_at')
+    .eq('id', user.id)
+    .maybeSingle()
 
-  if (profileError || weeklyError) {
+  if (profileError) {
+    return NextResponse.json({ error: 'Unable to verify Live Mode allowance.' }, { status: 500, headers: cors })
+  }
+
+  const trialing = isTrialStatus(profile?.subscription_status, profile?.trial_ends_at, now)
+  const trialStart = trialing ? trialWindowStart(profile?.trial_ends_at) : null
+  const allowanceStart = trialStart || startOfUtcWeek(now)
+
+  const { data: sessions, error: sessionsError } = await supabase
+    .from('live_sessions')
+    .select('id,started_at,ended_at,total_paused_seconds,paused_at,live_substate,status')
+    .eq('user_id', user.id)
+    .gte('started_at', allowanceStart.toISOString())
+
+  if (sessionsError) {
     return NextResponse.json({ error: 'Unable to verify Live Mode allowance.' }, { status: 500, headers: cors })
   }
 
   const allowance = buildLiveModeAllowance({
     plan: profile?.plan || 'free',
-    sessions: weeklySessions || [],
+    subscriptionStatus: profile?.subscription_status || 'none',
+    trialEndsAt: profile?.trial_ends_at || null,
+    sessions: sessions || [],
     currentSession: null,
     now,
   })
 
   if (allowance.locked) {
+    const trial = allowance.scope === 'trial'
     return NextResponse.json({
-      error: 'You’ve used both Free Live Mode streams for this week. Upgrade to Pro for unlimited Live Mode.',
-      code: 'FREE_LIVE_WEEKLY_LIMIT',
+      error: trial
+        ? 'You’ve used both Live Mode sessions included in your 7-day trial. Upgrade to paid Pro for unlimited Live Mode.'
+        : 'You’ve used both Free Live Mode streams for this week. Upgrade to Pro for unlimited Live Mode.',
+      code: trial ? 'TRIAL_LIVE_TOTAL_LIMIT' : 'FREE_LIVE_WEEKLY_LIMIT',
       allowance,
     }, { status: 403, headers: cors })
   }
