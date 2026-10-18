@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const PLATFORM_OPTIONS = ['Chaturbate', 'BongaCams', 'MyFreeCams']
 
@@ -9,7 +9,7 @@ export default function PrivateShowControl({ engine, platform }) {
   const [username, setUsername] = useState('')
   const [rate, setRate] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState(platform || 'Chaturbate')
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
   const open = engine.privateInterval
 
   useEffect(() => {
@@ -26,10 +26,13 @@ export default function PrivateShowControl({ engine, platform }) {
     if (open) setEnabled(true)
   }, [open])
 
-  const elapsedSeconds = useMemo(() => {
-    if (!open?.started_at) return 0
-    return Math.max(0, Math.floor((Date.now() - new Date(open.started_at).getTime()) / 1000))
-  }, [open, Date.now()])
+  // `tick` exists only to trigger one render per second while a private is
+  // open. Do not put Date.now() in a dependency array — it is not React state
+  // and creates a new dependency value on every render.
+  void tick
+  const elapsedSeconds = open?.started_at
+    ? Math.max(0, Math.floor((Date.now() - new Date(open.started_at).getTime()) / 1000))
+    : 0
 
   const estimated = open
     ? (Number(open.rate_per_minute) || 0) * elapsedSeconds / 60
