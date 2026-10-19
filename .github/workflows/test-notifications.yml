@@ -6,20 +6,30 @@ on:
     types:
       - completed
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   notify-slack:
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion != 'success'
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
       - name: Download test results
+        if: github.event.workflow_run.conclusion != 'success'
         uses: actions/download-artifact@v4
         with:
           name: test-results-${{ github.event.workflow_run.id }}
           path: test-results
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
         continue-on-error: true
 
       - name: Parse test results
+        if: github.event.workflow_run.conclusion != 'success'
         id: parse
         run: |
           if [ -f "test-results/summary.json" ]; then
@@ -32,14 +42,15 @@ jobs:
             DURATION="unknown"
           fi
 
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
+          echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+          echo "duration=$DURATION" >> "$GITHUB_OUTPUT"
 
       - name: Notify Slack on Failure
+        if: github.event.workflow_run.conclusion != 'success' && env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.25.0
         with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-url: ${{ env.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "text": "🚨 CamCash Test Failure",
@@ -104,12 +115,12 @@ jobs:
                 }
               ]
             }
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
 
       - name: Notify Slack on Success
+        if: github.event.workflow_run.conclusion == 'success' && env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.25.0
         with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-url: ${{ env.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "text": "✅ CamCash Tests Passed",
@@ -149,4 +160,7 @@ jobs:
                 }
               ]
             }
-        if: ${{ github.event.workflow_run.conclusion == 'success' && secrets.SLACK_WEBHOOK_URL != '' }}
+
+      - name: No Slack webhook configured
+        if: env.SLACK_WEBHOOK_URL == ''
+        run: echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification without failing the workflow."
