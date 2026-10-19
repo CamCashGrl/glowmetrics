@@ -140,7 +140,7 @@ export default function LiveModeAllowanceBar() {
       current_active_seconds: allowance.currentActiveSeconds,
       locked: !!allowance.locked,
     })
-    router.push('/pricing')
+    router.push('/pricing#trial')
   }
 
   return (
@@ -171,9 +171,12 @@ export default function LiveModeAllowanceBar() {
           )}
         </div>
 
-        <button onClick={upgrade} style={{ border: 0, borderRadius: 999, padding: '10px 16px', cursor: 'pointer', color: '#07070b', fontWeight: 900, fontSize: 12, background: 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 22px rgba(124,92,255,0.28)', whiteSpace: 'nowrap' }}>
-          Unlock unlimited · $9.99/mo
-        </button>
+        <div style={{ display: 'grid', gap: 5, justifyItems: 'end' }}>
+          <button onClick={upgrade} style={{ border: 0, borderRadius: 999, padding: '10px 16px', cursor: 'pointer', color: '#07070b', fontWeight: 900, fontSize: 12, background: 'linear-gradient(90deg,#16F4FF,#7C5CFF,#FF2BAE)', boxShadow: '0 0 22px rgba(124,92,255,0.28)', whiteSpace: 'nowrap' }}>
+            Go unlimited with Pro →
+          </button>
+          <div style={{ color: '#64748b', fontSize: 9.5, textAlign: 'right' }}>$9.99/mo or $99/yr</div>
+        </div>
       </div>
     </div>
   )
