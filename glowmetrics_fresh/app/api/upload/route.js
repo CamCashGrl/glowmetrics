@@ -255,6 +255,16 @@ async function handleUpload(req) {
     console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing "Chat Type" column.')
   }
 
+  // Assign exact-key identities across the original file before reconciliation
+  // removes any occurrences. Surviving rows must keep their original tip_seq.
+  const dedupSeq = new Map()
+  tipRows.forEach(r => {
+    const key = `${r.user_id}|${r.username.toLowerCase()}|${r.tokens}|${r.usd.toFixed(2)}|${r.date_time}`
+    const next = (dedupSeq.get(key) || 0) + 1
+    dedupSeq.set(key, next)
+    r.tip_seq = next
+  })
+
   // ── CROSS-SOURCE LIVE MODE → CSV RECONCILIATION ────────────────────────
   // A creator may use Live Mode first and later upload the platform CSV that
   // contains the same real tips. The normal exact CSV unique key cannot always
@@ -270,15 +280,6 @@ async function handleUpload(req) {
   if (crossSourceSkipped > 0) {
     console.log(`[UPLOAD] Cross-source reconciliation skipped ${crossSourceSkipped} tip(s) already captured by Live Mode`)
   }
-
-  // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE REMAINING FILE ──────────────
-  const dedupSeq = new Map()
-  tipRows.forEach(r => {
-    const key = `${r.user_id}|${r.username.toLowerCase()}|${r.tokens}|${r.usd.toFixed(2)}|${r.date_time}`
-    const next = (dedupSeq.get(key) || 0) + 1
-    dedupSeq.set(key, next)
-    r.tip_seq = next
-  })
 
   const summaryDates = tipRows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
   const summaryDateFrom = summaryDates.length ? new Date(Math.min(...summaryDates)) : null

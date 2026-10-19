@@ -10,7 +10,11 @@ jest.mock('next/server', () => ({
 
 let rpcCalls
 function mockSupabase() {
-  const chain = { insert: jest.fn(async () => ({ error: null })), delete: jest.fn(() => chain), eq: jest.fn(async () => ({ error: null })) }
+  const chain = { insert: jest.fn(async () => ({ error: null })), delete: jest.fn(() => chain),
+    eq: jest.fn(() => chain), select: jest.fn(() => chain), gte: jest.fn(() => chain),
+    lte: jest.fn(() => chain), order: jest.fn(() => chain),
+    range: jest.fn(async () => ({ data: [], error: null })),
+  }
   return {
     auth: { getUser: jest.fn(async () => ({ data: { user: { id: 'creator-1' } }, error: null })) },
     from: jest.fn(() => chain),

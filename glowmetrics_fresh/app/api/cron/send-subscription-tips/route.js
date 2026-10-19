@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 export const dynamic = 'force-dynamic'
 
 const PRODUCT_UPDATE_TYPE = 'product_update_2026_10_free_live_limits'
+const PROFILE_BATCH_SIZE = 1000
 
 const PRODUCT_UPDATE = {
   subject: 'CamCash update: new Free limits, Live Mode progress, and stored-history unlocks',
@@ -145,50 +146,61 @@ export async function GET() {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  const { data: users, error } = await supabase
-    .from('profiles')
-    .select('id, email, plan, subscription_status')
-    .not('email', 'is', null)
-    .limit(1000)
-
-  if (error) {
-    console.error('[send-subscription-tips] query failed:', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-  }
-
   let updateEmailsSent = 0
   let retentionEmailsSent = 0
   let emailsFailed = 0
   const tip = getRandomTip()
+  let usersChecked = 0
+  let lastId = null
 
-  for (const user of users || []) {
-    if (!user.email) continue
-
-    const hasUpdate = await alreadySent(supabase, PRODUCT_UPDATE_TYPE, user.email)
-    if (!hasUpdate) {
-      const sent = await sendEmail(
-        supabase,
-        PRODUCT_UPDATE_TYPE,
-        user.email,
-        PRODUCT_UPDATE.subject,
-        PRODUCT_UPDATE.text
-      )
-      if (sent) updateEmailsSent++
-      else emailsFailed++
-      continue
+  // Advance by the immutable unique id, so earlier deletions cannot shift
+  // offsets and cause an eligible profile to be skipped.
+  while (true) {
+    let query = supabase
+      .from('profiles')
+      .select('id, email, plan, subscription_status')
+      .not('email', 'is', null)
+      .order('id', { ascending: true })
+      .limit(PROFILE_BATCH_SIZE)
+    if (lastId !== null) query = query.gt('id', lastId)
+    const { data: users, error } = await query
+    if (error) {
+      console.error('[send-subscription-tips] query failed:', error.message)
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
+    if (!users?.length) break
+    usersChecked += users.length
 
-    if (['active', 'trialing'].includes(user.subscription_status)) {
-      const sent = await sendEmail(supabase, 'subscription_retention_tip', user.email, tip.subject, tip.text)
-      if (sent) retentionEmailsSent++
-      else emailsFailed++
+    for (const user of users) {
+      if (!user.email) continue
+
+      const hasUpdate = await alreadySent(supabase, PRODUCT_UPDATE_TYPE, user.email)
+      if (!hasUpdate) {
+        const sent = await sendEmail(
+          supabase,
+          PRODUCT_UPDATE_TYPE,
+          user.email,
+          PRODUCT_UPDATE.subject,
+          PRODUCT_UPDATE.text
+        )
+        if (sent) updateEmailsSent++
+        else emailsFailed++
+        continue
+      }
+
+      if (['active', 'trialing'].includes(user.subscription_status)) {
+        const sent = await sendEmail(supabase, 'subscription_retention_tip', user.email, tip.subject, tip.text)
+        if (sent) retentionEmailsSent++
+        else emailsFailed++
+      }
     }
+    lastId = users[users.length - 1].id
   }
 
   console.log(`[send-subscription-tips] product updates=${updateEmailsSent}, retention=${retentionEmailsSent}, failed=${emailsFailed}`)
   return NextResponse.json({
     success: true,
-    usersChecked: users?.length || 0,
+    usersChecked,
     updateEmailsSent,
     retentionEmailsSent,
     emailsFailed,

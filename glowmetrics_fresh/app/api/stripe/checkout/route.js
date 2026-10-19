@@ -226,6 +226,49 @@ export async function POST(request) {
       billingCycle: expected.interval === 'year' ? 'annual' : 'monthly',
       stripeSessionId: session.id || null,
     })
+    // Server-authoritative funnel tracking. Previously these tables depended on
+    // optional client tracking, so pricing/landing checkout attempts could be
+    // invisible even though Stripe customers or sessions were created.
+    const billingCycle = planType === 'standard_annual' ? 'annual' : 'monthly'
+    const planPrice = expected.amount / 100
+    const trackedAt = new Date().toISOString()
+
+    const { error: checkoutTrackError } = await admin.from('checkout_events').insert({
+      user_id: user.id,
+      session_id: session.id,
+      status: 'checkout_created',
+      plan_type: planType,
+      plan_price: planPrice,
+      billing_cycle: billingCycle,
+      stripe_session_id: session.id,
+      properties: {
+        source: 'server_checkout_route',
+        customer_id: customerId,
+        price_id: priceId,
+        trial_days: 7,
+        created_at: trackedAt,
+      },
+    })
+    if (checkoutTrackError) {
+      console.error('Checkout: failed to record checkout event', checkoutTrackError.message)
+    }
+
+    const { error: trialTrackError } = await admin.from('free_trial_events').insert({
+      user_id: user.id,
+      event_type: 'trial_checkout_created',
+      trial_days_offered: 7,
+      properties: {
+        source: 'server_checkout_route',
+        stripe_session_id: session.id,
+        customer_id: customerId,
+        plan_type: planType,
+        billing_cycle: billingCycle,
+        created_at: trackedAt,
+      },
+    })
+    if (trialTrackError) {
+      console.error('Checkout: failed to record trial attempt', trialTrackError.message)
+    }
 
     return NextResponse.json({ url: session.url })
   } catch (error) {

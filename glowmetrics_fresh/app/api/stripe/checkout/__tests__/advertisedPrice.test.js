@@ -16,7 +16,7 @@ jest.mock('../../../../../lib/stripe', () => ({ stripe: mockStripe }))
 
 const mockCheckoutInsert = jest.fn().mockResolvedValue({ error: null })
 const mockAdminFrom = jest.fn((table) => {
-  if (table === 'checkout_events') return { insert: mockCheckoutInsert }
+  if (table === 'checkout_events' || table === 'free_trial_events') return { insert: mockCheckoutInsert }
   if (table === 'profiles') {
     return { update: () => ({ eq: async () => ({ error: null }) }) }
   }
@@ -56,6 +56,8 @@ test('monthly env price at $19.99 is replaced by the $9.99 lookup-key price', as
   expect(mockStripe.checkout.sessions.create.mock.calls[0][0].client_reference_id).toBe('u1')
   expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'started', user_id: 'u1' }))
   expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'session_created', stripe_session_id: 'cs_test_1' }))
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'checkout_created', user_id: 'u1' }))
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'trial_checkout_created', user_id: 'u1' }))
 })
 
 test('monthly env price already $9.99 is used as-is', async () => {
