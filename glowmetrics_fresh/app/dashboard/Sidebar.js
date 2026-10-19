@@ -116,9 +116,10 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           <div style={{ fontSize: 10.5, lineHeight: 1.45, color: "#7d8aa3", textAlign: "center", marginBottom: 7 }}>
             Full history · unlimited Live Mode · deeper fan intelligence
           </div>
-          <Button as="a" href="/pricing" style={{ width: "100%", fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
-            ✦ Unlock Pro · $9.99/mo
+          <Button as="a" href="/pricing#trial" style={{ width: "100%", fontSize: 13, padding: "11px 12px", textAlign: "center" }}>
+            ✦ Start 7-day Pro trial
           </Button>
+          <div style={{ marginTop: 5, fontSize: 9.5, color: "#64748b", textAlign: "center" }}>$9.99/mo or $99/yr after trial</div>
         </div>
       )}
 
