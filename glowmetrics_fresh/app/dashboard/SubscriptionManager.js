@@ -88,15 +88,15 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
       <>
         <style>{glowAnimation}</style>
         <div style={{ padding: '16px 12px', borderRadius: 9, background: 'rgba(124,92,255,0.08)', border: '1px solid rgba(124,92,255,0.3)', marginBottom: 8 }}>
-          <div style={{ fontSize: 12, color: C.white, fontWeight: 800, marginBottom: 5 }}>Try CamCash Pro for 7 days</div>
+          <div style={{ fontSize: 12, color: C.white, fontWeight: 800, marginBottom: 5 }}>Unlock what CamCash found in your data</div>
           <div style={{ fontSize: 11, color: C.text, marginBottom: 10, lineHeight: 1.55 }}>
-            Trial access is capped to your 1 analytics platform, a rolling 31 days of visible data, platform comparison, and 2 Live Mode sessions up to 30 active minutes each. Your older uploads stay stored and unlock after payment.
+            Start a 7-day Pro trial to explore the upgrade experience while keeping the same safe trial limits: 1 analytics platform, a rolling 31 days, Platform Comparison, and 2 Live Mode sessions up to 30 active minutes each. Your older uploads stay stored; full history unlocks once Pro becomes paid and active.
           </div>
           <a href="/pricing#trial" style={{ display: 'inline-block', width: '100%', padding: '9px 12px', borderRadius: 6, background: C.purple, color: C.white, textDecoration: 'none', fontSize: 12, fontWeight: 800, textAlign: 'center' }}>
-            Start 7-day trial
+            Start my 7-day trial →
           </a>
           <div style={{ fontSize: 9.5, color: '#7d8aa3', lineHeight: 1.5, textAlign: 'center', marginTop: 8 }}>
-            Card required. Cancel before the trial ends to avoid being charged. By starting a trial you agree to our <a href="/terms" style={{ color: C.cyan }}>Terms</a> and <a href="/privacy" style={{ color: C.cyan }}>Privacy Policy</a>.
+            No charge today · Card required · $9.99/mo or $99/yr after the trial. Cancel before the trial ends to avoid being charged. By starting a trial you agree to our <a href="/terms" style={{ color: C.cyan }}>Terms</a> and <a href="/privacy" style={{ color: C.cyan }}>Privacy Policy</a>.
           </div>
         </div>
       </>
@@ -126,7 +126,7 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
 
         {isTrialing && (
           <div style={{ fontSize: 10.5, color: C.text, background: 'rgba(34,211,238,0.07)', border: '1px solid rgba(34,211,238,0.18)', padding: 9, borderRadius: 6, lineHeight: 1.5 }}>
-            Trial limits: 1 analytics platform · rolling 31 days · platform comparison · 2 Live Mode sessions · 30 active minutes each. Full stored history unlocks when Pro becomes paid.
+            Trial limits: 1 analytics platform · rolling 31 days · Platform Comparison · 2 Live Mode sessions · 30 active minutes each. Full stored history unlocks when Pro becomes paid.
           </div>
         )}
 
@@ -148,7 +148,7 @@ export default function SubscriptionManager({ isPro = false, subscriptionData = 
           <button onClick={handleOpenPortal} disabled={loading} style={{ flex: 1, padding: '8px 10px', borderRadius: 6, background: C.purple, color: C.white, border: 'none', fontSize: 11, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
             {loading ? 'Opening...' : '⚙️ Manage subscription'}
           </button>
-          <a href="/pricing" style={{ flex: 1, padding: '8px 10px', borderRadius: 6, background: 'rgba(34,211,238,0.15)', color: C.cyan, fontSize: 11, fontWeight: 700, textAlign: 'center', textDecoration: 'none' }}>📊 Plans</a>
+          <a href="/pricing#trial" style={{ flex: 1, padding: '8px 10px', borderRadius: 6, background: 'rgba(34,211,238,0.15)', color: C.cyan, fontSize: 11, fontWeight: 700, textAlign: 'center', textDecoration: 'none' }}>📊 Plans</a>
         </div>
 
         {error && <div style={{ fontSize: 10, color: C.red, background: 'rgba(248,113,113,0.1)', padding: 8, borderRadius: 6 }}>{error}</div>}
