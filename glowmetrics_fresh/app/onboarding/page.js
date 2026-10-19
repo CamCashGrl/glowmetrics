@@ -534,8 +534,8 @@ const GRAD='linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
 // 3 vs 10), StreamPlanner isPro gating.
 const TRIAL_COPY={
   headline:'Your first insight is just the beginning.',
-  sub:'Start your 7-day Pro trial and let CamCash build a deeper picture of your earnings, fans, platforms, and best streaming times.',
-  benefits:['Full earning history','Full multi-platform analytics','Complete fan insights','Stream Planner','Deeper earning-pattern analysis'],
+  sub:'See what CamCash can uncover from your real streaming data over 7 days. Paid Pro unlocks full stored history after the capped trial.',
+  benefits:['1 selected analytics platform','Rolling 31-day detailed analytics','Recent Platform Comparison','2 Live Mode sessions total, up to 30 active minutes each','Real-data previews of deeper insights'],
   cta:'Start my 7-day Pro trial →',
 }
 const EYE={fontSize:10,fontWeight:900,letterSpacing:'0.22em',textTransform:'uppercase',color:CYAN,marginBottom:10,textAlign:'center'}

@@ -1,179 +1,164 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import SiteFooter from '../components/SiteFooter'
-import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
+import { track } from '../../lib/track'
+import { PRO_MONTHLY_PRICE, PRO_ANNUAL_PRICE } from '../../lib/planLimits'
+import styles from './pricing.module.css'
 
-async function startCheckout(planType, setLoading) {
-  setLoading(planType)
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) {
-      alert('Your login session could not be found. Please sign in again, then return to pricing.')
-      return
-    }
-    const response = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      credentials: 'include',
-      body: JSON.stringify({ plan_type: planType }),
-    })
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data.error || 'Unable to start Stripe Checkout.')
-    if (!data.url) throw new Error('Stripe Checkout did not return a payment URL.')
-    window.location.assign(data.url)
-  } catch (error) {
-    alert(error?.message || 'Something went wrong while opening Stripe Checkout. Please try again.')
-  } finally {
-    setLoading(null)
-  }
-}
-
-const C = {
-  bg: '#050713', card: 'rgba(10, 14, 32, 0.82)', card2: 'rgba(16, 20, 42, 0.72)',
-  border: 'rgba(124,92,255,0.15)', purple: '#7C5CFF', pink: '#FF2BAE', cyan: '#16F4FF',
-  cyanSoft: '#48E9FF', green: '#10B981', white: '#FFFFFF', text: '#8D93AA', muted: '#5E647C',
-  gradientPrimary: 'linear-gradient(90deg, #16F4FF 0%, #55B8FF 28%, #7C5CFF 52%, #FF2BAE 100%)',
-}
-
-function CheckLine({ children, color = C.cyan }) {
-  return <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:11 }}>
-    <span aria-hidden="true" style={{ color, fontWeight:800, flexShrink:0, marginTop:1 }}>✓</span>
-    <span style={{ color:C.text, fontSize:14, lineHeight:1.55 }}>{children}</span>
-  </div>
-}
-
-function TopBar({ user }) {
-  return <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:1000, height:56, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', background:'rgba(5,7,19,0.92)', backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)', borderBottom:'1px solid rgba(124,92,255,0.2)' }}>
-    <a href="/" style={{ textDecoration:'none', display:'flex', alignItems:'center', gap:9 }}>
-      <span style={{ width:28, height:28, borderRadius:9, background:C.gradientPrimary, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:900, color:'#06101A', boxShadow:'0 0 14px rgba(22,244,255,0.3)' }}>$</span>
-      <span style={{ fontSize:17, fontWeight:800, color:C.white, letterSpacing:'-0.4px' }}>Cam<span style={{ background:C.gradientPrimary, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Cash</span>™</span>
-    </a>
-    <Button as="a" href={user ? '/dashboard' : '/landing'} style={{ padding:'8px 18px', fontSize:13 }}>{user ? 'Back to Dashboard →' : 'Create Free Account →'}</Button>
-  </div>
-}
-
-function PricingSection({ checkoutLoading, setCheckoutLoading, user }) {
-  const freeFeatures = [
-    'Real analytics for 1 selected platform',
-    'Rolling 31 days of visible analytics',
-    'Upload more history and other supported platforms — CamCash stores it for you',
-    'Platform comparison stays available on Free',
-    'Other advanced insights appear as locked previews built from your real data',
-    'Free Live Mode: 2 streams per week',
-    'Up to 30 active minutes per Free Live Mode stream; paused time does not count',
-    'Top 3 fans and basic dashboard views inside the Free window',
-  ]
-
-  const proFeatures = [
-    'Unlock full stored history across supported platforms',
-    'Full advanced insights instead of blurred teasers',
-    'Full fan profiles and CRM tools',
-    'Advanced churn and re-engagement insights',
-    'Unlimited Live Mode',
-    'Private-session analytics',
-    'Deeper fan risk signals',
-    'Complete historical trend analysis',
-    'Stream Planner',
-    'Money Map',
-    'Comparative performance reports',
-  ]
-
-  return <section style={{ padding:'88px 20px 56px', minHeight:'100vh', display:'flex', alignItems:'flex-start' }}>
-    <div style={{ width:'100%', maxWidth:1000, margin:'0 auto' }}>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(290px, 1fr))', gap:24, alignItems:'stretch' }}>
-        <article style={{ background:C.card, border:'1px solid rgba(22,244,255,0.22)', borderRadius:20, padding:28, display:'flex', flexDirection:'column' }}>
-          <p style={{ color:C.cyan, fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'1.5px', margin:'0 0 12px' }}>Free</p>
-          <div style={{ marginBottom:8 }}><span style={{ color:C.white, fontSize:42, fontWeight:900, letterSpacing:'-1px' }}>$0</span><span style={{ color:C.text, fontSize:15, marginLeft:4 }}>/forever</span></div>
-          <p style={{ color:C.text, fontSize:14, lineHeight:1.6, margin:'0 0 24px' }}>Start with one real 31-day analytics window. Upload more if you want — CamCash stores the extra data and uses it for locked upgrade previews without exposing the full answer.</p>
-          <div style={{ flexGrow:1, marginBottom:26 }}>{freeFeatures.map(feature => <CheckLine key={feature} color={C.cyan}>{feature}</CheckLine>)}</div>
-          <Button as="a" href={user ? '/dashboard' : '/landing'} variant="secondary" style={{ display:'block', width:'100%', padding:'13px 0', fontSize:14, textAlign:'center' }}>{user ? 'Continue to Dashboard →' : 'Start Free →'}</Button>
-        </article>
-
-        <article style={{ position:'relative', background:C.card2, border:`2px solid ${C.pink}`, borderRadius:20, padding:28, display:'flex', flexDirection:'column', boxShadow:'0 0 36px rgba(255,43,174,0.16)' }}>
-          <div style={{ position:'absolute', top:-13, right:22, background:C.gradientPrimary, color:'#06101A', padding:'6px 12px', borderRadius:999, fontSize:11, fontWeight:900, textTransform:'uppercase', letterSpacing:'0.6px' }}>Most Popular</div>
-          <p style={{ color:C.pink, fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'1.5px', margin:'0 0 12px' }}>CamCash Pro</p>
-          <div style={{ marginBottom:6 }}><span style={{ color:C.white, fontSize:42, fontWeight:900, letterSpacing:'-1px' }}>$9.99</span><span style={{ color:C.text, fontSize:15, marginLeft:4 }}>/month</span></div>
-          <p style={{ color:C.cyan, fontWeight:800, fontSize:14, margin:'0 0 8px' }}>Or $99 per year</p>
-          <p style={{ color:C.text, fontSize:13, lineHeight:1.55, margin:'0 0 22px' }}>Start with a 7-day trial. The trial is intentionally capped: 1 analytics platform, rolling 31 days, and 2 Live Mode sessions up to 30 active minutes each. Full stored history unlocks only after the subscription becomes paid/active.</p>
-          <div style={{ flexGrow:1, marginBottom:26 }}>{proFeatures.map(feature => <CheckLine key={feature} color={C.pink}>{feature}</CheckLine>)}</div>
-          <div style={{ display:'grid', gap:12 }}>
-            <Button type="button" onClick={() => startCheckout('standard_monthly', setCheckoutLoading)} disabled={checkoutLoading !== null} style={{ display:'block', width:'100%', padding:'13px 0', fontSize:14 }}>{checkoutLoading === 'standard_monthly' ? 'Redirecting…' : 'Start 7-day trial — $9.99/mo after'}</Button>
-            <Button type="button" variant="secondary" onClick={() => startCheckout('standard_annual', setCheckoutLoading)} disabled={checkoutLoading !== null} style={{ display:'block', width:'100%', padding:'13px 0', fontSize:14 }}>{checkoutLoading === 'standard_annual' ? 'Redirecting…' : 'Start 7-day trial — $99/year after'}</Button>
-            <p style={{ color:C.muted, fontSize:11, lineHeight:1.55, margin:0, textAlign:'center' }}>Card required. Cancel before the trial ends to avoid a charge. By starting a trial you agree to the <a href="/terms" style={{ color:C.cyan }}>Terms</a> and <a href="/privacy" style={{ color:C.cyan }}>Privacy Policy</a>.</p>
-          </div>
-        </article>
-      </div>
-    </div>
-  </section>
-}
-
-function PromiseSection() {
-  const promises = [
-    'The free plan remains useful with a real rolling 31-day analytics window',
-    'Extra uploaded history stays stored for you instead of being discarded',
-    'Locked previews use your real stored data, not fake examples',
-    'Pro unlocks full stored history and the deeper answers behind those previews',
-    '30 days notice before material pricing or plan changes',
-    'Built by cam models, for cam models',
-  ]
-  return <section style={{ padding:'72px 20px' }}><div style={{ maxWidth:760, margin:'0 auto', background:C.card, border:`1px solid ${C.border}`, borderRadius:20, padding:'48px 40px' }}>
-    <h2 style={{ color:C.white, fontSize:'clamp(22px, 3.5vw, 32px)', fontWeight:800, margin:'0 0 32px', letterSpacing:'-0.4px' }}>Our Promise to You</h2>
-    <div>{promises.map(promise => <div key={promise} style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:14 }}><span aria-hidden="true" style={{ fontSize:18, flexShrink:0 }}>✅</span><span style={{ color:C.text, fontSize:15, lineHeight:1.55 }}>{promise}</span></div>)}</div>
-  </div></section>
-}
-
-const FAQ_ITEMS = [
-  { q:'What exactly does Free include?', a:'Free provides real analytics for 1 selected platform using a rolling 31-day window. You can upload additional history and other supported platforms, and CamCash stores that data for you. Platform comparison remains available on Free; deeper insights are shown as locked previews built from your real data.' },
-  { q:'What happens to data older than 31 days?', a:'It is not thrown away. CamCash stores it in your account. Free and trial users do not get the full historical answer from that data, but it may be used to show truthful locked discoveries such as additional high-value fans or stronger earning windows. Paid Pro unlocks the full stored history.' },
-  { q:'What are the Free Live Mode limits?', a:'Free includes 2 Live Mode streams per week, up to 30 active minutes per stream. Paused time does not count against the 30-minute allowance.' },
-  { q:'What does the 7-day trial include?', a:'The trial demonstrates Pro without giving away unlimited history. It is capped to 1 analytics platform, a rolling 31-day analytics window, and 2 Live Mode sessions up to 30 active minutes each. Full stored history and unlimited Live Mode require an active paid Pro subscription.' },
-  { q:'What does CamCash Pro include?', a:'Paid Pro unlocks full stored history, all advanced insights, full fan profiles and CRM tools, unlimited Live Mode, advanced churn and re-engagement analysis, private-session analytics, Stream Planner, Money Map, and complete historical trends.' },
-  { q:'How much is Pro?', a:'CamCash Pro is $9.99 per month or $99 per year. Both billing options unlock the same paid Pro features.' },
-  { q:'Can I manage or cancel my subscription later?', a:'Yes. Subscription management remains available from your dashboard. You can change billing details or cancel through the billing portal. Trial and subscription terms are also available from the dashboard and pricing page.' },
-  { q:'What platforms does CamCash support?', a:'CamCash currently supports Chaturbate, BongaCams, and MyFreeCams. Additional platforms may be added based on creator demand.' },
-  { q:'Is my data private?', a:'Yes. Your analytics data is private to your account. CamCash does not sell your personal analytics data.' },
+const annualSavings = (PRO_MONTHLY_PRICE * 12 - PRO_ANNUAL_PRICE).toFixed(2)
+const savingsPercent = Math.round((1 - PRO_ANNUAL_PRICE / (PRO_MONTHLY_PRICE * 12)) * 100)
+const freeFeatures = [
+  'Detailed analytics for 1 selected platform, rolling 31 days',
+  'Recent 31-day Platform Comparison across supported platforms',
+  'Top 3 fans and basic fan insights',
+  'Upload and store supported-platform history, including older data',
+  'Locked advanced previews built from your real data',
+  '2 Live Mode starts per UTC Monday–Sunday week',
+  '30 active minutes per stream; paused time does not count',
+]
+const proFeatures = [
+  'Full stored history across all supported platforms',
+  'Complete fan leaderboard, searchable profiles and deeper CRM insights',
+  'Stream Planner and Money Map',
+  'Advanced timing and earning-pattern insights',
+  'Full Platform Comparison and historical trends',
+  'Advanced Live Mode recaps and unlimited Live Mode',
+  'Paid/private-session analytics where supported',
+  'Older stored data unlocked',
+]
+const comparisons = [
+  ['Detailed analytics', '1 selected platform · rolling 31 days', '1 selected platform · rolling 31 days', 'All supported platforms · full stored history'],
+  ['Platform Comparison', 'Recent 31-day slices', 'Recent 31-day slices', 'Full comparison and deeper history where supported'],
+  ['Fan intelligence', 'Top 3 fans + basic insights', 'Basic insights + real-data upgrade previews', 'Complete leaderboard, searchable profiles + CRM intelligence'],
+  ['Live Mode', '2 starts per UTC week · 30 active minutes each', '2 sessions total over 7 days · 30 active minutes each', 'Unlimited, subject to product safety and technical rules'],
+  ['Stream Planner / Money Map', 'Locked; previews where available', 'Locked; previews where available', 'Full access'],
+  ['Advanced insights', 'Locked teasers from real data', 'Real-data Pro previews', 'Full supported insights and advanced recaps'],
+  ['Older history', 'Stored; detailed analytics capped at 31 days', 'Stored; detailed analytics capped at 31 days', 'Full stored history unlocked'],
+]
+const faqs = [
+  ['Does Free delete my older history?', 'No. Upload and store supported-platform history for future unlock. Free shows detailed analytics for one selected platform over a rolling 31 days, plus recent Platform Comparison. Paid Pro unlocks the full stored history.'],
+  ['What does the 7-day trial include?', 'Explore CamCash using your real streaming data: one selected analytics platform, a rolling 31-day window, and two Live Mode sessions total during the trial, up to 30 active minutes each. Paused time does not count. Full stored history, multi-platform detailed analytics and unlimited Live Mode unlock after the trial when your paid subscription is active.'],
+  ['When will I be charged?', 'A card is required to start a trial. No charge today. After 7 days, your selected plan renews at $9.99/month or $99/year unless you cancel before the trial ends. Manage or cancel through your dashboard.'],
+  ['How much does annual Pro save?', `Twelve monthly payments total $119.88. Annual Pro costs $99, saving $${annualSavings} per year (about ${savingsPercent}%). Both paid plans include the same features.`],
+  ['Which platforms are supported?', 'CamCash supports Chaturbate, BongaCams and MyFreeCams. Feature availability, including private-session analytics, depends on the data supported by each platform.'],
+  ['Is my analytics data private?', 'Your analytics are private to your account. CamCash does not sell your personal analytics data. See the Privacy Policy for details.'],
 ]
 
-function FAQSection() {
-  const [open, setOpen] = useState(null)
-  return <section style={{ padding:'0 20px 72px' }}><div style={{ maxWidth:760, margin:'0 auto' }}>
-    <h2 style={{ color:C.white, fontSize:'clamp(22px, 3.5vw, 32px)', fontWeight:800, margin:'0 0 32px', textAlign:'center', letterSpacing:'-0.4px' }}>Questions</h2>
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, overflow:'hidden' }}>{FAQ_ITEMS.map((item,index)=>{ const isOpen=open===index; return <div key={item.q} style={{ borderBottom:index<FAQ_ITEMS.length-1?'1px solid rgba(255,255,255,0.06)':'none' }}>
-      <button type="button" aria-expanded={isOpen} onClick={()=>setOpen(isOpen?null:index)} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, padding:'20px 24px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left' }}><span style={{ color:C.white, fontWeight:600, fontSize:15, lineHeight:1.4 }}>{item.q}</span><span aria-hidden="true" style={{ color:C.purple, fontSize:18, flexShrink:0, transform:isOpen?'rotate(180deg)':'rotate(0deg)', transition:'transform 0.2s', lineHeight:1 }}>›</span></button>
-      {isOpen && <div style={{ padding:'0 24px 20px' }}><p style={{ color:C.text, fontSize:14, lineHeight:1.7, margin:0 }}>{item.a}</p></div>}
-    </div>})}</div>
-  </div></section>
-}
-
-function FinalCTA({ user }) {
-  return <section style={{ background:'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124,92,255,0.2) 0%, rgba(5,7,19,0) 70%), #050713', padding:'80px 20px', textAlign:'center' }}>
-    <h2 style={{ color:C.white, fontSize:'clamp(26px, 5vw, 46px)', fontWeight:800, margin:'0 0 16px', letterSpacing:'-1px' }}>Start with 31 days. Keep building from there.</h2>
-    <p style={{ color:C.text, fontSize:16, margin:'0 auto 36px', maxWidth:560, lineHeight:1.6 }}>Free gives you a real analytics window and capped Live Mode. Upload more data whenever you want; CamCash keeps it stored and can surface locked discoveries worth coming back for.</p>
-    <div style={{ display:'flex', flexWrap:'wrap', gap:14, justifyContent:'center', marginBottom:20 }}><Button as="a" href={user?'/dashboard':'/landing'} style={{ padding:'14px 28px' }}>{user?'Go to Dashboard →':'Create Free Account →'}</Button><Button as="a" href="/extension" variant="secondary" style={{ padding:'14px 28px', fontSize:15 }}>View Extension →</Button></div>
-    <p style={{ color:C.muted, fontSize:13, margin:0 }}>Free plan always available · 1 analytics platform · Rolling 31 days · Extra uploaded data stays stored</p>
-  </section>
-}
-
-function AmbientBackground() {
-  return <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0 }}>
-    <div style={{ position:'absolute', inset:0, backgroundImage:'radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.3), transparent), radial-gradient(1px 1px at 60% 10%, rgba(255,255,255,0.22), transparent), radial-gradient(1px 1px at 80% 60%, rgba(255,255,255,0.26), transparent), radial-gradient(1px 1px at 35% 80%, rgba(255,255,255,0.18), transparent), radial-gradient(1px 1px at 90% 85%, rgba(255,255,255,0.22), transparent)' }} />
-    <div style={{ position:'absolute', width:700, height:700, top:'-15%', right:'-5%', background:'radial-gradient(circle, rgba(22,244,255,0.08), transparent 65%)', filter:'blur(60px)' }} />
-    <div style={{ position:'absolute', width:600, height:600, bottom:'10%', left:'-10%', background:'radial-gradient(circle, rgba(255,43,174,0.08), transparent 65%)', filter:'blur(60px)' }} />
-    <div style={{ position:'absolute', width:600, height:600, top:'40%', left:'40%', background:'radial-gradient(circle, rgba(124,92,255,0.06), transparent 65%)', filter:'blur(60px)' }} />
-  </div>
-}
-
 export default function PricingClient() {
-  const [checkoutLoading,setCheckoutLoading]=useState(null)
-  const [user,setUser]=useState(null)
-  useEffect(()=>{ let mounted=true; supabase.auth.getSession().then(({data:{session}})=>{if(mounted)setUser(session?.user||null)}); const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{if(mounted)setUser(session?.user||null)}); return()=>{mounted=false;subscription.unsubscribe()} },[])
-  return <div style={{ minHeight:'100vh', background:C.bg, color:C.white, fontFamily:"'DM Sans', system-ui, -apple-system, sans-serif", WebkitFontSmoothing:'antialiased' }}>
-    <AmbientBackground/><TopBar user={user}/><main style={{ position:'relative', zIndex:1 }}><PricingSection checkoutLoading={checkoutLoading} setCheckoutLoading={setCheckoutLoading} user={user}/><PromiseSection/><FAQSection/><FinalCTA user={user}/></main><div style={{ position:'relative', zIndex:1 }}><SiteFooter/></div>
+  const router = useRouter()
+  const [user, setUser] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
+  const [loading, setLoading] = useState(null)
+  const [error, setError] = useState('')
+  const viewed = useRef(false)
+
+  useEffect(() => {
+    if (!viewed.current) { track('pricing_page_viewed'); viewed.current = true }
+    let mounted = true
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) { setUser(session?.user || null); setAuthReady(true) }
+    }).catch(() => { if (mounted) setAuthReady(true) })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) { setUser(session?.user || null); setAuthReady(true) }
+    })
+    return () => { mounted = false; subscription.unsubscribe() }
+  }, [])
+
+  async function startTrial(planType) {
+    if (loading) return
+    track('pricing_plan_selected', { plan_type: planType })
+    track(planType === 'standard_annual' ? 'pricing_annual_clicked' : 'pricing_monthly_clicked', { plan_type: planType })
+    track('pricing_trial_clicked', { plan_type: planType })
+    setLoading(planType)
+    setError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) { router.push(`/landing?plan=${encodeURIComponent(planType)}`); return }
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ plan_type: planType }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.url) throw new Error(data.error || 'Unable to open checkout. Please try again.')
+      window.location.assign(data.url)
+    } catch (err) { setError(err.message || 'Unable to open checkout. Please try again.') }
+    finally { setLoading(null) }
+  }
+
+  const dashboardOrSignup = user ? '/dashboard' : '/landing'
+  return <div className={styles.page}>
+    <header className={styles.nav}>
+      <a className={styles.brand} href="/" aria-label="CamCash home">Cam<span>Cash</span><small>™</small></a>
+      <a className={styles.navLink} href={dashboardOrSignup}>{user ? 'Back to Dashboard' : 'Create Free Account'} <span aria-hidden="true">↗</span></a>
+    </header>
+    <main>
+      <section className={styles.hero}>
+        <p className={styles.eyebrow}>YOUR DATA. YOUR NEXT BEST MOVE.</p>
+        <h1>Know what to stream.<br />Know who spends.<br /><span>Know when to go live.</span></h1>
+        <p className={styles.lead}>CamCash turns your streaming history into clear decisions about earnings, fans, platforms, timing, and your next best move.</p>
+        <p className={styles.tagline}>Start with Free. Unlock the full picture with Pro.</p>
+        <a href="#plans" className={styles.textLink}>Find your plan <span aria-hidden="true">↓</span></a>
+      </section>
+
+      <section id="plans" className={styles.plans} aria-label="CamCash pricing plans">
+        <article className={styles.card}>
+          <p className={styles.badge}>A useful place to start</p>
+          <h2>Free</h2><p className={styles.price}>$0<span>/ forever</span></p>
+          <p className={styles.cardIntro}>Build your history. See what your last 31 days can tell you.</p>
+          <a className={styles.secondaryButton} href={dashboardOrSignup} onClick={() => track('pricing_plan_selected', { plan_type: 'free' })}>{user ? 'Continue Free' : 'Start Free'}</a>
+          <p className={styles.billing}>No card required.</p>
+          <ul>{freeFeatures.map(feature => <li key={feature}>{feature}</li>)}</ul>
+        </article>
+        {[
+          { id: 'standard_monthly', title: 'Pro Monthly', badge: 'Most Flexible', price: `$${PRO_MONTHLY_PRICE.toFixed(2)}`, period: '/ month', intro: 'Your full picture, with the flexibility of monthly billing.' },
+          { id: 'standard_annual', title: 'Pro Annual', badge: `Best Value · Save ${savingsPercent}%`, price: `$${PRO_ANNUAL_PRICE}`, period: '/ year', intro: `Same paid Pro features. Save $${annualSavings} a year versus monthly.`, annual: true },
+        ].map(plan => <article key={plan.id} className={`${styles.card} ${plan.annual ? styles.annualCard : ''}`}>
+          <p className={`${styles.badge} ${plan.annual ? styles.valueBadge : ''}`}>{plan.badge}</p>
+          <h2>{plan.title}</h2><p className={styles.price}>{plan.price}<span>{plan.period}</span></p>
+          <p className={styles.cardIntro}>{plan.intro}</p>
+          <button className={plan.annual ? styles.primaryButton : styles.secondaryButton} onClick={() => startTrial(plan.id)} disabled={!authReady || loading !== null} aria-label={`Start 7-Day Trial — ${plan.title}`}>
+            {loading === plan.id ? 'Opening checkout…' : 'Start 7-Day Trial'}
+          </button>
+          <p className={styles.billing}>Then {plan.price}{plan.period}. Card required.</p>
+          <p className={styles.paidLabel}>When your paid Pro subscription is active:</p>
+          <ul>{proFeatures.map(feature => <li key={feature}>{feature}</li>)}</ul>
+        </article>)}
+      </section>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+
+      <section id="trial" className={styles.trial} aria-labelledby="trial-title">
+        <div><p className={styles.eyebrow}>TRY CAMCASH PRO FOR 7 DAYS</p><h2 id="trial-title">See what your real data can uncover.</h2>
+          <p>The trial includes <strong>1 selected analytics platform, rolling 31 days, and 2 Live Mode sessions total</strong> across the entire trial, up to <strong>30 active minutes each</strong>. Paused time does not count. Explore available real-data previews before committing.</p>
+          <p>After the trial, paid Pro unlocks multi-platform detailed analytics, full stored history and unlimited Live Mode.</p>
+        </div>
+        <p className={styles.terms}>No charge today. Cancel before the trial ends to avoid a charge. Starting a trial means agreeing to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>. Your selected plan renews at $9.99/month or $99/year.</p>
+      </section>
+
+      <section className={styles.comparison} aria-labelledby="comparison-title">
+        <p className={styles.eyebrow}>WHAT CHANGES WHEN YOU UPGRADE</p>
+        <h2 id="comparison-title">The data stays. The picture gets bigger.</h2>
+        <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Plan comparison, scroll horizontally on small screens">
+          <table><caption>Free, 7-day trial and active paid Pro features</caption>
+            <thead><tr><th scope="col">Feature</th><th scope="col">Free</th><th scope="col">7-Day Trial</th><th scope="col">Paid Pro</th></tr></thead>
+            <tbody>{comparisons.map(([feature, ...values]) => <tr key={feature}><th scope="row">{feature}</th>{values.map((value, i) => <td key={i}>{value}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+      <section className={styles.unlock}>
+        <p className={styles.eyebrow}>YOU’VE BUILT THE DATA. UNLOCK THE PATTERNS.</p>
+        <h2>Your older uploads stay here.<br />Pro unlocks the full history.</h2>
+        <p>Compare the last 31 days for free. Reveal deeper fan, timing and earning patterns from your stored history with paid Pro.</p>
+        <a href="#plans" className={styles.textLink}>Explore Pro plans <span aria-hidden="true">↗</span></a>
+      </section>
+      <section className={styles.faq} aria-labelledby="faq-title"><h2 id="faq-title">A few things worth knowing.</h2>
+        {faqs.map(([question, answer]) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}
+      </section>
+      <section className={styles.finalCta}><h2>Start with your next best move.</h2><p>Useful for free. A fuller picture when you’re ready.</p><a className={styles.primaryButton} href={dashboardOrSignup}>{user ? 'Go to Dashboard' : 'Start Free'}</a></section>
+    </main>
+    <SiteFooter />
   </div>
 }

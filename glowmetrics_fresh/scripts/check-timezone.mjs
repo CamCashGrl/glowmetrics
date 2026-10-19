@@ -29,8 +29,9 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PATTERN = /\.getUTC(Day|Hours)\s*\(\s*\)/g
 
 // Known, accepted sites as of this guard's introduction.
@@ -47,6 +48,9 @@ const BASELINE = {
 // Genuinely correct uses: the tz helpers' own fallback when Intl is missing,
 // and fixtures/demos that are not creator data.
 const EXEMPT = [
+  // The Free Live allowance is explicitly a UTC Monday–Sunday billing window,
+  // not a creator-facing day/hour label. Keep its calendar boundary in UTC.
+  /^lib\/liveModeAllowance\.js$/,
   /^lib\/analytics\/__tests__\//,
   /^lib\/analytics\/localTime\.js$/, // Fallback for when Intl.DateTimeFormat fails
   /^app\/dashboard\/__tests__\//,
@@ -69,7 +73,7 @@ function walk(dir, out = []) {
 
 const counts = {}
 for (const file of walk(ROOT)) {
-  const rel = relative(ROOT, file)
+  const rel = relative(ROOT, file).split('\\').join('/')
   if (EXEMPT.some(re => re.test(rel))) continue
   const hits = (readFileSync(file, 'utf8').match(PATTERN) || []).length
   if (hits > 0) counts[rel] = hits

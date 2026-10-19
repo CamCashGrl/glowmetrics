@@ -79,7 +79,7 @@ export function freeHistoryMessage() {
 }
 
 export function trialLimitMessage() {
-  return `The ${TRIAL_DAYS}-day trial is capped to 1 analytics platform, ${TRIAL_ANALYSIS_WINDOW_DAYS} days of data, and ${TRIAL_LIVE_STREAMS_TOTAL} Live Mode sessions up to ${TRIAL_LIVE_STREAM_MINUTES} minutes each. Upgrade to keep full Pro access.`
+  return `The ${TRIAL_DAYS}-day trial includes 1 analytics platform, a rolling ${TRIAL_ANALYSIS_WINDOW_DAYS} days of data, and ${TRIAL_LIVE_STREAMS_TOTAL} Live Mode sessions total, up to ${TRIAL_LIVE_STREAM_MINUTES} active minutes each. Paid Pro unlocks full stored history and unlimited Live Mode.`
 }
 
 export function canShowFullInsight({ insightId, paidPro = false } = {}) {
