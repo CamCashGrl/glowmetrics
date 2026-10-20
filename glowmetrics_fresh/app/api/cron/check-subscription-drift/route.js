@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
-// Only a paid active subscription earns full Pro. A Stripe trial stays on the
-// capped trial entitlement path even though it has a subscription record.
+// Paid Pro is active only. Stripe trialing deliberately stays on the capped
+// trial/free entitlement path so a trial cannot unlock full stored history.
 function expectedPlanFor(stripeStatus) {
   return stripeStatus === 'active' ? 'pro' : 'free'
 }

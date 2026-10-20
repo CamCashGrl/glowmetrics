@@ -1,5 +1,6 @@
 'use client';
 import { useRouter } from 'next/navigation';
+import LiveModeAllowanceBar from './components/LiveModeAllowanceBar';
 
 export default function LiveLayout({ children }) {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function LiveLayout({ children }) {
         <NavItem icon="⚙️" label="Settings" href="/settings" router={router} />
       </div>
       <main style={{ flex: 1, overflowY: 'auto' }}>
+        <LiveModeAllowanceBar />
         {children}
       </main>
     </div>

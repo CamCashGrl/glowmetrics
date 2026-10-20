@@ -4,7 +4,46 @@ import { stripe } from '../../../../lib/stripe'
 import { createSupabaseRouteClient } from '../../../../lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
 
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+}
+
+async function logCheckoutEvent(admin, userId, {
+  status,
+  planType = null,
+  planPrice = null,
+  billingCycle = null,
+  stripeSessionId = null,
+  errorCode = null,
+  errorMessage = null,
+  failureReason = null,
+  properties = {},
+} = {}) {
+  if (!admin || !userId || !status) return
+  const { error } = await admin.from('checkout_events').insert({
+    user_id: userId,
+    status,
+    plan_type: planType,
+    plan_price: planPrice,
+    billing_cycle: billingCycle,
+    stripe_session_id: stripeSessionId,
+    error_code: errorCode,
+    error_message: errorMessage,
+    failure_reason: failureReason,
+    properties: { source: 'server', ...properties },
+  })
+  if (error) console.error('Checkout: failed to log checkout event', status, error.message)
+}
+
 export async function POST(request) {
+  let admin = null
+  let checkoutUserId = null
+  let checkoutPlanType = null
+
   try {
     const body = await request.json().catch(() => ({}))
     let supabase = createSupabaseRouteClient()
@@ -41,15 +80,36 @@ export async function POST(request) {
       )
     }
 
-    // Billing writes and billing analytics are server-owned. Bind every write
-    // to the authenticated user above; never accept a user id from the client.
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    )
+    checkoutUserId = user.id
+    admin = getSupabaseAdmin()
 
-    // Get or create customer — profiles is the single source of truth
+    // Resolve the correct Stripe price ID based on plan_type.
+    const planType = body.plan_type || 'standard_monthly'
+    checkoutPlanType = planType
+
+    const PRICE_MAP = {
+      standard_monthly: process.env.STRIPE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
+      standard_annual: process.env.STRIPE_YEARLY_PRICE_ID || process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_ANNUAL || process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL,
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(PRICE_MAP, planType)) {
+      await logCheckoutEvent(admin, user.id, {
+        status: 'failed',
+        planType,
+        errorCode: 'invalid_plan',
+        errorMessage: 'Invalid subscription plan selected.',
+        failureReason: 'invalid_plan',
+      })
+      return NextResponse.json({ error: 'Invalid subscription plan selected.' }, { status: 400 })
+    }
+
+    await logCheckoutEvent(admin, user.id, {
+      status: 'started',
+      planType,
+      billingCycle: planType === 'standard_annual' ? 'annual' : 'monthly',
+    })
+
+    // Get or create customer — profiles is the single source of truth.
     let customerId
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -80,21 +140,9 @@ export async function POST(request) {
 
       if (updateError) {
         console.error('Checkout: failed to save stripe_customer_id', updateError.message)
-        // Don't fail checkout — customer was created in Stripe, that's what matters
-        // The webhook will save the customer ID when subscription completes
+        // Don't fail checkout — customer was created in Stripe, that's what matters.
+        // The webhook will save the customer ID when subscription completes.
       }
-    }
-
-    // Resolve the correct Stripe price ID based on plan_type
-    const planType = body.plan_type || 'standard_monthly'
-
-    const PRICE_MAP = {
-      standard_monthly:      process.env.STRIPE_MONTHLY_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_MONTHLY || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
-      standard_annual:       process.env.STRIPE_YEARLY_PRICE_ID || process.env.STRIPE_ANNUAL_PRICE_ID || process.env.STRIPE_PRICE_STANDARD_ANNUAL || process.env.NEXT_PUBLIC_STRIPE_PRICE_ANNUAL,
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(PRICE_MAP, planType)) {
-      return NextResponse.json({ error: 'Invalid subscription plan selected.' }, { status: 400 })
     }
 
     let priceId = PRICE_MAP[planType]
@@ -104,8 +152,8 @@ export async function POST(request) {
     // against Stripe before checkout. Monthly falls back to the $9.99 price's
     // lookup key; anything still not matching is refused (never overcharge).
     const ADVERTISED = {
-      standard_monthly: { amount: 999,  interval: 'month', lookupKey: 'Monthly_Premuim' },
-      standard_annual:  { amount: 9900, interval: 'year',  lookupKey: null },
+      standard_monthly: { amount: 999, interval: 'month', lookupKey: 'Monthly_Premuim' },
+      standard_annual: { amount: 9900, interval: 'year', lookupKey: null },
     }
     const expected = ADVERTISED[planType]
     const matches = (p) => p && p.active && p.currency === 'usd'
@@ -119,23 +167,31 @@ export async function POST(request) {
       price = found.data[0] || null
     }
     if (!matches(price)) {
+      const message = `The ${planType.includes('annual') ? 'annual' : 'monthly'} Stripe price is not configured correctly.`
       console.error(`Checkout: no active Stripe price matches the advertised ${planType} amount (${expected.amount})`)
-      return NextResponse.json(
-        { error: `The ${planType.includes('annual') ? 'annual' : 'monthly'} Stripe price is not configured correctly.` },
-        { status: 500 }
-      )
+      await logCheckoutEvent(admin, user.id, {
+        status: 'failed',
+        planType,
+        planPrice: expected.amount / 100,
+        billingCycle: expected.interval === 'year' ? 'annual' : 'monthly',
+        errorCode: 'price_misconfigured',
+        errorMessage: message,
+        failureReason: 'price_misconfigured',
+      })
+      return NextResponse.json({ error: message }, { status: 500 })
     }
     priceId = price.id
 
-    // Create checkout session with 7-day trial
-    // Card is collected immediately but not charged until after 7 days
+    // Create checkout session with 7-day trial.
+    // Card is collected immediately but not charged until after 7 days.
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
+      client_reference_id: user.id,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
-        trial_period_days: 7,  // Card on file, charge after 7 days
+        trial_period_days: 7,
         metadata: {
           userId: user.id,
           plan_type: planType,
@@ -150,9 +206,26 @@ export async function POST(request) {
     })
 
     if (!session.url) {
+      await logCheckoutEvent(admin, user.id, {
+        status: 'failed',
+        planType,
+        planPrice: expected.amount / 100,
+        billingCycle: expected.interval === 'year' ? 'annual' : 'monthly',
+        stripeSessionId: session.id || null,
+        errorCode: 'missing_checkout_url',
+        errorMessage: 'Stripe Checkout did not return a payment URL.',
+        failureReason: 'missing_checkout_url',
+      })
       return NextResponse.json({ error: 'Stripe Checkout did not return a payment URL.' }, { status: 500 })
     }
 
+    await logCheckoutEvent(admin, user.id, {
+      status: 'session_created',
+      planType,
+      planPrice: expected.amount / 100,
+      billingCycle: expected.interval === 'year' ? 'annual' : 'monthly',
+      stripeSessionId: session.id || null,
+    })
     // Server-authoritative funnel tracking. Previously these tables depended on
     // optional client tracking, so pricing/landing checkout attempts could be
     // invisible even though Stripe customers or sessions were created.
@@ -200,6 +273,13 @@ export async function POST(request) {
     return NextResponse.json({ url: session.url })
   } catch (error) {
     console.error('Stripe checkout error:', error)
+    await logCheckoutEvent(admin, checkoutUserId, {
+      status: 'failed',
+      planType: checkoutPlanType,
+      errorCode: 'checkout_exception',
+      errorMessage: error.message,
+      failureReason: 'checkout_exception',
+    })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

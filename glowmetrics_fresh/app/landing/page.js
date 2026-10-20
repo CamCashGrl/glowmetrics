@@ -1010,7 +1010,7 @@ export default function LandingPage() {
               ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever: full history on your 1 primary platform, plus the last 31 days on your other platforms. Pro ($9.99/mo) unlocks full history on every platform."],
+              ["Price", "Free forever: detailed analytics for 1 selected platform over a rolling 31 days, plus recent Platform Comparison. Your older history stays stored. Paid Pro ($9.99/mo or $99/year) unlocks full stored history across supported platforms."],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>

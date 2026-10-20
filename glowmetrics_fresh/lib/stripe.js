@@ -32,13 +32,13 @@ function validTrial(profile, now = new Date()) {
   return !Number.isNaN(end.getTime()) && end > now
 }
 
-// Full/unlimited Pro access is paid access only. A Stripe trial intentionally
-// stays on the capped trial entitlement path.
+// Full Pro means paid/active. Stripe trialing is deliberately capped elsewhere
+// and must never be treated as unlimited Pro access.
 export const hasProAccess = async (userId) => {
   const { supabase } = await import('./supabase')
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('plan, trial_ends_at, subscription_status')
+    .select('plan, subscription_status')
     .eq('id', userId)
     .single()
 
@@ -54,6 +54,7 @@ export const hasTrialAccess = async (userId) => {
     .select('trial_ends_at, subscription_status')
     .eq('id', userId)
     .single()
+
   return !error && !!profile && validTrial(profile)
 }
 

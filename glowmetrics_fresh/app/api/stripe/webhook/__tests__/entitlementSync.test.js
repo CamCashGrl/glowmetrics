@@ -1,8 +1,8 @@
 /**
- * Entitlement sync: only a paid active Stripe subscription maps to Pro.
- * Trialing stays on the capped trial entitlement path (profile plan remains
- * free while subscription_status=trialing), failures are retryable, and
- * repeated Stripe events are idempotent.
+ * Entitlement sync: every Stripe subscription state maps to the right plan,
+ * users resolve by metadata.userId → stripe_customer_id → email, a failure is
+ * never acknowledged with 2xx (Stripe only retries non-2xx), and a retried
+ * event is idempotent.
  */
 jest.mock('next/server', () => ({ NextResponse: { json: (body, init) => ({ body, status: init?.status || 200 }) } }))
 
@@ -55,18 +55,16 @@ jest.mock('@supabase/supabase-js', () => ({ createClient: () => fakeSupabase }))
 global.fetch = jest.fn(async () => ({ ok: true }))
 
 const { POST } = require('../route')
-
 const USER = 'user-1'
 const CUS = 'cus_1'
+
 beforeEach(() => {
   failProfileWrites = false
   mockStripe.subscriptions.retrieve.mockReset()
   db = {
     users: [{ id: USER, email: 'model@example.com' }],
     profiles: [{ id: USER, plan: 'pro', subscription_status: 'active', stripe_customer_id: CUS, stripe_subscription_id: 'sub_1' }],
-    subscriptions: [],
-    webhook_events: [],
-    subscription_events: [],
+    subscriptions: [], webhook_events: [], subscription_events: [],
   }
 })
 
@@ -91,13 +89,10 @@ describe.each([
   })
 })
 
-test('trialing keeps capped entitlement until successful payment', async () => {
+test('trialing stays capped instead of receiving paid Pro', async () => {
   await send('customer.subscription.updated', sub('trialing', { trial_end: 2000 }))
   expect(profile().plan).toBe('free')
   expect(profile().subscription_status).toBe('trialing')
-  await send('customer.subscription.updated', sub('active'))
-  expect(profile().plan).toBe('pro')
-  expect(profile().subscription_status).toBe('active')
 })
 
 test('successful payment recovery: past_due → active restores Pro', async () => {

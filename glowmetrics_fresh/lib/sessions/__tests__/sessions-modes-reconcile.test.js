@@ -48,19 +48,20 @@ test('CSV-only Free (no primary): 31-day window on every platform', () => {
   expect(p.audience).toMatchObject({ uniqueTippers: 5, repeatFans: 3, topFansSharePct: 78 }) // Ann Ben Ola; (26+13+10)/63
 })
 
-test('single-platform Free (primary Chaturbate): full history kept', () => {
+test('single-platform Free: selected Chaturbate is still capped at 31 days', () => {
   const { overall: o, perf: p, mode } = rows('singleFree')
   expect(mode).toMatchObject({ kind: 'csv', singlePlatform: true })
-  expect(o.publicUSD).toBe(140) // days 40/70/90 kept on the primary
-  expect(o.tipCount).toBe(14)
-  expect(o.uniqueTippers).toBe(6)
-  expect(o.meaningfulSessions).toBe(7)
-  expect(o.medianSessionUSD).toBe(20) // 30 20 20 10 10 10 40
+  expect(o.publicUSD).toBe(80) // days 2/4/6/8: 30+20+20+10; days 40/70/90 excluded
+  expect(o.tipCount).toBe(8)
+  expect(o.uniqueTippers).toBe(4) // Ann, Ben, Cy, Dee; older Eve and Fin excluded
+  expect(o.meaningfulSessions).toBe(4)
+  expect(o.medianSessionUSD).toBe(20) // 10, 20, 20, 30
   expect(o.avgSessionUSD).toBe(20)
-  expect(o.topTipper).toMatchObject({ username: 'Ann', usd: 86 })
-  expect(o.largestTip).toMatchObject({ username: 'Ann', usd: 30 })
-  expect(p.momentum).toMatchObject({ window: 3, recentAvgUSD: 23.33, priorAvgUSD: 10, deltaPct: 133 })
-  expect(p.audience).toMatchObject({ uniqueTippers: 6, repeatFans: 2, topFansSharePct: 83 }) // (86+20+10)/140
+  expect(o.topTipper).toMatchObject({ username: 'Ann', usd: 47 })
+  expect(o.largestTip).toMatchObject({ username: 'Ann', usd: 20 })
+  expect(p.momentum).toBeNull() // only four visible sessions; six are required
+  expect(p.audience).toMatchObject({ uniqueTippers: 4, repeatFans: 2, topFansSharePct: 90 }) // (47+15+10)/80
+  expect(fixture.scenarios.singleFree.tips).toHaveLength(14) // source history remains stored
 })
 
 test('mixed Live + CSV (Free, primary Chaturbate): Today and Overall', () => {

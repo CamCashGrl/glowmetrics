@@ -13,18 +13,29 @@ test('valid JSON is returned as-is', async () => {
     .toEqual({ error: 'No valid rows found. Check CSV format.' })
 })
 
-test('HTTP 413 gets its own file-too-large message', async () => {
-  expect(await readUploadJson(res(413, 'Request Entity Too Large'))).toEqual({ error: UPLOAD_TOO_LARGE_ERROR })
-  expect(await readUploadJson(res(413, ''))).toEqual({ error: UPLOAD_TOO_LARGE_ERROR })
+test('HTTP 413 gets a retry-safe file-too-large response', async () => {
+  const expected = { error: UPLOAD_TOO_LARGE_ERROR, code: 'upload_too_large', retrySafe: true }
+  expect(await readUploadJson(res(413, 'Request Entity Too Large'))).toEqual(expected)
+  expect(await readUploadJson(res(413, ''))).toEqual(expected)
 })
 
-test('an empty failed response reports the server stopped responding', async () => {
-  expect(await readUploadJson(res(502, ''))).toEqual({ error: UPLOAD_NO_RESPONSE_ERROR })
-  expect(await readUploadJson(res(500, ''))).toEqual({ error: UPLOAD_NO_RESPONSE_ERROR })
+test('an empty failed response is marked safe to retry', async () => {
+  const expected = { error: UPLOAD_NO_RESPONSE_ERROR, code: 'upload_interrupted', retrySafe: true }
+  expect(await readUploadJson(res(502, ''))).toEqual(expected)
+  expect(await readUploadJson(res(500, ''))).toEqual(expected)
 })
 
-test('a 504 error page reports the server stopped responding', async () => {
-  expect(await readUploadJson(res(504, '<html>An error occurred</html>'))).toEqual({ error: UPLOAD_NO_RESPONSE_ERROR })
+test('a 504 error page is marked safe to retry', async () => {
+  expect(await readUploadJson(res(504, '<html>An error occurred</html>'))).toEqual({
+    error: UPLOAD_NO_RESPONSE_ERROR,
+    code: 'upload_interrupted',
+    retrySafe: true,
+  })
+})
+
+test('recovery copy explains that dedupe prevents duplicate tips', () => {
+  expect(UPLOAD_TOO_LARGE_ERROR).toMatch(/already imported will be skipped, not duplicated/i)
+  expect(UPLOAD_NO_RESPONSE_ERROR).toMatch(/already imported will be skipped/i)
 })
 
 test('other non-JSON failures name the HTTP status', async () => {

@@ -2227,15 +2227,11 @@ export function freeWindowStartByPlatform(rows = [], { windowDays = 31 } = {}) {
   return starts
 }
 
-// Free tier: every platform keeps a rolling `windowDays` (anchored to its own
-// latest row) EXCEPT the creator's primary platform (`unlimitedPlatform`, from
-// lib/planLimits.js resolvePlatformRoles), which keeps its full history.
-// With no primary (null) every platform is windowed — the pre-existing rule.
-// This is the ONLY implementation of Free history gating; everything that
-// shows Free data must go through it (see accessibleDataset below).
-export function applyFreeAnalysisWindow(rows = [], { windowDays = 31, unlimitedPlatform = null } = {}) {
+// Free/trial history is independently capped on every platform. A selected
+// detailed-analytics platform never bypasses this window. Paid Pro bypasses
+// the Free gate through accessibleDataset's existing isPro branch below.
+export function applyFreeAnalysisWindow(rows = [], { windowDays = 31 } = {}) {
   if (!rows.length) return []
-  const unlimited = unlimitedPlatform ? canonicalPlatform(unlimitedPlatform) : null
 
   // Group by platform, compute window per platform (anchored to that platform's latest activity)
   const byPlatform = {}
@@ -2258,7 +2254,6 @@ export function applyFreeAnalysisWindow(rows = [], { windowDays = 31, unlimitedP
     })
 
     if (!sorted.length) continue
-    if (unlimited && canonicalPlatform(platform) === unlimited) { windowed.push(...sorted); continue }
 
     const latestDate = new Date(sorted[sorted.length - 1].date_time || sorted[sorted.length - 1].date || sorted[sorted.length - 1].ts)
     const windowStart = new Date(latestDate.getTime() - (windowDays - 1) * 86400000)
@@ -2326,22 +2321,20 @@ export function summarizeWindowExclusion(allRows = [], windowedRows = []) {
 // another table. Pro gets everything unchanged.
 export function accessibleDataset({
   tips = [], paidSessions = [], liveIntervals = [], shows = [],
-  isPro = false, unlimitedPlatform = null, windowDays = 31,
+  isPro = false, windowDays = 31,
 } = {}) {
   if (isPro) return { tips, paidSessions, liveIntervals, shows, windowStarts: null, unlimitedPlatform: null }
-  const unlimited = unlimitedPlatform ? canonicalPlatform(unlimitedPlatform) : null
   const starts = { ...freeWindowStartByPlatform(paidSessions, { windowDays }), ...freeWindowStartByPlatform(tips, { windowDays }) }
   const byKey = {}
   for (const [p, d] of Object.entries(starts)) byKey[canonicalPlatform(p).toLowerCase()] = d
   const allowed = (platform, at) => {
     const c = canonicalPlatform(platform || 'unknown')
-    if (unlimited && c === unlimited) return true
     const start = byKey[c.toLowerCase()]
     const d = new Date(at)
     return !!start && !isNaN(d.getTime()) && d >= start
   }
   return {
-    tips: applyFreeAnalysisWindow(tips, { windowDays, unlimitedPlatform: unlimited }),
+    tips: applyFreeAnalysisWindow(tips, { windowDays }),
     paidSessions: paidSessions.filter((r) => allowed(r.platform, r.date_time)),
     liveIntervals: liveIntervals.filter((r) => allowed(r.platform, r.ended_at || r.endedAt)),
     shows: shows.filter((s) => {
@@ -2350,6 +2343,6 @@ export function accessibleDataset({
       return plats.some((p) => allowed(p, s.startedAt))
     }),
     windowStarts: byKey,
-    unlimitedPlatform: unlimited,
+    unlimitedPlatform: null,
   }
 }

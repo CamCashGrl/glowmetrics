@@ -772,7 +772,7 @@ export default function LandingClient() {
         'name': 'Is CamCash free to use?',
         'acceptedAnswer': {
           '@type': 'Answer',
-          'text': 'Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier keeps full history on your 1 primary platform and the last 31 days on your other platforms (live via the extension, or by uploading your tip data). Full history on every platform and deeper analytics come with the optional CamCash Pro upgrade.'
+          'text': 'Yes. Free includes one selected analytics platform with a rolling 31-day window, recent Platform Comparison, and capped Live Mode. Upload supported-platform history without a card; older history stays stored. Paid Pro unlocks full stored history across supported platforms.'
         }
       },
       {
@@ -788,7 +788,7 @@ export default function LandingClient() {
         'name': 'Can I track more than one platform for free?',
         'acceptedAnswer': {
           '@type': 'Answer',
-          'text': 'Yes. The free tier keeps full history on the 1 primary platform you choose and the last 31 days on your other platforms. CamCash Pro ($9.99/month) unlocks full history on every platform.'
+          'text': 'You can upload and store history from supported platforms for free and compare their recent 31-day slices. Detailed Free analytics cover one selected platform over a rolling 31 days. Paid Pro ($9.99/month or $99/year) unlocks multi-platform detailed analytics and full stored history.'
         }
       },
       {
@@ -986,9 +986,9 @@ export default function LandingClient() {
   ]
 
   const faqs = [
-    { q: "Is CamCash free to use?", a: "Yes. The free tier is free forever — install the extension and create an account with no credit card. The free tier keeps full history on your 1 primary platform and the last 31 days on your other platforms (live via the extension, or by uploading your tip data). Full history on every platform and deeper analytics come with the optional CamCash Pro upgrade." },
+    { q: "Is CamCash free to use?", a: "Yes. Free includes one selected analytics platform with a rolling 31-day window, recent Platform Comparison, and capped Live Mode. Upload supported-platform history without a card; older history stays stored. Paid Pro unlocks full stored history across supported platforms." },
     { q: "What file formats do you support?", a: "CSV exports from Chaturbate, BongaCams, and MyFreeCams, plus automatic tip capture through the Chrome extension." },
-    { q: "Can I track more than one platform for free?", a: "Yes. The free tier keeps full history on the 1 primary platform you choose and the last 31 days on your other platforms. CamCash Pro ($9.99/month) unlocks full history on every platform." },
+    { q: "Can I track more than one platform for free?", a: "You can upload and store history from supported platforms for free and compare their recent 31-day slices. Detailed Free analytics cover one selected platform over a rolling 31 days. Paid Pro ($9.99/month or $99/year) unlocks multi-platform detailed analytics and full stored history." },
     { q: "Is my data safe and private?", a: "Yes. Your data is encrypted, never shared, and never sold." },
   ]
 
@@ -1067,7 +1067,7 @@ export default function LandingClient() {
                 ["⚡", "Your best stream time, calculated from your real data"],
                 ["👑", "Top fan alerts — who to message and when"],
                 ["📊", "Platform ROI — where your time is actually worth more"],
-                ["🔓", "Free tier: full history on 1 primary platform, last 31 days on the rest (extension or CSV upload) — $9.99/mo for full history everywhere"],
+                ["🔓", "Free: 1 analytics platform, rolling 31 days, recent Platform Comparison and capped Live Mode. Extra history stays stored — paid Pro unlocks it for $9.99/mo or $99/year."],
               ].map(([icon, text]) => (
                 <div key={text} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: T.textFaint }}>
                   <span style={{ fontSize: 14 }}>{icon}</span>
@@ -1148,7 +1148,7 @@ export default function LandingClient() {
               ["Built for", "Chaturbate, BongaCams & MyFreeCams"],
               ["What it does", "Finds peak earning hours, ranks top tippers with churn-risk alerts, compares platform payouts, and generates fan re-engagement messages & room titles"],
               ["How you use it", "Install the free Chrome extension or upload a CSV export — no manual data entry"],
-              ["Price", "Free forever: full history on 1 primary platform, last 31 days on your other platforms. Pro is $9.99/mo (or $99/yr) and unlocks full history on every platform"],
+              ["Price", "Free forever: 1 selected analytics platform with a rolling 31-day window and recent Platform Comparison. Paid Pro is $9.99/mo or $99/year and unlocks full stored history across supported platforms."],
               ["Your data", "Encrypted, private, never sold"],
             ].map(([term, desc]) => (
               <div key={term}>

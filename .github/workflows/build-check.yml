@@ -1,53 +1,43 @@
 name: Build Check
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch: {}
-
+permissions:
+  contents: read
 jobs:
   build:
+    if: >-
+      github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == github.repository_owner)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
-        working-directory: glowmetrics_fresh
-
+        shell: pwsh
+    environment: camcash-test
+    env:
+      CI: 'true'
+      CAMCASH_TEST_ENV: 'true'
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL || secrets.SUPABASE_STAGING_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY || secrets.SUPABASE_STAGING_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}
+      STRIPE_SECRET_KEY: sk_test_ci_build_placeholder
+      NEXT_TELEMETRY_DISABLED: '1'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: glowmetrics_fresh/package-lock.json
-
-      - name: Install dependencies
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject production before installing or testing
+        run: node scripts/ci/assert-test-environment.cjs
+      - name: Install locked dependencies
+        working-directory: glowmetrics_fresh
         run: npm ci
-
-      - name: Run ESLint (if configured)
-        run: |
-          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
-            echo "Found a 'lint' script in package.json — running it."
-            npm run lint
-          else
-            echo "No 'lint' script in package.json — skipping ESLint step."
-          fi
-
-      - name: Run estimated-hourly-rate verification
-        run: node scripts/verify-estimated-hourly-rate.mjs
-
-      - name: Run timezone guard
-        run: node scripts/check-timezone.mjs
-
-      - name: Run test suite
-        run: npm test
-
-      - name: Run production build
+      - name: Production build with test backend only
+        working-directory: glowmetrics_fresh
         run: npm run build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}

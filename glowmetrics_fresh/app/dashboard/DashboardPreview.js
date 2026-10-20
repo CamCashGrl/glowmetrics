@@ -522,12 +522,12 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
               ) : platformCount === 0 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Track up to 3 platforms for free: full history on your primary platform, the last 31 days on the others. Choose your first platform to start building your dashboard.</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Choose one platform for detailed Free analytics over a rolling 31 days. Upload supported-platform history for storage and recent Platform Comparison.</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} of 3 platforms</div>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>You're tracking <strong style={{ color: C.cyan }}>{platforms[0]}</strong> for free. You can add up to 3 platforms for free (full history on your primary, the last 31 days on the others). Upgrade to Pro for full history on every platform.</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: C.white, marginBottom: 4 }}>Free plan · {platformCount} platform{platformCount === 1 ? '' : 's'} stored</div>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>Your <strong style={{ color: C.cyan }}>{platforms[0]}</strong> data stays stored. Free detailed analytics cover one selected platform over a rolling 31 days; recent Platform Comparison remains available. Paid Pro unlocks full stored history.</div>
                 </>
               )}
             </div>
@@ -544,7 +544,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
           </div>
           {!isPro && (
             <div style={{ marginTop: 12, fontSize: 11, color: C.muted, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              Your free plan includes up to 3 platforms: full history on your primary platform and the last 31 days on the others, free forever. Pro unlocks full history on every platform.
+              Free includes one selected analytics platform with a rolling 31-day window and recent Platform Comparison. Older history and other-platform data stay stored for a future paid Pro unlock.
             </div>
           )}
         </div>
@@ -621,7 +621,7 @@ export function DashboardPreview({ tips = [], analytics, userPlan = 'free', onAd
           <SnapshotMetricCard
             label="Platforms"
             value={platformCount > 0 ? platforms.join(', ') : 'None yet'}
-            helper={isPro ? 'Pro: full history on every platform' : 'Free: up to 3 platforms · full history on primary, 31 days on others'}
+            helper={isPro ? 'Pro: full history on every platform' : 'Free: 1 detailed analytics platform · rolling 31 days · recent Platform Comparison'}
             status={platformCount > 0 ? 'ready' : 'locked'}
           />
         </div>

@@ -280,10 +280,10 @@ function DataCoverage({ coverage }) {
 // UNIFIED VIEW
 // ============================================
 
-function UnifiedView({ analytics, coverage, isPro, onOpenPlanner }) {
+function UnifiedView({ analytics, comparisonAnalytics, coverage, isPro, onOpenPlanner }) {
   const snapshot = useMemo(() => buildBusinessSnapshot(analytics), [analytics])
-  const comparison = useMemo(() => buildPlatformComparison(analytics), [analytics])
-  const efficiency = useMemo(() => buildEfficiencyComparison(analytics), [analytics])
+  const comparison = useMemo(() => buildPlatformComparison(comparisonAnalytics), [comparisonAnalytics])
+  const efficiency = useMemo(() => buildEfficiencyComparison(comparisonAnalytics), [comparisonAnalytics])
   const timeIntel = useMemo(() => buildTimeIntelligence(analytics), [analytics])
   const fans = useMemo(() => buildFanRevenue(analytics, isPro), [analytics, isPro])
   const noticed = useMemo(() => buildCamCashNoticed(analytics), [analytics])
@@ -632,13 +632,13 @@ function SplitView({ analytics, platformName, isPro }) {
 // PAGE
 // ============================================
 
-export default function PlatformsIntelligence({ analytics = null, tips = [], isPro = false, onOpenPlanner = null }) {
+export default function PlatformsIntelligence({ analytics = null, comparisonAnalytics = analytics, tips = [], comparisonTips = tips, isPro = false, onOpenPlanner = null }) {
   const [view, setView] = useState('unified')
   const [selectedPlatform, setSelectedPlatform] = useState(null)
 
   // Coverage reads the account's real import span via the canonical vault
   // helper rather than deriving its own.
-  const coverage = useMemo(() => buildDataCoverage(computeDataVaultStats(tips)), [tips])
+  const coverage = useMemo(() => buildDataCoverage(computeDataVaultStats(comparisonTips)), [comparisonTips])
 
   const platformNames = useMemo(
     () => buildPlatformComparison(analytics).map(p => p.platform),
@@ -682,12 +682,12 @@ export default function PlatformsIntelligence({ analytics = null, tips = [], isP
         </div>
       </div>
 
-      {!analytics || platformNames.length === 0 ? (
+      {!comparisonAnalytics || buildPlatformComparison(comparisonAnalytics).length === 0 ? (
         <Empty>
           No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
         </Empty>
       ) : view === 'unified' ? (
-        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
+        <UnifiedView analytics={analytics} comparisonAnalytics={comparisonAnalytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
       ) : (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>

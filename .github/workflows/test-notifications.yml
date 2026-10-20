@@ -1,152 +1,42 @@
 name: Test Notifications
-
 on:
   workflow_run:
-    workflows: ["CamCash Test Suite"]
-    types:
-      - completed
-
+    workflows: ["CamCash Test Suite", "Build Check"]
+    types: [completed]
+permissions:
+  actions: read
+  contents: read
 jobs:
   notify-slack:
-    runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion != 'success'
-
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: [self-hosted, Windows, camcash-test]
+    timeout-minutes: 5
     steps:
-      - name: Download test results
+      # Only workflow-definition code, never the completed PR's head revision.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          clean: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download optional results from the completed run
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: test-results-${{ github.event.workflow_run.id }}
-          path: test-results
-        continue-on-error: true
-
-      - name: Parse test results
-        id: parse
-        run: |
-          if [ -f "test-results/summary.json" ]; then
-            PASSED=$(jq -r '.numPassedTests // 0' test-results/summary.json)
-            FAILED=$(jq -r '.numFailedTests // 0' test-results/summary.json)
-            DURATION=$(jq -r '.testResults[0].perfStats.end // 0' test-results/summary.json)
-          else
-            PASSED="unknown"
-            FAILED="unknown"
-            DURATION="unknown"
-          fi
-
-          echo "passed=$PASSED" >> $GITHUB_OUTPUT
-          echo "failed=$FAILED" >> $GITHUB_OUTPUT
-          echo "duration=$DURATION" >> $GITHUB_OUTPUT
-
-      - name: Notify Slack on Failure
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-          payload: |
-            {
-              "text": "🚨 CamCash Test Failure",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "🚨 CamCash Tests Failed"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Status:*\n❌ Failed"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.event.workflow_run.head_branch }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Tests Passed:*\n${{ steps.parse.outputs.passed }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Tests Failed:*\n${{ steps.parse.outputs.failed }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Commit:*\n<${{ github.event.workflow_run.head_commit.html_url }}|${{ github.event.workflow_run.head_commit.message }}>"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Workflow"
-                      },
-                      "url": "${{ github.event.workflow_run.html_url }}",
-                      "style": "danger"
-                    },
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View PR"
-                      },
-                      "url": "https://github.com/${{ github.repository }}/pulls?q=head:${{ github.event.workflow_run.head_branch }}",
-                      "style": "primary"
-                    }
-                  ]
-                }
-              ]
-            }
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
-
-      - name: Notify Slack on Success
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-          payload: |
-            {
-              "text": "✅ CamCash Tests Passed",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "✅ CamCash Tests Passed"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Status:*\n✅ All Passed"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.event.workflow_run.head_branch }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Workflow"
-                      },
-                      "url": "${{ github.event.workflow_run.html_url }}"
-                    }
-                  ]
-                }
-              ]
-            }
-        if: ${{ github.event.workflow_run.conclusion == 'success' && secrets.SLACK_WEBHOOK_URL != '' }}
+          path: notification-results
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Notify Slack of actual failure
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL || secrets.SLACK_WEBHOOK_SECRET }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_WORKFLOW: ${{ github.event.workflow_run.name }}
+          CI_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          CI_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CI_RESULTS_PATH: notification-results/test-results/results.json
+        run: node scripts/ci/notify-slack.cjs

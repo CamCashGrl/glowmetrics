@@ -223,12 +223,13 @@ test('no data: no scope switch or range controls', () => {
   expect(screen.queryByTestId('range-group')).toBeNull()
 })
 
-test('Free history note follows the primary platform', () => {
+test('Free history note caps detailed analytics even for the selected platform', () => {
   const { unmount } = renderTab({ tips: csvTips, isPro: false, primaryPlatform: null })
-  expect(val('overall-history-note')).toMatch(/last 31 days on every platform/)
+  expect(val('overall-history-note')).toMatch(/choose one platform.*last 31 days.*detailed analytics/)
   unmount()
   renderTab({ tips: csvTips, isPro: false, primaryPlatform: 'Chaturbate' })
-  expect(val('overall-history-note')).toMatch(/full history on Chaturbate/)
+  expect(val('overall-history-note')).toMatch(/last 31 days.*Chaturbate/)
+  expect(val('overall-history-note')).not.toMatch(/full history/)
 })
 
 // ── UI polish (no numeric change) ────────────────────────────────────────────

@@ -489,8 +489,8 @@ function BucketsView({ e, tips, tz }) {
 function FanDriversView({ e, tips, paidSessions, isPro, primaryPlatform }) {
   const fans = sessionFanDrivers(e, { tips, paidSessions })
   if (!fans.length) return <div data-testid="fans-empty" style={{ color: C.muted, fontSize: 13 }}>No fan-level detail for this session{e.type === "live" ? " (private time in Live Mode is not attributed to a fan)" : ""}.</div>
-  // Free sees full history only on the primary platform; elsewhere "new" may just be outside the window.
-  const newLabel = (platform) => !isPro && String(platform).toLowerCase() !== String(primaryPlatform || "").toLowerCase() ? "New in your available history" : "New"
+  // Free/trial history is windowed even on the selected platform, so "new" may mean new in that window.
+  const newLabel = (platform) => !isPro ? "New in your available history" : "New"
   return (
     <div data-testid="fan-drivers" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {fans.map((f, i) => (
@@ -636,8 +636,8 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
 
 export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null, plannedStreams = [], onOpenPlanner = null }) {
   const historyNote = isPro ? "Full history on every platform" : primaryPlatform
-    ? `Free: full history on ${pName(primaryPlatform)}, last 31 days on other platforms`
-    : "Free: last 31 days on every platform until you choose a primary platform"
+    ? `Free/trial: last 31 days on ${pName(primaryPlatform)}`
+    : "Free/trial: choose one platform for its last 31 days of detailed analytics"
   const now = useNow(fixedNow, live?.session ? 5000 : 15000)
   const [range, setRange] = useState(1)
   const [scopePick, setScopePick] = useState(null)

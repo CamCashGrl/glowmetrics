@@ -1,58 +1,22 @@
 name: Production Health Check
-
 on:
   schedule:
-    # Run daily at 1 PM UTC
     - cron: '0 13 * * *'
-  workflow_dispatch:
-
+  workflow_dispatch: {}
+permissions:
+  contents: read
 jobs:
   health-check:
-    runs-on: ubuntu-latest
     name: Verify Production Accessibility
-
+    runs-on: [self-hosted, Windows, camcash-test]
+    timeout-minutes: 5
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Check www.camcashgrl.com root page
-        run: |
-          response=$(curl -s -w "\n%{http_code}" https://www.camcashgrl.com/)
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
-
-          echo "HTTP Status: $http_code"
-
-          if [ "$http_code" != "200" ]; then
-            echo "❌ FAILED: www.camcashgrl.com returned $http_code (expected 200)"
-            exit 1
-          fi
-
-          echo "✅ PASSED: www.camcashgrl.com is accessible (200 OK)"
-
-      - name: Check health endpoint
-        run: |
-          response=$(curl -s -w "\n%{http_code}" https://www.camcashgrl.com/api/health)
-          http_code=$(echo "$response" | tail -n1)
-
-          echo "HTTP Status: $http_code"
-
-          # Allow 200 (if endpoint exists) or 404 (if not implemented yet)
-          if [ "$http_code" = "200" ] || [ "$http_code" = "404" ]; then
-            echo "✅ PASSED: Health endpoint check ($http_code)"
-          else
-            echo "⚠️ WARNING: Health endpoint returned $http_code"
-          fi
-
-      - name: Report success
-        if: success()
-        run: |
-          echo "✅ Production is healthy and accessible"
-          echo "Last verified: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-
-      - name: Report failure
-        if: failure()
-        run: |
-          echo "❌ Production health check FAILED"
-          echo "Time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-          exit 1
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only public HTTP checks
+        shell: pwsh
+        run: node scripts/ci/production-health-check.mjs

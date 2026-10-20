@@ -3,116 +3,72 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const TIPS = [
+const PRODUCT_UPDATE_TYPE = 'product_update_2026_10_free_live_limits'
+const PROFILE_BATCH_SIZE = 1000
+
+const PRODUCT_UPDATE = {
+  subject: 'CamCash update: new Free limits, Live Mode progress, and stored-history unlocks',
+  text: `Hi there,
+
+We’re updating CamCash so the Free plan stays useful while making Pro clearer and more valuable.
+
+What’s changing:
+- Free analytics use 1 selected platform with a rolling 31 days of visible analytics.
+- You can still upload more history and other supported platforms. CamCash keeps that data stored for you.
+- Stored history may power locked previews such as “we found more high-value fans” or “we found a stronger earning window,” but the full answer stays locked until Pro.
+- Platform comparison remains available on Free.
+- Other advanced insights appear as locked previews built from your real data.
+- Free Live Mode includes 2 streams per week, up to 30 active minutes per stream. Paused time does not count.
+- Your Live Mode progress bar will show how much free tracking is left.
+- A 7-day trial is available, but it does not unlock unlimited historical data. Trial access stays capped to the 31-day analytics window and the trial Live Mode allowance.
+
+You can also skip CSV importing and start building your history automatically with Live Mode.
+
+Open your dashboard: https://www.camcashgrl.com/dashboard
+See plans: https://www.camcashgrl.com/pricing
+Terms: https://www.camcashgrl.com/terms
+
+Your uploaded data remains stored in your account so it can be unlocked if you upgrade later.
+
+— CamCash`,
+}
+
+const RETENTION_TIPS = [
   {
-    subject: '💡 Tip: Master Your Daily Analytics Dashboard',
+    subject: 'Your CamCash dashboard may have something new for you',
     text: `Hi there,
 
-Did you know you can customize your GlowMetrics dashboard to show exactly what matters to you?
+Open CamCash and check “Since your last visit.” As your stream and fan data changes, CamCash can surface new spenders, returning fans, timing shifts, and new locked discoveries from your stored history.
 
-Here's a quick tip:
-1. Go to Settings → Dashboard
-2. Toggle on/off the metrics you want to see
-3. Arrange them in any order you prefer
+The goal is simple: show you what changed and what your next best move should be.
 
-This way, you only see what's relevant to your goals. Give it a try!
+Open your dashboard: https://www.camcashgrl.com/dashboard
 
-Learn more: https://glowmetrics.co/docs/dashboard
-
-Best,
-GlowMetrics Team`,
+— CamCash`,
   },
   {
-    subject: '📊 Tip: Get More from Your Analytics',
+    subject: 'Before your next stream: check your best move',
     text: `Hi there,
 
-Want to understand your audience better? Here's a powerful feature you might not know about:
+Before you go live, open CamCash and check your current best move: strongest platform, strongest time window, fan activity, and anything new we found in your recent data.
 
-Use our Audience Insights tool to:
-- See who's engaging with your content
-- Track growth trends over time
-- Identify your top performing content
+Then start Live Mode so CamCash can keep learning from the stream automatically.
 
-Check it out in your dashboard under "Analytics" → "Insights".
+Open CamCash: https://www.camcashgrl.com/dashboard
 
-Learn more: https://glowmetrics.co/docs/insights
-
-Best,
-GlowMetrics Team`,
+— CamCash`,
   },
   {
-    subject: '🎯 Tip: Set Goals and Track Progress',
+    subject: 'Your stored history can keep getting more valuable',
     text: `Hi there,
 
-Want to stay motivated and focused? GlowMetrics lets you set custom goals and track your progress toward them.
+You can upload more than the Free dashboard displays. CamCash keeps that history stored and can use it to identify locked discoveries worth revisiting later.
 
-To set a goal:
-1. Go to Settings → Goals
-2. Add your target metrics
-3. Watch your progress in real-time
+Free shows your rolling 31-day analytics window. Pro unlocks the deeper history and full insight details.
 
-Perfect for tracking growth, engagement targets, or revenue goals.
+See what CamCash found: https://www.camcashgrl.com/dashboard
 
-Learn more: https://glowmetrics.co/docs/goals
-
-Best,
-GlowMetrics Team`,
-  },
-  {
-    subject: '📧 Tip: Get Smarter Reports Delivered to Your Inbox',
-    text: `Hi there,
-
-Did you know GlowMetrics can automatically send you weekly or daily reports?
-
-Never miss important metrics:
-1. Go to Settings → Reports
-2. Choose your frequency (Daily, Weekly, Monthly)
-3. Pick which metrics matter most
-4. Get summaries delivered straight to your email
-
-Set it and forget it!
-
-Learn more: https://glowmetrics.co/docs/reports
-
-Best,
-GlowMetrics Team`,
-  },
-  {
-    subject: '🚀 Tip: Export Your Data Anytime',
-    text: `Hi there,
-
-Need to analyze your data elsewhere or share reports with your team?
-
-You can export all your analytics:
-1. Select the date range you want
-2. Choose CSV or PDF format
-3. Get a download link instantly
-
-Perfect for presentations, spreadsheets, or team sharing.
-
-Learn more: https://glowmetrics.co/docs/export
-
-Best,
-GlowMetrics Team`,
-  },
-  {
-    subject: '⚙️ Tip: Optimize Your Settings for Maximum Impact',
-    text: `Hi there,
-
-Your settings are your control center. Here's what you should know:
-
-Key settings to review:
-- Privacy & Data: Choose your data retention policy
-- Notifications: Get alerts on important changes
-- Integrations: Connect with your favorite tools
-- Team Access: Add team members to collaborate
-
-Spend 5 minutes optimizing today!
-
-Learn more: https://glowmetrics.co/docs/settings
-
-Best,
-GlowMetrics Team`,
+— CamCash`,
   },
 ]
 
@@ -148,30 +104,40 @@ async function sendEmail(supabase, emailType, recipient, subject, text) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'GlowMetrics <noreply@camcashgrl.com>',
+        from: 'CamCash <noreply@camcashgrl.com>',
         to: recipient,
         subject,
         text,
       }),
     })
 
-    const resendResponse = await response.json()
-
+    const resendResponse = await response.json().catch(() => ({}))
     if (response.ok && resendResponse.id) {
       await logEmail(supabase, emailType, recipient, subject, 'sent', resendResponse, null)
       return true
-    } else {
-      await logEmail(supabase, emailType, recipient, subject, 'failed', resendResponse, resendResponse.message || 'Unknown error')
-      return false
     }
+
+    await logEmail(supabase, emailType, recipient, subject, 'failed', resendResponse, resendResponse.message || 'Unknown error')
+    return false
   } catch (e) {
     await logEmail(supabase, emailType, recipient, subject, 'failed', null, e.message)
     return false
   }
 }
 
+async function alreadySent(supabase, emailType, recipient) {
+  const { data, error } = await supabase
+    .from('email_logs')
+    .select('id')
+    .eq('email_type', emailType)
+    .eq('recipient', recipient)
+    .eq('status', 'sent')
+    .limit(1)
+  return !error && !!data?.length
+}
+
 function getRandomTip() {
-  return TIPS[Math.floor(Math.random() * TIPS.length)]
+  return RETENTION_TIPS[Math.floor(Math.random() * RETENTION_TIPS.length)]
 }
 
 export async function GET() {
@@ -180,36 +146,64 @@ export async function GET() {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  // Get all active subscribers (paid + trialing, excluding free)
-  const { data: activeSubscribers, error } = await supabase
-    .from('profiles')
-    .select('id, email, plan, subscription_status')
-    .in('subscription_status', ['active', 'trialing'])
-    .neq('plan', 'free')
-
-  if (error) {
-    console.error('[send-subscription-tips] query failed:', error.message)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-  }
-
-  let emailsSent = 0
+  let updateEmailsSent = 0
+  let retentionEmailsSent = 0
   let emailsFailed = 0
   const tip = getRandomTip()
+  let usersChecked = 0
+  let lastId = null
 
-  if (activeSubscribers?.length) {
-    for (const user of activeSubscribers) {
-      const sent = await sendEmail(supabase, 'subscription_tip', user.email, tip.subject, tip.text)
-      if (sent) emailsSent++
-      else emailsFailed++
+  // Advance by the immutable unique id, so earlier deletions cannot shift
+  // offsets and cause an eligible profile to be skipped.
+  while (true) {
+    let query = supabase
+      .from('profiles')
+      .select('id, email, plan, subscription_status')
+      .not('email', 'is', null)
+      .order('id', { ascending: true })
+      .limit(PROFILE_BATCH_SIZE)
+    if (lastId !== null) query = query.gt('id', lastId)
+    const { data: users, error } = await query
+    if (error) {
+      console.error('[send-subscription-tips] query failed:', error.message)
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
+    if (!users?.length) break
+    usersChecked += users.length
+
+    for (const user of users) {
+      if (!user.email) continue
+
+      const hasUpdate = await alreadySent(supabase, PRODUCT_UPDATE_TYPE, user.email)
+      if (!hasUpdate) {
+        const sent = await sendEmail(
+          supabase,
+          PRODUCT_UPDATE_TYPE,
+          user.email,
+          PRODUCT_UPDATE.subject,
+          PRODUCT_UPDATE.text
+        )
+        if (sent) updateEmailsSent++
+        else emailsFailed++
+        continue
+      }
+
+      if (['active', 'trialing'].includes(user.subscription_status)) {
+        const sent = await sendEmail(supabase, 'subscription_retention_tip', user.email, tip.subject, tip.text)
+        if (sent) retentionEmailsSent++
+        else emailsFailed++
+      }
+    }
+    lastId = users[users.length - 1].id
   }
 
-  console.log(`[send-subscription-tips] sent ${emailsSent} subscription tips, ${emailsFailed} failed (total subscribers: ${activeSubscribers?.length || 0})`)
+  console.log(`[send-subscription-tips] product updates=${updateEmailsSent}, retention=${retentionEmailsSent}, failed=${emailsFailed}`)
   return NextResponse.json({
     success: true,
-    activeSubscribers: activeSubscribers?.length || 0,
-    emailsSent,
+    usersChecked,
+    updateEmailsSent,
+    retentionEmailsSent,
     emailsFailed,
-    tipTopic: tip.subject,
+    retentionTopic: tip.subject,
   })
 }

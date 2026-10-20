@@ -187,11 +187,7 @@ export async function POST(request) {
 
   let event
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET
-    )
+    event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET)
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message)
     return NextResponse.json({ error: err.message }, { status: 400 })
@@ -208,27 +204,16 @@ export async function POST(request) {
         const email = session.customer_details?.email || session.customer_email
         const user = await resolveUser(supabase, { userId: session.metadata?.userId, email, customerId: session.customer })
         if (!user) {
-          await alertUnresolvedUser('checkout.session.completed', event, {
-            userId: session.metadata?.userId, email, customerId: session.customer,
-          })
+          await alertUnresolvedUser('checkout.session.completed', event, { userId: session.metadata?.userId, email, customerId: session.customer })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
-
-        // Checkout completion only stores the Stripe customer link. The
-        // subscription event is the source of truth for trial vs paid access.
-        const ok = await updateProfile(supabase, user.id, {
-          stripe_customer_id: session.customer,
-        })
+        const ok = await updateProfile(supabase, user.id, { stripe_customer_id: session.customer })
         if (!ok) {
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
-
-        await sendResendNotification(
-          `💳 CamCash checkout completed — ${email}`,
-          `${email} completed checkout. Subscription status will determine trial or paid Pro access.`
-        )
+        await sendResendNotification(`💳 CamCash checkout completed — ${email}`, `${email} completed checkout. Subscription status will determine trial or paid Pro access.`)
         break
       }
 
@@ -237,13 +222,10 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email, customerId: sub.customer })
         if (!user) {
-          await alertUnresolvedUser('customer.subscription.created', event, {
-            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
-          })
+          await alertUnresolvedUser('customer.subscription.created', event, { userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
-
         const subscriptionStatus = sub.status
         const plan = subscriptionStatus === 'active' ? 'pro' : 'free'
         const update = {
@@ -253,13 +235,10 @@ export async function POST(request) {
           subscription_status: subscriptionStatus,
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
         }
-
-        const profileOk = await updateProfile(supabase, user.id, update)
-        if (!profileOk) {
+        if (!await updateProfile(supabase, user.id, update)) {
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
-
         const subsOk = await upsertSubscriptionRecord(supabase, user.id, {
           stripe_customer_id: sub.customer,
           stripe_subscription_id: sub.id,
@@ -274,7 +253,6 @@ export async function POST(request) {
           await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
           return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: RETRY_STATUS })
         }
-
         await logSubscriptionEvent(supabase, user.id, 'subscription_started', {
           stripeEventId: event.id,
           customerId: sub.customer,
@@ -282,7 +260,6 @@ export async function POST(request) {
           newPlan: plan,
           details: { status: sub.status, trialEnd: sub.trial_end },
         })
-
         await sendResendNotification(
           subscriptionStatus === 'active' ? `💰 New Paid Subscription — ${email}` : `🎁 Trial Started — ${email}`,
           `${email} started a ${subscriptionStatus} subscription (ID: ${sub.id}).`
@@ -295,40 +272,22 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email, customerId: sub.customer })
         if (!user) {
-          await alertUnresolvedUser('customer.subscription.deleted', event, {
-            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
-          })
+          await alertUnresolvedUser('customer.subscription.deleted', event, { userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
-
         if (await isStaleSubscription(supabase, user.id, sub)) {
           await logWebhookEvent(supabase, event, 'success', `Skipped: ${sub.id} is not the profile's current subscription`)
           return NextResponse.json({ received: true, status: 'stale_subscription_ignored' })
         }
-
-        const update = {
-          plan: 'free',
-          subscription_status: 'canceled',
-          trial_ends_at: null,
-        }
-
-        const profileOk = await updateProfile(supabase, user.id, update)
-        if (!profileOk) {
+        if (!await updateProfile(supabase, user.id, { plan: 'free', subscription_status: 'canceled', trial_ends_at: null })) {
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to downgrade profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
-
-        const subsOk = await upsertSubscriptionRecord(supabase, user.id, {
-          plan_type: 'free',
-          billing_cycle: null,
-          status: 'canceled',
-        })
-        if (!subsOk) {
+        if (!await upsertSubscriptionRecord(supabase, user.id, { plan_type: 'free', billing_cycle: null, status: 'canceled' })) {
           await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
           return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: RETRY_STATUS })
         }
-
         await logSubscriptionEvent(supabase, user.id, 'subscription_canceled', {
           stripeEventId: event.id,
           customerId: sub.customer,
@@ -336,11 +295,7 @@ export async function POST(request) {
           previousPlan: 'pro',
           newPlan: 'free',
         })
-
-        await sendResendNotification(
-          `❌ Subscription Canceled — ${email}`,
-          `${email} cancelled their subscription.`
-        )
+        await sendResendNotification(`❌ Subscription Canceled — ${email}`, `${email} cancelled their subscription.`)
         break
       }
 
@@ -349,34 +304,26 @@ export async function POST(request) {
         const email = await getEmailFromCustomer(sub.customer)
         const user = await resolveUser(supabase, { userId: sub.metadata?.userId, email, customerId: sub.customer })
         if (!user) {
-          await alertUnresolvedUser('customer.subscription.updated', event, {
-            userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
-          })
+          await alertUnresolvedUser('customer.subscription.updated', event, { userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
-
         if (await isStaleSubscription(supabase, user.id, sub)) {
           await logWebhookEvent(supabase, event, 'success', `Skipped: ${sub.id} is not the profile's current subscription`)
           return NextResponse.json({ received: true, status: 'stale_subscription_ignored' })
         }
-
         const subscriptionStatus = sub.status
         const plan = subscriptionStatus === 'active' ? 'pro' : 'free'
-
         const update = {
           plan,
           stripe_subscription_id: sub.id,
           subscription_status: subscriptionStatus,
           trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
         }
-
-        const profileOk = await updateProfile(supabase, user.id, update)
-        if (!profileOk) {
+        if (!await updateProfile(supabase, user.id, update)) {
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
-
         const subsOk = await upsertSubscriptionRecord(supabase, user.id, {
           stripe_customer_id: sub.customer,
           stripe_subscription_id: sub.id,
@@ -391,7 +338,6 @@ export async function POST(request) {
           await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
           return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: RETRY_STATUS })
         }
-
         await logSubscriptionEvent(supabase, user.id, 'subscription_updated', {
           stripeEventId: event.id,
           customerId: sub.customer,
@@ -399,22 +345,12 @@ export async function POST(request) {
           newPlan: plan,
           details: { status: sub.status, reason: event.data.previous_attributes },
         })
-
         if (subscriptionStatus === 'active') {
-          await sendResendNotification(
-            `💰 Subscription Active — ${email}`,
-            `${email}'s subscription is now active.`
-          )
+          await sendResendNotification(`💰 Subscription Active — ${email}`, `${email}'s subscription is now active.`)
         } else if (subscriptionStatus === 'trialing') {
-          await sendResendNotification(
-            `🎁 Trial Updated — ${email}`,
-            `${email}'s subscription remains trialing and capped.`
-          )
+          await sendResendNotification(`🎁 Trial Updated — ${email}`, `${email}'s subscription remains trialing and capped.`)
         } else {
-          await sendResendNotification(
-            `❌ Subscription Issue — ${email}`,
-            `${email}'s subscription status changed to ${sub.status}.`
-          )
+          await sendResendNotification(`❌ Subscription Issue — ${email}`, `${email}'s subscription status changed to ${sub.status}.`)
         }
         break
       }

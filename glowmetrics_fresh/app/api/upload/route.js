@@ -8,6 +8,114 @@ const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
+const LIVE_DEDUP_PAGE_SIZE = 1000
+
+function minuteBucket(value) {
+  const ms = new Date(value).getTime()
+  if (!Number.isFinite(ms)) return null
+  return Math.floor(ms / 60000)
+}
+
+function crossSourceTipKey(row) {
+  const bucket = minuteBucket(row.date_time)
+  if (bucket === null) return null
+  const platform = canonicalPlatform(row.platform || 'Unknown') || 'Unknown'
+  const username = String(row.username || '').trim().toLowerCase().replace(/^@+/, '')
+  const tokens = Number(row.tokens) || 0
+  // Tokens are the stable cross-source amount for supported cam platforms.
+  // Keep USD out of this key because historical rows can carry slightly
+  // different rounded USD values after token-rate fixes while still
+  // representing the exact same real tip.
+  return `${platform.toLowerCase()}|${username}|${tokens}|${bucket}`
+}
+
+async function loadExistingLiveTipCounts(supabase, userId, tipRows) {
+  if (!tipRows.length) return new Map()
+
+  const dated = tipRows
+    .map((row) => new Date(row.date_time))
+    .filter((d) => Number.isFinite(d.getTime()))
+  if (!dated.length) return new Map()
+
+  // Give the query one minute of padding on each side so a second-level Live
+  // timestamp and a minute-rounded CSV timestamp still land in the candidate
+  // set. The final key remains exact to the UTC minute and occurrence-counted.
+  const minMs = Math.min(...dated.map((d) => d.getTime())) - 60000
+  const maxMs = Math.max(...dated.map((d) => d.getTime())) + 60000
+  const counts = new Map()
+
+  for (let from = 0; ; from += LIVE_DEDUP_PAGE_SIZE) {
+    const to = from + LIVE_DEDUP_PAGE_SIZE - 1
+    const { data, error } = await supabase
+      .from('tips')
+      .select('platform,username,tokens,date_time,source')
+      .eq('user_id', userId)
+      .eq('source', 'extension')
+      .gte('date_time', new Date(minMs).toISOString())
+      .lte('date_time', new Date(maxMs).toISOString())
+      .order('date_time', { ascending: true })
+      .range(from, to)
+
+    if (error) {
+      // Dedup lookup failure must never make the upload destructive or silently
+      // discard rows. Fall back to the existing exact insert_tips_dedup RPC and
+      // surface a server log so we can investigate.
+      console.error('[UPLOAD] Live-tip reconciliation lookup failed:', error.message)
+      return new Map()
+    }
+
+    for (const row of data || []) {
+      const key = crossSourceTipKey(row)
+      if (!key) continue
+      const bucket = counts.get(key) || { remaining: 0, exact: new Map() }
+      const instant = new Date(row.date_time).getTime()
+      bucket.remaining++
+      bucket.exact.set(instant, (bucket.exact.get(instant) || 0) + 1)
+      counts.set(key, bucket)
+    }
+
+    if (!data || data.length < LIVE_DEDUP_PAGE_SIZE) break
+  }
+
+  return counts
+}
+
+function reconcileCsvAgainstLiveTips(tipRows, liveCounts) {
+  if (!tipRows.length || !liveCounts.size) {
+    return { rows: tipRows, skipped: 0 }
+  }
+
+  const rows = []
+  let skipped = 0
+
+  // Reserve exact timestamp matches before using minute-rounded matches.
+  // Otherwise an earlier, distinct CSV tip can consume a later Live match,
+  // leaving that later CSV row to collide with the DB's exact dedupe key.
+  const exactMatches = new Set()
+  tipRows.forEach((row, index) => {
+    const bucket = liveCounts.get(crossSourceTipKey(row))
+    const instant = new Date(row.date_time).getTime()
+    const remaining = bucket?.exact.get(instant) || 0
+    if (remaining > 0) {
+      bucket.exact.set(instant, remaining - 1)
+      bucket.remaining--
+      exactMatches.add(index)
+    }
+  })
+
+  for (const [index, row] of tipRows.entries()) {
+    const key = crossSourceTipKey(row)
+    const bucket = key ? liveCounts.get(key) : null
+    if (exactMatches.has(index) || bucket?.remaining > 0) {
+      if (!exactMatches.has(index)) bucket.remaining--
+      skipped++
+      continue
+    }
+    rows.push(row)
+  }
+
+  return { rows, skipped }
+}
 
 // Rows are inserted in sequential BATCH_SIZE chunks, one Supabase round-trip
 // each, so a large export takes far longer than Vercel's 10s default. When the
@@ -60,20 +168,7 @@ async function handleUpload(req) {
   // ── VALIDATE FORMAT ────────────────────────────────────────────────────
   const raw = await file.text()
 
-  // Note: Tab-delimited (TSV) files are now supported via delimiter detection in parseCSV().
-  // The parser will automatically detect and handle both comma and tab delimiters.
-  // This enables support for platforms like BongaCams that export both formats.
-
   // ── PARSE + NORMALIZE ──────────────────────────────────────────────────
-  // Prefer the platform the user explicitly selected in the UI — text-based
-  // detection is a fallback for callers that don't pass one, and can't find
-  // any platform keywords in a clean, already-normalized CSV (e.g. the
-  // onboarding paste flow, which sends parsed rows rather than raw text).
-  // A platform that can't be determined is never stored: rows saved as
-  // 'Unknown' land in their own "Unknown" platform everywhere (Command Center,
-  // breakdowns) and get DEFAULT_TOKEN_RATE instead of the platform's rate.
-  // Order: the user's choice, then the file contents, then the file name
-  // (e.g. "MFC2024-2026.csv" with no platform words inside), else ask.
   const explicitPlatform = canonicalPlatform((fd.get('platform') || '').toString().trim()) || ''
   if (explicitPlatform && !KNOWN_PLATFORMS.includes(explicitPlatform)) {
     return NextResponse.json({ error: `Unsupported platform: ${explicitPlatform}`, code: 'platform_required' }, { status: 400 })
@@ -87,9 +182,7 @@ async function handleUpload(req) {
       code: 'platform_required',
     }, { status: 400 })
   }
-  // Numeric dates (06/11/2024) are read in the order the file proves; when
-  // every date could be either, the user chooses. Never guessed: a wrong
-  // guess moves tips to other dates and past the duplicate check.
+
   const fileDateOrder = detectDateOrder(raw)
   const chosenDateOrder = ['MDY', 'DMY'].includes(fd.get('date_order')) ? fd.get('date_order') : null
   if (fileDateOrder === 'conflict') {
@@ -112,18 +205,9 @@ async function handleUpload(req) {
   }
   const dateOrder = fileDateOrder === 'ambiguous' ? chosenDateOrder : (fileDateOrder || null)
 
-  // The parser keeps its content-detected platform when it has one (same
-  // parse as before); otherwise it uses the resolved platform so token→USD
-  // uses that platform's rate rather than the default.
   const parsed = parseCSV(raw, contentPlatform !== 'Unknown' ? contentPlatform : textDetectedPlatform, { dateOrder })
 
-  // Log parse attempt to track platform support and format issues
   const formatAnalysis = analyzeFormat(raw)
-  // supabase.rpc() returns a PostgrestFilterBuilder — a thenable, not a real
-  // Promise (it only implements .then(), not .catch()). Chaining .catch()
-  // on it throws synchronously and was taking down the entire upload
-  // request before any tips were inserted. try/catch keeps this logging
-  // call non-blocking as intended.
   try {
     await supabase.rpc('log_paste_parse_attempt', {
       p_user_id: user.id,
@@ -149,19 +233,16 @@ async function handleUpload(req) {
     const usd = parseFloat((Number(row.usd) || 0).toFixed(2))
 
     return {
-      user_id:   user.id,
+      user_id: user.id,
       date_time: row.dateRaw || row.date_time || null,
-      platform:  row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
-      username:  row.username  || 'Unknown',
-      tip_type:  row.tip_type  || 'Tip',
-      tip_note:  row.tip_note  || row.note || row.message || '',
+      platform: row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
+      username: row.username || 'Unknown',
+      tip_type: row.tip_type || 'Tip',
+      tip_note: row.tip_note || row.note || row.message || '',
       tokens,
       usd,
-      // BongaCams paid-chat/spy-mode rows are flagged by parseCSV() (see
-      // lib/analytics.js's BC_PAID_CHAT_TYPES) so they can be routed to
-      // paid_sessions below instead of tips.
       is_paid_session: row.is_paid_session === true,
-      session_type:    row.session_type || null,
+      session_type: row.session_type || null,
     }
   }).filter(r =>
     r.date_time &&
@@ -170,64 +251,31 @@ async function handleUpload(req) {
   )
 
   if (!rows.length) {
-    return NextResponse.json(
-      { error: 'No valid rows found. Check CSV format.' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'No valid rows found. Check CSV format.' }, { status: 400 })
   }
 
-  // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────
+  // Existing legacy option. Do not expand this path; normal uploads should
+  // always rely on dedup rather than destructive replacement.
   if (replace) {
-    const { error } = await supabase
-      .from('tips')
-      .delete()
-      .eq('user_id', user.id)
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const { error } = await supabase.from('tips').delete().eq('user_id', user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // ── DETECT PLATFORM ─────────────────────────────────────────────────────
   const detectedPlatform = textDetectedPlatform
   rows.forEach(r => { if (!r.platform || r.platform === 'Unknown') r.platform = detectedPlatform })
-  // Store canonical names ('BC' → 'BongaCams'): insert_tips_dedup picks the
-  // BongaCams token rate only for the exact name 'BongaCams'. The dedup key
-  // does not include platform, so re-uploads still dedup against old rows.
   rows.forEach(r => { r.platform = canonicalPlatform(r.platform) })
-  // A per-row platform column with an unrecognised value falls back to the
-  // file's platform instead of being stored as a new, unknown platform.
   rows.forEach(r => { if (!KNOWN_PLATFORMS.includes(r.platform)) r.platform = detectedPlatform })
 
-  // ── SPLIT TIPS FROM PAID CHAT / SPY-MODE SESSIONS ───────────────────────
-  // Paid-chat/spy-mode rows (flagged above) never go into tips — they go to
-  // paid_sessions via insert_paid_sessions_dedup, same as the onboarding
-  // paste flow's separate /api/upload-paid-sessions call. Keeping the split
-  // here (rather than filtering in lib/analytics.js) lets parseCSV() keep
-  // returning one flat array, which app/dashboard/page.js's own parseCSV
-  // caller still relies on.
-  const tipRows = rows.filter(r => !r.is_paid_session)
+  let tipRows = rows.filter(r => !r.is_paid_session)
   const paidSessionRows = rows.filter(r => r.is_paid_session)
 
-  // ── VALIDATE BONGACAMS PAID SESSIONS ─────────────────────────────────────
-  // If BongaCams is detected but no paid sessions found, it likely means the
-  // "Chat Type" column is missing or has unexpected values. Warn the user.
   if ((textDetectedPlatform === 'BongaCams' || detectedPlatform === 'BongaCams') &&
       rows.length > 0 && paidSessionRows.length === 0) {
     console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing "Chat Type" column.')
   }
 
-  // ── ASSIGN DEDUP SEQUENCE ACROSS THE WHOLE FILE ─────────────────────────
-  // Two rows can legitimately share the same (user, username, tokens, usd,
-  // date_time) — e.g. the same fan tipping the same amount at the same
-  // recorded minute — and insert_tips_dedup relies on tip_seq to tell them
-  // apart instead of dropping the second one as a duplicate. That sequence
-  // has to be assigned here, over the full file, rather than inside the RPC:
-  // the RPC is called once per BATCH_SIZE-row chunk below, so a duplicate-key
-  // group split across a batch boundary would otherwise get renumbered from 1
-  // in the second batch and collide with the first batch's already-inserted
-  // rows, silently dropping real tips.
-  // Only tipRows get a tip_seq — insert_paid_sessions_dedup has no client_seq
-  // concept (it dedups per-row against paid_sessions_dedup_unique instead).
+  // Assign exact-key identities across the original file before reconciliation
+  // removes any occurrences. Surviving rows must keep their original tip_seq.
   const dedupSeq = new Map()
   tipRows.forEach(r => {
     const key = `${r.user_id}|${r.username.toLowerCase()}|${r.tokens}|${r.usd.toFixed(2)}|${r.date_time}`
@@ -236,91 +284,81 @@ async function handleUpload(req) {
     r.tip_seq = next
   })
 
-  // ── SUMMARY STATS ────────────────────────────────────────────────────────
-  // Computed once, shared by the csv_uploads audit log and the JSON response
-  // (the response uses these so the importer UI can show a real summary —
-  // rows/earnings/platform/date range — instead of just a row count).
-  // Tip-only, same as csv_uploads' columns (which log the tip import, not
-  // paid sessions) and the response fields the importer UI already reads.
+  // ── CROSS-SOURCE LIVE MODE → CSV RECONCILIATION ────────────────────────
+  // A creator may use Live Mode first and later upload the platform CSV that
+  // contains the same real tips. The normal exact CSV unique key cannot always
+  // catch this because Live Mode captures seconds while many exports round to
+  // the minute. Match only already-persisted extension tips, one occurrence at
+  // a time, by canonical platform + normalized fan + token amount + minute.
+  // This preserves legitimate repeated identical tips: existing Live count 1
+  // plus CSV count 2 skips exactly one and still inserts the second.
+  const liveCounts = await loadExistingLiveTipCounts(supabase, user.id, tipRows)
+  const reconciled = reconcileCsvAgainstLiveTips(tipRows, liveCounts)
+  tipRows = reconciled.rows
+  const crossSourceSkipped = reconciled.skipped
+  if (crossSourceSkipped > 0) {
+    console.log(`[UPLOAD] Cross-source reconciliation skipped ${crossSourceSkipped} tip(s) already captured by Live Mode`)
+  }
+
   const summaryDates = tipRows.map(r => new Date(r.date_time)).filter(d => !isNaN(d))
   const summaryDateFrom = summaryDates.length ? new Date(Math.min(...summaryDates)) : null
-  const summaryDateTo   = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
+  const summaryDateTo = summaryDates.length ? new Date(Math.max(...summaryDates)) : null
   const summaryTotalUsd = parseFloat(tipRows.reduce((sum, r) => sum + (r.usd || 0), 0).toFixed(2))
   const summaryTotalTokens = tipRows.reduce((sum, r) => sum + (r.tokens || 0), 0)
-  // Free-tier 31-day analysis window — same computeSnapshotStats() the
-  // onboarding paste flow uses, so a CSV file upload and a pasted-then-
-  // uploaded import report identical, real (not estimated) full-range vs
-  // recent-window numbers.
   const snapshot = computeSnapshotStats(
     tipRows.map(r => ({ date: r.date_time, tokens: r.tokens, usd: r.usd })),
     31
   )
 
-  // ── LOG TO csv_uploads ─────────────────────────────────────────────────
-  // Shared by the success path below and the platform-limit block path, so a
-  // blocked attempt still leaves an audit row instead of vanishing entirely.
+  let inserted = 0
+  let skipped = crossSourceSkipped
+  const errors = []
+  const totalBatches = Math.ceil(tipRows.length / BATCH_SIZE)
+  const uploadRef = crypto.randomUUID()
+
   const logCsvUpload = async (status) => {
     try {
-      // Build sorted array of unique "YYYY-MM" strings covered
       const monthsSet = new Set(
         summaryDates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
       )
       const monthsCovered = [...monthsSet].sort()
 
       const { error: logInsertError } = await supabase.from('csv_uploads').insert({
-        user_id:        user.id,
-        upload_ref:     crypto.randomUUID(),
-        platform:       detectedPlatform,
-        file_name:      file.name || 'upload.csv',
-        date_from:      summaryDateFrom,
-        date_to:        summaryDateTo,
+        user_id: user.id,
+        upload_ref: uploadRef,
+        platform: detectedPlatform,
+        file_name: file.name || 'upload.csv',
+        date_from: summaryDateFrom,
+        date_to: summaryDateTo,
         months_covered: monthsCovered,
-        total_rows:     tipRows.length,
-        inserted_rows:  inserted,
-        skipped_rows:   skipped,
-        total_usd:      summaryTotalUsd,
-        total_tokens:   summaryTotalTokens,
+        total_rows: tipRows.length + crossSourceSkipped,
+        inserted_rows: inserted,
+        skipped_rows: skipped,
+        total_usd: summaryTotalUsd,
+        total_tokens: summaryTotalTokens,
         status,
       })
-      // supabase-js reports insert failures in { error } rather than throwing,
-      // so without this check a failed audit row vanished silently (#672).
       if (logInsertError) {
         console.error('[UPLOAD] Failed to log csv_upload record:', logInsertError.message)
       } else {
         console.log(`[UPLOAD] Logged csv_upload record (${status}) for ${detectedPlatform} — ${monthsCovered.length} months covered`)
       }
     } catch (logErr) {
-      // Non-fatal — don't fail the whole upload if logging fails
       console.error('[UPLOAD] Failed to log csv_upload record:', logErr.message)
     }
   }
 
-  // ── BATCH INSERT via dedup RPC ─────────────────────────────────────────
-  let inserted = 0
-  let skipped  = 0
-  const errors = []
-  const totalBatches = Math.ceil(tipRows.length / BATCH_SIZE)
-
   for (let i = 0; i < tipRows.length; i += BATCH_SIZE) {
-    const batch    = tipRows.slice(i, i + BATCH_SIZE)
+    const batch = tipRows.slice(i, i + BATCH_SIZE)
     const batchNum = Math.floor(i / BATCH_SIZE) + 1
 
-    const { data, error } = await supabase.rpc('insert_tips_dedup', {
-      tips: batch
-    })
+    const { data, error } = await supabase.rpc('insert_tips_dedup', { tips: batch })
 
-    // insert_tips_dedup catches its own exceptions and returns them inside the
-    // jsonb payload (data.error) rather than as a PostgREST-level error, so a
-    // failed batch can otherwise look like a clean { inserted: 0, skipped: 0 }.
     if (error || data?.error) {
       const message = error?.message || data?.error
       console.error(`[UPLOAD] Batch ${batchNum}/${totalBatches} error:`, message)
 
       if (message?.includes('PLATFORM_LIMIT_REACHED')) {
-        // Log the attempt — including any rows earlier batches in this same
-        // request already inserted — before returning. Without this, a
-        // correctly-rejected upload leaves zero trace in csv_uploads,
-        // indistinguishable from a request that never ran at all.
         await logCsvUpload('blocked')
         return NextResponse.json({
           error: platformLimitMessage(),
@@ -334,14 +372,10 @@ async function handleUpload(req) {
     }
 
     inserted += data?.inserted || 0
-    skipped  += data?.skipped  || 0
-
+    skipped += data?.skipped || 0
     console.log(`[UPLOAD] Batch ${batchNum}/${totalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
   }
 
-  // ── VALIDATE IMPORTED TIPS ──────────────────────────────────────────────
-  // After all batches complete, validate the newly inserted tips for data
-  // quality issues (future dates, unrealistic amounts, missing usernames, etc.)
   if (inserted > 0) {
     try {
       const { data: validationResult, error: validationError } = await supabase.rpc(
@@ -360,78 +394,66 @@ async function handleUpload(req) {
 
   await logCsvUpload(errors.length > 0 ? 'partial' : 'complete')
 
-  // ── BATCH INSERT PAID CHAT / SPY-MODE SESSIONS ──────────────────────────
-  // Same RPC the onboarding paste flow's /api/upload-paid-sessions uses, so
-  // rows flagged by parseCSV() (BC_PAID_CHAT_TYPES, lib/analytics.js) land in
-  // paid_sessions instead of tips regardless of which import path sent them.
   let paidInserted = 0
-  let paidSkipped  = 0
+  let paidSkipped = 0
   const paidErrors = []
   const paidTotalBatches = Math.ceil(paidSessionRows.length / BATCH_SIZE)
 
   for (let i = 0; i < paidSessionRows.length; i += BATCH_SIZE) {
     const batch = paidSessionRows.slice(i, i + BATCH_SIZE).map(r => ({
-      user_id:      r.user_id,
-      date_time:    r.date_time,
-      platform:     r.platform,
-      username:     r.username,
+      user_id: r.user_id,
+      date_time: r.date_time,
+      platform: r.platform,
+      username: r.username,
       session_type: r.session_type,
-      tokens:       r.tokens,
-      usd:          r.usd,
+      tokens: r.tokens,
+      usd: r.usd,
     }))
     const batchNum = Math.floor(i / BATCH_SIZE) + 1
 
-    const { data, error } = await supabase.rpc('insert_paid_sessions_dedup', {
-      sessions: batch
-    })
+    const { data, error } = await supabase.rpc('insert_paid_sessions_dedup', { sessions: batch })
 
     if (error) {
       console.error(`[UPLOAD] Paid-session batch ${batchNum}/${paidTotalBatches} error:`, error.message)
-
       if (error.message?.includes('PLATFORM_LIMIT_REACHED')) {
-        // Tips (if any) already inserted and logged above — this only blocks
-        // the paid-session half, same as onboarding's two independent
-        // requests would behave if the paid-sessions call failed on its own.
         return NextResponse.json({
           error: platformLimitMessage(),
           code: 'platform_limit_reached',
           upgradeUrl: '/pricing',
         }, { status: 402 })
       }
-
       paidErrors.push({ batch: batchNum, error: error.message })
       continue
     }
 
     paidInserted += data?.inserted || 0
-    paidSkipped  += data?.skipped  || 0
-
+    paidSkipped += data?.skipped || 0
     console.log(`[UPLOAD] Paid-session batch ${batchNum}/${paidTotalBatches} — inserted: ${data?.inserted}, skipped: ${data?.skipped}`)
   }
 
-  // ── RESPONSE ───────────────────────────────────────────────────────────
   const response = {
-    ok:        errors.length === 0,
+    ok: errors.length === 0,
     inserted,
     skipped,
-    total:     tipRows.length,
-    batches:   totalBatches,
+    crossSourceSkipped,
+    total: tipRows.length + crossSourceSkipped,
+    batches: totalBatches,
     batchSize: BATCH_SIZE,
-    platform:  detectedPlatform, // ← used by dashboard toast
-    totalUsd:  summaryTotalUsd,
-    dateFrom:  summaryDateFrom ? summaryDateFrom.toISOString() : null,
-    dateTo:    summaryDateTo ? summaryDateTo.toISOString() : null,
+    platform: detectedPlatform,
+    totalUsd: summaryTotalUsd,
+    dateFrom: summaryDateFrom ? summaryDateFrom.toISOString() : null,
+    dateTo: summaryDateTo ? summaryDateTo.toISOString() : null,
     paidSessionsInserted: paidInserted,
-    paidSessionsSkipped:  paidSkipped,
+    paidSessionsSkipped: paidSkipped,
     snapshot,
   }
 
   if (errors.length > 0) {
     response.warnings = errors
-    response.message  = `${errors.length} batch(es) had errors but upload continued. ${inserted} of ${tipRows.length} rows inserted.`
+    response.message = `${errors.length} batch(es) had errors but upload continued. ${inserted} new tips inserted; ${skipped} duplicates/already-captured tips skipped.`
     console.warn('[UPLOAD] Completed with errors:', errors)
   } else {
-    response.message = `All ${inserted} tips inserted successfully (${skipped} duplicates skipped).`
+    response.message = `${inserted} new tips inserted successfully (${skipped} duplicates/already-captured tips skipped).`
     console.log('[UPLOAD] Complete:', response.message)
   }
 
@@ -440,15 +462,11 @@ async function handleUpload(req) {
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
   }
 
-  // ── BONGACAMS NO PAID SESSIONS WARNING ──────────────────────────────────
-  // If BongaCams detected but no paid sessions found, user may be missing a
-  // session-type column (Chat Type, Session Type, Activity Type, etc.)
-  if ((detectedPlatform === 'BongaCams') && paidSessionRows.length === 0 && tipRows.length > 0) {
+  if (detectedPlatform === 'BongaCams' && paidSessionRows.length === 0 && tipRows.length > 0) {
     response.bongaCamsWarning = 'No private/group/spy sessions detected. If your BongaCams export includes private chat sessions, verify it contains a session-type column (e.g., "Chat Type", "Session Type", "Activity Type").'
     console.warn('[UPLOAD] BongaCams detected but no paid sessions found. CSV may be missing a session-type column.')
   }
 
-  // ── FOUNDER NOTIFICATION (non-blocking) ───────────────────────────────
   if (errors.length === 0) {
     try {
       const origin = new URL(req.url).origin

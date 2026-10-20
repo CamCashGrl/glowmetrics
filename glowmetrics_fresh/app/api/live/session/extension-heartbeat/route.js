@@ -3,16 +3,14 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
+import { verifyLiveModeProfile } from '../../../../../lib/liveSession/paidEntitlement'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
+import { buildLiveModeAllowance } from '../../../../../lib/liveModeAllowance'
 
 export async function OPTIONS(req) {
   return new Response(null, { status: 204, headers: corsHeaders(req) })
 }
 
-// Extension heartbeat — proves the extension is active on a supported
-// broadcaster page. Merely having Chrome open or the background worker
-// alive is not proof; broadcasterPageDetected must reflect an actual,
-// periodically re-checked page detection performed by the content script.
 export async function POST(req) {
   const cors = corsHeaders(req)
   const { supabase, user } = await getLiveSessionCaller(req)
@@ -25,7 +23,7 @@ export async function POST(req) {
     platform = body?.platform ?? null
     broadcasterPageDetected = !!body?.broadcasterPageDetected
   } catch (_) {
-    // malformed/missing body — treated as "not detected", never as "detected"
+    // malformed/missing body — treated as not detected
   }
 
   const { data, error } = await supabase.rpc('send_extension_heartbeat', {
@@ -35,6 +33,46 @@ export async function POST(req) {
   if (error) {
     const { status, body } = sanitizedErrorResponse(error)
     return NextResponse.json(body, { status, headers: cors })
+  }
+
+  if (data?.id) {
+    const { data: storedProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('plan,subscription_status,trial_ends_at,stripe_subscription_id,stripe_customer_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profileError || !storedProfile) {
+      return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 500, headers: cors })
+    }
+
+    let profile
+    try { profile = await verifyLiveModeProfile(storedProfile) } catch (_) {
+      return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 503, headers: cors })
+    }
+
+    const allowance = buildLiveModeAllowance({
+      plan: profile.plan || 'free',
+      subscriptionStatus: profile.subscription_status || 'none',
+      trialEndsAt: profile.trial_ends_at || null,
+      sessions: [data],
+      currentSession: data,
+      now: new Date(),
+    })
+
+    if (!allowance.isPro && allowance.limitReached) {
+      const { data: stopped, error: stopError } = await supabase.rpc('stop_live_session')
+      if (stopError) {
+        const { status, body } = sanitizedErrorResponse(stopError)
+        return NextResponse.json(body, { status, headers: cors })
+      }
+      return NextResponse.json({
+        session: shapeLiveSession(stopped),
+        endedByFreeLimit: true,
+        code: allowance.isTrial ? 'TRIAL_LIVE_DURATION_LIMIT' : 'FREE_LIVE_DURATION_LIMIT',
+        allowance,
+      }, { headers: cors })
+    }
   }
 
   return NextResponse.json({ session: shapeLiveSession(data) }, { headers: cors })

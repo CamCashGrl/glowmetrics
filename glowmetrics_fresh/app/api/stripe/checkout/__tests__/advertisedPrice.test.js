@@ -13,13 +13,25 @@ const mockStripe = {
   checkout: { sessions: { create: jest.fn() } },
 }
 jest.mock('../../../../../lib/stripe', () => ({ stripe: mockStripe }))
+
+const mockCheckoutInsert = jest.fn().mockResolvedValue({ error: null })
+const mockAdminFrom = jest.fn((table) => {
+  if (table === 'checkout_events' || table === 'free_trial_events') return { insert: mockCheckoutInsert }
+  if (table === 'profiles') {
+    return { update: () => ({ eq: async () => ({ error: null }) }) }
+  }
+  throw new Error(`Unexpected admin table: ${table}`)
+})
+
 jest.mock('../../../../../lib/supabase-server', () => ({
   createSupabaseRouteClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: 'u1', email: 'a@b.c' } } }) },
     from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { stripe_customer_id: 'cus_1' } }) }) }) }),
   }),
 }))
-jest.mock('@supabase/supabase-js', () => ({ createClient: jest.fn() }))
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({ from: mockAdminFrom })),
+}))
 
 const { POST } = require('../route')
 
@@ -28,9 +40,10 @@ const req = (plan_type) => ({ json: async () => ({ plan_type }), headers: { get:
 
 beforeEach(() => {
   jest.clearAllMocks()
+  mockCheckoutInsert.mockResolvedValue({ error: null })
   process.env.STRIPE_MONTHLY_PRICE_ID = 'price_wrong1999'
   process.env.STRIPE_YEARLY_PRICE_ID = 'price_year'
-  mockStripe.checkout.sessions.create.mockResolvedValue({ url: 'https://checkout.test' })
+  mockStripe.checkout.sessions.create.mockResolvedValue({ id: 'cs_test_1', url: 'https://checkout.test' })
 })
 
 test('monthly env price at $19.99 is replaced by the $9.99 lookup-key price', async () => {
@@ -40,6 +53,11 @@ test('monthly env price at $19.99 is replaced by the $9.99 lookup-key price', as
   expect(res.status).toBe(200)
   expect(mockStripe.prices.list).toHaveBeenCalledWith(expect.objectContaining({ lookup_keys: ['Monthly_Premuim'] }))
   expect(mockStripe.checkout.sessions.create.mock.calls[0][0].line_items).toEqual([{ price: 'price_999', quantity: 1 }])
+  expect(mockStripe.checkout.sessions.create.mock.calls[0][0].client_reference_id).toBe('u1')
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'started', user_id: 'u1' }))
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'session_created', stripe_session_id: 'cs_test_1' }))
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ status: 'checkout_created', user_id: 'u1' }))
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'trial_checkout_created', user_id: 'u1' }))
 })
 
 test('monthly env price already $9.99 is used as-is', async () => {
@@ -49,12 +67,17 @@ test('monthly env price already $9.99 is used as-is', async () => {
   expect(mockStripe.prices.list).not.toHaveBeenCalled()
 })
 
-test('refuses checkout when no price matches the advertised amount', async () => {
+test('refuses checkout when no price matches the advertised amount and logs the reason', async () => {
   mockStripe.prices.retrieve.mockResolvedValue(price('price_wrong1999', 1999, 'month'))
   mockStripe.prices.list.mockResolvedValue({ data: [] })
   const res = await POST(req('standard_monthly'))
   expect(res.status).toBe(500)
   expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled()
+  expect(mockCheckoutInsert).toHaveBeenCalledWith(expect.objectContaining({
+    status: 'failed',
+    error_code: 'price_misconfigured',
+    failure_reason: 'price_misconfigured',
+  }))
 })
 
 test('annual must be $99/year', async () => {
