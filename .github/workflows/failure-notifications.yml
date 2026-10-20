@@ -49,7 +49,7 @@ jobs:
       - name: Notify Slack of actual failure
         shell: pwsh
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL || secrets.SLACK_WEBHOOK_SECRET }}
           CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           CI_WORKFLOW: ${{ github.event.workflow_run.name }}
           CI_BRANCH: ${{ github.event.workflow_run.head_branch }}

@@ -36,6 +36,11 @@ secrets copied from the **testing** project only:
 | `STAGING_SUPABASE_ANON_KEY` | Testing project's anon/publishable key |
 | `STAGING_SUPABASE_SERVICE_ROLE_KEY` | Testing project's service role/secret key |
 
+Existing repository secrets named `SUPABASE_STAGING_URL`,
+`SUPABASE_STAGING_ANON_KEY`, and `SUPABASE_STAGING_SERVICE_ROLE_KEY` are also
+accepted. The `STAGING_SUPABASE_*` names take precedence. Both conventions
+must point to Live Mode Testing; the same preflight checks apply to either.
+
 Do not use generic `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` or service secrets
 from production as a fallback. The workflow maps these dedicated staging secrets
 to the existing application variable names. The preflight runs before npm install
@@ -54,6 +59,7 @@ not create Stripe subscriptions. Do not add a live Stripe key for CI.
 
 Add `SLACK_WEBHOOK_URL` as a **repository Actions secret** for notification
 workflows. Keep the existing webhook if configured. No webhook URL is logged.
+The existing repository secret `SLACK_WEBHOOK_SECRET` is accepted as a fallback.
 
 ## What runs
 
