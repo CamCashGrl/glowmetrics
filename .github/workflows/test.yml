@@ -24,6 +24,9 @@ jobs:
     env:
       CI: 'true'
       CAMCASH_TEST_ENV: 'true'
+      # Existing date fixtures/fingerprints assume UTC, as on hosted Linux.
+      # Creator-local behavior is tested with explicit IANA timezone arguments.
+      TZ: UTC
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL || secrets.SUPABASE_STAGING_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY || secrets.SUPABASE_STAGING_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY || secrets.SUPABASE_STAGING_SERVICE_ROLE_KEY }}

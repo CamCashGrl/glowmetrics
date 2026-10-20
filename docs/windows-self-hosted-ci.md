@@ -63,6 +63,11 @@ The existing repository secret `SLACK_WEBHOOK_SECRET` is accepted as a fallback.
 
 ## What runs
 
+The full suite runs with `TZ=UTC`, matching the existing date fixtures and
+fingerprints on hosted Linux. Creator-local boundary tests still pass explicit
+IANA zones. Host-local Windows runs can differ; record those separately rather
+than changing expected financial results or removing timezone assertions.
+
 - **CamCash Test Suite**: environment preflight, locked install, safety-script
   tests, changed-test integrity, formula/timezone guards, one full Jest run with
   coverage, JSON-based count/skip/failure verification, and HTML/JSON reports.
