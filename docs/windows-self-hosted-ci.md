@@ -1,4 +1,12 @@
-# CamCash Windows CI setup
+# CamCash CI runner configuration
+
+The required PR checks **CamCash Test Suite**, **Build Check**, and **Test
+Integrity Guard** run on GitHub-hosted `ubuntu-latest`. No self-hosted runner is
+required for those three workflows. Account billing/spending restrictions are
+an external blocker; do not switch runners to bypass them.
+
+The Windows setup below applies only to the remaining optional workflows
+that still declare the custom runner label. It is not a prerequisite for PR CI.
 
 The feature branch configures repository CI. It does not register a runner,
 resume a database, create secrets, merge the PR, or apply migrations.
@@ -84,14 +92,17 @@ than changing expected financial results or removing timezone assertions.
   definition commit, never a completed PR head. Existing failure issue tracking
   is retained. No claim of successful delivery when the webhook is missing.
 
-All seven inspected workflows use the dedicated laptop label. Unrelated
+The three required PR workflows use GitHub-hosted runners. The remaining four
+previously converted workflows still use the dedicated laptop label; changing
+those optional scheduled/notification workflows is outside this fix scope. Unrelated
 Supabase security-advisor and specialized staging workflows were not converted;
 they are outside essential PR CI and may still need hosted runner capacity.
 
 ## First verification
 
-Register the runner and configure secrets, then open PR #678 → Checks. Verify
-the runner picks up pending jobs. Workflow-dispatch, scheduled and workflow_run
+Configure the dedicated staging secrets, then open PR #678 → Checks. The
+required PR jobs use GitHub-hosted runners; check account billing if GitHub
+rejects them before steps start. Workflow-dispatch, scheduled and workflow_run
 notification definitions generally come from the default branch: changes in an
 unmerged PR do not replace those default-branch definitions. Review their YAML
 in the PR; do not merge merely to activate them. Until those definitions are

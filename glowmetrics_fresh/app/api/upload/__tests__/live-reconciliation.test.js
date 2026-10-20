@@ -102,6 +102,8 @@ test('seconds within the same minute must match the represented occurrence, not 
   const response = await POST(csvRequest(['2026-10-18 12:00:00,fanA,100', '2026-10-18 12:00:30,fanA,100']))
   expect(response.body.inserted).toBe(1)
   expect(stored.size).toBe(2)
+  expect((await POST(csvRequest(['2026-10-18 12:00:00,fanA,100', '2026-10-18 12:00:30,fanA,100']))).body.inserted).toBe(0)
+  expect(stored.size).toBe(2)
 })
 test('equal tips across a minute boundary are distinct occurrences', async () => {
   const live = { ...tip(1), date_time: '2026-10-18T12:00:59.000Z' }

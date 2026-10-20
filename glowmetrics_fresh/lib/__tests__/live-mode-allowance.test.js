@@ -130,3 +130,13 @@ test('legacy plan=pro with trialing status is still capped as trial, not treated
   expect(allowance.isTrial).toBe(true)
   expect(allowance.remainingInScope).toBe(1)
 })
+
+
+test.each([null, '', 'invalid-date'])('invalid trial expiry %s cannot create a fresh allowance or interrupt an existing session', trialEndsAt => {
+  const now = new Date('2026-10-19T12:00:00Z')
+  const args = { subscriptionStatus: 'trialing', trialEndsAt, now }
+  expect(trialWindowStart(trialEndsAt)).toBeNull()
+  expect(buildLiveModeAllowance(args)).toMatchObject({ locked: true, remainingInScope: 0, resetAt: null })
+  expect(buildLiveModeAllowance({ ...args, currentSession: { started_at: '2026-10-19T11:59:00Z' } }))
+    .toMatchObject({ locked: false, limitReached: false, currentRemainingSeconds: 1740 })
+})

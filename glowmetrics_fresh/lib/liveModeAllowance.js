@@ -25,6 +25,7 @@ export function endOfUtcWeek(date = new Date()) {
 }
 
 export function trialWindowStart(trialEndsAt, trialDays = TRIAL_DAYS) {
+  if (!trialEndsAt) return null
   const end = new Date(trialEndsAt)
   if (!Number.isFinite(end.getTime())) return null
   return new Date(end.getTime() - trialDays * 24 * 60 * 60 * 1000)
@@ -56,7 +57,9 @@ export function buildLiveModeAllowance({
   now = new Date(),
 } = {}) {
   const paidPro = hasPaidProAccess({ plan, subscriptionStatus })
-  const trialing = isTrialStatus(subscriptionStatus, trialEndsAt, now)
+  const trialMetadataInvalid = subscriptionStatus === 'trialing'
+    && (!trialEndsAt || !Number.isFinite(new Date(trialEndsAt).getTime()))
+  const trialing = trialMetadataInvalid || isTrialStatus(subscriptionStatus, trialEndsAt, now)
   const currentActiveSeconds = currentSession ? activeSecondsForSession(currentSession, now) : 0
 
   if (paidPro) {
@@ -94,7 +97,7 @@ export function buildLiveModeAllowance({
     scopeEndMs = trialEnd.getTime()
     sessionLimit = TRIAL_LIVE_STREAMS_TOTAL
     streamLimitSeconds = TRIAL_LIVE_STREAM_MINUTES * 60
-    resetAt = trialEnd.toISOString()
+    resetAt = trialMetadataInvalid ? null : trialEnd.toISOString()
   }
 
   const inScope = sessions.filter((session) => {
@@ -102,11 +105,12 @@ export function buildLiveModeAllowance({
     return Number.isFinite(started) && started >= scopeStartMs && started < scopeEndMs
   })
   const usedInScope = inScope.length
-  const remainingInScope = Math.max(0, sessionLimit - usedInScope)
+  const remainingInScope = trialMetadataInvalid ? 0 : Math.max(0, sessionLimit - usedInScope)
 
   return {
     isPro: false,
     isTrial: trialing,
+    trialMetadataInvalid,
     scope,
     sessionLimit,
     usedInScope,
@@ -121,7 +125,7 @@ export function buildLiveModeAllowance({
     currentRemainingSeconds: currentSession
       ? Math.max(0, streamLimitSeconds - currentActiveSeconds)
       : streamLimitSeconds,
-    locked: !currentSession && usedInScope >= sessionLimit,
+    locked: !currentSession && (trialMetadataInvalid || usedInScope >= sessionLimit),
     limitReached: !!currentSession && currentActiveSeconds >= streamLimitSeconds,
     resetAt,
   }

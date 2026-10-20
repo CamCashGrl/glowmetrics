@@ -67,7 +67,11 @@ async function loadExistingLiveTipCounts(supabase, userId, tipRows) {
     for (const row of data || []) {
       const key = crossSourceTipKey(row)
       if (!key) continue
-      counts.set(key, (counts.get(key) || 0) + 1)
+      const bucket = counts.get(key) || { remaining: 0, exact: new Map() }
+      const instant = new Date(row.date_time).getTime()
+      bucket.remaining++
+      bucket.exact.set(instant, (bucket.exact.get(instant) || 0) + 1)
+      counts.set(key, bucket)
     }
 
     if (!data || data.length < LIVE_DEDUP_PAGE_SIZE) break
@@ -84,11 +88,26 @@ function reconcileCsvAgainstLiveTips(tipRows, liveCounts) {
   const rows = []
   let skipped = 0
 
-  for (const row of tipRows) {
-    const key = crossSourceTipKey(row)
-    const remaining = key ? (liveCounts.get(key) || 0) : 0
+  // Reserve exact timestamp matches before using minute-rounded matches.
+  // Otherwise an earlier, distinct CSV tip can consume a later Live match,
+  // leaving that later CSV row to collide with the DB's exact dedupe key.
+  const exactMatches = new Set()
+  tipRows.forEach((row, index) => {
+    const bucket = liveCounts.get(crossSourceTipKey(row))
+    const instant = new Date(row.date_time).getTime()
+    const remaining = bucket?.exact.get(instant) || 0
     if (remaining > 0) {
-      liveCounts.set(key, remaining - 1)
+      bucket.exact.set(instant, remaining - 1)
+      bucket.remaining--
+      exactMatches.add(index)
+    }
+  })
+
+  for (const [index, row] of tipRows.entries()) {
+    const key = crossSourceTipKey(row)
+    const bucket = key ? liveCounts.get(key) : null
+    if (exactMatches.has(index) || bucket?.remaining > 0) {
+      if (!exactMatches.has(index)) bucket.remaining--
       skipped++
       continue
     }

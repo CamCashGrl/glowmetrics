@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../lib/liveSession/auth'
 import { buildLiveModeAllowance, startOfUtcWeek, trialWindowStart } from '../../../../lib/liveModeAllowance'
 import { isTrialStatus } from '../../../../lib/planLimits'
+import { verifyLiveModeProfile } from '../../../../lib/liveSession/paidEntitlement'
 import { corsHeaders } from '../../../../lib/liveSession/cors'
 
 const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
@@ -18,14 +19,19 @@ export async function GET(req) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
 
   const now = new Date()
-  const { data: profile, error: profileError } = await supabase
+  const { data: storedProfile, error: profileError } = await supabase
     .from('profiles')
-    .select('plan,subscription_status,trial_ends_at')
+    .select('plan,subscription_status,trial_ends_at,stripe_subscription_id,stripe_customer_id')
     .eq('id', user.id)
     .maybeSingle()
 
   if (profileError) {
     return NextResponse.json({ error: 'Unable to load Live Mode allowance.' }, { status: 500, headers: cors })
+  }
+
+  let profile
+  try { profile = await verifyLiveModeProfile(storedProfile) } catch (_) {
+    return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 503, headers: cors })
   }
 
   const trialing = isTrialStatus(profile?.subscription_status, profile?.trial_ends_at, now)

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
+import { verifyLiveModeProfile } from '../../../../../lib/liveSession/paidEntitlement'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
 import { buildLiveModeAllowance } from '../../../../../lib/liveModeAllowance'
 
@@ -35,14 +36,19 @@ export async function POST(req) {
   }
 
   if (data?.id) {
-    const { data: profile, error: profileError } = await supabase
+    const { data: storedProfile, error: profileError } = await supabase
       .from('profiles')
-      .select('plan,subscription_status,trial_ends_at')
+      .select('plan,subscription_status,trial_ends_at,stripe_subscription_id,stripe_customer_id')
       .eq('id', user.id)
       .maybeSingle()
 
-    if (profileError || !profile) {
+    if (profileError || !storedProfile) {
       return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 500, headers: cors })
+    }
+
+    let profile
+    try { profile = await verifyLiveModeProfile(storedProfile) } catch (_) {
+      return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 503, headers: cors })
     }
 
     const allowance = buildLiveModeAllowance({

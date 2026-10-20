@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
+import { verifyLiveModeProfile } from '../../../../../lib/liveSession/paidEntitlement'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
 import { buildLiveModeAllowance, startOfUtcWeek, trialWindowStart } from '../../../../../lib/liveModeAllowance'
 import { isTrialStatus } from '../../../../../lib/planLimits'
@@ -38,14 +39,19 @@ export async function POST(req) {
   }
 
   const now = new Date()
-  const { data: profile, error: profileError } = await supabase
+  const { data: storedProfile, error: profileError } = await supabase
     .from('profiles')
-    .select('plan,subscription_status,trial_ends_at')
+    .select('plan,subscription_status,trial_ends_at,stripe_subscription_id,stripe_customer_id')
     .eq('id', user.id)
     .maybeSingle()
 
   if (profileError) {
     return NextResponse.json({ error: 'Unable to verify Live Mode allowance.' }, { status: 500, headers: cors })
+  }
+
+  let profile
+  try { profile = await verifyLiveModeProfile(storedProfile) } catch (_) {
+    return NextResponse.json({ error: 'Unable to verify Live Mode entitlement.' }, { status: 503, headers: cors })
   }
 
   const trialing = isTrialStatus(profile?.subscription_status, profile?.trial_ends_at, now)
@@ -74,10 +80,12 @@ export async function POST(req) {
   if (allowance.locked) {
     const trial = allowance.scope === 'trial'
     return NextResponse.json({
-      error: trial
+      error: allowance.trialMetadataInvalid
+        ? 'Unable to verify your trial allowance. Please retry or contact support.'
+        : trial
         ? 'You’ve used both Live Mode sessions included in your 7-day trial. Upgrade to paid Pro for unlimited Live Mode.'
         : 'You’ve used both Free Live Mode streams for this week. Upgrade to Pro for unlimited Live Mode.',
-      code: trial ? 'TRIAL_LIVE_TOTAL_LIMIT' : 'FREE_LIVE_WEEKLY_LIMIT',
+      code: allowance.trialMetadataInvalid ? 'TRIAL_METADATA_INVALID' : trial ? 'TRIAL_LIVE_TOTAL_LIMIT' : 'FREE_LIVE_WEEKLY_LIMIT',
       allowance,
     }, { status: 403, headers: cors })
   }
