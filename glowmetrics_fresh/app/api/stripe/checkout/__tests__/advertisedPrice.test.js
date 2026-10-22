@@ -19,7 +19,16 @@ jest.mock('../../../../../lib/supabase-server', () => ({
     from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { stripe_customer_id: 'cus_1' } }) }) }) }),
   }),
 }))
-jest.mock('@supabase/supabase-js', () => ({ createClient: jest.fn() }))
+// Service-role client: the route records checkout/trial attempts with it
+// (hotfix 9073305), so the stub must accept insert() and update().eq().
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({
+    from: () => ({
+      insert: async () => ({ error: null }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+    }),
+  })),
+}))
 
 const { POST } = require('../route')
 
