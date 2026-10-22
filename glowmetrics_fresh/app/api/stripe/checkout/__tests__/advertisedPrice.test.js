@@ -19,7 +19,13 @@ jest.mock('../../../../../lib/supabase-server', () => ({
     from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { stripe_customer_id: 'cus_1' } }) }) }) }),
   }),
 }))
-jest.mock('@supabase/supabase-js', () => ({ createClient: jest.fn() }))
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(() => ({
+    from: jest.fn(() => ({
+      insert: jest.fn().mockResolvedValue({ error: null }),
+    })),
+  })),
+}))
 
 const { POST } = require('../route')
 
