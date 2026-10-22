@@ -1,3 +1,6 @@
+// Pin the host timezone for date-sensitive tests and aggregate fingerprints.
+process.env.TZ = 'UTC'
+
 const nextJest = require('next/jest')
 
 const createJestConfig = nextJest({
