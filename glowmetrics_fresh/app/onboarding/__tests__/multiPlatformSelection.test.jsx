@@ -52,6 +52,18 @@ jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }))
 
 import OnboardingPage from '../page.js'
 
+// Pin the "browser" timezone so expectations don't depend on the CI machine.
+let mockBrowserTz = 'America/Los_Angeles'
+const realResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions
+beforeEach(() => {
+  mockBrowserTz = 'America/Los_Angeles'
+  jest.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(function () {
+    return { ...realResolvedOptions.call(this), timeZone: mockBrowserTz }
+  })
+})
+afterEach(() => jest.restoreAllMocks())
+const TZ = 'America/Los_Angeles'
+
 const NEW_USER = { plan: 'free', streaming_platforms: null, primary_pro_platform: null }
 const card = (name) => screen.getByRole('radio', { name: new RegExp(name) })
 
@@ -138,7 +150,7 @@ describe('Onboarding Step 1 — saving platforms and the permanent primary', () 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
     // Brand-new user: only the selected primary is saved — the earlier click
     // on Chaturbate was replaced, not kept as a secondary.
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams'] }])
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams'], timezone: TZ }])
     expect(profileUpserts()[0]).not.toHaveProperty('primary_pro_platform')
     const [url, init] = global.fetch.mock.calls[0]
     expect(url).toBe('/api/profile/primary-platform')
@@ -183,7 +195,7 @@ describe('Onboarding Step 1 — saving platforms and the permanent primary', () 
   test('platform-list save failure is shown and the route is not called', async () => {
     mockUpsertError = { message: 'permission denied' }
     await chooseAndContinue()
-    expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('could not save your platforms')
+    expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('could not save your platforms and timezone')
     expect(global.fetch).not.toHaveBeenCalled()
   })
 })
@@ -207,7 +219,7 @@ describe('Onboarding Step 1 — returning users keep saved secondary platforms',
     fireEvent.click(screen.getByText('Chaturbate'))
     fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['chaturbate', 'bongacams', 'myfreecams'] }])
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['chaturbate', 'bongacams', 'myfreecams'], timezone: TZ }])
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ platform: 'chaturbate' })
   })
 
@@ -216,7 +228,7 @@ describe('Onboarding Step 1 — returning users keep saved secondary platforms',
     render(<OnboardingPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Continue with BongaCams →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams', 'myfreecams'] }])
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams', 'myfreecams'], timezone: TZ }])
   })
 
   test('saved secondaries are not walked through in onboarding — only the primary is connected', async () => {
@@ -228,5 +240,85 @@ describe('Onboarding Step 1 — returning users keep saved secondary platforms',
     // Lands on the primary's connect step with no "(1 of N)" queue position.
     expect(await screen.findByText(/Step 2 of 3 — Chaturbate/)).toBeInTheDocument()
     expect(screen.queryByText(/\(1 of \d\)/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Onboarding Step 1 — creator timezone confirmation', () => {
+  const okJson = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
+  beforeEach(() => { mockUpserts.length = 0; mockUpsertError = null; mockProfile = NEW_USER; global.fetch = jest.fn().mockResolvedValue(okJson(200, {})) })
+  const profileUpserts = () => mockUpserts.filter((u) => u.table === 'profiles').map((u) => u.v)
+  const shownTz = () => screen.getByTestId('timezone-iana').textContent
+
+  test('no saved timezone: the browser timezone is suggested with a readable label', async () => {
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
+    expect(screen.getByText('Pacific Time')).toBeInTheDocument()
+    expect(screen.getByText(/Used for your best hours, daily earnings, sessions, and stream recommendations/)).toBeInTheDocument()
+  })
+
+  test('a saved creator timezone overrides browser detection', async () => {
+    mockProfile = { ...NEW_USER, timezone: 'Europe/Berlin' }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('Europe/Berlin'))
+    fireEvent.click(screen.getByText('Chaturbate'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Chaturbate →' }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(profileUpserts()[0].timezone).toBe('Europe/Berlin')
+  })
+
+  test('an invalid saved timezone is ignored in favour of the browser zone', async () => {
+    mockProfile = { ...NEW_USER, timezone: 'GMT-8 PST' }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
+  })
+
+  test.each([[''], [undefined], ['Not/AZone']])('invalid/empty browser timezone (%p) falls back to UTC', async (bad) => {
+    mockBrowserTz = bad
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('UTC'))
+  })
+
+  test('manual change via search + select is shown and saved as an IANA zone', async () => {
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'new york' } })
+    const select = screen.getByLabelText('Timezone')
+    expect(Array.from(select.options).map((o) => o.value)).toContain('America/New_York')
+    fireEvent.change(select, { target: { value: 'America/New_York' } })
+    expect(shownTz()).toBe('America/New_York')
+    expect(screen.queryByLabelText('Timezone')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('BongaCams'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with BongaCams →' }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams'], timezone: 'America/New_York' }])
+  })
+
+  test('save failure shows an inline error, keeps the selection, and retry succeeds', async () => {
+    mockUpsertError = { message: 'network' }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'Tokyo' } })
+    fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Tokyo' } })
+    fireEvent.click(screen.getByText('MyFreeCams'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with MyFreeCams →' }))
+    expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('could not save your platforms and timezone')
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(shownTz()).toBe('Asia/Tokyo')
+    expect(card('MyFreeCams')).toHaveAttribute('aria-checked', 'true')
+    mockUpsertError = null
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with MyFreeCams →' }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(profileUpserts().at(-1)).toEqual({ id: 'u1', streaming_platforms: ['myfreecams'], timezone: 'Asia/Tokyo' })
+  })
+
+  test('after a successful save Step 1 continues to the primary platform connect step', async () => {
+    render(<OnboardingPage />)
+    await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
+    fireEvent.click(screen.getByText('BongaCams'))
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with BongaCams →' }))
+    expect(await screen.findByText(/Step 2 of 3 — BongaCams/)).toBeInTheDocument()
+    expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
   })
 })

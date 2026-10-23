@@ -643,12 +643,12 @@ function OBProgress({current}){
             <div className="ob-stepper-circle" style={{
               width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
               fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
-              background:s.n<current?CYAN:s.n===current?GRAD:'rgba(255,255,255,0.05)',
+              background:s.n<=current?CYAN:'rgba(255,255,255,0.05)',
               border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
               color:s.n<=current?'#04101b':'rgba(255,255,255,0.25)',
               boxShadow:s.n===current?`0 0 22px rgba(33,230,243,0.65),0 0 45px rgba(33,230,243,0.25)`:s.n<current?`0 0 14px rgba(33,230,243,0.4)`:'none',
             }}>
-              {s.n<current?'✓':s.n}
+              {s.n<=current?'✓':s.n}
             </div>
             {i<2&&<div className="ob-stepper-line" style={{height:2,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
           </div>
@@ -701,6 +701,65 @@ function OBTrust(){
   return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
 }
 
+// ── Creator timezone (Step 1) ──────────────────────────────────
+// The canonical value is always an IANA zone (e.g. 'America/Los_Angeles'),
+// never a fixed offset like PST/GMT-8, so DST is handled downstream.
+function isValidTimeZone(tz){
+  if(!tz||typeof tz!=='string')return false
+  try{new Intl.DateTimeFormat('en-US',{timeZone:tz});return true}catch{return false}
+}
+function detectBrowserTimeZone(){
+  try{
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone
+    return isValidTimeZone(tz)?tz:'UTC'
+  }catch{return 'UTC'}
+}
+function timeZoneLabel(tz){
+  for(const timeZoneName of ['longGeneric','long']){
+    try{
+      const part=new Intl.DateTimeFormat('en-US',{timeZone:tz,timeZoneName}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')
+      if(part?.value)return part.value
+    }catch{}
+  }
+  return tz
+}
+function allTimeZones(){
+  let list=[]
+  try{list=Intl.supportedValuesOf('timeZone')}catch{}
+  return list.includes('UTC')?list:['UTC',...list]
+}
+
+function OBTimezone({value,onChange}){
+  const[editing,setEditing]=useState(false)
+  const[query,setQuery]=useState('')
+  const zones=editing?allTimeZones():[]
+  const q=query.trim().toLowerCase().replace(/\s+/g,'_')
+  const matches=q?zones.filter(z=>z.toLowerCase().includes(q)||timeZoneLabel(z).toLowerCase().replace(/\s+/g,'_').includes(q)):zones
+  return(
+    <div data-testid="timezone-card" style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.025)',padding:'10px 13px',marginBottom:14,textAlign:'left'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+        <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',letterSpacing:'0.08em',textTransform:'uppercase'}}><span aria-hidden="true" style={{marginRight:5}}>🌐</span>Your timezone</div>
+        <button type="button" onClick={()=>{setEditing(e=>!e);setQuery('')}} style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:CYAN,cursor:'pointer'}}>{editing?'Done':'Change'}</button>
+      </div>
+      <div style={{display:'flex',alignItems:'baseline',gap:8,flexWrap:'wrap',marginTop:3}}>
+        <div style={{fontSize:13,fontWeight:800,color:'#F1F5F9'}}>{timeZoneLabel(value)}</div>
+        <div data-testid="timezone-iana" style={{fontSize:11,color:'rgba(148,163,184,0.75)',fontFamily:'monospace'}}>{value}</div>
+      </div>
+      {editing&&(
+        <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:6}}>
+          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search city or region…" aria-label="Search timezones" autoFocus
+            style={{width:'100%',padding:'8px 10px',background:'rgba(4,6,18,0.92)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,color:'#f8fafc',fontSize:12}}/>
+          <select aria-label="Timezone" size={4} value={matches.includes(value)?value:''} onChange={e=>{if(isValidTimeZone(e.target.value)){onChange(e.target.value);setEditing(false);setQuery('')}}}
+            style={{width:'100%',background:'rgba(4,6,18,0.92)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,color:'#e2e8f0',fontSize:12,padding:4}}>
+            {matches.map(z=>(<option key={z} value={z}>{z.replace(/_/g,' ')}</option>))}
+          </select>
+        </div>
+      )}
+      <div style={{marginTop:4,fontSize:10.5,color:'rgba(148,163,184,0.62)',lineHeight:1.45}}>Used for your best hours, daily earnings, sessions, and stream recommendations.</div>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────
 export default function OnboardingPage(){
   const router=useRouter()
@@ -738,6 +797,10 @@ export default function OnboardingPage(){
   const[importResult,setImportResult]=useState(null)
   const[importError,setImportError]=useState('')
   const[primarySaveError,setPrimarySaveError]=useState('')
+  // Creator timezone (IANA). A saved profiles.timezone is the source of
+  // truth; the browser zone is only the initial suggestion when none exists.
+  // Resolved in the boot effect (client only) to avoid an SSR/hydration mismatch.
+  const[timezone,setTimezone]=useState('UTC')
   const[upgradeBlocked,setUpgradeBlocked]=useState(null)
   const[isFirstImport,setIsFirstImport]=useState(true)
   const[showSparkle,setShowSparkle]=useState(false)
@@ -771,7 +834,7 @@ export default function OnboardingPage(){
       if(!user){router.replace('/login');return}
       const{data}=await supabase.from('beta_users').select('onboarding_complete').eq('user_id',user.id).single()
       if(data?.onboarding_complete){router.replace('/dashboard');return}
-      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform').eq('id',user.id).single()
+      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform,timezone').eq('id',user.id).single()
       setUserPlan(profile?.plan==='pro'?'pro':'free')
       // Restore an in-progress platform selection if the user left and came
       // back — matches beta_users.onboarding_complete already gating re-entry.
@@ -783,6 +846,7 @@ export default function OnboardingPage(){
         setSavedPlatforms([...new Set([primary,...saved])])
         setSelectedPlatforms([primary])
       }
+      setTimezone(isValidTimeZone(profile?.timezone)?profile.timezone:detectBrowserTimeZone())
       setUser(user);setBooting(false)
     })()
   },[router])
@@ -848,8 +912,8 @@ export default function OnboardingPage(){
       // (never dropped, never duplicated). Brand-new users save just [primary].
       const platformsToSave=[...new Set([selectedPlatforms[0],...savedPlatforms])]
       // Browser saves only the platform list; the permanent primary is set only by the server route.
-      const{error:listErr}=await supabase.from('profiles').upsert({id:user.id,streaming_platforms:platformsToSave},{onConflict:'id'})
-      if(listErr){setPrimarySaveError('We could not save your platforms. Please try again.');return}
+      const{error:listErr}=await supabase.from('profiles').upsert({id:user.id,streaming_platforms:platformsToSave,timezone},{onConflict:'id'})
+      if(listErr){setPrimarySaveError('We could not save your platforms and timezone. Your choices are kept.');return}
       const res=await fetch('/api/profile/primary-platform',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:selectedPlatforms[0]})}).catch(()=>null)
       const body=res?await res.json().catch(()=>({})):{}
       const alreadySame=res?.status===409&&String(body?.primary_pro_platform||'').toLowerCase()===selectedPlatforms[0]
@@ -1170,8 +1234,12 @@ export default function OnboardingPage(){
       <div className="ob-card-shell" style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
         <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
-          <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
-          <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
+          {/* Decorative glows sit in a clipped layer so their -50px offsets
+              don't add empty scrollable space to the card. */}
+          <div aria-hidden="true" style={{position:'absolute',inset:0,overflow:'hidden',borderRadius:'inherit',pointerEvents:'none'}}>
+            <div style={{position:'absolute',top:-50,left:-50,width:220,height:220,borderRadius:'50%',background:'rgba(33,230,243,0.055)',filter:'blur(40px)',pointerEvents:'none'}}/>
+            <div style={{position:'absolute',bottom:-50,right:-50,width:220,height:220,borderRadius:'50%',background:'rgba(255,47,174,0.045)',filter:'blur(40px)',pointerEvents:'none'}}/>
+          </div>
 
           {!['loading','done'].includes(step)&&(
             <button
@@ -1203,15 +1271,16 @@ export default function OnboardingPage(){
                   return(
                     <button key={key} role="radio" aria-checked={sel} onClick={()=>selectPrimary(key)} style={{
                       flex:1,padding:'14px 8px 12px',borderRadius:16,textAlign:'center',
-                      background:sel?'linear-gradient(180deg,rgba(33,230,243,0.11),rgba(124,92,255,0.08))':'rgba(255,255,255,0.03)',
-                      border:sel?'1.5px solid rgba(33,230,243,0.9)':'1px solid rgba(255,255,255,0.10)',
-                      boxShadow:sel?'0 0 0 1px rgba(124,92,255,0.25),0 0 18px rgba(33,230,243,0.28),0 0 34px rgba(124,92,255,0.18),inset 0 1px 0 rgba(255,255,255,0.10)':'inset 0 1px 0 rgba(255,255,255,0.04)',
+                      // Selected: cyan → pink gradient border via padding-box/border-box layers.
+                      background:sel?'linear-gradient(180deg,rgba(14,22,44,0.96),rgba(10,14,34,0.96)) padding-box,linear-gradient(135deg,#21E6F3,#FF2FAE) border-box':'rgba(255,255,255,0.03)',
+                      border:sel?'2px solid transparent':'1px solid rgba(255,255,255,0.10)',
+                      boxShadow:sel?'-6px 0 22px rgba(33,230,243,0.30),6px 0 22px rgba(255,47,174,0.28),inset 0 1px 0 rgba(255,255,255,0.08)':'inset 0 1px 0 rgba(255,255,255,0.04)',
                       cursor:'pointer',transition:'all 0.2s ease',position:'relative',
                     }}
                     onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
                     onMouseLeave={e=>{e.currentTarget.style.transform='';if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.10)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
                     >
-                      {sel&&<div aria-hidden="true" style={{position:'absolute',top:8,right:8,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 12px rgba(33,230,243,0.6)'}}>✓</div>}
+                      {sel&&<div aria-hidden="true" style={{position:'absolute',top:8,right:8,width:18,height:18,borderRadius:'50%',background:'linear-gradient(135deg,#D946EF,#FF2FAE)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#fff',boxShadow:'0 0 12px rgba(255,47,174,0.55)'}}>✓</div>}
                       <div style={{width:50,height:50,borderRadius:15,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:900,margin:'0 auto 9px',...p.iconStyle}}>{p.short}</div>
                       <div style={{fontSize:13,fontWeight:800,color:sel?'#fff':'rgba(226,232,240,0.78)'}}>{p.label}</div>
                     </button>
@@ -1219,11 +1288,13 @@ export default function OnboardingPage(){
                 })}
               </div>
 
+              <OBTimezone value={timezone} onChange={tz=>{setTimezone(tz);setPrimarySaveError('');track('onboarding_timezone_changed',{timezone:tz})}}/>
+
               {primarySaveError&&<div role="alert" data-testid="primary-save-error" style={{color:'#F87171',fontSize:13,marginBottom:10,textAlign:'center'}}>{primarySaveError} Tap Continue to retry.</div>}
               <OBBtn onClick={confirmPlatforms} disabled={!primaryPlatformId} style={primaryPlatformId?{}:{color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>
                 {primaryPlatformId?`Continue with ${PLATFORMS[primaryPlatformId].label} →`:'Choose a platform'}
               </OBBtn>
-              <div style={{marginTop:10,textAlign:'center',fontSize:11,color:'rgba(148,163,184,0.65)'}}>You can add more platforms later.</div>
+              <div style={{marginTop:10,textAlign:'center',fontSize:12,color:'rgba(203,213,225,0.8)'}}><span aria-hidden="true" style={{marginRight:5}}>⚡</span>You can add more platforms later.</div>
             </div>
           )}
 
