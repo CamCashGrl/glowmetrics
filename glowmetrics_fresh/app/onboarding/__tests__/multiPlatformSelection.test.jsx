@@ -1,11 +1,10 @@
 /**
- * Integration tests for onboarding Step 1 — multi-platform selection and
- * primary/secondary designation. Renders the real OnboardingPage component
- * (not a re-implementation) so these actually exercise the shipped state
- * machine, per the product rule: "PLATFORM IDENTITY -> PRIMARY PLATFORM ->
- * DATA CONNECTION..." — exactly one platform is ever Primary, selecting more
- * never loses an earlier selection, and changing Primary reorders without
- * deleting anything.
+ * Integration tests for onboarding Step 1 — single-select primary platform.
+ * Renders the real OnboardingPage component (not a re-implementation) so
+ * these exercise the shipped state machine: exactly one platform is ever
+ * selected (it becomes Primary), brand-new users save only that platform,
+ * and returning users keep their already-saved secondaries, reordered behind
+ * the chosen primary, never deleted or duplicated.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
@@ -22,6 +21,7 @@ HTMLCanvasElement.prototype.getContext = () => ({
 
 const mockUpserts = []
 let mockUpsertError = null
+let mockProfile = { plan: 'free', streaming_platforms: null, primary_pro_platform: null }
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     auth: {
@@ -34,7 +34,7 @@ jest.mock('../../../lib/supabase', () => ({
         eq: () => chain,
         single: async () => {
           if (table === 'beta_users') return { data: { onboarding_complete: false } }
-          if (table === 'profiles') return { data: { plan: 'free', streaming_platforms: null, primary_pro_platform: null } }
+          if (table === 'profiles') return { data: mockProfile }
           return { data: null }
         },
         upsert: jest.fn(async (v) => { mockUpserts.push({ table, v }); return { data: null, error: table === 'profiles' ? mockUpsertError : null } }),
@@ -44,91 +44,107 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }))
 jest.mock('../../../lib/track', () => ({ track: jest.fn() }))
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), replace: jest.fn() }) }))
+// One stable router object, as in the real app — a fresh object per render
+// would re-run the page's [router] effect and re-restore the saved selection
+// over the user's click.
+const mockRouter = { push: jest.fn(), replace: jest.fn() }
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }))
 
 import OnboardingPage from '../page.js'
 
-describe('Onboarding Step 1 — multi-platform + primary designation', () => {
-  test('A: selecting only Chaturbate makes it Primary and shows "Continue with 1 platform"', async () => {
+const NEW_USER = { plan: 'free', streaming_platforms: null, primary_pro_platform: null }
+const card = (name) => screen.getByRole('radio', { name: new RegExp(name) })
+
+describe('Onboarding Step 1 — single-select primary platform', () => {
+  beforeEach(() => { mockProfile = NEW_USER })
+
+  test('shows the new headline and the shared PLATFORM / IMPORT / INSIGHTS stepper', async () => {
     render(<OnboardingPage />)
-    const cbCard = await screen.findByText('Chaturbate')
-    fireEvent.click(cbCard)
-    await waitFor(() => expect(screen.getByText(/Primary platform: Chaturbate/)).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /Continue with 1 platform/ })).toBeInTheDocument()
+    expect(await screen.findByText('Choose your primary platform')).toBeInTheDocument()
+    expect(screen.getByText('Platform')).toHaveAttribute('aria-current', 'step')
+    expect(screen.getByText('Import')).not.toHaveAttribute('aria-current')
+    expect(screen.getByText('Insights')).not.toHaveAttribute('aria-current')
+    expect(screen.queryByText(/Step 1 of 3/)).not.toBeInTheDocument()
+    expect(screen.getByText('You can add more platforms later.')).toBeInTheDocument()
   })
 
-  test('B: selecting Chaturbate then BongaCams keeps Chaturbate Primary, BongaCams Secondary', async () => {
+  test('A: selecting Chaturbate selects only it and the CTA names it', async () => {
     render(<OnboardingPage />)
     fireEvent.click(await screen.findByText('Chaturbate'))
-    fireEvent.click(await screen.findByText('BongaCams'))
-    await waitFor(() => expect(screen.getByText(/Primary platform: Chaturbate/)).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Make BongaCams primary/ })).toBeInTheDocument()
+    await waitFor(() => expect(card('Chaturbate')).toHaveAttribute('aria-checked', 'true'))
+    expect(card('BongaCams')).toHaveAttribute('aria-checked', 'false')
+    expect(card('MyFreeCams')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: 'Continue with Chaturbate →' })).toBeEnabled()
   })
 
-  test('C: selecting all three platforms shows exactly one Primary and "3 / 3" coverage', async () => {
+  test('B: selecting another platform replaces the selection (never two selected)', async () => {
     render(<OnboardingPage />)
     fireEvent.click(await screen.findByText('Chaturbate'))
-    fireEvent.click(await screen.findByText('BongaCams'))
-    fireEvent.click(await screen.findByText('MyFreeCams'))
-    await waitFor(() => expect(screen.getByText(/Primary platform: Chaturbate/)).toBeInTheDocument())
-    expect(screen.getByText('3 / 3')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Continue with 3 platforms/ })).toBeInTheDocument()
-    // Only one "Primary" badge should be rendered among the three cards
-    expect(screen.getAllByText('Primary')).toHaveLength(1)
-  })
-
-  test('D: "Make primary" moves the designation without losing the other selection', async () => {
-    render(<OnboardingPage />)
-    fireEvent.click(await screen.findByText('Chaturbate'))
-    fireEvent.click(await screen.findByText('BongaCams'))
-    await waitFor(() => screen.getByRole('button', { name: /Make BongaCams primary/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Make BongaCams primary/ }))
-    await waitFor(() => expect(screen.getByText(/Primary platform: BongaCams/)).toBeInTheDocument())
-    // Chaturbate must still be selected (not lost), now offered as the one to make primary
-    expect(screen.getByRole('button', { name: /Make Chaturbate primary/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
-  })
-
-  test('deselecting a platform removes it from the count without crashing', async () => {
-    render(<OnboardingPage />)
-    fireEvent.click(await screen.findByText('Chaturbate'))
-    fireEvent.click(await screen.findByText('BongaCams'))
-    await waitFor(() => expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument())
     fireEvent.click(screen.getByText('BongaCams'))
-    await waitFor(() => expect(screen.getByRole('button', { name: /Continue with 1 platform/ })).toBeInTheDocument())
-    expect(screen.getByText(/Primary platform: Chaturbate/)).toBeInTheDocument()
+    await waitFor(() => expect(card('BongaCams')).toHaveAttribute('aria-checked', 'true'))
+    expect(card('Chaturbate')).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Continue with BongaCams →' })).toBeInTheDocument()
+  })
+
+  test('C: clicking all three in turn still leaves exactly one selected — the last', async () => {
+    render(<OnboardingPage />)
+    fireEvent.click(await screen.findByText('Chaturbate'))
+    fireEvent.click(screen.getByText('BongaCams'))
+    fireEvent.click(screen.getByText('MyFreeCams'))
+    await waitFor(() => expect(card('MyFreeCams')).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1)
+  })
+
+  test('D: multi-select UI is gone (count, x / 3, primary box, make-primary)', async () => {
+    render(<OnboardingPage />)
+    fireEvent.click(await screen.findByText('Chaturbate'))
+    await waitFor(() => expect(card('Chaturbate')).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.queryByText(/platforms? selected/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\/ 3/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Primary platform:/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Make .* primary/ })).not.toBeInTheDocument()
+  })
+
+  test('re-clicking the selected platform keeps it selected (no deselect into an empty state)', async () => {
+    render(<OnboardingPage />)
+    fireEvent.click(await screen.findByText('Chaturbate'))
+    fireEvent.click(screen.getByText('Chaturbate'))
+    await waitFor(() => expect(card('Chaturbate')).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.getByRole('button', { name: 'Continue with Chaturbate →' })).toBeEnabled()
   })
 
   test('no platform selected: CTA is disabled and does not claim a platform', async () => {
     render(<OnboardingPage />)
     await screen.findByText('Chaturbate')
-    expect(screen.getByRole('button', { name: 'Select a platform to continue' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Choose a platform' })).toBeDisabled()
   })
 })
 
 describe('Onboarding Step 1 — saving platforms and the permanent primary', () => {
   const okJson = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
-  beforeEach(() => { mockUpserts.length = 0; mockUpsertError = null; global.fetch = jest.fn() })
+  beforeEach(() => { mockUpserts.length = 0; mockUpsertError = null; mockProfile = NEW_USER; global.fetch = jest.fn() })
   const profileUpserts = () => mockUpserts.filter((u) => u.table === 'profiles').map((u) => u.v)
   async function chooseAndContinue() {
     render(<OnboardingPage />)
-    fireEvent.click(await screen.findByText('BongaCams'))
     fireEvent.click(await screen.findByText('Chaturbate'))
-    fireEvent.click(await screen.findByRole('button', { name: /Continue with 2 platforms/ }))
+    fireEvent.click(await screen.findByText('BongaCams'))
+    fireEvent.click(await screen.findByRole('button', { name: /Continue with BongaCams/ }))
   }
 
   test('browser saves only streaming_platforms; the primary goes through the server route', async () => {
     global.fetch.mockResolvedValue(okJson(200, { primary_pro_platform: 'bongacams' }))
     await chooseAndContinue()
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams', 'chaturbate'] }])
+    // Brand-new user: only the selected primary is saved — the earlier click
+    // on Chaturbate was replaced, not kept as a secondary.
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams'] }])
     expect(profileUpserts()[0]).not.toHaveProperty('primary_pro_platform')
     const [url, init] = global.fetch.mock.calls[0]
     expect(url).toBe('/api/profile/primary-platform')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ platform: 'bongacams' })
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with 2 platforms/ })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with BongaCams/ })).not.toBeInTheDocument())
     expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
   })
 
@@ -136,10 +152,10 @@ describe('Onboarding Step 1 — saving platforms and the permanent primary', () 
     global.fetch.mockResolvedValueOnce(okJson(500, { error: 'Could not save your primary platform.' }))
     await chooseAndContinue()
     expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('Could not save your primary platform.')
-    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue with BongaCams/ })).toBeInTheDocument()
     global.fetch.mockResolvedValueOnce(okJson(200, { primary_pro_platform: 'bongacams' }))
-    fireEvent.click(screen.getByRole('button', { name: /Continue with 2 platforms/ }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with 2 platforms/ })).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /Continue with BongaCams/ }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with BongaCams/ })).not.toBeInTheDocument())
     expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
@@ -147,20 +163,20 @@ describe('Onboarding Step 1 — saving platforms and the permanent primary', () 
     global.fetch.mockRejectedValueOnce(new Error('offline'))
     await chooseAndContinue()
     expect(await screen.findByTestId('primary-save-error')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue with BongaCams/ })).toBeInTheDocument()
   })
 
   test('409 for a DIFFERENT stored primary is shown, not treated as success', async () => {
     global.fetch.mockResolvedValueOnce(okJson(409, { error: 'Your primary platform is already set and cannot be changed.', primary_pro_platform: 'myfreecams' }))
     await chooseAndContinue()
     expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('already set')
-    expect(screen.getByRole('button', { name: /Continue with 2 platforms/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue with BongaCams/ })).toBeInTheDocument()
   })
 
   test('409 for the SAME stored primary (retry after an earlier success) continues', async () => {
     global.fetch.mockResolvedValueOnce(okJson(409, { primary_pro_platform: 'bongacams' }))
     await chooseAndContinue()
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with 2 platforms/ })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Continue with BongaCams/ })).not.toBeInTheDocument())
     expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
   })
 
@@ -169,5 +185,48 @@ describe('Onboarding Step 1 — saving platforms and the permanent primary', () 
     await chooseAndContinue()
     expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('could not save your platforms')
     expect(global.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('Onboarding Step 1 — returning users keep saved secondary platforms', () => {
+  const okJson = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
+  beforeEach(() => { mockUpserts.length = 0; mockUpsertError = null; global.fetch = jest.fn().mockResolvedValue(okJson(200, {})) })
+  const profileUpserts = () => mockUpserts.filter((u) => u.table === 'profiles').map((u) => u.v)
+
+  test('restored primary is pre-selected; only one card is selected', async () => {
+    mockProfile = { plan: 'free', streaming_platforms: ['BongaCams', 'MyFreeCams', 'Chaturbate'], primary_pro_platform: null }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(card('BongaCams')).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1)
+  })
+
+  test('choosing a new primary reorders saved secondaries behind it, no deletes, no duplicates', async () => {
+    mockProfile = { plan: 'free', streaming_platforms: ['BongaCams', 'MyFreeCams', 'Chaturbate'], primary_pro_platform: null }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(card('BongaCams')).toHaveAttribute('aria-checked', 'true'))
+    fireEvent.click(screen.getByText('Chaturbate'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['chaturbate', 'bongacams', 'myfreecams'] }])
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ platform: 'chaturbate' })
+  })
+
+  test('keeping the restored primary saves the full saved list unchanged in order', async () => {
+    mockProfile = { plan: 'free', streaming_platforms: ['MyFreeCams', 'BongaCams'], primary_pro_platform: 'bongacams' }
+    render(<OnboardingPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue with BongaCams →' }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
+    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams', 'myfreecams'] }])
+  })
+
+  test('saved secondaries are not walked through in onboarding — only the primary is connected', async () => {
+    mockProfile = { plan: 'free', streaming_platforms: ['BongaCams', 'MyFreeCams', 'Chaturbate'], primary_pro_platform: null }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(card('BongaCams')).toHaveAttribute('aria-checked', 'true'))
+    fireEvent.click(screen.getByText('Chaturbate'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
+    // Lands on the primary's connect step with no "(1 of N)" queue position.
+    expect(await screen.findByText(/Step 2 of 3 — Chaturbate/)).toBeInTheDocument()
+    expect(screen.queryByText(/\(1 of \d\)/)).not.toBeInTheDocument()
   })
 })

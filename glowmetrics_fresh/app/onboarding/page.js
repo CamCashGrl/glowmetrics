@@ -634,7 +634,7 @@ function OBLogo({showSub=false}){
 }
 
 function OBProgress({current}){
-  const steps=[{n:1,label:'Stats'},{n:2,label:'Tips'},{n:3,label:'Done'}]
+  const steps=[{n:1,label:'Platform'},{n:2,label:'Import'},{n:3,label:'Insights'}]
   return(
     <div className="ob-stepper" style={{marginBottom:14}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
@@ -654,8 +654,8 @@ function OBProgress({current}){
           </div>
         ))}
       </div>
-      <div className="ob-stepper-labels" style={{display:'flex',justifyContent:'space-between',maxWidth:250,margin:'0 auto'}}>
-        {steps.map(s=>(<div key={s.n} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:s.n<=current?`rgba(33,230,243,0.9)`:'rgba(255,255,255,0.2)',transition:'all 0.35s'}}>{s.label}</div>))}
+      <div className="ob-stepper-step-labels" style={{display:'flex',justifyContent:'space-between',maxWidth:280,margin:'0 auto'}}>
+        {steps.map(s=>(<div key={s.n} aria-current={s.n===current?'step':undefined} style={{width:60,textAlign:'center',fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.12em',color:s.n===current?CYAN:s.n<current?'rgba(33,230,243,0.7)':'rgba(255,255,255,0.28)',textShadow:s.n===current?'0 0 10px rgba(33,230,243,0.55)':'none',transition:'all 0.35s'}}>{s.label}</div>))}
       </div>
     </div>
   )
@@ -709,11 +709,16 @@ export default function OnboardingPage(){
   const[userPlan,setUserPlan]=useState('free')
 
   const[step,setStep]=useState('platforms')
-  // selectedPlatforms order IS the primary/secondary order: index 0 is
-  // always Primary. Selecting a platform appends it; "make primary" moves
-  // it to index 0. This is the single source of truth for primary/secondary
-  // status — there is no separate primaryPlatformId to keep in sync.
+  // selectedPlatforms is this session's connect queue. Step 1 is single
+  // select, so it only ever holds the chosen primary — secondary platforms
+  // are added later inside CamCash, not walked through here. Index 0 is
+  // always Primary and is the single source of truth for it — there is no
+  // separate primaryPlatformId to keep in sync.
   const[selectedPlatforms,setSelectedPlatforms]=useState([])
+  // Platforms already saved in profiles.streaming_platforms (primary-first,
+  // lowercase ids) for a returning user. Kept only so Step 1's save
+  // preserves existing secondaries instead of overwriting them.
+  const[savedPlatforms,setSavedPlatforms]=useState([])
   // Which position in selectedPlatforms is currently being connected.
   const[queueIndex,setQueueIndex]=useState(0)
   // Per-platform outcome once its connect step finishes (connected or
@@ -775,7 +780,8 @@ export default function OnboardingPage(){
       if(saved.length){
         const storedPrimary=profile?.primary_pro_platform?String(profile.primary_pro_platform).toLowerCase():null
         const primary=storedPrimary&&saved.includes(storedPrimary)?storedPrimary:saved[0]
-        setSelectedPlatforms([primary,...saved.filter(id=>id!==primary)])
+        setSavedPlatforms([...new Set([primary,...saved])])
+        setSelectedPlatforms([primary])
       }
       setUser(user);setBooting(false)
     })()
@@ -821,12 +827,10 @@ export default function OnboardingPage(){
     await supabase.from('beta_users').upsert({user_id:user.id,email:user.email,onboarding_complete:true,signed_up_at:user.created_at},{onConflict:'user_id'})
   }
 
-  // ── Multi-platform selection (Step 1) ──────────────────────────
-  function togglePlatform(id){
-    setSelectedPlatforms(prev=>prev.includes(id)?prev.filter(p=>p!==id):[...prev,id])
-  }
-  function makePrimary(id){
-    setSelectedPlatforms(prev=>prev.includes(id)?[id,...prev.filter(p=>p!==id)]:prev)
+  // ── Primary platform selection (Step 1, single select) ─────────
+  function selectPrimary(id){
+    if(selectedPlatforms[0]===id&&selectedPlatforms.length===1)return
+    setSelectedPlatforms([id])
     track('onboarding_primary_platform_selected',{platform:id})
   }
 
@@ -840,8 +844,11 @@ export default function OnboardingPage(){
     if(!selectedPlatforms.length)return
     if(user){
       setPrimarySaveError('')
+      // Chosen primary first, then any secondaries the user already had saved
+      // (never dropped, never duplicated). Brand-new users save just [primary].
+      const platformsToSave=[...new Set([selectedPlatforms[0],...savedPlatforms])]
       // Browser saves only the platform list; the permanent primary is set only by the server route.
-      const{error:listErr}=await supabase.from('profiles').upsert({id:user.id,streaming_platforms:selectedPlatforms},{onConflict:'id'})
+      const{error:listErr}=await supabase.from('profiles').upsert({id:user.id,streaming_platforms:platformsToSave},{onConflict:'id'})
       if(listErr){setPrimarySaveError('We could not save your platforms. Please try again.');return}
       const res=await fetch('/api/profile/primary-platform',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:selectedPlatforms[0]})}).catch(()=>null)
       const body=res?await res.json().catch(()=>({})):{}
@@ -1183,74 +1190,40 @@ export default function OnboardingPage(){
             </header>
           )}
 
-          {/* ══ PLATFORMS (multi-select + primary) ══ */}
+          {/* ══ PLATFORMS (single select — primary only) ══ */}
           {step==='platforms'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 1 of 3</div>
-              <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>Tell us where you stream</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>Select all platforms you stream on. Your primary platform will shape your personalized insights.</p>
+              <div style={{textAlign:'center',marginBottom:14}}>
+                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:6}}>Choose your primary platform</h1>
+                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.5,maxWidth:380,margin:'0 auto'}}>We’ll use this to personalize your import and first insights. You can add other platforms later.</p>
               </div>
-              <div style={{marginBottom:16}}>
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:9,letterSpacing:'0.08em',textTransform:'uppercase'}}>Your platforms</div>
-                <div className="ob-plat-row" style={{display:'flex',gap:9}}>
-                  {Object.entries(PLATFORMS).map(([key,p])=>{
-                    const sel=selectedPlatforms.includes(key)
-                    const isPrimary=selectedPlatforms[0]===key
-                    return(
-                      <button key={key} onClick={()=>togglePlatform(key)} style={{
-                        flex:1,padding:'12px 8px',borderRadius:14,textAlign:'center',
-                        background:sel?'rgba(33,230,243,0.09)':'rgba(255,255,255,0.03)',
-                        border:sel?`1.5px solid rgba(33,230,243,0.85)`:'1px solid rgba(255,255,255,0.09)',
-                        boxShadow:sel?'0 0 22px rgba(33,230,243,0.22),inset 0 1px 0 rgba(255,255,255,0.08)':'none',
-                        cursor:'pointer',transition:'all 0.22s',position:'relative',
-                      }}
-                      onMouseEnter={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
-                      onMouseLeave={e=>{if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.09)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
-                      >
-                        {sel&&<div style={{position:'absolute',top:9,right:9,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 14px rgba(33,230,243,0.6)'}}>✓</div>}
-                        {isPrimary&&<div style={{position:'absolute',top:9,left:9,padding:'2px 6px',borderRadius:6,background:GRAD,fontSize:7,fontWeight:900,letterSpacing:'0.06em',color:'#fff',textTransform:'uppercase'}}>Primary</div>}
-                        <div style={{width:44,height:44,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 10px',...p.iconStyle}}>{p.short}</div>
-                        <div style={{fontSize:12,fontWeight:700,color:sel?'#fff':'rgba(255,255,255,0.5)'}}>{p.label}</div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {selectedPlatforms.length>0&&(
-                <div style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.06)',padding:'12px 14px',marginBottom:14}}>
-                  <div style={{display:'flex',alignItems:'center',gap:9}}>
-                    <span style={{fontSize:16}}>👑</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:12,fontWeight:800,color:'#fff'}}>Primary platform: {PLATFORMS[primaryPlatformId].label}</div>
-                      <div style={{fontSize:10,color:'rgba(148,163,184,0.75)',lineHeight:1.5}}>We'll use this to personalize your experience and show your most relevant insights first.</div>
-                    </div>
-                  </div>
-                  {selectedPlatforms.length>1&&(
-                    <div style={{display:'flex',gap:6,marginTop:9,flexWrap:'wrap'}}>
-                      {selectedPlatforms.slice(1).map(id=>(
-                        <button key={id} onClick={()=>makePrimary(id)} style={{fontSize:10,fontWeight:700,color:CYAN,background:'rgba(33,230,243,0.08)',border:'1px solid rgba(33,230,243,0.25)',borderRadius:8,padding:'4px 9px',cursor:'pointer'}}>Make {PLATFORMS[id].label} primary</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div style={{marginBottom:20}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                  <span style={{fontSize:11,color:'rgba(148,163,184,0.75)'}}>{selectedPlatforms.length} platform{selectedPlatforms.length===1?'':'s'} selected</span>
-                  <span style={{fontSize:11,color:CYAN,fontWeight:700}}>{selectedPlatforms.length} / 3</span>
-                </div>
-                <div style={{height:7,borderRadius:100,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)',overflow:'hidden'}}>
-                  <div style={{height:'100%',width:`${(selectedPlatforms.length/3)*100}%`,background:GRAD,borderRadius:100,boxShadow:selectedPlatforms.length?'0 0 12px rgba(33,230,243,0.4)':'none',transition:'width 0.25s ease'}}/>
-                </div>
+              <div className="ob-plat-row" role="radiogroup" aria-label="Primary platform" style={{display:'flex',gap:10,marginBottom:16}}>
+                {Object.entries(PLATFORMS).map(([key,p])=>{
+                  const sel=selectedPlatforms[0]===key
+                  return(
+                    <button key={key} role="radio" aria-checked={sel} onClick={()=>selectPrimary(key)} style={{
+                      flex:1,padding:'14px 8px 12px',borderRadius:16,textAlign:'center',
+                      background:sel?'linear-gradient(180deg,rgba(33,230,243,0.11),rgba(124,92,255,0.08))':'rgba(255,255,255,0.03)',
+                      border:sel?'1.5px solid rgba(33,230,243,0.9)':'1px solid rgba(255,255,255,0.10)',
+                      boxShadow:sel?'0 0 0 1px rgba(124,92,255,0.25),0 0 18px rgba(33,230,243,0.28),0 0 34px rgba(124,92,255,0.18),inset 0 1px 0 rgba(255,255,255,0.10)':'inset 0 1px 0 rgba(255,255,255,0.04)',
+                      cursor:'pointer',transition:'all 0.2s ease',position:'relative',
+                    }}
+                    onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
+                    onMouseLeave={e=>{e.currentTarget.style.transform='';if(!sel){e.currentTarget.style.borderColor='rgba(255,255,255,0.10)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
+                    >
+                      {sel&&<div aria-hidden="true" style={{position:'absolute',top:8,right:8,width:18,height:18,borderRadius:'50%',background:CYAN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#04101b',boxShadow:'0 0 12px rgba(33,230,243,0.6)'}}>✓</div>}
+                      <div style={{width:50,height:50,borderRadius:15,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:900,margin:'0 auto 9px',...p.iconStyle}}>{p.short}</div>
+                      <div style={{fontSize:13,fontWeight:800,color:sel?'#fff':'rgba(226,232,240,0.78)'}}>{p.label}</div>
+                    </button>
+                  )
+                })}
               </div>
 
               {primarySaveError&&<div role="alert" data-testid="primary-save-error" style={{color:'#F87171',fontSize:13,marginBottom:10,textAlign:'center'}}>{primarySaveError} Tap Continue to retry.</div>}
-              <OBBtn onClick={confirmPlatforms} disabled={!selectedPlatforms.length} style={{marginBottom:10}}>
-                {selectedPlatforms.length?`Continue with ${selectedPlatforms.length} platform${selectedPlatforms.length===1?'':'s'} →`:'Select a platform to continue'}
+              <OBBtn onClick={confirmPlatforms} disabled={!primaryPlatformId} style={primaryPlatformId?{}:{color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>
+                {primaryPlatformId?`Continue with ${PLATFORMS[primaryPlatformId].label} →`:'Choose a platform'}
               </OBBtn>
+              <div style={{marginTop:10,textAlign:'center',fontSize:11,color:'rgba(148,163,184,0.65)'}}>You can add more platforms later.</div>
             </div>
           )}
 
