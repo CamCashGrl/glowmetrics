@@ -9,6 +9,7 @@ jest.mock('next/server', () => ({
 }))
 
 let rpcCalls
+let mockPaidMode
 function mockSupabase() {
   const chain = { insert: jest.fn(async () => ({ error: null })), delete: jest.fn(() => chain), eq: jest.fn(async () => ({ error: null })) }
   return {
@@ -17,6 +18,8 @@ function mockSupabase() {
     rpc: jest.fn(async (name, params) => {
       rpcCalls.push({ name, params })
       if (name === 'insert_tips_dedup') return { data: { inserted: params.tips.length, skipped: 0 }, error: null }
+      if (name === 'insert_paid_sessions_dedup' && mockPaidMode==='failure') return {data:null,error:{message:'simulated paid storage failure'}}
+      if (name === 'insert_paid_sessions_dedup' && mockPaidMode==='duplicate') return {data:{inserted:0,skipped:params.sessions.length},error:null}
       if (name === 'insert_paid_sessions_dedup') return { data: { inserted: (params.sessions || params.rows || []).length, skipped: 0 }, error: null }
       return { data: null, error: null }
     }),
@@ -41,7 +44,7 @@ function req(text, { name = 'upload.csv', platform, dateOrder } = {}) {
 const CLEAN = ['date_time,username,tokens', '2025-05-19 21:04,fanA,900', '2025-07-18 05:43,fanB,50'].join('\n')
 const insertedTips = () => rpcCalls.filter((c) => c.name === 'insert_tips_dedup').flatMap((c) => c.params.tips)
 
-beforeEach(() => { rpcCalls = [] })
+beforeEach(() => { rpcCalls = [];mockPaidMode='success' })
 
 describe('/api/upload platform labelling', () => {
   test('undetectable platform with no choice is rejected and nothing is written', async () => {
@@ -135,5 +138,31 @@ describe('/api/upload date order', () => {
     expect(res.status).toBe(400)
     expect((await res.json()).code).toBe('date_order_conflict')
     expect(insertedTips()).toHaveLength(0)
+  })
+})
+
+describe('Chaturbate category-aware persistence',()=>{
+  const raw='Oct 10, 2026, 8:00 PM\nPrivate Show: fanA\n857  1000'
+  test('private-only paste uses existing paid dedup RPC with actual response counts',async()=>{
+    const json=await (await upload(req(raw,{platform:'Chaturbate'}))).json()
+    expect(insertedTips()).toHaveLength(0)
+    expect(rpcCalls.find(c=>c.name==='insert_paid_sessions_dedup').params.sessions).toEqual([expect.objectContaining({username:'fana',session_type:'Private Show',tokens:857,usd:42.85})])
+    expect(json.paidSessionsInserted).toBe(1)
+    expect(json.onboardingSummary.full).toMatchObject({tips:0,usd:42.85,fans:1})
+  })
+  test('duplicate private RPC result is reported as skipped, not inserted',async()=>{
+    mockPaidMode='duplicate'
+    const json=await (await upload(req(raw,{platform:'Chaturbate'}))).json()
+    expect(json.paidSessionsInserted).toBe(0)
+    expect(json.paidSessionsSkipped).toBe(1)
+    expect(json.onboardingSummary.full.usd).toBe(42.85)
+  })
+  test('paid failure remains explicit even when tips succeed',async()=>{
+    mockPaidMode='failure'
+    const mixed=raw+'\nOct 10, 2026, 9:00 PM\nTip From: fanB\n10  1010'
+    const json=await (await upload(req(mixed,{platform:'Chaturbate'}))).json()
+    expect(json.inserted).toBe(1)
+    expect(json.paidSessionsInserted).toBe(0)
+    expect(json.paidSessionsWarnings).toEqual([expect.objectContaining({error:'simulated paid storage failure'})])
   })
 })
