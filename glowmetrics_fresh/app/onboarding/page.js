@@ -8,7 +8,7 @@ import { readUploadJson } from '../../lib/readUploadJson'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats, parseCSV } from '../../lib/analytics'
-import { summarizeOnboarding, importDate, assertImportComplete } from '../../lib/onboardingSummary'
+import { summarizeOnboarding, importDate, assertImportComplete, earningDateRange, formatDay } from '../../lib/onboardingSummary'
 import { FREE_ANALYSIS_WINDOW_DAYS } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
@@ -393,21 +393,22 @@ export function buildPreview(rawText,platformId,platformLabel,timeZone='UTC'){
     for(const r of parsed){
       const ts=importDate(r.date_time||r.dateRaw)
       if(isNaN(ts.getTime()))continue
-      if(r.is_paid_session)paidSessions.push({ts,username:r.username,sessionType:r.session_type,tokens:r.tokens,usd:r.usd})
-      else rows.push({ts,username:r.username,tokens:r.tokens,usd:r.usd,note:r.tip_note||'',tip_type:r.tip_type})
+      const date_time=r.date_time||r.dateRaw
+      if(r.is_paid_session)paidSessions.push({ts,date_time,username:r.username,sessionType:r.session_type,tokens:r.tokens,usd:r.usd})
+      else rows.push({ts,date_time,username:r.username,tokens:r.tokens,usd:r.usd,note:r.tip_note||'',tip_type:r.tip_type})
     }
   }else{
     rows=parseRows(rawText,platformId).rows
     paidSessions=parseBCPaidSessions(rawText).sessions
   }
   if(!rows.length&&!paidSessions.length)return null
-  const allRows=[...rows,...paidSessions.map(s=>({ts:s.ts,username:s.username,tokens:s.tokens,usd:s.usd,session_type:s.sessionType,is_paid_session:true}))]
+  const allRows=[...rows,...paidSessions.map(s=>({ts:s.ts,date_time:s.date_time,username:s.username,tokens:s.tokens,usd:s.usd,session_type:s.sessionType,is_paid_session:true}))]
   const summary=summarizeOnboarding(allRows,timeZone)
-  const dates=allRows.map(r=>r.ts).sort((a,b)=>a-b)
+  // Card date range: first → last earning day on the creator's clock.
+  const range=earningDateRange(allRows,timeZone)
   const fans=new Set(allRows.map(r=>(r.username||'').toLowerCase().trim()).filter(Boolean)).size
   const topSpender=Object.entries(allRows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
   const c=summary.full.categories
-  const fmtD=d=>d.toLocaleDateString('en-US',{timeZone,month:'short',day:'numeric',year:'numeric'})
   return{
     tipsDetected:c.tips.count,
     privateDetected:c.private.count,
@@ -419,10 +420,13 @@ export function buildPreview(rawText,platformId,platformLabel,timeZone='UTC'){
     estimatedEarnings:summary.full.usd,
     paidEarnings:c.private.usd,
     fansDetected:fans,
-    dateFrom:dates.length?fmtD(dates[0]):null,
-    dateTo:dates.length?fmtD(dates[dates.length-1]):null,
-    dateRange:dates.length?`${fmtD(dates[0])} – ${fmtD(dates[dates.length-1])}`:'—',
-    days:summary.full.days||0,
+    startDate:range?.startDate||null,
+    endDate:range?.endDate||null,
+    dateFrom:range?formatDay(range.startDate):null,
+    dateTo:range?formatDay(range.endDate):null,
+    dateRange:range?`${formatDay(range.startDate)} – ${formatDay(range.endDate)}`:'—',
+    // Inclusive calendar dates in the range (Sep 18 → Oct 9 = 22).
+    calendarDays:range?.calendarDays||0,
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
     bestHour:summary.bestHour,
     bestHourConfident:summary.bestHourConfident,
@@ -1539,7 +1543,7 @@ export default function OnboardingPage(){
                   </div>
                   <div className="ob-det-grid" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 1fr'}}>
                     {col('platform','Platform',platform.label,null,'#F1F5F9',true)}
-                    {col('range','Date range',range,preview.days?`${preview.days.toLocaleString('en-US')} day${preview.days===1?'':'s'}`:null,'#93C5FD')}
+                    {col('range','Date range',range,preview.calendarDays?`${preview.calendarDays.toLocaleString('en-US')} calendar day${preview.calendarDays===1?'':'s'}`:null,'#93C5FD')}
                     {col('total','Earnings detected',`$${preview.estimatedEarnings.toFixed(2)}`,null,'#4ade80')}
                   </div>
                 </div>

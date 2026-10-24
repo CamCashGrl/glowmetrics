@@ -59,3 +59,38 @@ test('response validation accepts dedup success and rejects partial paid failure
   expect(()=>assertImportComplete({ok:true,paidSessionsWarnings:[{error:'failed'}]})).toThrow(/Some rows could not be saved/)
   expect(()=>assertImportComplete({ok:false,warnings:[{error:'failed'}]})).toThrow()
 })
+
+// Step 2 date range (earningDay / earningDateRange / formatDay).
+describe('earning date range', () => {
+  const { earningDay, earningDateRange, formatDay } = require('../onboardingSummary')
+
+  test('offset-less export wall-clock time keeps its own date in every creator zone', () => {
+    for (const tz of ['UTC', 'America/Los_Angeles', 'Asia/Tokyo', 'Pacific/Auckland']) {
+      expect(earningDay({ date_time: '2026-10-09 05:33:00' }, tz)).toBe('2026-10-09')
+      expect(earningDay({ dateRaw: '2026-09-18 23:59:00' }, tz)).toBe('2026-09-18')
+    }
+  })
+
+  test('real instants (explicit offset or Date) are dated on the creator clock', () => {
+    expect(earningDay({ date_time: '2026-10-09T05:33:00Z' }, 'America/Los_Angeles')).toBe('2026-10-08')
+    expect(earningDay({ ts: new Date('2026-10-09T05:33:00Z') }, 'Asia/Tokyo')).toBe('2026-10-09')
+    expect(earningDay({ date_time: 'not a date' }, 'UTC')).toBeNull()
+  })
+
+  test('range is min → max earning day regardless of row order; calendar days are inclusive', () => {
+    const rows = [
+      { date_time: '2026-09-25 04:41:00' },
+      { date_time: '2026-10-09 05:33:00' },
+      { date_time: '2026-09-18 16:52:00' },
+      { date_time: '2026-10-09 05:25:00' },
+    ]
+    expect(earningDateRange(rows, 'America/Los_Angeles')).toEqual({ startDate: '2026-09-18', endDate: '2026-10-09', calendarDays: 22 })
+    expect(earningDateRange([{ date_time: '2026-10-09 05:33:00' }], 'UTC')).toEqual({ startDate: '2026-10-09', endDate: '2026-10-09', calendarDays: 1 })
+    expect(earningDateRange([], 'UTC')).toBeNull()
+  })
+
+  test('formatDay prints the calendar date as written', () => {
+    expect(formatDay('2026-09-18')).toBe('Sep 18, 2026')
+    expect(formatDay('2026-10-09')).toBe('Oct 9, 2026')
+  })
+})

@@ -44,6 +44,7 @@ jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }))
 import OnboardingPage, { buildPreview } from '../page.js'
 import { track } from '../../../lib/track'
 import { controlPaste } from '../../../lib/__tests__/fixtures/onboardingControl'
+import { CB_RECENT_EXPORT } from '../../../lib/__tests__/fixtures/chaturbateRecentExport'
 
 // ── Step 2 (Import) state machine + private-earnings correctness ───────────
 // Private earnings (Chaturbate private shows, BongaCams paid chats,
@@ -89,7 +90,7 @@ describe('Step 2 states', () => {
     expect(screen.queryByText(/HOW TO COPY FROM/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Step 2 of 3/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Open earnings page/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Upload CSV instead' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Upload CSV instead/ })).toBeInTheDocument()
     expect(screen.getByText('Import')).toHaveAttribute('aria-current', 'step')
   })
 
@@ -221,4 +222,111 @@ describe('private earnings are detected, kept out of tips, and persisted', () =>
     expect(screen.getByTestId('stat-private')).toHaveTextContent('95 private sessions')
     expect(screen.getByTestId('stat-memberships')).toHaveTextContent('$10.00')
   }, 20000)
+})
+
+// ── Step 2 summary card: real recent Chaturbate export (regression) ────────
+// The export's times are the creator's own wall-clock times. The card's date
+// range must be first → last EARNING event on that clock; it used to read the
+// times as UTC, so for a Pacific creator "Oct 9, 2026, 5:33 AM" showed as Oct 8.
+describe('Step 2 summary: real recent Chaturbate export', () => {
+  const LA = 'America/Los_Angeles'
+  const lines = CB_RECENT_EXPORT.split('\n')
+
+  test('count and earnings are unchanged: 176 earning rows, 1,171 tokens, $58.55', () => {
+    const p = buildPreview(CB_RECENT_EXPORT, 'chaturbate', 'Chaturbate', LA)
+    expect(p.transactionsDetected).toBe(176)
+    expect(p.tipsDetected).toBe(175)
+    expect(p.membershipsDetected).toBe(1)
+    expect(p.privateDetected).toBe(0)
+    const c = p.snapshot.full.categories
+    expect(c.tips.tokens + c.memberships.tokens).toBe(1171)
+    expect(p.estimatedEarnings).toBe(58.55)
+  })
+
+  test('date range is first → last earning event: Sep 18 – Oct 9, 2026, 22 calendar days', () => {
+    const p = buildPreview(CB_RECENT_EXPORT, 'chaturbate', 'Chaturbate', LA)
+    expect(p.startDate).toBe('2026-09-18')
+    expect(p.endDate).toBe('2026-10-09')
+    expect(p.dateFrom).toBe('Sep 18, 2026')
+    expect(p.dateTo).toBe('Oct 9, 2026')
+    // Inclusive calendar dates (Sep 18 … Oct 9), not elapsed days (21).
+    expect(p.calendarDays).toBe(22)
+  })
+
+  test('Oct 9 earnings are counted and dated Oct 9', () => {
+    const p = buildPreview(CB_RECENT_EXPORT, 'chaturbate', 'Chaturbate', LA)
+    const oct9 = p.rows.filter(r => String(r.date_time).startsWith('2026-10-09'))
+    expect(oct9.map(r => r.tokens)).toEqual([11, 2, 1, 1, 1])
+  })
+
+  test.each(['UTC', 'America/Los_Angeles', 'America/New_York', 'Asia/Tokyo', 'Pacific/Auckland'])(
+    'the creator timezone (%s) never moves the export\'s own calendar dates', (tz) => {
+      const p = buildPreview(CB_RECENT_EXPORT, 'chaturbate', 'Chaturbate', tz)
+      expect([p.startDate, p.endDate, p.calendarDays]).toEqual(['2026-09-18', '2026-10-09', 22])
+    })
+
+  test('transfers, outbound tips and admin deductions never set the range or count as income', () => {
+    const text = [
+      lines[0],
+      'Oct 12, 2026, 9:00 AM\t', 'Transfer tokens to $5.00 cash.', '-100\t0',
+      ...lines.slice(1),
+      'Sep 11, 2026, 1:00 PM\t', 'Outbound Tip: fan99', 'thank you', '-1\t3',
+      'Sep 10, 2026, 1:00 PM\t', 'Admin Adjustment: Deduction: Please email support for more information.', '-8\t0',
+    ].join('\n')
+    const p = buildPreview(text, 'chaturbate', 'Chaturbate', LA)
+    expect([p.startDate, p.endDate]).toEqual(['2026-09-18', '2026-10-09'])
+    expect(p.transactionsDetected).toBe(176)
+    expect(p.estimatedEarnings).toBe(58.55)
+  })
+
+  test('the detection card renders Sep 18 – Oct 9, 2026 for a Pacific creator', async () => {
+    const saved = mockProfile
+    mockProfile = { ...mockProfile, timezone: LA }
+    try {
+      const el = await toImport('Chaturbate')
+      paste(el, CB_RECENT_EXPORT)
+      const card = await screen.findByTestId('detected-summary')
+      expect(within(card).getByTestId('detected-count')).toHaveTextContent('176')
+      expect(within(card).getByTestId('detected-total')).toHaveTextContent('$58.55')
+      const range = within(card).getByTestId('detected-range')
+      expect(range).toHaveTextContent('Sep 18 – Oct 9, 2026')
+      expect(range).not.toHaveTextContent('Oct 8')
+      expect(range).toHaveTextContent('22 calendar days')
+    } finally {
+      mockProfile = saved
+    }
+  })
+})
+
+// ── Larger historical export shapes: parser must not crash ─────────────────
+// Synthetic rows in the shapes a long Chaturbate history contains. Only rows
+// the parser already recognizes as earnings may set the date range. (Spy Show
+// is not a recognized earning row today; this only checks it is never counted
+// as a regular tip.)
+describe('Step 2 summary: mixed historical Chaturbate rows', () => {
+  const text = [
+    'Date\tAction\tTokens\tToken Balance',
+    'Oct 3, 2026, 8:00 AM\t', 'Transfer tokens to $10.00 cash.', '-200\t0',
+    'Oct 2, 2026, 11:45 PM\t', 'Private Show: fanP', '120\t200',
+    'Oct 2, 2026, 11:10 PM\t', 'Spy Show: fanS', '30\t80',
+    'Oct 2, 2026, 10:00 PM\t', 'Snapchat Sale: fanQ', '40\t50',
+    'Oct 2, 2026, 9:30 PM\t', 'Fan Club Membership: fanM', '10\t10',
+    'Oct 1, 2026, 9:00 PM\t', 'Outbound Tip: fanO', 'thank you', '-1\t0',
+    'Oct 1, 2026, 8:00 PM\t', 'Admin Adjustment: Deduction: Please email support for more information.', '-5\t1',
+    'Oct 1, 2026, 7:00 PM\t', 'Promoted room for 10 minutes', '-50\t6',
+    'Sep 30, 2026, 6:15 AM\t', 'Tip From: fanT', 'hi', '6\t56',
+    'Sep 29, 2026, 4:00 PM\t', 'Transfer tokens to $2.50 cash.', '-50\t50',
+  ].join('\n')
+
+  test('does not crash; earning rows set the range; private shows are not tips', () => {
+    const p = buildPreview(text, 'chaturbate', 'Chaturbate', 'America/Los_Angeles')
+    expect(p).not.toBeNull()
+    expect(p.privateDetected).toBe(1)
+    expect(p.membershipsDetected).toBe(1)
+    expect(p.tipsDetected).toBe(1)
+    // A late-night private show is the last earning event and stays on Oct 2.
+    expect([p.startDate, p.endDate, p.calendarDays]).toEqual(['2026-09-30', '2026-10-02', 3])
+    expect(p.rows.some(r => r.username === 'fanS')).toBe(false)
+    expect(p.rows.every(r => r.tokens > 0)).toBe(true)
+  })
 })

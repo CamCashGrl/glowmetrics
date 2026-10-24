@@ -1,4 +1,5 @@
 import { computeSnapshotStats, toLocalHour } from './analytics'
+import { zonedYMD } from './creatorTimezone'
 
 // Display categories do not change storage, dedup keys, or session eligibility.
 export function earningCategory(row) {
@@ -13,6 +14,39 @@ export function importDate(value) {
   if(value instanceof Date)return value
   const text=String(value||'').replace(' ','T')
   return new Date(/^\d{4}-\d{2}-\d{2}T/.test(text)&&!/(Z|[+-]\d{2}:?\d{2})$/i.test(text)?text+'Z':text)
+}
+
+// Calendar date ('YYYY-MM-DD') of an earning row on the creator's clock.
+// Paste exports (Chaturbate, MyFreeCams) give offset-less wall-clock times that
+// are already the creator's local time, so the date is read as written. Reading
+// them through importDate() would treat them as UTC, and formatting that in a
+// US zone moved early-morning earnings to the previous day. Rows with an
+// explicit offset, or only a Date, are real instants dated in the creator zone.
+const WALL_CLOCK_RE = /^(\d{4}-\d{2}-\d{2})[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/
+export function earningDay(row, timeZone = 'UTC') {
+  const raw = row?.date_time ?? row?.dateRaw
+  const wall = typeof raw === 'string' && raw.trim().match(WALL_CLOCK_RE)
+  if (wall) return wall[1]
+  const date = importDate(raw ?? row?.ts ?? row?.date)
+  return isNaN(date.getTime()) ? null : zonedYMD(date, timeZone)
+}
+
+// Date range of imported earning rows: first and last earning day, and the
+// number of calendar dates it covers counted inclusively (Sep 18 → Oct 9 is
+// 22). Pass earning rows only; transfers, outbound tips, admin adjustments and
+// promotions are never parsed into rows, so they cannot move the range.
+export function earningDateRange(rows, timeZone = 'UTC') {
+  const days = rows.map(r => earningDay(r, timeZone)).filter(Boolean).sort()
+  if (!days.length) return null
+  const startDate = days[0], endDate = days[days.length - 1]
+  const utcMidnight = ymd => Date.UTC(+ymd.slice(0, 4), +ymd.slice(5, 7) - 1, +ymd.slice(8, 10))
+  return { startDate, endDate, calendarDays: Math.round((utcMidnight(endDate) - utcMidnight(startDate)) / 86400000) + 1 }
+}
+
+// 'YYYY-MM-DD' → 'Sep 18, 2026'. Already a calendar date, so no zone shift.
+export function formatDay(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export function summarizeOnboarding(rows, timeZone = 'UTC') {
