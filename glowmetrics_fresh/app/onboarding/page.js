@@ -1813,62 +1813,67 @@ export default function OnboardingPage(){
             ].filter(Boolean)
             const kpi=(label,value,sub,color)=>(
               <div className="ob-kpi" style={{minWidth:0}}>
-                <div style={{fontSize:9.5,color:'rgba(148,163,184,0.75)',textTransform:'uppercase',letterSpacing:'0.08em',fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{label}</div>
-                <div style={{fontSize:18,fontWeight:900,color,marginTop:4,lineHeight:1.1,whiteSpace:'nowrap'}}>{value}</div>
-                {sub&&<div style={{fontSize:10,color:'rgba(148,163,184,0.75)',marginTop:3,lineHeight:1.3}}>{sub}</div>}
+                <div style={{fontSize:10,color:'rgba(148,163,184,0.75)',textTransform:'uppercase',letterSpacing:'0.06em',fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{label}</div>
+                <div style={{fontSize:20,fontWeight:900,color,marginTop:3,lineHeight:1.1,whiteSpace:'nowrap'}}>{value}</div>
+                {sub&&<div style={{fontSize:9,color:'rgba(148,163,184,0.75)',marginTop:3,lineHeight:1.25}}>{sub}</div>}
               </div>)
             const bars=(
               <svg aria-hidden="true" width="58" height="34" viewBox="0 0 58 34" style={{flexShrink:0}}>
                 {[[4,18,'#22d3ee'],[16,26,'#60a5fa'],[28,14,'#a78bfa'],[40,30,'#c026d3'],[52,22,'#ff2fae']].map(([x,h,c],i)=>(
                   <rect key={i} x={x} y={34-h} width="7" height={h} rx="2" fill={c} opacity="0.85"/>))}
               </svg>)
+            const blueBars=(
+              <svg aria-hidden="true" width="30" height="26" viewBox="0 0 30 26" style={{flexShrink:0}}>
+                {[[2,10,'#38bdf8'],[11,16,'#3b82f6'],[20,24,'#60a5fa']].map(([x,h,c],i)=>(
+                  <rect key={i} x={x} y={26-h} width="7" height={h} rx="2" fill={c} opacity="0.9"/>))}
+              </svg>)
             return(
-            <div data-testid="step4-insights" style={{animation:'fadeUp 0.35s ease both',display:'flex',flexDirection:'column',gap:12}}>
+            <div data-testid="step4-insights" style={{animation:'fadeUp 0.35s ease both',display:'flex',flexDirection:'column',gap:8,padding:'0 4px'}}>
               <div style={{textAlign:'center'}}>
-                <h1 style={{fontSize:21,fontWeight:900,color:'#fff',marginBottom:3,lineHeight:1.2}}>Your {platform.label} data is ready!</h1>
-                <p style={{fontSize:12.5,color:'rgba(148,163,184,0.8)'}}>Here’s a first look at your insights.</p>
+                <h1 style={{fontSize:22,fontWeight:800,color:'#fff',marginBottom:0,lineHeight:1.15}}>Your {platform.label} data is ready!</h1>
+                <p style={{fontSize:13,color:'rgba(148,163,184,0.8)',marginTop:4}}>Here’s a first look at your insights.</p>
               </div>
 
-              <div data-testid="step4-stats" className="insights-kpi-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:10}}>
+              <div data-testid="step4-stats" className="insights-kpi-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:8}}>
                 <div data-testid="stat-earnings" className="ob-kpi-card">
                   {kpi('Total earnings',`$${earnings.toFixed(2)}`,extraParts.length?`Includes ${extraParts.join(' and ')}`:null,'#4ade80')}
                 </div>
                 <div data-testid="stat-tips" className="ob-kpi-card">
-                  {kpi('Tips',tipCount.toLocaleString('en-US'),'Regular tips only',CYAN)}
+                  {kpi('Tips',tipCount.toLocaleString('en-US'),`from ${(full?.fans||0).toLocaleString('en-US')} unique fans`,CYAN)}
                 </div>
                 <div data-testid="step4-date-range" className="ob-kpi-card">
                   {kpi('Date range',range?.calendarDays?`${range.calendarDays.toLocaleString('en-US')} days`:'—',range?.dateFrom&&range?.dateTo?`${range.dateFrom} – ${range.dateTo}`:null,'#93C5FD')}
                 </div>
                 <div className="ob-kpi-card">
-                  {kpi('Avg. $/hour',hourly!==null?`$${hourly.toFixed(2)}`:'—',hourly!==null?'Estimated':'Not enough data yet',PINK)}
+                  {kpi('Avg. $/hour',hourly!==null?`$${hourly.toFixed(2)}`:'—',hourly!==null?`Estimated · ${rate.hourlyRateSessionCount} sessions`:'Not enough data yet',PINK)}
                 </div>
               </div>
 
-              <div data-testid="step4-best-time" className="ob-s4-card" style={{display:'flex',alignItems:'center',gap:12,minHeight:84,padding:'12px 14px',borderRadius:12,border:'1px solid rgba(33,230,243,0.25)',background:'rgba(33,230,243,0.05)',textAlign:'left'}}>
-                <div aria-hidden="true" style={{width:32,height:32,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(33,230,243,0.12)',color:CYAN,fontSize:15}}>📊</div>
+              <div data-testid="step4-best-time" className="ob-s4-card" style={{display:'flex',alignItems:'center',gap:12,minHeight:72,padding:'10px 14px',borderRadius:12,border:'1px solid rgba(33,230,243,0.25)',background:'rgba(33,230,243,0.05)',textAlign:'left'}}>
+                {blueBars}
                 <div style={{flex:1,minWidth:0}}>
                   {best?(<>
-                    {!confident&&<span data-testid="early-signal" style={{display:'inline-block',fontSize:8.5,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fbbf24',border:'1px solid rgba(251,191,36,0.5)',borderRadius:5,padding:'1px 6px',marginBottom:4}}>Early signal</span>}
-                    <div style={{fontSize:13.5,fontWeight:800,color:'#fff',lineHeight:1.3}}>Your biggest tips land around <span style={{color:PINK}}>{hourLabel(best.localHour)}</span></div>
-                    <div style={{fontSize:11,color:'rgba(148,163,184,0.85)',marginTop:3,lineHeight:1.4}}>{confident?'Your earnings tend to be strongest around this hour, based on your streaming data.':`Based on ${best.sessionCount} session${best.sessionCount===1?'':'s'} so far. More streaming history will confirm it.`}</div>
+                    {!confident&&<span data-testid="early-signal" style={{display:'inline-block',fontSize:8,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fbbf24',border:'1px solid rgba(251,191,36,0.5)',borderRadius:5,padding:'1px 6px',marginBottom:3}}>Early signal</span>}
+                    <div style={{fontSize:13,fontWeight:800,color:'#fff',lineHeight:1.25}}>Your biggest tips land around <span style={{color:PINK}}>{hourLabel(best.localHour)}</span></div>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',marginTop:2,lineHeight:1.35}}>{confident?'Your earnings tend to be strongest around this hour, based on your streaming data.':`Based on ${best.sessionCount} session${best.sessionCount===1?'':'s'} so far. More streaming history will confirm it.`}</div>
                   </>):(<>
-                    <div style={{fontSize:13,fontWeight:800,color:'#fff'}}>We need a little more history</div>
-                    <div style={{fontSize:11,color:'rgba(148,163,184,0.85)',marginTop:3}}>to find your best streaming time.</div>
+                    <div style={{fontSize:12.5,fontWeight:800,color:'#fff'}}>We need a little more history</div>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',marginTop:2}}>to find your best streaming time.</div>
                   </>)}
                 </div>
                 {bars}
               </div>
 
-              <div data-testid="step4-free-note" className="ob-s4-card" style={{display:'flex',alignItems:'center',gap:12,minHeight:70,padding:'10px 14px',borderRadius:12,border:'1px solid rgba(124,92,255,0.3)',background:'rgba(124,92,255,0.05)',textAlign:'left'}}>
-                <div aria-hidden="true" style={{width:32,height:32,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(124,92,255,0.14)',fontSize:15}}>🗄️</div>
-                <div style={{fontSize:11,color:'rgba(203,213,225,0.9)',lineHeight:1.45}}>
-                  <div style={{fontSize:12.5,fontWeight:800,color:'#fff',marginBottom:2}}>Your full history is safely stored.</div>
+              <div data-testid="step4-free-note" className="ob-s4-card" style={{display:'flex',alignItems:'center',gap:10,minHeight:58,padding:'8px 12px',borderRadius:12,border:'1px solid rgba(124,92,255,0.3)',background:'rgba(124,92,255,0.05)',textAlign:'left'}}>
+                <div aria-hidden="true" style={{width:26,height:26,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(124,92,255,0.14)',fontSize:13}}>🗄️</div>
+                <div style={{fontSize:10,color:'rgba(203,213,225,0.9)',lineHeight:1.35}}>
+                  <div style={{fontSize:11.5,fontWeight:800,color:'#fff',marginBottom:1}}>{range?.calendarDays?`All ${range.calendarDays.toLocaleString('en-US')} days are safely stored.`:'Your full history is safely stored.'}</div>
                   Free includes full history for your primary platform. Additional platforms are limited to their most recent 31 days.
                 </div>
               </div>
 
               <div style={{flexShrink:0}}>
-                <OBBtn onClick={goToTrial} style={{height:48}}>Continue →</OBBtn>
+                <OBBtn onClick={goToTrial} style={{height:42,fontSize:13,fontWeight:700,borderRadius:8}}>Continue →</OBBtn>
               </div>
             </div>
           )})()}
