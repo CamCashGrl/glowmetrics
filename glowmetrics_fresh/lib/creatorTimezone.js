@@ -77,6 +77,42 @@ export function zonedHourDecimal(date,tz){
   return hour+minute/60
 }
 
+// An imported timestamp → the real instant it names. Platform exports give
+// timezone-naive wall-clock times ('2026-10-09 05:33[:00]') that are the
+// creator's own local time, so they are read in the creator's selected zone —
+// never as UTC, and never in the server's or device's zone. Values that already
+// carry an offset or 'Z' (and Date objects) are real instants and pass through.
+const NAIVE_WALL_CLOCK_RE = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2})(?:\.\d+)?)?$/
+// Imports run several passes over the same timestamps (summary, date range,
+// sessions); remember each resolved instant instead of re-resolving the zone.
+const instantCache = new Map()
+const EXPLICIT_ZONE_RE = /(?:Z|[+-]\d{2}:?\d{2}|\b(?:UTC|GMT)\b)\s*$/i
+export function creatorInstant(value, tz) {
+  if (value instanceof Date) return value
+  const text = String(value ?? '').trim()
+  if (!text || EXPLICIT_ZONE_RE.test(text)) return new Date(text)
+  const key = `${tz}|${text}`
+  let ms = instantCache.get(key)
+  if (ms === undefined) {
+    const wall = text.match(NAIVE_WALL_CLOCK_RE)
+    if (wall) {
+      ms = zonedWallTimeToDate(wall[1], wall[2], tz).getTime() + (Number(wall[3]) || 0) * 1000
+    } else {
+      // Other zone-less export formats ('Jun 18, 2026 10:40 PM', '06/18/2026
+      // 14:32', date-only): read the written fields as-is (parsing with an
+      // explicit UTC marker keeps the device's zone out), then place them on
+      // the creator's clock.
+      const fields = new Date(`${text} UTC`)
+      if (isNaN(fields.getTime())) return new Date(NaN)
+      const iso = fields.toISOString()
+      ms = zonedWallTimeToDate(iso.slice(0, 10), iso.slice(11, 16), tz).getTime() + fields.getUTCSeconds() * 1000
+    }
+    if (instantCache.size >= 200000) instantCache.clear()
+    instantCache.set(key, ms)
+  }
+  return new Date(ms)
+}
+
 // Wall-clock date ('YYYY-MM-DD') + time ('HH:MM') on the creator's clock → the
 // real instant. Two passes settle the zone offset, including across DST edges.
 export function zonedWallTimeToDate(dateStr,timeStr,tz){

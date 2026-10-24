@@ -1,5 +1,6 @@
-import { computeSnapshotStats, toLocalHour } from './analytics'
-import { zonedYMD } from './creatorTimezone'
+import { computeSnapshotStats, toLocalHour, aggregateRows } from './analytics'
+import { detectSessions, isValidSession } from './analytics/sessions'
+import { zonedYMD, creatorInstant } from './creatorTimezone'
 
 // Display categories do not change storage, dedup keys, or session eligibility.
 export function earningCategory(row) {
@@ -9,25 +10,11 @@ export function earningCategory(row) {
   return 'tips'
 }
 
-// Upload timestamps without offsets use the existing UTC storage contract.
-export function importDate(value) {
-  if(value instanceof Date)return value
-  const text=String(value||'').replace(' ','T')
-  return new Date(/^\d{4}-\d{2}-\d{2}T/.test(text)&&!/(Z|[+-]\d{2}:?\d{2})$/i.test(text)?text+'Z':text)
-}
-
 // Calendar date ('YYYY-MM-DD') of an earning row on the creator's clock.
-// Paste exports (Chaturbate, MyFreeCams) give offset-less wall-clock times that
-// are already the creator's local time, so the date is read as written. Reading
-// them through importDate() would treat them as UTC, and formatting that in a
-// US zone moved early-morning earnings to the previous day. Rows with an
-// explicit offset, or only a Date, are real instants dated in the creator zone.
-const WALL_CLOCK_RE = /^(\d{4}-\d{2}-\d{2})[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/
+// Timezone-naive export times are the creator's own wall-clock times
+// (creatorInstant), so 'Oct 9, 2026, 5:33 AM' stays Oct 9 in every zone.
 export function earningDay(row, timeZone = 'UTC') {
-  const raw = row?.date_time ?? row?.dateRaw
-  const wall = typeof raw === 'string' && raw.trim().match(WALL_CLOCK_RE)
-  if (wall) return wall[1]
-  const date = importDate(raw ?? row?.ts ?? row?.date)
+  const date = creatorInstant(row?.date_time ?? row?.dateRaw ?? row?.ts ?? row?.date, timeZone)
   return isNaN(date.getTime()) ? null : zonedYMD(date, timeZone)
 }
 
@@ -50,7 +37,7 @@ export function formatDay(ymd) {
 }
 
 export function summarizeOnboarding(rows, timeZone = 'UTC') {
-  const normalized = rows.map(r => ({ ...r, date: importDate(r.date_time || r.dateRaw || r.date || r.ts) }))
+  const normalized = rows.map(r => ({ ...r, date: creatorInstant(r.date_time || r.dateRaw || r.date || r.ts, timeZone) }))
     .filter(r => !isNaN(r.date.getTime()))
   const window = computeSnapshotStats(normalized, 31)
   const summarize = entries => {
@@ -81,6 +68,48 @@ export function summarizeOnboarding(rows, timeZone = 'UTC') {
     bestHour: peak ? `${peak[0] % 12 || 12}${peak[0] < 12 ? 'am' : 'pm'}` : null,
     bestHourConfident: !!peak && peak[1].days.size >= 2,
     timeZone,
+  }
+}
+
+// Onboarding Step 3/4 dataset: the confirmed import's earning rows with every
+// timestamp resolved to a real instant on the creator's clock (ISO, UTC) — the
+// shape the dashboard engine reads from tips / paid_sessions — so Step 3's
+// analysis and Step 4's insights come from the same rows the dashboard uses.
+export function canonicalImportDataset(rows, platform, timeZone) {
+  const tips = [], paidSessions = []
+  for (const r of rows) {
+    const at = creatorInstant(r.date_time ?? r.dateRaw ?? r.ts, timeZone)
+    if (isNaN(at.getTime())) continue
+    const iso = at.toISOString()
+    const base = { date_time: iso, dateRaw: iso, platform, username: r.username, tokens: Number(r.tokens) || 0, usd: Number(r.usd) || 0 }
+    if (r.is_paid_session || r.session_type || r.sessionType) paidSessions.push({ ...base, session_type: r.session_type || r.sessionType })
+    else tips.push({ ...base, tip_type: r.tip_type || 'Tip', tip_note: r.tip_note || r.note || '' })
+  }
+  return { tips, paidSessions, timeZone }
+}
+
+// Step 3 "Calculating your stream patterns": the canonical session grouping
+// (lib/analytics/sessions.js: 60-minute gap; valid = 30+ minutes and 2+ tips).
+export function streamPatterns(dataset) {
+  const sessions = detectSessions(dataset.tips)
+  const valid = sessions.filter(isValidSession)
+  return {
+    sessionCount: sessions.length,
+    validSessionCount: valid.length,
+    validStreamedMinutes: valid.reduce((n, s) => n + (s.durationMinutes || 0), 0),
+  }
+}
+
+// Step 3 "Detecting your best streaming times": the dashboard engine's
+// canonical best-time windows and hourly rate (lib/analytics.js aggregateRows),
+// run on the same tips in the creator's zone.
+export function bestStreamingTimes(dataset) {
+  const engine = aggregateRows(dataset.tips, dataset.timeZone)
+  return {
+    canonicalBestTimes: engine.canonicalBestTimes,
+    estimatedHourlyRate: engine.estimatedHourlyRate,
+    hourlyRateSessionCount: engine.hourlyRateSessionCount,
+    hourlyRateTotalMinutes: engine.hourlyRateTotalMinutes,
   }
 }
 

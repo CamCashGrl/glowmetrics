@@ -206,14 +206,27 @@ describe('private earnings are detected, kept out of tips, and persisted', () =>
     paste(el, CB)
     await screen.findByTestId('detected-summary')
     fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
-    expect(await screen.findByText(/could not be saved|Retry/i, {}, { timeout: 10000 })).toBeInTheDocument()
+    // Step 3 stops at "Saving your earnings & fans" with the error + Retry.
+    const err = await screen.findByTestId('proc-error', {}, { timeout: 10000 })
+    expect(err).toHaveTextContent(/could not be saved/i)
+    expect(err).toHaveTextContent('Your pasted data is kept.')
+    expect(screen.getByTestId('proc-step-2')).toHaveAttribute('data-state', 'error')
+    expect(screen.getByTestId('proc-step-3')).toHaveAttribute('data-state', 'pending')
     expect(screen.queryByText(/Your Chaturbate data is ready/)).not.toBeInTheDocument()
+    // Retry re-saves the same import; once it saves, analysis finishes.
+    global.fetch = jest.fn(async () => {
+      const json = { ok: true, inserted: 3, skipped: 0 }
+      return { ok: true, status: 200, json: async () => json, text: async () => JSON.stringify(json) }
+    })
+    fireEvent.click(within(err).getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })).toBeInTheDocument()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
   }, 20000)
 
   test('first insights show private earnings and memberships separately from regular tips', async () => {
     const el = await toImport('Chaturbate')
     paste(el, controlPaste())
-    await screen.findByTestId('detected-summary')
+    await screen.findByTestId('detected-summary', {}, { timeout: 5000 })
     fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
     await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })
     expect(screen.getByTestId('stat-earnings')).toHaveTextContent('$369.40')

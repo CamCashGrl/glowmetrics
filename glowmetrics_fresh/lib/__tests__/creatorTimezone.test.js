@@ -76,3 +76,35 @@ describe('zonedWallTimeToDate — creator wall clock → instant', () => {
     expect(isNaN(zonedWallTimeToDate('', '20:00', 'UTC').getTime())).toBe(true)
   })
 })
+
+// creatorInstant: timezone-naive import times are the creator's wall clock.
+describe('creatorInstant', () => {
+  const { creatorInstant } = require('../creatorTimezone')
+  const iso = (v, tz) => creatorInstant(v, tz).toISOString()
+
+  test('naive ISO-style times are read in the creator zone, never UTC', () => {
+    expect(iso('2026-10-09 05:33:00', 'America/Los_Angeles')).toBe('2026-10-09T12:33:00.000Z')
+    expect(iso('2026-10-09T05:33', 'America/Los_Angeles')).toBe('2026-10-09T12:33:00.000Z')
+    expect(iso('2026-10-09 05:33:00', 'Asia/Tokyo')).toBe('2026-10-08T20:33:00.000Z')
+    expect(iso('2026-10-09 05:33:17', 'UTC')).toBe('2026-10-09T05:33:17.000Z')
+  })
+
+  test('other zone-less export formats are read the same way', () => {
+    expect(iso('Jun 18, 2026 10:40 PM', 'America/Los_Angeles')).toBe('2026-06-19T05:40:00.000Z') // MyFreeCams
+    expect(iso('06/18/2026 14:32', 'Asia/Tokyo')).toBe('2026-06-18T05:32:00.000Z') // BongaCams via normalizeDate
+    expect(iso('2026-06-18', 'America/New_York')).toBe('2026-06-18T04:00:00.000Z') // date-only → local midnight
+  })
+
+  test('values with an explicit zone, and Dates, pass through unchanged', () => {
+    expect(iso('2026-10-09T05:33:00Z', 'America/Los_Angeles')).toBe('2026-10-09T05:33:00.000Z')
+    expect(iso('2026-10-09T05:33:00+02:00', 'America/Los_Angeles')).toBe('2026-10-09T03:33:00.000Z')
+    const d = new Date('2026-10-09T05:33:00Z')
+    expect(creatorInstant(d, 'Asia/Tokyo')).toBe(d)
+    expect(isNaN(creatorInstant('not a date', 'UTC').getTime())).toBe(true)
+  })
+
+  test('DST is handled by the zone, not a fixed offset', () => {
+    expect(iso('2026-01-15 12:00:00', 'America/Los_Angeles')).toBe('2026-01-15T20:00:00.000Z') // PST
+    expect(iso('2026-07-15 12:00:00', 'America/Los_Angeles')).toBe('2026-07-15T19:00:00.000Z') // PDT
+  })
+})

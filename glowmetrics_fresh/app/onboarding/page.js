@@ -8,13 +8,13 @@ import { readUploadJson } from '../../lib/readUploadJson'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats, parseCSV } from '../../lib/analytics'
-import { summarizeOnboarding, importDate, assertImportComplete, earningDateRange, formatDay } from '../../lib/onboardingSummary'
+import { summarizeOnboarding, assertImportComplete, earningDateRange, formatDay, canonicalImportDataset, streamPatterns, bestStreamingTimes } from '../../lib/onboardingSummary'
 import { FREE_ANALYSIS_WINDOW_DAYS } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
-import { isValidTimeZone, resolveCreatorTimeZone, timeZoneLabel, allTimeZones } from '../../lib/creatorTimezone'
+import { isValidTimeZone, resolveCreatorTimeZone, timeZoneLabel, allTimeZones, creatorInstant } from '../../lib/creatorTimezone'
 
 
 const PLATFORMS = {
@@ -47,8 +47,6 @@ const TOKEN_RATES = {
   bongacams:  PLATFORM_TOKEN_RATES.BongaCams,
   myfreecams: PLATFORM_TOKEN_RATES.MyFreeCams,
 }
-const LOADING_MESSAGES=['Cleaning your tip history…','Finding your top fans…','Calculating your average earnings per hour…','Detecting your best stream windows…','Building your dashboard…']
-const EXTRA_MSGS=['Importing additional tip history…','Merging with your dashboard…','Updating your insights…']
 
 // Maps an import/upload error to a controlled category for analytics — never
 // send e.message here, since parser errors can echo back pasted content.
@@ -73,15 +71,25 @@ const CB_PRIVATE_SHOW_PATTERN = /^Private Show:/i
 const MFC_PRIVATE_TYPE = 'Private'
 
 // ── Parsers ────────────────────────────────────────────────────
+// tryParseDate's Date is built in the browser's zone — that is what the
+// BongaCams upload has always stored, and it stays as-is until the saved-data
+// timezone migration. `.wall` keeps the export's literal wall-clock time
+// ('YYYY-MM-DD HH:MM:00') so analysis reads it in the creator's selected zone
+// (creatorInstant) instead of the browser's.
+const pad2=n=>String(n).padStart(2,'0')
+function withWall(d,y,mo,day,h,mi){if(isNaN(d.getTime()))return null;d.wall=`${y}-${pad2(mo)}-${pad2(day)} ${pad2(h)}:${pad2(mi)}:00`;return d}
 function tryParseDate(str){
   if(!str)return null;const s=str.trim()
   const cbMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
-  if(cbMatch){const[,mon,day,year,hr,min,ampm]=cbMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
+  if(cbMatch){const[,mon,day,year,hr,min,ampm]=cbMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,months[mon.toLowerCase()]+1,+day,h,+min)}
   const bcMatch=s.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/)
-  if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return d}
+  if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,+mon,+day,+hr,+min)}
   const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
-  if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return d}
-  const d=new Date(s);if(!isNaN(d.getTime()))return d;return null
+  if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,months[mon.toLowerCase()]+1,+day,h,+min)}
+  const d=new Date(s);if(isNaN(d.getTime()))return null
+  const naive=s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?$/)
+  if(naive)d.wall=`${naive[1]} ${naive[2]}:${naive[3]||'00'}`
+  return d
 }
 
 // Detects if a BongaCams tab-separated row is a paid chat session
@@ -386,20 +394,23 @@ function paidSessionsToCSVBlob(sessions){
 // parser mis-read MFC exports: wrong dates, usernames, tokens, and privates
 // counted as tips.) BongaCams keeps this page's parsers, which read its
 // headerless exports more accurately; its paid chats upload separately.
-export function buildPreview(rawText,platformId,platformLabel,timeZone='UTC'){
+export function buildPreview(rawText,platformId,platformLabel,timeZone='UTC',{csv=false}={}){
   let rows=[],paidSessions=[]
-  if(platformId==='chaturbate'||platformId==='myfreecams'){
+  // CSV files always use the canonical parser, same as /api/upload.
+  if(csv||platformId==='chaturbate'||platformId==='myfreecams'){
     const parsed=parseCSV(rawText,PLATFORMS[platformId].label)
     for(const r of parsed){
-      const ts=importDate(r.date_time||r.dateRaw)
-      if(isNaN(ts.getTime()))continue
       const date_time=r.date_time||r.dateRaw
+      const ts=creatorInstant(date_time,timeZone)
+      if(isNaN(ts.getTime()))continue
       if(r.is_paid_session)paidSessions.push({ts,date_time,username:r.username,sessionType:r.session_type,tokens:r.tokens,usd:r.usd})
       else rows.push({ts,date_time,username:r.username,tokens:r.tokens,usd:r.usd,note:r.tip_note||'',tip_type:r.tip_type})
     }
   }else{
-    rows=parseRows(rawText,platformId).rows
-    paidSessions=parseBCPaidSessions(rawText).sessions
+    // Read BongaCams' literal wall-clock times in the creator's zone.
+    const local=r=>({...r,date_time:r.ts.wall||r.ts.toISOString(),ts:creatorInstant(r.ts.wall||r.ts,timeZone)})
+    rows=parseRows(rawText,platformId).rows.map(local)
+    paidSessions=parseBCPaidSessions(rawText).sessions.map(local)
   }
   if(!rows.length&&!paidSessions.length)return null
   const allRows=[...rows,...paidSessions.map(s=>({ts:s.ts,date_time:s.date_time,username:s.username,tokens:s.tokens,usd:s.usd,session_type:s.sessionType,is_paid_session:true}))]
@@ -433,6 +444,8 @@ export function buildPreview(rawText,platformId,platformLabel,timeZone='UTC'){
     sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{timeZone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
     rows,
     snapshot:summary,
+    // Creator-local canonical dataset for Step 3's analysis and Step 4.
+    dataset:canonicalImportDataset(allRows,platformLabel,timeZone),
   }
 }
 
@@ -560,8 +573,35 @@ const CSS=`
   @keyframes progressSweep{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
   @keyframes dashboardSweep{0%{opacity:0;transform:translateX(-30%) scaleX(0.6)}45%{opacity:1}100%{opacity:0;transform:translateX(30%) scaleX(1.4)}}
   @keyframes dashboardDissolve{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.03)}}
+  /* Step 3 · Processing — subtle motion only; all of it stops under reduced motion. */
+  @keyframes obProcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  @keyframes obProcHalo{0%,100%{opacity:0.35;transform:scale(0.96)}50%{opacity:0.6;transform:scale(1.05)}}
+  @keyframes obProcOrbit{to{transform:rotate(360deg)}}
+  @keyframes obProcScan{0%,62%,100%{opacity:0}18%{opacity:1}36%{opacity:0.15}}
+  @keyframes obProcBeam{0%,100%{opacity:0.45}50%{opacity:1}}
+  @keyframes obProcRise{0%{opacity:0;transform:translateY(0)}20%{opacity:0.9}100%{opacity:0;transform:translateY(-38px)}}
+  @keyframes obProcTwinkle{0%,100%{opacity:0.15;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+  @keyframes obProcCheck{0%{opacity:0;transform:scale(0.5)}70%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+  @keyframes obProcFade{from{opacity:0;transform:translateX(4px)}to{opacity:1;transform:translateX(0)}}
+  @keyframes obProcSweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+  .ob-proc-orb{animation:obProcFloat 3.6s ease-in-out infinite}
+  .ob-proc-halo,.ob-proc-ring{transform-box:fill-box;transform-origin:center}
+  .ob-proc-halo{animation:obProcHalo 3.6s ease-in-out infinite}
+  .ob-proc-ring{animation:obProcOrbit 14s linear infinite}
+  .ob-proc-scan{opacity:0;animation:obProcScan 3.3s ease-in-out infinite}
+  .ob-proc-beam{animation:obProcBeam 2.8s ease-in-out infinite}
+  .ob-proc-rise{opacity:0;animation:obProcRise 2.4s ease-out infinite}
+  .ob-proc-spark{animation:obProcTwinkle 2.6s ease-in-out infinite}
+  .ob-proc-spin{animation:spin 0.9s linear infinite}
+  .ob-proc-check{animation:obProcCheck 0.32s ease-out both}
+  .ob-proc-status{animation:obProcFade 0.3s ease-out both}
+  .ob-proc-row{overflow:hidden}
+  .ob-proc-row--active::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(34,211,238,0.07),transparent);animation:obProcSweep 1.8s ease-in-out infinite}
+  @media(max-width:640px){.ob-proc-visual{display:none!important}}
   @media(prefers-reduced-motion:reduce){
     .ob-dash-sweep,.ob-dash-dissolve{animation:none!important}
+    .ob-proc-orb,.ob-proc-halo,.ob-proc-ring,.ob-proc-beam,.ob-proc-spark,.ob-proc-spin,.ob-proc-check,.ob-proc-status{animation:none!important}
+    .ob-proc-scan,.ob-proc-rise,.ob-proc-row--active::after{animation:none!important;opacity:0!important}
   }
   textarea::placeholder{color:rgba(100,116,139,0.4);font-family:monospace;font-size:11px;line-height:1.6}
   input::placeholder{color:rgba(100,116,139,0.4)}
@@ -644,6 +684,7 @@ const CSS=`
     .ob-step1-head{margin-bottom:14px!important}
     .ob-plat-row{margin-bottom:14px!important}
     .ob-plat-card{padding:14px 10px 12px!important}
+    .ob-proc .ob-proc-row{height:54px!important}
   }
   .ob-card{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px)}
   .ob-gap{margin-bottom:clamp(10px,1.8dvh,16px)!important}
@@ -717,6 +758,64 @@ function OBBtn({onClick,children,disabled=false,style={}}){
   )
 }
 
+// Step 3 rows, in pipeline order (see runProcessing).
+const PROC_STEPS=['Reading your tip history','Saving your earnings & fans','Calculating your stream patterns','Detecting your best streaming times']
+
+function OBProcIcon({state}){
+  const base={width:24,height:24,borderRadius:'50%',flexShrink:0,display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:900}
+  if(state==='done')return <span aria-hidden="true" className="ob-proc-check" style={{...base,background:'#22d3ee',color:'#04101b',boxShadow:'0 0 12px rgba(34,211,238,0.55)'}}>✓</span>
+  if(state==='error')return <span aria-hidden="true" style={{...base,background:'rgba(248,113,113,0.9)',color:'#1f0a0a'}}>!</span>
+  if(state==='active')return(
+    <span aria-hidden="true" style={{...base,position:'relative',border:'2px solid rgba(34,211,238,0.35)',boxShadow:'0 0 10px rgba(34,211,238,0.35)'}}>
+      <span className="ob-proc-spin" style={{position:'absolute',inset:-2,borderRadius:'50%',border:'2px solid transparent',borderTopColor:'#22d3ee',borderRightColor:'#22d3ee'}}/>
+      <span style={{width:6,height:6,borderRadius:'50%',background:'#22d3ee'}}/>
+    </span>)
+  return <span aria-hidden="true" style={{...base,border:'2px solid rgba(148,163,184,0.28)'}}/>
+}
+
+// Decorative Step 3 artwork: CamCash $ orb over three stacked neon data
+// layers, with sparkles. Pure SVG; motion is off under prefers-reduced-motion.
+function OBProcessingVisual(){
+  const slab=y=>({top:`M95 ${y-17} L158 ${y} L95 ${y+17} L32 ${y} Z`,side:`M32 ${y} L32 ${y+8} L95 ${y+25} L158 ${y+8} L158 ${y} L95 ${y+17} Z`})
+  return(
+    <div className="ob-proc-visual" aria-hidden="true" style={{width:190,height:212,flexShrink:0}}>
+      <svg viewBox="0 0 190 212" width="190" height="212" style={{overflow:'visible'}}>
+        <defs>
+          <linearGradient id="obProcOrb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#22d3ee"/><stop offset="0.55" stopColor="#7c3aed"/><stop offset="1" stopColor="#ff2fae"/></linearGradient>
+          <radialGradient id="obProcShine" cx="0.32" cy="0.28" r="0.6"><stop offset="0" stopColor="#ffffff" stopOpacity="0.6"/><stop offset="1" stopColor="#ffffff" stopOpacity="0"/></radialGradient>
+          <linearGradient id="obProcEdge" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#22d3ee"/><stop offset="0.5" stopColor="#6366f1"/><stop offset="1" stopColor="#ff2fae"/></linearGradient>
+          <linearGradient id="obProcBeam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stopColor="#22d3ee" stopOpacity="0"/><stop offset="0.5" stopColor="#22d3ee" stopOpacity="0.35"/><stop offset="1" stopColor="#a855f7" stopOpacity="0"/></linearGradient>
+          <filter id="obProcBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
+        </defs>
+        <ellipse className="ob-proc-floor" cx="95" cy="186" rx="78" ry="16" fill="#7c3aed" opacity="0.35" filter="url(#obProcBlur)"/>
+        {/* Three data layers; a light scans up the stack, one layer at a time. */}
+        {[166,140,114].map((y,i)=>{const d=slab(y);return(
+          <g key={y} className="ob-proc-layer">
+            <path d={d.side} fill="rgba(30,16,70,0.85)" stroke="url(#obProcEdge)" strokeWidth="1.2" strokeOpacity="0.7"/>
+            <path d={d.top} fill="rgba(56,30,120,0.55)" stroke="url(#obProcEdge)" strokeWidth="1.8"/>
+            <path className="ob-proc-scan" d={d.top} fill="rgba(34,211,238,0.16)" stroke="#a5f3fc" strokeWidth="1.4" style={{animationDelay:`${i*0.55}s`}}/>
+          </g>)})}
+        {/* Light beam + data particles rising from the stack into the orb. */}
+        <rect className="ob-proc-beam" x="80" y="62" width="30" height="40" fill="url(#obProcBeam)"/>
+        {[[88,0],[101,0.8],[94,1.6]].map(([x,delay])=>(
+          <circle key={x} className="ob-proc-rise" cx={x} cy="100" r="1.6" fill="#a5f3fc" style={{animationDelay:`${delay}s`}}/>
+        ))}
+        <ellipse cx="95" cy="98" rx="30" ry="9" fill="#22d3ee" opacity="0.45" filter="url(#obProcBlur)"/>
+        <g className="ob-proc-orb">
+          <circle className="ob-proc-halo" cx="95" cy="56" r="40" fill="#7c3aed" opacity="0.45" filter="url(#obProcBlur)"/>
+          <circle className="ob-proc-ring" cx="95" cy="56" r="38" fill="none" stroke="url(#obProcEdge)" strokeWidth="1" strokeDasharray="10 14" strokeLinecap="round" opacity="0.7"/>
+          <circle cx="95" cy="56" r="31" fill="url(#obProcOrb)" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5"/>
+          <circle cx="95" cy="56" r="31" fill="url(#obProcShine)"/>
+          <text x="95" y="67" textAnchor="middle" fontSize="32" fontWeight="900" fill="#ffffff" fontFamily="Inter,system-ui,sans-serif">$</text>
+        </g>
+        {[[30,40,2.2,'#22d3ee',0],[160,30,1.8,'#ff7ad9',0.6],[170,96,1.6,'#a78bfa',1.1],[18,110,1.5,'#ff7ad9',1.5],[146,64,1.3,'#ffffff',0.9],[48,12,1.4,'#a5f3fc',1.8]].map(([x,y,r,c,delay])=>(
+          <circle key={`${x}-${y}`} className="ob-proc-spark" cx={x} cy={y} r={r} fill={c} style={{animationDelay:`${delay}s`}}/>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
 function OBSecBtn({onClick,children,style={}}){
   return(
     <button onClick={onClick} style={{height:44,padding:'0 16px',borderRadius:12,border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(203,213,225,0.85)',fontSize:13,fontWeight:700,transition:'all 0.18s',...style}}
@@ -735,7 +834,7 @@ function OBLinks({links}){
 }
 
 function OBTrust(){
-  return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
+  return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and kept private.</span></div>)
 }
 
 // Step 1 timezone: a glass row (closed by default) that opens a styled,
@@ -911,8 +1010,12 @@ export default function OnboardingPage(){
   const[importedPlatforms,setImportedPlatforms]=useState([])
   const[csvUploading,setCsvUploading]=useState(false)
   const[csvError,setCsvError]=useState('')
-  const[loadingMsgIdx,setLoadingMsgIdx]=useState(0)
-  const[loadingProgress,setLoadingProgress]=useState(0)
+  // Step 3 processing rows: 'pending' | 'active' | 'done' | 'error'.
+  const[procStages,setProcStages]=useState(['pending','pending','pending','pending'])
+  const[procParsedCount,setProcParsedCount]=useState(0)
+  const[procError,setProcError]=useState('')
+  const procRevealRef=useRef(0)
+  const procRunRef=useRef(null)
   const[howItWorksOpen,setHowItWorksOpen]=useState(false)
   const[dashboardTransitioning,setDashboardTransitioning]=useState(false)
   // null until the user picks on the trial screen; 'trial' | 'free' after.
@@ -929,8 +1032,7 @@ export default function OnboardingPage(){
 
   const platform=PLATFORMS[platformId]
   const primaryPlatformId=selectedPlatforms[0]||null
-  const stepNum={platforms:1,paste:2,csv:2,loading:2,platformSuccess:2,finalSummary:3,trial:3,freeReady:3,step4:3,done:3}[step]||1
-  const showProgress=!['loading'].includes(step)
+  const stepNum={platforms:1,paste:2,csv:2,loading:3,platformSuccess:2,finalSummary:3,trial:3,freeReady:3,step4:3,done:3}[step]||1
 
   useEffect(()=>{
     ;(async()=>{
@@ -1120,108 +1222,144 @@ export default function OnboardingPage(){
   function handlePreview(){
     setParseError('')
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
-    const p=buildPreview(pasteText,platformId,platform.label,timezone)
-    if(!p||( p.transactionsDetected===0)){
-      setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.")
-      track('onboarding_paste_parse_failed',{platform:platformId})
-
-      // Log detailed parse attempt for analysis
-      if(user?.id){
-        const formatAnalysis=analyzeFormat(pasteText)
-        logParseAttempt({
-          userId:user.id,
-          source:'onboarding',
-          attemptedPlatform:platformId,
-          claimedPlatform:platformId,
-          rawText:pasteText,
-          formatAnalysis,
-          parseSuccess:false,
-          errorReason:"We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.",
-          errorDetails:formatAnalysis,
-        })
-      }
-      return
-    }
-
-    // Log successful parse
-    if(user?.id){
-      logParseAttempt({
-        userId:user.id,
-        source:'onboarding',
-        attemptedPlatform:platformId,
-        claimedPlatform:platformId,
-        rawText:pasteText,
-        formatAnalysis:analyzeFormat(pasteText),
-        parseSuccess:true,
-      })
-    }
-
-    setPreview(p)
-    handleImport(p)
+    runProcessing({source:'paste'})
   }
 
-  async function handleImport(previewArg){
-    const p=previewArg||preview
+  // ── Step 3: Processing ────────────────────────────────────────────
+  // Each row turns Complete only when its real work has finished:
+  //   1 parse the confirmed import  2 save it  3 canonical session grouping
+  //   4 canonical best-time windows (the dashboard engine).
+  // Rows are revealed at least PROC_REVEAL_MS apart so they can be read —
+  // a reveal pace, never simulated progress. Saving starts as soon as the
+  // parse finishes, so the pace never delays the real work.
+  const PROC_REVEAL_MS=300
+  const PROC_HOLD_MS=650 // finished checklist stays up ~0.65s before Step 4
+  const nextPaint=()=>new Promise(r=>setTimeout(r,0))
+  async function revealStage(i,status='done'){
+    const wait=procRevealRef.current+PROC_REVEAL_MS-Date.now()
+    if(wait>0)await new Promise(r=>setTimeout(r,wait))
+    setProcStages(prev=>prev.map((v,k)=>k===i?status:(status==='done'&&k===i+1?'active':v)))
+    procRevealRef.current=Date.now()
+  }
+  const readFileText=file=>file.text?file.text():new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsText(file)})
+
+  async function runProcessing({source='paste',file=null,from=0}={}){
     if(!user)return
-    setImportError('');setUpgradeBlocked(null);setStep('loading');setLoadingMsgIdx(0);setLoadingProgress(0)
-    track('onboarding_import_started',{platform:platformId,source:'paste'})
+    setImportError('');setUpgradeBlocked(null);setProcError('');setCsvError('')
+    setProcStages(['pending','pending','pending','pending'].map((_,k)=>k<from?'done':k===from?'active':'pending'))
+    procRevealRef.current=Date.now()
+    setStep('loading')
+    if(source==='csv')setCsvUploading(true)
+    // A failed stage stops on its own row with the error + Retry; Retry resumes
+    // from that stage with the same import (nothing already saved is redone).
+    const fail=(i,msg,e)=>{
+      setProcStages(prev=>prev.map((v,k)=>k===i?'error':k>i?'pending':v))
+      setProcError(msg)
+      procRunRef.current={...procRunRef.current,source,file,failedAt:i}
+      track('onboarding_import_failed',{platform:platformId,source,stage:i+1,error_category:categorizeImportError(e||{})})
+    }
     try{
-      const{data:{session}}=await supabase.auth.getSession()
-      if(!session)throw new Error('Not logged in')
-      // Chaturbate / MyFreeCams: send the raw paste — preview and server share
-      // the canonical parser, so private earnings are classified identically
-      // and stored through the route's deduplicating paid-session path.
-      // BongaCams: send the already-parsed tips as a clean CSV; its paid
-      // chats go to /api/upload-paid-sessions below.
-      const rawToServer=platformId==='chaturbate'||platformId==='myfreecams'
-      const{blob:csvBlob}=rawToServer?{blob:new Blob([pasteText],{type:'text/plain'})}:pasteToCSVBlob(pasteText,platformId)
-      const file=new File([csvBlob],'pasted_import.csv',{type:'text/csv'})
-      const minWait=isFirstImport?5500:1800
-      const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
-      const start=Date.now()
-      const pi=setInterval(()=>{const pr=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(pr*100))},60)
-      const mi=setInterval(()=>setLoadingMsgIdx(i=>(i+1)%msgs.length),900)
+      if(from===0)track('onboarding_import_started',{platform:platformId,source})
+      await nextPaint()
 
-      const controller=new AbortController()
-      const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+      // 1. Reading your tip history — parse the confirmed import in the creator's zone.
+      let run=procRunRef.current||{}
+      if(from===0){
+        let text='',p=null
+        try{
+          text=source==='csv'?await readFileText(file):pasteText
+          p=buildPreview(text,platformId,platform.label,timezone,{csv:source==='csv'})
+        }catch(e){fail(0,'We couldn’t read this history.',e);return}
+        if(!p||!p.transactionsDetected){
+          const msg=source==='csv'?'We couldn’t find any earnings rows in this file.':'We couldn’t find any earning rows in this paste.'
+          track('onboarding_paste_parse_failed',{platform:platformId,source})
+          if(source==='paste'&&user?.id){const formatAnalysis=analyzeFormat(text);logParseAttempt({userId:user.id,source:'onboarding',attemptedPlatform:platformId,claimedPlatform:platformId,rawText:text,formatAnalysis,parseSuccess:false,errorReason:msg,errorDetails:formatAnalysis})}
+          fail(0,msg)
+          return
+        }
+        if(source==='paste'){
+          setPreview(p)
+          if(user?.id)logParseAttempt({userId:user.id,source:'onboarding',attemptedPlatform:platformId,claimedPlatform:platformId,rawText:text,formatAnalysis:analyzeFormat(text),parseSuccess:true})
+        }
+        run={p,source,file}
+        procRunRef.current=run
+        setProcParsedCount(p.transactionsDetected)
+      }
+      const{p}=run
 
-      // Upload free tips
-      const tipUploadPromise=fetch('/api/upload',{
-        method:'POST',
-        headers:{Authorization:`Bearer ${session.access_token}`},
-        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);f.append('time_zone',timezone);return f})(),
-        signal:controller.signal
-      })
+      // 2. Saving your earnings & fans — starts as soon as the parse is done.
+      if(from<=1){
+        const saving=(source==='csv'?saveCsvImport(file):saveImport(p)).then(v=>({ok:true,v}),e=>({ok:false,e}))
+        if(from===0)await revealStage(0)
+        const saved=await saving
+        if(!saved.ok){handleSaveError(saved.e,source,fail);return}
+        run={...run,saved:saved.v};procRunRef.current=run
+        await revealStage(1)
+      }
 
-      // Upload BongaCams paid chats (deduplicated server-side)
-      let paidUploadPromise=Promise.resolve(null)
+      // 3. Calculating your stream patterns — canonical session grouping.
+      if(from<=2){
+        await nextPaint()
+        try{run={...run,patterns:streamPatterns(p.dataset)};procRunRef.current=run}
+        catch(e){fail(2,'We couldn’t calculate your stream patterns.',e);return}
+        await revealStage(2)
+      }
+
+      // 4. Detecting your best streaming times — the dashboard engine's windows.
+      await nextPaint()
+      let bestTimes
+      try{bestTimes=bestStreamingTimes(p.dataset)}
+      catch(e){fail(3,'We couldn’t detect your best streaming times.',e);return}
+      await revealStage(3)
+
+      finishProcessing(p,run.saved,{patterns:run.patterns,bestTimes},source)
+      // Hold the finished checklist briefly so it registers, then Step 4.
+      const wait=procRevealRef.current+PROC_HOLD_MS-Date.now()
+      if(wait>0)await new Promise(r=>setTimeout(r,wait))
+      setStep('platformSuccess')
+    }finally{
+      if(source==='csv')setCsvUploading(false)
+    }
+  }
+
+  function handleSaveError(e,source,fail){
+    if(e.code==='platform_limit_reached'){
+      track('onboarding_import_failed',{platform:platformId,source,stage:2,error_category:categorizeImportError(e)})
+      if(source==='csv'){setCsvError(e.message);setStep('csv')}
+      else{setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'});setStep('paste')}
+      return
+    }
+    fail(1,e.name==='AbortError'?'Saving timed out. Check your connection and try again.':(e.message||'Saving failed.'),e)
+  }
+  function retryProcessing(){const r=procRunRef.current;if(r)runProcessing({source:r.source,file:r.file,from:r.failedAt??0})}
+  function leaveProcessing(){setProcError('');setStep(procRunRef.current?.source==='csv'?'csv':'paste')}
+
+  // Upload the confirmed paste. Chaturbate / MyFreeCams send the raw paste —
+  // preview and server share the canonical parser, so private earnings are
+  // classified identically and stored through the route's deduplicating
+  // paid-session path. BongaCams sends its parsed tips as CSV; its paid chats
+  // go to /api/upload-paid-sessions. Throws on any failed or partial save.
+  async function saveImport(p){
+    const{data:{session}}=await supabase.auth.getSession()
+    if(!session)throw new Error('Not logged in')
+    const rawToServer=platformId==='chaturbate'||platformId==='myfreecams'
+    const{blob:csvBlob}=rawToServer?{blob:new Blob([pasteText],{type:'text/plain'})}:pasteToCSVBlob(pasteText,platformId)
+    const file=new File([csvBlob],'pasted_import.csv',{type:'text/csv'})
+    const controller=new AbortController()
+    const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+    try{
+      const form=new FormData();form.append('file',file);form.append('platform',platform.label);form.append('time_zone',timezone)
+      const tipUpload=fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form,signal:controller.signal})
+      let paidUpload=Promise.resolve(null)
       if(platformId==='bongacams'&&p?.paidSessionsDetected>0){
-        const paidBlob=paidSessionsToCSVBlob(p.paidSessions)
-        const paidFile=new File([paidBlob],'paid_sessions_import.csv',{type:'text/csv'})
         const paidForm=new FormData()
-        paidForm.append('file',paidFile)
+        paidForm.append('file',new File([paidSessionsToCSVBlob(parseBCPaidSessions(pasteText).sessions)],'paid_sessions_import.csv',{type:'text/csv'}))
         paidForm.append('platform',platform.label)
-        paidUploadPromise=fetch('/api/upload-paid-sessions',{
-          method:'POST',
-          headers:{Authorization:`Bearer ${session.access_token}`},
-          body:paidForm,
-          signal:controller.signal
-        })
+        paidUpload=fetch('/api/upload-paid-sessions',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:paidForm,signal:controller.signal})
       }
-
-      const[res,paidRes]=await Promise.all([
-        tipUploadPromise,
-        paidUploadPromise,
-        new Promise(r=>setTimeout(r,minWait)),
-      ])
-      clearTimeout(timeoutId)
-      clearInterval(pi);clearInterval(mi);setLoadingProgress(100)
+      const[res,paidRes]=await Promise.all([tipUpload,paidUpload])
       const json=await readUploadJson(res)
-      if(!res.ok||json.error){
-        const err=new Error(json.error||'Import failed')
-        err.code=json.code;err.upgradeUrl=json.upgradeUrl
-        throw err
-      }
+      if(!res.ok||json.error){const err=new Error(json.error||'Import failed');err.code=json.code;err.upgradeUrl=json.upgradeUrl;throw err}
       // Never report success when any batch (tips or private earnings) failed.
       assertImportComplete(json)
       let paidInserted=json.paidSessionsInserted??0
@@ -1231,26 +1369,41 @@ export default function OnboardingPage(){
         assertImportComplete(paidJson)
         paidInserted=paidJson.inserted??0
       }
-      const inserted=json.inserted??p?.tipsDetected??0
-      setImportResult({inserted,skipped:json.skipped??0,paidInserted})
-      setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'paste'})
-      if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
-      if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
-      setPlatformResults(prev=>({...prev,[platformId]:{
-        status:'connected',inserted,skipped:json.skipped??0,paidInserted,
-        snapshot:p?.snapshot||null,topSpender:p?.topSpender||null,
-        bestHour:p?.bestHour||null,bestHourConfident:p?.bestHourConfident||false,
-      }}))
-      track('onboarding_results_viewed',{platform:platformId,source:'paste'})
-      setStep('platformSuccess')
-    }catch(e){
-      if(e.name==='AbortError')setImportError('Import timed out. Check your connection or try a smaller file.')
-      else if(e.code==='platform_limit_reached')setUpgradeBlocked({message:e.message,upgradeUrl:e.upgradeUrl||'/pricing'})
-      else setImportError(e.message||'Import failed')
-      track('onboarding_import_failed',{platform:platformId,source:'paste',error_category:categorizeImportError(e)})
-      setStep('paste')
-    }
+      return{inserted:json.inserted??p?.tipsDetected??0,skipped:json.skipped??0,paidInserted}
+    }finally{clearTimeout(timeoutId)}
+  }
+
+  async function saveCsvImport(file){
+    const{data:{session}}=await supabase.auth.getSession()
+    if(!session)throw new Error('Not logged in')
+    const controller=new AbortController()
+    const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
+    try{
+      const form=new FormData();form.append('file',file);form.append('platform',platform.label);form.append('time_zone',timezone)
+      const res=await fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form,signal:controller.signal})
+      const json=await readUploadJson(res)
+      if(!res.ok||json.error){const err=new Error(json.error||'Upload failed');err.code=json.code;err.upgradeUrl=json.upgradeUrl;throw err}
+      assertImportComplete(json)
+      return{inserted:json.inserted??0,skipped:json.skipped??0,paidInserted:json.paidSessionsInserted??0,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo}
+    }finally{clearTimeout(timeoutId)}
+  }
+
+  function finishProcessing(p,saved,analysis,source){
+    const{inserted,skipped,paidInserted}=saved
+    setImportResult({inserted,skipped,paidInserted})
+    setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
+    track('onboarding_import_completed',{platform:platformId,inserted,skipped,source})
+    if(isFirstImport){track('onboarding_completed',{platform:platformId,...(source==='csv'?{source}:{})});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
+    if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
+    setPlatformResults(prev=>({...prev,[platformId]:{
+      status:'connected',inserted,skipped,paidInserted,source,
+      snapshot:p.snapshot||null,topSpender:p.topSpender||null,
+      bestHour:p.bestHour||null,bestHourConfident:p.bestHourConfident||false,
+      ...(source==='csv'?{totalUsd:saved.totalUsd,dateFrom:saved.dateFrom,dateTo:saved.dateTo}:{}),
+      // Step 3's analysis of the creator-local canonical dataset, for Step 4.
+      dataset:p.dataset,analysis,
+    }}))
+    track('onboarding_results_viewed',{platform:platformId,source})
   }
 
   function goToTrial(){
@@ -1297,49 +1450,9 @@ export default function OnboardingPage(){
     }
   }
 
-  async function handleCsvUpload(file){
+  function handleCsvUpload(file){
     if(!file||!user)return
-    setCsvUploading(true);setCsvError('');setStep('loading');setLoadingProgress(0)
-    track('onboarding_import_started',{platform:platformId,source:'csv'})
-    try{
-      const{data:{session}}=await supabase.auth.getSession()
-      if(!session)throw new Error('Not logged in')
-      const form=new FormData();form.append('file',file);form.append('platform',platform.label);form.append('time_zone',timezone)
-      const minWait=isFirstImport?5500:1800
-      const start=Date.now()
-      const pi=setInterval(()=>{const p=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(p*100))},60)
-
-      const controller=new AbortController()
-      const timeoutId=setTimeout(()=>controller.abort(),90000) // 90s timeout for large imports
-
-      const[res]=await Promise.all([
-        fetch('/api/upload',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:form,signal:controller.signal}),
-        new Promise(r=>setTimeout(r,minWait))
-      ])
-      clearTimeout(timeoutId)
-      clearInterval(pi);setLoadingProgress(100)
-      const json=await readUploadJson(res)
-      if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
-      assertImportComplete(json)
-      const inserted=json.inserted??preview?.tipsDetected??0
-      setImportResult({inserted,skipped:json.skipped??0})
-      setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
-      track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'csv'})
-      if(isFirstImport){track('onboarding_completed',{platform:platformId,source:'csv'});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
-      if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
-      setPlatformResults(prev=>({...prev,[platformId]:{
-        status:'connected',inserted,skipped:json.skipped??0,
-        snapshot:json.onboardingSummary||json.snapshot||null,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo,source:'csv',
-        bestHour:json.onboardingSummary?.bestHour||null,bestHourConfident:!!json.onboardingSummary?.bestHourConfident,
-      }}))
-      track('onboarding_results_viewed',{platform:platformId,source:'csv'})
-      setStep('platformSuccess')
-    }catch(e){
-      setCsvError(e.name==='AbortError'?'Upload timed out. Try a smaller file or check your connection.':e.message||'Upload failed')
-      track('onboarding_import_failed',{platform:platformId,source:'csv',error_category:categorizeImportError(e)})
-      setStep('csv')
-    }
-    finally{setCsvUploading(false)}
+    runProcessing({source:'csv',file})
   }
 
   if(booting)return(
@@ -1349,7 +1462,6 @@ export default function OnboardingPage(){
     </div>
   )
 
-  const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
   const tipsDisplayed=importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)
   const isPrimaryInQueue=queueIndex===0
   const queuePosLabel=selectedPlatforms.length>1?` (${queueIndex+1} of ${selectedPlatforms.length})`:''
@@ -1399,8 +1511,8 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div className={`ob-card-shell${step==='platforms'||step==='paste'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+      <div className={`ob-card-shell${step==='platforms'||step==='paste'||step==='loading'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'||step==='loading'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
               don't add empty scrollable space to the card. */}
@@ -1419,12 +1531,10 @@ export default function OnboardingPage(){
             >✕</button>
           )}
 
-          {!['loading'].includes(step)&&(
-            <header>
-              <OBLogo showSub={step==='platform'}/>
-              {showProgress&&<OBProgress current={stepNum} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>}
-            </header>
-          )}
+          <header>
+            <OBLogo showSub={step==='platform'}/>
+            <OBProgress current={stepNum} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
+          </header>
 
           {/* ══ PLATFORMS (single select — primary only) ══ */}
           {step==='platforms'&&(
@@ -1582,7 +1692,7 @@ export default function OnboardingPage(){
                 <button type="button" onClick={()=>setStep('csv')} style={{padding:'4px 12px',borderRadius:9,border:'1px solid rgba(34,211,238,0.42)',background:'rgba(34,211,238,0.06)',color:'#E0F7FF',fontWeight:700,cursor:'pointer'}}>⇪ Upload CSV instead</button>
                 {!isPrimaryInQueue&&<button type="button" onClick={skipCurrentPlatform} style={{background:'none',border:'none',padding:0,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Skip for now</button>}
               </div>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:8,fontSize:11,color:'rgba(148,163,184,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and never shared.</span></div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:8,fontSize:11,color:'rgba(148,163,184,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and kept private.</span></div>
             </div>
           )})()}
 
@@ -1606,52 +1716,46 @@ export default function OnboardingPage(){
           )}
 
           {/* ══ LOADING ══ */}
-          {step==='loading'&&(
-            <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <OBLogo/>
-              <div style={{marginBottom:16}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
-                  {[{n:1},{n:2},{n:3}].map((s,i)=>(<div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
-                    <div style={{width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,flexShrink:0,background:s.n<3?CYAN:GRAD,color:'#04101b',boxShadow:s.n===3?`0 0 20px rgba(33,230,243,0.6)`:`0 0 14px rgba(33,230,243,0.4)`}}>{s.n<3?'✓':s.n}</div>
-                    {i<2&&<div style={{height:2,flex:1,background:GRAD,margin:'0 3px',boxShadow:'0 0 6px rgba(33,230,243,0.3)'}}/>}
-                  </div>))}
-                </div>
-                <div style={{display:'flex',justifyContent:'space-between',maxWidth:250,margin:'0 auto'}}>
-                  {['Stats','Tips','Done'].map((l,i)=>(<div key={l} style={{width:28,textAlign:'center',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:i<2?`rgba(33,230,243,0.55)`:`rgba(33,230,243,0.9)`}}>{l}</div>))}
-                </div>
+          {/* ══ STEP 3 · PROCESSING ══ */}
+          {step==='loading'&&(()=>{
+            const fromCsv=procRunRef.current?.source==='csv'
+            return(
+            <div className="ob-proc" style={{animation:'fadeUp 0.3s ease both',maxWidth:640,margin:'0 auto'}}>
+              <div style={{textAlign:'center',marginBottom:17}}>
+                <h1 className="ob-s2-title" style={{fontSize:28,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.15,marginBottom:6}}>Analyzing your data…</h1>
+                <p style={{fontSize:13.5,color:'rgba(166,168,189,0.9)',lineHeight:1.45}}>This only takes a moment. We’re building your first insights.</p>
               </div>
-              <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',marginBottom:7}}>Building your CamCash dashboard</h1>
-                <p style={{fontSize:13,color:'rgba(148,163,184,0.75)',minHeight:18}}>{msgs[loadingMsgIdx]}</p>
+              <div style={{display:'flex',alignItems:'center',gap:18}}>
+                <ol data-testid="processing-steps" aria-label="Analysis progress" style={{flex:1,minWidth:0,listStyle:'none',margin:0,padding:'4px 16px',borderRadius:16,border:'1px solid rgba(34,211,238,0.16)',background:'rgba(4,10,24,0.55)',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.04)'}}>
+                  {PROC_STEPS.map((label,i)=>{
+                    const st=procStages[i]
+                    return(
+                    <li key={label} data-testid={`proc-step-${i+1}`} data-state={st} aria-current={st==='active'?'step':undefined}
+                      className={st==='active'?'ob-proc-row ob-proc-row--active':'ob-proc-row'}
+                      style={{position:'relative',display:'flex',alignItems:'center',gap:12,height:56,borderBottom:i<PROC_STEPS.length-1?'1px solid rgba(148,163,184,0.10)':'none',transition:'opacity 0.35s ease',opacity:st==='pending'?0.5:1}}>
+                      <OBProcIcon key={`icon-${st}`} state={st}/>
+                      <span style={{flex:1,minWidth:0,fontSize:14,fontWeight:st==='pending'?500:600,color:st==='active'?'#22d3ee':st==='error'?'#FCA5A5':st==='done'?'#E2E8F0':'rgba(148,163,184,0.8)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',transition:'color 0.35s ease'}}>{label}</span>
+                      <span key={`status-${st}`} className="ob-proc-status" style={{flexShrink:0,minWidth:78,textAlign:'right',fontSize:12.5,fontWeight:700,color:st==='done'?'#22d3ee':st==='active'?'rgba(34,211,238,0.85)':st==='error'?'#FCA5A5':'rgba(148,163,184,0.55)'}}>{st==='done'?(i===0?`${procParsedCount.toLocaleString('en-US')} transaction${procParsedCount===1?'':'s'}`:i===1?'Saved':'Complete'):st==='active'?'In progress':st==='error'?(i===1?'Not saved':'Failed'):'Waiting'}</span>
+                    </li>)
+                  })}
+                </ol>
+                <OBProcessingVisual/>
               </div>
-              <div style={{marginBottom:22}}>
-                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-                  <span style={{fontSize:10,color:'rgba(148,163,184,0.55)'}}>Progress</span>
-                  <span style={{fontSize:10,color:CYAN,fontWeight:700}}>{loadingProgress}%</span>
-                </div>
-                <div style={{height:8,borderRadius:100,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.07)',overflow:'hidden'}}>
-                  <div style={{height:'100%',width:`${loadingProgress}%`,background:GRAD,borderRadius:100,boxShadow:'0 0 18px rgba(33,230,243,0.4)',transition:'width 0.1s linear'}}/>
-                </div>
-                <div style={{fontSize:10,color:'rgba(100,116,139,0.5)',textAlign:'center',marginTop:4}}>{loadingProgress}% complete</div>
+              {/* Fixed-height status line: the save error + Retry appear here
+                  without resizing the card. */}
+              <div aria-live="polite" style={{height:68,marginTop:12,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {procError?(
+                  <div role="alert" data-testid="proc-error" style={{display:'flex',alignItems:'center',gap:12,width:'100%',padding:'8px 12px',borderRadius:12,border:'1px solid rgba(248,113,113,0.45)',background:'rgba(127,29,29,0.14)'}}>
+                    <span style={{flex:1,minWidth:0,fontSize:12,lineHeight:1.4,color:'#FECACA',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{procError}{procStages[2]==='error'||procStages[3]==='error'?' Your earnings are saved.':fromCsv?' Your file is kept.':' Your pasted data is kept.'}</span>
+                    <button type="button" onClick={retryProcessing} style={{flexShrink:0,padding:'7px 16px',borderRadius:10,border:'none',background:GRAD,color:'#fff',fontSize:12.5,fontWeight:800,cursor:'pointer'}}>Retry</button>
+                    <button type="button" onClick={leaveProcessing} style={{flexShrink:0,padding:'7px 12px',borderRadius:10,border:'1px solid rgba(148,163,184,0.35)',background:'transparent',color:'rgba(226,232,240,0.85)',fontSize:12.5,fontWeight:700,cursor:'pointer'}}>Back</button>
+                  </div>
+                ):(
+                  <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'rgba(148,163,184,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and kept private.</span></div>
+                )}
               </div>
-              <div style={{marginBottom:12}}>
-                {LOADING_MESSAGES.map((m,i)=>{
-                  const done=loadingProgress>=((i+1)/LOADING_MESSAGES.length)*95
-                  const active=!done&&loadingProgress>=(i/LOADING_MESSAGES.length)*95
-                  return(<div key={m} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 0',borderBottom:i<LOADING_MESSAGES.length-1?'1px solid rgba(255,255,255,0.04)':'none',opacity:done||active?1:0.3,transition:'opacity 0.4s'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:9}}>
-                      <div style={{width:20,height:20,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:done?CYAN:active?'rgba(33,230,243,0.15)':'rgba(255,255,255,0.05)',border:done?'none':active?`1px solid rgba(33,230,243,0.45)`:'1px solid rgba(255,255,255,0.1)',transition:'all 0.3s',boxShadow:done?'0 0 10px rgba(33,230,243,0.5)':active?'0 0 6px rgba(33,230,243,0.2)':'none'}}>
-                        {done?<span style={{fontSize:10,fontWeight:900,color:'#04101b'}}>✓</span>:active?<div style={{width:6,height:6,borderRadius:'50%',border:'1.5px solid rgba(255,255,255,0.2)',borderTopColor:CYAN,animation:'spin 0.8s linear infinite'}}/>:null}
-                      </div>
-                      <span style={{fontSize:12,color:done?'#fff':active?CYAN:'rgba(148,163,184,0.5)',fontWeight:done?600:active?700:400}}>{m}</span>
-                    </div>
-                    <span style={{fontSize:9,fontWeight:700,color:done?CYAN:active?'rgba(33,230,243,0.6)':'rgba(100,116,139,0.35)'}}>{done?'Complete':active?'In progress':'Queued'}</span>
-                  </div>)
-                })}
-              </div>
-              <div style={{textAlign:'center',fontSize:11,color:'rgba(100,116,139,0.5)'}}>Your results are almost ready.</div>
             </div>
-          )}
+          )})()}
 
           {/* ══ PLATFORM SUCCESS (primary or secondary) ══ */}
           {step==='platformSuccess'&&currentResult&&(()=>{
