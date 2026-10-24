@@ -121,7 +121,7 @@ export default function HowToIncreaseChaturbateTips() {
 
       <h2 style={s.h2}>1. Stream During Your Actual Peak Hours (Not the Platform's)</h2>
       <p style={s.p}>
-        Chaturbate peaks 9pm-1am EST across the platform. But your peak is when <em>your</em> fans are online - and that's different for every model. Models who identify and protect their personal peak hours earn 40-80% more per hour with zero change in content.
+        Chaturbate traffic is commonly reported to be busiest during US evenings and late nights (Eastern Time) - a general starting pattern, not an official figure. But your peak is when <em>your</em> fans are online - and that's different for every model. Your own revenue per streamed hour is what tells you which hours to protect.
       </p>
       <p style={s.p}>
         How to find yours: export your Chaturbate CSV, group earnings by hour of day, and look for the 2-3 hour windows where $/hr is consistently highest. <a href="/landing" style={s.iLink}>CamCash</a> does this automatically. Full guide at <a href="/guides/chaturbate-best-hours" style={s.iLink}>chaturbate-best-hours</a>.
