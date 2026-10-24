@@ -232,9 +232,11 @@ describe('private earnings are detected, kept out of tips, and persisted', () =>
     await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })
     expect(screen.getByTestId('stat-earnings')).toHaveTextContent('$369.40')
     expect(screen.getByTestId('stat-tips')).toHaveTextContent('994')
-    expect(screen.getByTestId('stat-private')).toHaveTextContent('$42.85')
-    expect(screen.getByTestId('stat-private')).toHaveTextContent('95 private sessions')
-    expect(screen.getByTestId('stat-memberships')).toHaveTextContent('$10.00')
+    // Step 4 keeps private earnings and memberships as secondary text inside
+    // Total earnings (no separate large cards); they are never counted as tips.
+    expect(screen.getByTestId('stat-earnings')).toHaveTextContent('$42.85 private')
+    expect(screen.getByTestId('stat-earnings')).toHaveTextContent('$10.00 memberships')
+    expect(screen.getByTestId('stat-tips')).not.toHaveTextContent('$42.85')
   }, 20000)
 })
 

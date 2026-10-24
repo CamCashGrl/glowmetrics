@@ -600,7 +600,9 @@ const CSS=`
   .ob-proc-status{animation:obProcFade 0.3s ease-out both}
   .ob-proc-row{overflow:hidden}
   .ob-proc-row--active::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(34,211,238,0.07),transparent);animation:obProcSweep 1.8s ease-in-out infinite}
-  @media(max-width:640px){.ob-proc-visual{display:none!important}.ob-s5-top,.ob-s5-bottom{grid-template-columns:1fr!important}}
+  .ob-kpi-card{min-height:92px;padding:12px 14px;border-radius:12px;border:1px solid rgba(34,211,238,0.22);background:rgba(255,255,255,0.03);box-sizing:border-box}
+  .ob-s4-card{flex-shrink:0;box-sizing:border-box}
+  @media(max-width:640px){.ob-proc-visual{display:none!important}.ob-s5-top,.ob-s5-bottom{grid-template-columns:1fr!important}.insights-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
   @media(prefers-reduced-motion:reduce){
     .ob-dash-sweep,.ob-dash-dissolve{animation:none!important}
     .ob-ext-tip{animation:none!important}
@@ -714,7 +716,7 @@ function OBLogo({showSub=false}){
   )
 }
 
-function OBProgress({current,onBack}){
+function OBProgress({current,onBack,allDone=false}){
   const steps=[{n:1,label:'Platform'},{n:2,label:'Import'},{n:3,label:'Insights'}]
   return(
     <div className="ob-stepper" style={{marginBottom:10}}>
@@ -725,12 +727,12 @@ function OBProgress({current,onBack}){
             <Tag className="ob-stepper-circle" {...(back?{type:'button',onClick:onBack,'aria-label':`Back to ${s.label}`,title:`Back to ${s.label}`}:{})} style={{
               width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',padding:0,cursor:back?'pointer':'default',
               fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
-              background:s.n===current?GRAD:s.n<current?CYAN:'rgba(255,255,255,0.05)',
+              background:allDone||s.n<current?CYAN:s.n===current?GRAD:'rgba(255,255,255,0.05)',
               border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
-              color:s.n===current?'#fff':s.n<current?'#04101b':'rgba(255,255,255,0.25)',
+              color:allDone||s.n<current?'#04101b':s.n===current?'#fff':'rgba(255,255,255,0.25)',
               boxShadow:s.n===current?`0 0 22px rgba(33,230,243,0.75),0 0 40px rgba(168,85,247,0.5),0 0 56px rgba(255,47,174,0.38)`:s.n<current?`0 0 14px rgba(33,230,243,0.4)`:'none',
             }}>
-              {s.n<current?'✓':s.n}
+              {allDone||s.n<current?'✓':s.n}
             </Tag>)})()}
             {i<2&&<div className="ob-stepper-line" style={{height:2,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
           </div>
@@ -1545,8 +1547,8 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div className={`ob-card-shell${step==='platforms'||step==='paste'||step==='loading'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'||step==='loading'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+      <div className={`ob-card-shell${step==='platforms'||step==='paste'||step==='loading'||(step==='platformSuccess'&&isPrimaryInQueue)?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'||step==='loading'||(step==='platformSuccess'&&isPrimaryInQueue)?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
               don't add empty scrollable space to the card. */}
@@ -1567,7 +1569,7 @@ export default function OnboardingPage(){
 
           <header>
             <OBLogo showSub={step==='platform'}/>
-            <OBProgress current={stepNum} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
+            <OBProgress current={stepNum} allDone={step==='platformSuccess'&&isPrimaryInQueue} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
           </header>
 
           {/* ══ PLATFORMS (single select — primary only) ══ */}
@@ -1793,63 +1795,81 @@ export default function OnboardingPage(){
 
           {/* ══ PLATFORM SUCCESS (primary or secondary) ══ */}
           {step==='platformSuccess'&&currentResult&&isPrimaryInQueue&&(()=>{
-            const snap=currentResult.snapshot
-            const full=snap?.full
+            // Step 4 consumes the already-computed canonical onboarding analysis
+            // (snapshot, Step 3 analysis). No calculation happens in this component.
+            const full=currentResult.snapshot?.full
             const cat=full?.categories
             const best=currentResult.analysis?.bestTimes?.canonicalBestTimes?.bestWindow||null
             const rate=currentResult.analysis?.bestTimes
             const hourly=rate&&rate.hourlyRateSessionCount>0?rate.estimatedHourlyRate:null
             const range=currentResult.range
             const tipCount=cat?cat.tips.count:(currentResult.inserted??0)
+            const earnings=full?.usd??currentResult.totalUsd??0
             const hourLabel=h=>`${h%12||12} ${h<12?'AM':'PM'}`
             const confident=best&&(best.tier==='high'||best.tier==='supported')
-            const stat=(label,value,sub,color)=>(
-              <div className="stat-card" style={{padding:'12px 10px',textAlign:'left'}}>
-                <div style={{fontSize:9,color:'rgba(148,163,184,0.7)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>{label}</div>
-                <div style={{fontSize:18,fontWeight:900,color,lineHeight:1.15}}>{value}</div>
-                {sub&&<div style={{fontSize:10,color:'rgba(148,163,184,0.75)',marginTop:3}}>{sub}</div>}
+            const extraParts=[
+              cat&&cat.private.count>0?`$${cat.private.usd.toFixed(2)} private`:null,
+              cat&&cat.memberships.count>0?`$${cat.memberships.usd.toFixed(2)} memberships`:null,
+            ].filter(Boolean)
+            const kpi=(label,value,sub,color)=>(
+              <div className="ob-kpi" style={{minWidth:0}}>
+                <div style={{fontSize:9.5,color:'rgba(148,163,184,0.75)',textTransform:'uppercase',letterSpacing:'0.08em',fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{label}</div>
+                <div style={{fontSize:18,fontWeight:900,color,marginTop:4,lineHeight:1.1,whiteSpace:'nowrap'}}>{value}</div>
+                {sub&&<div style={{fontSize:10,color:'rgba(148,163,184,0.75)',marginTop:3,lineHeight:1.3}}>{sub}</div>}
               </div>)
+            const bars=(
+              <svg aria-hidden="true" width="58" height="34" viewBox="0 0 58 34" style={{flexShrink:0}}>
+                {[[4,18,'#22d3ee'],[16,26,'#60a5fa'],[28,14,'#a78bfa'],[40,30,'#c026d3'],[52,22,'#ff2fae']].map(([x,h,c],i)=>(
+                  <rect key={i} x={x} y={34-h} width="7" height={h} rx="2" fill={c} opacity="0.85"/>))}
+              </svg>)
             return(
-            <div data-testid="step4-insights" style={{animation:'fadeUp 0.35s ease both',textAlign:'center'}}>
-              <div style={EYE}>Your first insights</div>
-              <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:4}}>Your {platform.label} data is ready!</h1>
-              <p style={{fontSize:12.5,color:'rgba(148,163,184,0.8)',marginBottom:12}}>Here’s a first look at your insights.</p>
-
-              <div data-testid="step4-stats" style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:10}}>
-                <div data-testid="stat-earnings" style={{display:'contents'}}>{stat('Total earnings',`$${(full?.usd??currentResult.totalUsd??0).toFixed(2)}`,null,'#4ade80')}</div>
-                <div data-testid="stat-tips" style={{display:'contents'}}>{stat('Tips',tipCount.toLocaleString('en-US'),'Regular tips only',CYAN)}</div>
-                {stat('Date range',range?.calendarDays?`${range.calendarDays.toLocaleString('en-US')} days`:'—',range?.dateFrom&&range?.dateTo?`${range.dateFrom} – ${range.dateTo}`:null,'#93C5FD')}
-                {stat('Avg. $/hour',hourly!==null?`$${hourly.toFixed(2)}`:'—',hourly!==null?'Estimated · from your sessions':'Not enough data yet',PINK)}
+            <div data-testid="step4-insights" style={{animation:'fadeUp 0.35s ease both',display:'flex',flexDirection:'column',gap:12}}>
+              <div style={{textAlign:'center'}}>
+                <h1 style={{fontSize:21,fontWeight:900,color:'#fff',marginBottom:3,lineHeight:1.2}}>Your {platform.label} data is ready!</h1>
+                <p style={{fontSize:12.5,color:'rgba(148,163,184,0.8)'}}>Here’s a first look at your insights.</p>
               </div>
 
-              {(cat?.private.count>0||cat?.memberships.count>0)&&(
-                <div data-testid="step4-other-earnings" style={{display:'grid',gridTemplateColumns:`repeat(${[cat.private.count>0,cat.memberships.count>0].filter(Boolean).length},1fr)`,gap:9,marginBottom:10}}>
-                  {cat.private.count>0&&<div data-testid="stat-private" style={{display:'contents'}}>{stat('Private earnings',`$${cat.private.usd.toFixed(2)}`,`${cat.private.count.toLocaleString('en-US')} private ${cat.private.count===1?'session':'sessions'} · not counted as tips`,PINK)}</div>}
-                  {cat.memberships.count>0&&<div data-testid="stat-memberships" style={{display:'contents'}}>{stat('Memberships',`$${cat.memberships.usd.toFixed(2)}`,`${cat.memberships.count.toLocaleString('en-US')} ${cat.memberships.count===1?'membership':'memberships'}`,'#a78bfa')}</div>}
+              <div data-testid="step4-stats" className="insights-kpi-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:10}}>
+                <div data-testid="stat-earnings" className="ob-kpi-card">
+                  {kpi('Total earnings',`$${earnings.toFixed(2)}`,extraParts.length?`Includes ${extraParts.join(' and ')}`:null,'#4ade80')}
                 </div>
-              )}
-
-              <div data-testid="step4-best-time" style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.05)',padding:'11px 14px',marginBottom:10,textAlign:'left'}}>
-                {best?(
-                  <>
-                    <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:confident?CYAN:'#fbbf24',marginBottom:4}}>{confident?'Best streaming time':'Early signal'}</div>
-                    <div style={{fontSize:12.5,color:'#fff',lineHeight:1.5}}>Your tips land most around <strong style={{color:PINK}}>{hourLabel(best.localHour)}</strong> ({best.sessionCount} session{best.sessionCount===1?'':'s'} at that hour, {currentResult.timezone||'your timezone'}).{!confident&&' More streaming history will confirm this.'}</div>
-                  </>
-                ):(
-                  <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5}}>We need a little more history to find your best streaming time.</div>
-                )}
+                <div data-testid="stat-tips" className="ob-kpi-card">
+                  {kpi('Tips',tipCount.toLocaleString('en-US'),'Regular tips only',CYAN)}
+                </div>
+                <div data-testid="step4-date-range" className="ob-kpi-card">
+                  {kpi('Date range',range?.calendarDays?`${range.calendarDays.toLocaleString('en-US')} days`:'—',range?.dateFrom&&range?.dateTo?`${range.dateFrom} – ${range.dateTo}`:null,'#93C5FD')}
+                </div>
+                <div className="ob-kpi-card">
+                  {kpi('Avg. $/hour',hourly!==null?`$${hourly.toFixed(2)}`:'—',hourly!==null?'Estimated':'Not enough data yet',PINK)}
+                </div>
               </div>
 
-              <div data-testid="step4-free-note" style={{display:'flex',alignItems:'flex-start',gap:10,textAlign:'left',fontSize:11,color:'rgba(148,163,184,0.85)',lineHeight:1.5,marginBottom:14}}>
-                <span aria-hidden="true">🗄️</span>
-                <span>
-                  <span style={{display:'block',color:'#fff',fontWeight:700}}>All {(range?.calendarDays||0).toLocaleString('en-US')} days are safely stored.</span>
-                  <span style={{display:'block'}}>Your full history is saved. Free includes full history for your primary platform; additional platforms are limited to the most recent 31 days.</span>
-                  {!billing.isPro&&<span style={{display:'block',marginTop:3,color:'#c4b5fd'}}>Upgrade to unlock your full history and advanced insights.</span>}
-                </span>
+              <div data-testid="step4-best-time" className="ob-s4-card" style={{display:'flex',alignItems:'center',gap:12,minHeight:84,padding:'12px 14px',borderRadius:12,border:'1px solid rgba(33,230,243,0.25)',background:'rgba(33,230,243,0.05)',textAlign:'left'}}>
+                <div aria-hidden="true" style={{width:32,height:32,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(33,230,243,0.12)',color:CYAN,fontSize:15}}>📊</div>
+                <div style={{flex:1,minWidth:0}}>
+                  {best?(<>
+                    {!confident&&<span data-testid="early-signal" style={{display:'inline-block',fontSize:8.5,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fbbf24',border:'1px solid rgba(251,191,36,0.5)',borderRadius:5,padding:'1px 6px',marginBottom:4}}>Early signal</span>}
+                    <div style={{fontSize:13.5,fontWeight:800,color:'#fff',lineHeight:1.3}}>Your biggest tips land around <span style={{color:PINK}}>{hourLabel(best.localHour)}</span></div>
+                    <div style={{fontSize:11,color:'rgba(148,163,184,0.85)',marginTop:3,lineHeight:1.4}}>{confident?'Your earnings tend to be strongest around this hour, based on your streaming data.':`Based on ${best.sessionCount} session${best.sessionCount===1?'':'s'} so far. More streaming history will confirm it.`}</div>
+                  </>):(<>
+                    <div style={{fontSize:13,fontWeight:800,color:'#fff'}}>We need a little more history</div>
+                    <div style={{fontSize:11,color:'rgba(148,163,184,0.85)',marginTop:3}}>to find your best streaming time.</div>
+                  </>)}
+                </div>
+                {bars}
               </div>
 
-              <OBBtn onClick={goToTrial}>Continue →</OBBtn>
+              <div data-testid="step4-free-note" className="ob-s4-card" style={{display:'flex',alignItems:'center',gap:12,minHeight:70,padding:'10px 14px',borderRadius:12,border:'1px solid rgba(124,92,255,0.3)',background:'rgba(124,92,255,0.05)',textAlign:'left'}}>
+                <div aria-hidden="true" style={{width:32,height:32,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(124,92,255,0.14)',fontSize:15}}>🗄️</div>
+                <div style={{fontSize:11,color:'rgba(203,213,225,0.9)',lineHeight:1.45}}>
+                  <div style={{fontSize:12.5,fontWeight:800,color:'#fff',marginBottom:2}}>Your full history is safely stored.</div>
+                  Free includes full history for your primary platform. Additional platforms are limited to their most recent 31 days.
+                </div>
+              </div>
+
+              <div style={{flexShrink:0}}>
+                <OBBtn onClick={goToTrial} style={{height:48}}>Continue →</OBBtn>
+              </div>
             </div>
           )})()}
 
