@@ -174,7 +174,7 @@ test('Back from Import returns to Step 1 (no username screen in between)', async
   fireEvent.click(await screen.findByText('Chaturbate'))
   fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
   await screen.findByPlaceholderText(/Paste|paste/)
-  fireEvent.click(screen.getAllByRole('button', { name: '← Back' })[0])
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Platform' }))
   expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Let’s get started')
   expect(screen.getByRole('radio', { name: /Chaturbate/ })).toHaveAttribute('aria-checked', 'true')
 }, 20000)

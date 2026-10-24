@@ -82,8 +82,10 @@ describe('Step 2 states', () => {
     await toImport('Chaturbate')
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Paste your Chaturbate tip history')
     expect(screen.getByText('Copy your earnings rows from Chaturbate and paste them below.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Import & build dashboard →' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled()
     expect(screen.queryByTestId('paste-help')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('detected-summary')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '← Back' })).not.toBeInTheDocument()
     expect(screen.queryByText(/HOW TO COPY FROM/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Step 2 of 3/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Open earnings page/)).not.toBeInTheDocument()
@@ -91,38 +93,50 @@ describe('Step 2 states', () => {
     expect(screen.getByText('Import')).toHaveAttribute('aria-current', 'step')
   })
 
-  test('DETECTED: control data shows real category totals, raw text collapses, Continue enabled', async () => {
+  test('DETECTED: control data shows real count, range and total; paste stays visible, Continue enabled', async () => {
     const el = await toImport('Chaturbate')
     paste(el, controlPaste())
+    expect(await screen.findByTestId('detect-parsing')).toHaveTextContent('Analyzing your history…')
     const card = await screen.findByTestId('detected-summary')
     expect(within(card).getByTestId('detected-count')).toHaveTextContent('1,091')
-    expect(within(card).getByTestId('detected-tips')).toHaveTextContent('994')
-    expect(within(card).getByTestId('detected-private')).toHaveTextContent('$42.85')
-    expect(within(card).getByTestId('detected-private')).toHaveTextContent('95 private sessions')
-    expect(within(card).getByTestId('detected-memberships')).toHaveTextContent('2')
+    // Private shows + memberships are present, so they are never called "tips".
+    expect(card).toHaveTextContent('transactions detected!')
+    expect(within(card).getByTestId('detected-platform')).toHaveTextContent('Chaturbate')
     expect(within(card).getByTestId('detected-total')).toHaveTextContent('$369.40')
-    expect(screen.queryByPlaceholderText('Paste your Chaturbate tip history here…')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Paste your Chaturbate tip history here…')).toHaveValue(controlPaste())
     expect(screen.getByRole('button', { name: 'Continue →' })).toBeEnabled()
   })
 
-  test('Edit data reopens the raw text with the paste preserved; Replace clears it', async () => {
+  test('all-tip paste is headlined as tips', async () => {
+    const el = await toImport('Chaturbate')
+    paste(el, 'Jun 18, 2026, 8:27 PM\nTip From: fanA\n500  12345\nJun 19, 2026, 9:14 PM\nTip From: fanB\n120  12465')
+    const card = await screen.findByTestId('detected-summary')
+    expect(within(card).getByTestId('detected-count')).toHaveTextContent('2')
+    expect(card).toHaveTextContent('tips detected!')
+    expect(within(card).getByTestId('detected-range')).toHaveTextContent('Jun 18 – Jun 19, 2026')
+  })
+
+  test('Edit data focuses the paste with it preserved; clearing it resets to empty', async () => {
     const el = await toImport('Chaturbate')
     paste(el, CB)
     await screen.findByTestId('detected-summary')
     fireEvent.click(screen.getByRole('button', { name: 'Edit data' }))
-    expect(screen.getByPlaceholderText('Paste your Chaturbate tip history here…')).toHaveValue(CB)
-    fireEvent.click(screen.getByRole('button', { name: 'Replace data' }))
-    expect(screen.getByPlaceholderText('Paste your Chaturbate tip history here…')).toHaveValue('')
+    expect(el).toHaveFocus()
+    expect(el).toHaveValue(CB)
+    fireEvent.change(el, { target: { value: '' } })
     await waitFor(() => expect(screen.queryByTestId('detected-summary')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled()
   })
 
-  test('INVALID: inline error, paste preserved, help reachable, CTA disabled', async () => {
+  test('INVALID: inline error, paste preserved, CSV fallback and help reachable, CTA disabled', async () => {
     const el = await toImport('Chaturbate')
     paste(el, 'hello this is not a tip export')
-    expect(await screen.findByTestId('detect-invalid')).toHaveTextContent('We couldn’t recognize this Chaturbate history.')
+    const err = await screen.findByTestId('detect-invalid')
+    expect(err).toHaveTextContent('We couldn’t detect a valid Chaturbate earnings history.')
+    expect(within(err).getByRole('button', { name: /Upload CSV instead/ })).toBeInTheDocument()
     expect(el).toHaveValue('hello this is not a tip export')
-    expect(screen.getByRole('button', { name: 'Import & build dashboard →' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Show copy instructions' }))
+    expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Need help copying your history?' }))
     expect(screen.getByTestId('paste-help')).toBeInTheDocument()
   })
 

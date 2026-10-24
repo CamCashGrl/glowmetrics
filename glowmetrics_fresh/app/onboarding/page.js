@@ -609,14 +609,11 @@ const CSS=`
     .ob-plat-icon{width:40px!important;height:40px!important;border-radius:12px!important;font-size:12px!important;margin-bottom:6px!important}
     .ob-plat-name{font-size:12px!important}
     .ob-plat-blurb{display:none}
-    .ob-det-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-    .ob-s2-actions{grid-template-columns:1fr!important}
-    .ob-s2-actions{gap:8px!important}
-    .ob-s2-actions>button:first-child{order:2;height:40px!important}
-    .ob-det-head{flex-wrap:wrap;gap:8px!important;margin-bottom:10px!important}
+    .ob-s2-title{font-size:23px!important}
+    .ob-det-grid{grid-template-columns:1fr 1fr!important;row-gap:10px}
+    .ob-det-grid>div:nth-child(3){grid-column:1 / -1;border-left:none!important;padding-left:0!important}
+    .ob-det-val{white-space:normal!important}
     .ob-det-title{font-size:14.5px!important}
-    .ob-det-grid{gap:9px 12px!important}
-    .ob-paste{height:120px!important}
     .ob-step1-title{font-size:24px!important}
     .ob-step1-sub{font-size:12.5px!important}
     .ob-tz-row{padding:0 12px!important;gap:9px!important}
@@ -644,7 +641,7 @@ const CSS=`
     .ob-plat-row{margin-bottom:14px!important}
     .ob-plat-card{padding:14px 10px 12px!important}
   }
-  .ob-card{max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px)}
+  .ob-card{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px)}
   .ob-gap{margin-bottom:clamp(10px,1.8dvh,16px)!important}
   @media(max-height:820px){
     .ob-stepper{margin-bottom:8px!important}
@@ -668,23 +665,24 @@ function OBLogo({showSub=false}){
   )
 }
 
-function OBProgress({current}){
+function OBProgress({current,onBack}){
   const steps=[{n:1,label:'Platform'},{n:2,label:'Import'},{n:3,label:'Insights'}]
   return(
     <div className="ob-stepper" style={{marginBottom:14}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
-            <div className="ob-stepper-circle" style={{
-              width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+            {(()=>{const back=onBack&&s.n===current-1;const Tag=back?'button':'div';return(
+            <Tag className="ob-stepper-circle" {...(back?{type:'button',onClick:onBack,'aria-label':`Back to ${s.label}`,title:`Back to ${s.label}`}:{})} style={{
+              width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',padding:0,cursor:back?'pointer':'default',
               fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
               background:s.n===current?GRAD:s.n<current?CYAN:'rgba(255,255,255,0.05)',
               border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
-              color:s.n<=current?'#04101b':'rgba(255,255,255,0.25)',
+              color:s.n===current?'#fff':s.n<current?'#04101b':'rgba(255,255,255,0.25)',
               boxShadow:s.n===current?`0 0 18px rgba(33,230,243,0.55),0 0 30px rgba(168,85,247,0.35),0 0 44px rgba(255,47,174,0.25)`:s.n<current?`0 0 14px rgba(33,230,243,0.4)`:'none',
             }}>
-              {s.n<=current?'✓':s.n}
-            </div>
+              {s.n<current?'✓':s.n}
+            </Tag>)})()}
             {i<2&&<div className="ob-stepper-line" style={{height:2,flex:1,background:current>s.n?GRAD:'rgba(255,255,255,0.1)',transition:'all 0.35s',margin:'0 3px',boxShadow:current>s.n?'0 0 6px rgba(33,230,243,0.3)':'none'}}/>}
           </div>
         ))}
@@ -882,10 +880,11 @@ export default function OnboardingPage(){
   // Chaturbate username it's used only to deep-link the stats page on Import.
   const[cbUsername,setCbUsername]=useState('')
   // Step 2 detection: 'empty' | 'validating' | 'detected' | 'invalid'
+  // Step 2 states (one persistent screen): 'empty' | 'parsing' | 'success' | 'error'
   const[detectStatus,setDetectStatus]=useState('empty')
-  const[rawOpen,setRawOpen]=useState(true)
+  const[parseStage,setParseStage]=useState(0) // 0..100 — parsing progress shown in place
+  const pasteRef=useRef(null)
   const[pasteHelpOpen,setPasteHelpOpen]=useState(false)
-  const justPastedRef=useRef(false)
   const parseFailTrackedRef=useRef('')
   const[pasteText,setPasteText]=useState('')
   const[preview,setPreview]=useState(null)
@@ -962,26 +961,28 @@ export default function OnboardingPage(){
     track('onboarding_step_viewed',{step,platform:platformId})
   },[step,user])
 
-  // Step 2 instant detection — re-parses (debounced) as the creator pastes or
-  // edits, using the same buildPreview the import uses, so what's shown is
-  // exactly what will be imported. Raw text collapses after a paste is
-  // recognized; "Edit data" reopens it without losing anything.
+  // Step 2 detection — runs the real import parser (buildPreview) in place
+  // after a short debounce. The paste field never leaves the screen; the
+  // status/result slot beneath it moves empty → parsing → success | error.
   useEffect(()=>{
     if(step!=='paste')return
-    if(!pasteText.trim()){setDetectStatus('empty');setPreview(null);setRawOpen(true);return}
-    setDetectStatus('validating')
-    const t=setTimeout(()=>{
-      const p=buildPreview(pasteText,platformId,platform.label,timezone)
-      if(p&&p.transactionsDetected>0){
-        setPreview(p);setDetectStatus('detected');setParseError('')
-        if(justPastedRef.current)setRawOpen(false)
-      }else{
-        setPreview(null);setDetectStatus('invalid')
-        if(parseFailTrackedRef.current!==pasteText){parseFailTrackedRef.current=pasteText;track('onboarding_paste_parse_failed',{platform:platformId,source:'auto_detect'})}
-      }
-      justPastedRef.current=false
-    },300)
-    return()=>clearTimeout(t)
+    if(!pasteText.trim()){setDetectStatus('empty');setPreview(null);setParseStage(0);return}
+    let t2,t3
+    const t1=setTimeout(()=>{
+      setDetectStatus('parsing');setParseStage(35)
+      t2=setTimeout(()=>{
+        const p=buildPreview(pasteText,platformId,platform.label,timezone)
+        setParseStage(100)
+        t3=setTimeout(()=>{
+          if(p&&p.transactionsDetected>0){setPreview(p);setDetectStatus('success');setParseError('')}
+          else{
+            setPreview(null);setDetectStatus('error')
+            if(parseFailTrackedRef.current!==pasteText){parseFailTrackedRef.current=pasteText;track('onboarding_paste_parse_failed',{platform:platformId,source:'auto_detect'})}
+          }
+        },220)
+      },260)
+    },350)
+    return()=>{clearTimeout(t1);clearTimeout(t2);clearTimeout(t3)}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[pasteText,platformId,timezone,step])
 
@@ -1356,7 +1357,7 @@ export default function OnboardingPage(){
   const fmtDate=d=>d?new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—'
 
   return(
-    <main style={{position:'relative',minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'28px 16px 34px',background:'#070b18',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
+    <main style={{position:'fixed',inset:0,height:'100dvh',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',background:'#070b18',fontFamily:"'Inter',system-ui,sans-serif",color:'#fff',overflow:'hidden'}}>
       <style>{CSS}</style>
 
       {/* ── BACKGROUND ── */}
@@ -1369,6 +1370,21 @@ export default function OnboardingPage(){
         <div style={{position:'absolute',left:'-16%',top:'22%',width:480,height:480,borderRadius:'50%',background:'rgba(20,184,206,0.10)',filter:'blur(130px)'}}/>
         <div style={{position:'absolute',right:'-16%',bottom:'14%',width:500,height:500,borderRadius:'50%',background:'rgba(219,39,119,0.10)',filter:'blur(140px)'}}/>
         <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse 58% 70% at 50% 50%,rgba(4,6,13,0.96) 0%,rgba(4,6,13,0.7) 55%,transparent 100%)'}}/>
+        <div style={{position:'absolute',left:'50%',bottom:'-18%',transform:'translateX(-50%)',width:'60%',height:'42%',borderRadius:'50%',background:'rgba(124,58,237,0.16)',filter:'blur(120px)'}}/>
+        {/* Faint neon wave accents along the lower edges */}
+        <svg viewBox="0 0 1440 900" preserveAspectRatio="none" style={{position:'absolute',inset:0,width:'100%',height:'100%'}}>
+          <defs>
+            <linearGradient id="obWaveL" x1="0" x2="1"><stop offset="0" stopColor="#22d3ee" stopOpacity="0.55"/><stop offset="1" stopColor="#7c3aed" stopOpacity="0"/></linearGradient>
+            <linearGradient id="obWaveR" x1="1" x2="0"><stop offset="0" stopColor="#ff2fae" stopOpacity="0.55"/><stop offset="1" stopColor="#7c3aed" stopOpacity="0"/></linearGradient>
+            <filter id="obWaveGlow"><feGaussianBlur stdDeviation="3"/></filter>
+          </defs>
+          <g fill="none" strokeLinecap="round" filter="url(#obWaveGlow)" opacity="0.7">
+            <path d="M-40 640 C 160 600, 260 760, 520 900" stroke="url(#obWaveL)" strokeWidth="2.5"/>
+            <path d="M-40 700 C 140 670, 240 800, 430 900" stroke="url(#obWaveL)" strokeWidth="1.5" opacity="0.7"/>
+            <path d="M1480 600 C 1280 590, 1180 760, 920 900" stroke="url(#obWaveR)" strokeWidth="2.5"/>
+            <path d="M1480 670 C 1300 660, 1200 800, 1010 900" stroke="url(#obWaveR)" strokeWidth="1.5" opacity="0.7"/>
+          </g>
+        </svg>
         <div style={{position:'absolute',inset:0,opacity:0.38,backgroundImage:'radial-gradient(1px 1px at 23px 41px,rgba(255,255,255,0.55),transparent),radial-gradient(1px 1px at 131px 97px,rgba(255,255,255,0.35),transparent),radial-gradient(1.5px 1.5px at 77px 163px,rgba(186,230,253,0.45),transparent),radial-gradient(1px 1px at 189px 19px,rgba(255,255,255,0.3),transparent)',backgroundSize:'211px 197px'}}/>
         <div style={{position:'absolute',inset:0,opacity:0.28,backgroundImage:'radial-gradient(1px 1px at 61px 211px,rgba(251,207,232,0.5),transparent),radial-gradient(1px 1px at 257px 83px,rgba(255,255,255,0.35),transparent),radial-gradient(1.5px 1.5px at 173px 281px,rgba(255,255,255,0.4),transparent)',backgroundSize:'331px 307px'}}/>
       </div>
@@ -1380,7 +1396,7 @@ export default function OnboardingPage(){
 
       {/* ── CARD ── */}
       <div className={`ob-card-shell${step==='platforms'||step==='paste'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div className={`ob-card ob-card-inner${step==='platforms'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'24px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
               don't add empty scrollable space to the card. */}
@@ -1402,7 +1418,7 @@ export default function OnboardingPage(){
           {!['loading'].includes(step)&&(
             <header>
               <OBLogo showSub={step==='platform'}/>
-              {showProgress&&<OBProgress current={stepNum}/>}
+              {showProgress&&<OBProgress current={stepNum} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>}
             </header>
           )}
 
@@ -1456,101 +1472,105 @@ export default function OnboardingPage(){
 
           {/* ══ PASTE ══ */}
           {step==='paste'&&(()=>{
-            const det=detectStatus==='detected'&&preview
+            const ok=detectStatus==='success'&&preview
             const helpLink=platformId==='chaturbate'
               ?(cbUsername?{href:platform.earningsUrl(cbUsername),label:'Open your Chaturbate token stats ↗'}:null)
               :{href:platform.earningsUrl(),label:platformId==='bongacams'?'Open BongaCams reports ↗':'Open MyFreeCams token sessions ↗'}
-            const metric=(k,label,value,sub,color='#F1F5F9')=>(
-              <div key={k} data-testid={`detected-${k}`} className="ob-det-cell" style={{minWidth:0}}>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginBottom:3}}>{label}</div>
-                <div style={{fontSize:16,fontWeight:800,color}}>{value}</div>
-                {sub&&<div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginTop:2}}>{sub}</div>}
+            // Headline count: "tips" only when every row is a tip; otherwise
+            // "transactions" so private shows / memberships are never called tips.
+            const onlyTips=ok&&preview.privateDetected===0&&preview.membershipsDetected===0&&preview.otherDetected===0
+            const count=ok?(onlyTips?preview.tipsDetected:preview.transactionsDetected):0
+            const range=ok&&preview.dateFrom&&preview.dateTo?(preview.dateFrom===preview.dateTo?preview.dateTo:preview.dateFrom.slice(-4)===preview.dateTo.slice(-4)?`${preview.dateFrom.replace(/, \d{4}$/,'')} – ${preview.dateTo}`:`${preview.dateFrom} – ${preview.dateTo}`):'—'
+            const slot={minHeight:100,borderRadius:14,marginTop:14,textAlign:'left'}
+            const col=(k,label,value,sub,color='#F1F5F9',first=false)=>(
+              <div key={k} data-testid={`detected-${k}`} style={{minWidth:0,padding:first?'0 14px 0 0':'0 14px',borderLeft:first?'none':'1px solid rgba(148,163,184,0.16)'}}>
+                <div style={{fontSize:11.5,color:'rgba(148,163,184,0.8)',marginBottom:3}}>{label}</div>
+                <div className="ob-det-val" style={{fontSize:15,fontWeight:800,color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{value}</div>
+                {sub&&<div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginTop:2}}>{sub}</div>}
               </div>
             )
             return(
-            <div className="ob-step1-col" style={{animation:'fadeUp 0.3s ease both'}}>
-              <div className="ob-step1-head" style={{textAlign:'center',marginBottom:18}}>
-                <h1 className="ob-step1-title" style={{fontSize:30,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.12,marginBottom:8}}>{isPrimaryInQueue?<>Paste your {platform.label} <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>tip history</span></>:`You also stream on ${platform.label}`}</h1>
-                <p className="ob-step1-sub" style={{fontSize:14.5,color:'rgba(166,168,189,0.9)',lineHeight:1.5,maxWidth:540,margin:'0 auto'}}>Copy your earnings rows from {platform.label} and paste them below.</p>
+            <div className="ob-s2" style={{animation:'fadeUp 0.3s ease both',maxWidth:600,margin:'0 auto'}}>
+              <div style={{textAlign:'center',marginBottom:14}}>
+                <h1 className="ob-s2-title" style={{fontSize:28,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.15,marginBottom:6}}>{isPrimaryInQueue?<>Paste your {platform.label} <span style={{background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>tip history</span></>:`You also stream on ${platform.label}`}</h1>
+                <p style={{fontSize:13.5,color:'rgba(166,168,189,0.9)',lineHeight:1.45}}>Copy your earnings rows from {platform.label} and paste them below.</p>
               </div>
 
-              {(rawOpen||!det)&&(
-                <textarea aria-label={`Paste your ${platform.label} tip history`} value={pasteText}
-                  onPaste={()=>{justPastedRef.current=true}}
-                  onChange={e=>setPasteText(e.target.value)} placeholder={`Paste your ${platform.label} tip history here…`}
-                  className="ob-paste"
-                  style={{width:'100%',height:det?110:140,resize:'none',borderRadius:16,border:`1px solid ${detectStatus==='invalid'?'rgba(248,113,113,0.55)':'rgba(96,165,250,0.32)'}`,background:'rgba(2,4,14,0.92)',padding:'14px 16px',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:12.5,lineHeight:1.55,color:'#E2E8F0',outline:'none',marginBottom:12,transition:'border-color 0.18s,box-shadow 0.18s'}}
-                  onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                  onBlur={e=>{e.target.style.borderColor=detectStatus==='invalid'?'rgba(248,113,113,0.55)':'rgba(96,165,250,0.32)';e.target.style.boxShadow='none'}}
-                />
-              )}
+              <textarea ref={pasteRef} aria-label={`Paste your ${platform.label} tip history`} value={pasteText}
+                onChange={e=>setPasteText(e.target.value)} placeholder={`Paste your ${platform.label} tip history here…`}
+                className="ob-paste" spellCheck={false}
+                style={{display:'block',width:'100%',height:110,minHeight:105,maxHeight:125,resize:'none',borderRadius:14,border:`1px solid ${detectStatus==='error'?'rgba(248,113,113,0.5)':'rgba(34,211,238,0.28)'}`,background:'rgba(4,10,24,0.85)',padding:'12px 14px',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:12,lineHeight:1.5,color:'#E2E8F0',outline:'none',transition:'border-color 0.18s,box-shadow 0.18s'}}
+                onFocus={e=>{e.target.style.borderColor='rgba(34,211,238,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(34,211,238,0.08)'}}
+                onBlur={e=>{e.target.style.borderColor=detectStatus==='error'?'rgba(248,113,113,0.5)':'rgba(34,211,238,0.28)';e.target.style.boxShadow='none'}}
+              />
 
-              {detectStatus==='validating'&&<div data-testid="detect-validating" style={{display:'flex',alignItems:'center',gap:8,fontSize:12.5,color:'rgba(148,163,184,0.85)',marginBottom:12}}><span style={{width:12,height:12,border:'2px solid rgba(33,230,243,0.25)',borderTopColor:CYAN,borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>Checking your data…</div>}
-
-              {det&&(
-                <div data-testid="detected-summary" style={{borderRadius:16,padding:'14px 18px 16px',marginBottom:14,textAlign:'left',background:'linear-gradient(180deg,rgba(30,16,52,0.55),rgba(12,14,36,0.7)) padding-box,linear-gradient(135deg,rgba(33,230,243,0.7),rgba(168,85,247,0.6),rgba(255,47,174,0.7)) border-box',border:'1.5px solid transparent',boxShadow:'0 0 22px rgba(168,85,247,0.18)'}}>
-                  <div className="ob-det-head" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
+              {/* Status / result slot — in place, directly beneath the paste field */}
+              {(importError||upgradeBlocked)?(
+                <div role="alert" style={{...slot,padding:'14px 16px',border:'1px solid rgba(248,113,113,0.4)',background:'rgba(248,113,113,0.06)'}}>
+                  {upgradeBlocked?(<>
+                    <div style={{fontSize:13.5,fontWeight:800,color:'#c4b5fd',marginBottom:4}}>🔒 Upgrade to add {platform.label}</div>
+                    <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5,marginBottom:8}}>{upgradeBlocked.message}</div>
+                    <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'7px 14px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See plans</button>
+                  </>):(<>
+                    <div style={{fontSize:13.5,fontWeight:800,color:'#FCA5A5',marginBottom:4}}>Import didn’t finish</div>
+                    <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5}}>{importError} Your pasted data is still here — press Continue to try again.</div>
+                  </>)}
+                </div>
+              ):detectStatus==='parsing'?(
+                <div data-testid="detect-parsing" style={{...slot,display:'flex',alignItems:'center',gap:14,padding:'0 18px',border:'1px solid rgba(124,92,255,0.45)',background:'linear-gradient(90deg,rgba(34,211,238,0.06),rgba(168,85,247,0.08))'}}>
+                  <span aria-hidden="true" style={{width:30,height:30,flexShrink:0,borderRadius:'50%',border:'3px solid rgba(34,211,238,0.18)',borderTopColor:'#22d3ee',borderRightColor:'#a855f7',animation:'spin 0.9s linear infinite'}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:800,color:'#F8FAFC'}}>Analyzing your history…</div>
+                    <div style={{fontSize:12,color:'rgba(148,163,184,0.85)',margin:'2px 0 8px'}}>Reading transactions and detecting earnings…</div>
                     <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <span aria-hidden="true" style={{width:24,height:24,borderRadius:'50%',background:CYAN,color:'#04101b',fontSize:13,fontWeight:900,display:'inline-flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 12px rgba(33,230,243,0.5)'}}>✓</span>
-                      <span className="ob-det-title" style={{fontSize:16,fontWeight:800,color:'#F8FAFC'}}><span data-testid="detected-count">{preview.transactionsDetected.toLocaleString('en-US')}</span> transactions detected!</span>
-                    </div>
-                    <div style={{display:'flex',gap:8}}>
-                      {!rawOpen&&<button type="button" onClick={()=>setRawOpen(true)} style={{padding:'6px 12px',borderRadius:10,border:'1px solid rgba(148,163,184,0.35)',background:'rgba(255,255,255,0.03)',color:'#F1F5F9',fontSize:12,fontWeight:700,cursor:'pointer'}}>Edit data</button>}
-                      <button type="button" onClick={()=>{setPasteText('');setRawOpen(true)}} style={{padding:'6px 12px',borderRadius:10,border:'1px solid rgba(148,163,184,0.2)',background:'transparent',color:'rgba(203,213,225,0.8)',fontSize:12,fontWeight:600,cursor:'pointer'}}>Replace data</button>
+                      <div style={{flex:1,height:6,borderRadius:6,background:'rgba(255,255,255,0.07)',overflow:'hidden'}}><div style={{width:`${parseStage}%`,height:'100%',borderRadius:6,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',transition:'width 0.25s ease'}}/></div>
+                      <span style={{fontSize:11.5,color:'rgba(203,213,225,0.85)',minWidth:30,textAlign:'right'}}>{parseStage}%</span>
                     </div>
                   </div>
-                  <div className="ob-det-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:'12px 16px'}}>
-                    {metric('platform','Platform',platform.label)}
-                    {metric('range','Date range',preview.dateFrom&&preview.dateTo?(preview.dateFrom===preview.dateTo?preview.dateTo:preview.dateFrom.slice(-4)===preview.dateTo.slice(-4)?`${preview.dateFrom.replace(/, \d{4}$/,'')} – ${preview.dateTo}`:`${preview.dateFrom} – ${preview.dateTo}`):'—',preview.days?`${preview.days.toLocaleString('en-US')} day${preview.days===1?'':'s'}`:null,'#93C5FD')}
-                    {metric('tips','Regular tips',preview.tipsDetected.toLocaleString('en-US'))}
-                    {metric('total','Total earnings',`$${preview.estimatedEarnings.toFixed(2)}`,null,'#4ade80')}
-                    {preview.privateDetected>0&&metric('private','Private earnings',`$${preview.paidEarnings.toFixed(2)}`,`${preview.privateDetected.toLocaleString('en-US')} private ${preview.privateDetected===1?'session':'sessions'}`,PINK)}
-                    {preview.membershipsDetected>0&&metric('memberships','Memberships',preview.membershipsDetected.toLocaleString('en-US'),`$${preview.snapshot.full.categories.memberships.usd.toFixed(2)}`,'#a78bfa')}
+                </div>
+              ):ok?(
+                <div data-testid="detected-summary" style={{...slot,padding:'12px 18px 14px',border:'1.5px solid transparent',background:'linear-gradient(90deg,rgba(7,16,31,0.92),rgba(30,16,52,0.75)) padding-box,linear-gradient(90deg,rgba(34,211,238,0.85),rgba(34,211,238,0.7) 60%,rgba(255,47,174,0.75)) border-box',boxShadow:'0 0 20px rgba(34,211,238,0.10),12px 0 26px rgba(255,47,174,0.08)'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:10}}>
+                    <div style={{display:'flex',alignItems:'center',gap:9,minWidth:0}}>
+                      <span aria-hidden="true" style={{width:22,height:22,flexShrink:0,borderRadius:'50%',background:'#22d3ee',color:'#04101b',fontSize:12,fontWeight:900,display:'inline-flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 10px rgba(34,211,238,0.5)'}}>✓</span>
+                      <span className="ob-det-title" style={{fontSize:15.5,fontWeight:800,color:'#F8FAFC'}}><span data-testid="detected-count">{count.toLocaleString('en-US')}</span> <span style={{color:'#22d3ee'}}>{onlyTips?'tips':'transactions'} detected!</span></span>
+                    </div>
+                    <button type="button" onClick={()=>{const el=pasteRef.current;if(el){el.focus();el.setSelectionRange?.(el.value.length,el.value.length);el.scrollTop=el.scrollHeight}}} style={{flexShrink:0,padding:'5px 12px',borderRadius:9,border:'1px solid rgba(148,163,184,0.45)',background:'rgba(255,255,255,0.03)',color:'#F1F5F9',fontSize:12,fontWeight:700,cursor:'pointer'}}>Edit data</button>
+                  </div>
+                  <div className="ob-det-grid" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 1fr'}}>
+                    {col('platform','Platform',platform.label,null,'#F1F5F9',true)}
+                    {col('range','Date range',range,preview.days?`${preview.days.toLocaleString('en-US')} day${preview.days===1?'':'s'}`:null,'#93C5FD')}
+                    {col('total','Earnings detected',`$${preview.estimatedEarnings.toFixed(2)}`,null,'#4ade80')}
                   </div>
                 </div>
-              )}
-
-              {detectStatus==='invalid'&&(
-                <div role="alert" data-testid="detect-invalid" style={{marginBottom:12,padding:'12px 14px',borderRadius:13,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.28)',textAlign:'left'}}>
-                  <div style={{fontSize:13,fontWeight:800,color:'#FCA5A5',marginBottom:3}}>We couldn’t recognize this {platform.label} history.</div>
-                  <div style={{fontSize:12,color:'rgba(203,213,225,0.8)',lineHeight:1.5}}>Make sure you copied the full table, including dates and token amounts. Your pasted text is still here.</div>
-                  <div style={{display:'flex',gap:14,marginTop:8}}>
-                    <button type="button" onClick={()=>{setPasteText('');setRawOpen(true)}} style={{background:'none',border:'none',padding:0,color:CYAN,fontSize:12,fontWeight:700,cursor:'pointer'}}>Try again</button>
-                    <button type="button" onClick={()=>setPasteHelpOpen(true)} style={{background:'none',border:'none',padding:0,color:CYAN,fontSize:12,fontWeight:700,cursor:'pointer'}}>Show copy instructions</button>
+              ):detectStatus==='error'?(
+                <div role="alert" data-testid="detect-invalid" style={{...slot,display:'flex',gap:12,padding:'12px 16px',border:'1px solid rgba(248,113,113,0.55)',background:'rgba(127,29,29,0.14)'}}>
+                  <span aria-hidden="true" style={{width:22,height:22,flexShrink:0,borderRadius:'50%',background:'rgba(248,113,113,0.9)',color:'#1f0a0a',fontSize:12,fontWeight:900,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>!</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13.5,fontWeight:800,color:'#FCA5A5',marginBottom:3}}>We couldn’t detect a valid {platform.label} earnings history.</div>
+                    <div style={{fontSize:12,color:'rgba(203,213,225,0.82)',lineHeight:1.45,marginBottom:8}}>Please make sure you’ve copied the full tip history from {platform.label}, or try uploading a CSV file instead.</div>
+                    <button type="button" onClick={()=>setStep('csv')} style={{padding:'6px 14px',borderRadius:9,border:'1px solid rgba(34,211,238,0.5)',background:'rgba(34,211,238,0.06)',color:'#E0F7FF',fontSize:12,fontWeight:700,cursor:'pointer'}}>⇪ Upload CSV instead</button>
                   </div>
                 </div>
-              )}
+              ):null}
 
-              {parseError&&detectStatus!=='invalid'&&<div role="alert" style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
-
-              {upgradeBlocked&&(
-                <div style={{marginBottom:10,padding:'12px 14px',borderRadius:12,background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.35)'}}>
-                  <div style={{fontSize:12,fontWeight:800,color:'#a78bfa',marginBottom:4}}>🔒 Upgrade to add {platform.label}</div>
-                  <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5,marginBottom:9}}>{upgradeBlocked.message}</div>
-                  <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See plans</button>
-                </div>
-              )}
-              {importError&&<div role="alert" style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
-
-              {pasteHelpOpen&&(
-                <div data-testid="paste-help" style={{marginBottom:12,padding:'12px 14px',borderRadius:13,border:'1px solid rgba(96,165,250,0.22)',background:'rgba(255,255,255,0.025)',textAlign:'left'}}>
-                  <div style={{fontSize:12.5,fontWeight:800,color:'#F1F5F9',marginBottom:4}}>How to copy from {platform.label}</div>
-                  <div style={{fontSize:12,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>{platform.instructions}{platformId==='chaturbate'&&!cbUsername?' You’ll find Token Stats on your broadcaster profile page.':''}</div>
-                  {platformId==='bongacams'&&<div style={{fontSize:11.5,color:'rgba(148,163,184,0.8)',marginTop:6}}>You can paste your Free Chat and Paid Chat sections together.</div>}
-                  {helpLink&&<a href={helpLink.href} target="_blank" rel="noreferrer" style={{display:'inline-block',marginTop:8,fontSize:12,fontWeight:700,color:CYAN,textDecoration:'none'}}>{helpLink.label}</a>}
-                </div>
-              )}
-
-              <div className="ob-s2-actions" style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10}}>
-                <OBSecBtn onClick={()=>setStep('platforms')} style={{height:58,padding:'0 18px'}}>← Back</OBSecBtn>
-                <OBBtn onClick={handlePreview} disabled={!det} style={det?{height:58,fontSize:16,borderRadius:16}:{height:58,fontSize:16,borderRadius:16,color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>{det?'Continue →':'Import & build dashboard →'}</OBBtn>
+              <div style={{marginTop:14}}>
+                <OBBtn onClick={handlePreview} disabled={!ok} style={ok?{height:54,fontSize:15.5,borderRadius:13}:{height:54,fontSize:15.5,borderRadius:13,color:'rgba(226,232,240,0.55)',border:'1px solid rgba(255,255,255,0.10)'}}>Continue →</OBBtn>
               </div>
-              <div style={{display:'flex',justifyContent:'center',gap:18,marginTop:12,flexWrap:'wrap'}}>
-                <button type="button" onClick={()=>setPasteHelpOpen(o=>!o)} style={{background:'none',border:'none',padding:0,fontSize:12,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>{pasteHelpOpen?'Hide copy instructions':'Need help copying your history?'}</button>
-                <button type="button" onClick={()=>setStep('csv')} style={{background:'none',border:'none',padding:0,fontSize:12,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Upload CSV instead</button>
-                {!isPrimaryInQueue&&<button type="button" onClick={skipCurrentPlatform} style={{background:'none',border:'none',padding:0,fontSize:12,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Skip for now — connect later</button>}
+
+              <div style={{position:'relative',display:'flex',justifyContent:'center',gap:18,marginTop:10,flexWrap:'wrap',fontSize:12}}>
+                {pasteHelpOpen&&(
+                  <div data-testid="paste-help" role="dialog" aria-label="How to copy your history" style={{position:'absolute',bottom:'calc(100% + 8px)',left:'50%',transform:'translateX(-50%)',width:'min(440px,100%)',zIndex:20,padding:'12px 14px',borderRadius:13,border:'1px solid rgba(34,211,238,0.28)',background:'#0b1428',boxShadow:'0 18px 40px rgba(0,0,0,0.5)',textAlign:'left'}}>
+                    <div style={{fontSize:12.5,fontWeight:800,color:'#F1F5F9',marginBottom:4}}>How to copy from {platform.label}</div>
+                    <div style={{fontSize:12,color:'rgba(203,213,225,0.82)',lineHeight:1.5}}>{platform.instructions}{platformId==='chaturbate'&&!cbUsername?' You’ll find Token Stats on your broadcaster profile page.':''}{platformId==='bongacams'?' You can paste your Free Chat and Paid Chat sections together.':''}</div>
+                    {helpLink&&<a href={helpLink.href} target="_blank" rel="noreferrer" style={{display:'inline-block',marginTop:6,fontSize:12,fontWeight:700,color:'#22d3ee',textDecoration:'none'}}>{helpLink.label}</a>}
+                  </div>
+                )}
+                <button type="button" onClick={()=>setPasteHelpOpen(o=>!o)} style={{background:'none',border:'none',padding:0,color:'rgba(203,213,225,0.8)',cursor:'pointer'}}>{pasteHelpOpen?'Hide copy instructions':'Need help copying your history?'}</button>
+                <button type="button" onClick={()=>setStep('csv')} style={{background:'none',border:'none',padding:0,color:'#22d3ee',fontWeight:600,cursor:'pointer'}}>Upload CSV instead</button>
+                {!isPrimaryInQueue&&<button type="button" onClick={skipCurrentPlatform} style={{background:'none',border:'none',padding:0,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Skip for now</button>}
               </div>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:11,color:'rgba(100,116,139,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and never shared.</span></div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:8,fontSize:11,color:'rgba(148,163,184,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and never shared.</span></div>
             </div>
           )})()}
 
