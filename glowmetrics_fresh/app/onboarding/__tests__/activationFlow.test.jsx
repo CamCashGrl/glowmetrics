@@ -73,7 +73,8 @@ async function importPrimary() {
   fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
   expectNoUsernameStep()
   fireEvent.change(await screen.findByPlaceholderText(/Paste|paste/), { target: { value: PASTE } })
-  fireEvent.click(screen.getByRole('button', { name: /Import & build dashboard/ }))
+  await screen.findByTestId('detected-summary')
+  fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
   await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })
 }
 
@@ -126,7 +127,8 @@ test('a returning user with saved secondaries still only imports the primary in 
   fireEvent.click(screen.getByRole('button', { name: 'Continue with Chaturbate →' }))
   expectNoUsernameStep()
   fireEvent.change(await screen.findByPlaceholderText(/Paste|paste/), { target: { value: PASTE } })
-  fireEvent.click(screen.getByRole('button', { name: /Import & build dashboard/ }))
+  await screen.findByTestId('detected-summary')
+  fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
   await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })
   noSecondaryOffered()
   // Saved secondary is preserved in the profile, just not walked through now.
@@ -140,7 +142,7 @@ test('Step 1 Continue goes directly to Import with platform + timezone preserved
   fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
   // Lands on the Chaturbate import screen immediately.
   expect(await screen.findByPlaceholderText(/Paste|paste/)).toBeInTheDocument()
-  expect(screen.getByText(/Step 2 of 3 — Chaturbate/)).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Paste your Chaturbate tip history')
   expectNoUsernameStep()
   expect(screen.getByText('Import')).toHaveAttribute('aria-current', 'step')
   expect(screen.queryByText(/^Username$/i)).not.toBeInTheDocument()
@@ -150,7 +152,8 @@ test('Step 1 Continue goes directly to Import with platform + timezone preserved
   expect(profileRows.some(r => 'chaturbate_username' in r)).toBe(false)
   // Import completes without a username.
   fireEvent.change(screen.getByPlaceholderText(/Paste|paste/), { target: { value: PASTE } })
-  fireEvent.click(screen.getByRole('button', { name: /Import & build dashboard/ }))
+  await screen.findByTestId('detected-summary')
+  fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
   expect(await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })).toBeInTheDocument()
 }, 20000)
 
@@ -160,6 +163,7 @@ test('a saved Chaturbate username is still used for the stats-page link, but nev
   fireEvent.click(await screen.findByText('Chaturbate'))
   fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
   await screen.findByPlaceholderText(/Paste|paste/)
+  fireEvent.click(screen.getByRole('button', { name: 'Need help copying your history?' }))
   expect(document.querySelector('a[href="https://chaturbate.com/p/savedname/?tab=tokens"]')).not.toBeNull()
   expectNoUsernameStep()
 }, 20000)

@@ -7,7 +7,8 @@ import { supabase } from '../../lib/supabase'
 import { readUploadJson } from '../../lib/readUploadJson'
 // Token rates — single source of truth, never hardcode below this line
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
-import { computeSnapshotStats } from '../../lib/analytics'
+import { computeSnapshotStats, parseCSV } from '../../lib/analytics'
+import { summarizeOnboarding, importDate, assertImportComplete } from '../../lib/onboardingSummary'
 import { FREE_ANALYSIS_WINDOW_DAYS } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
@@ -373,63 +374,61 @@ function paidSessionsToCSVBlob(sessions){
   return new Blob([csvRows.join('\n')],{type:'text/csv'})
 }
 
-export function buildPreview(rawText,platformId,platformLabel){
-  const{rows,skipped}=parseRows(rawText,platformId)
-
-  // Detect paid sessions for all platforms
-  let paidSessions=[]
-  if(platformId==='bongacams'){
-    const res=parseBCPaidSessions(rawText)
-    paidSessions=res.sessions
-  }else if(platformId==='chaturbate'){
-    const res=parseCBPrivateSessions(rawText)
-    paidSessions=res.sessions
-  }else if(platformId==='myfreecams'){
-    const res=parseMFCPrivateSessions(rawText)
-    paidSessions=res.sessions
+// Paste preview + first-insight summary. One category contract for every
+// platform (lib/onboardingSummary.js): regular tips, private earnings
+// (Chaturbate private shows, BongaCams paid chats, MyFreeCams privates),
+// memberships, other sales. Private earnings and memberships are never
+// counted as regular tips; total earnings = tips + private + memberships.
+// Chaturbate and MyFreeCams use the canonical server parser
+// (lib/analytics.js parseCSV) so the preview matches exactly what /api/upload
+// will store — including private shows / MFC privates, which that route saves
+// through its deduplicating paid-session path. (This page's own MFC row
+// parser mis-read MFC exports: wrong dates, usernames, tokens, and privates
+// counted as tips.) BongaCams keeps this page's parsers, which read its
+// headerless exports more accurately; its paid chats upload separately.
+export function buildPreview(rawText,platformId,platformLabel,timeZone='UTC'){
+  let rows=[],paidSessions=[]
+  if(platformId==='chaturbate'||platformId==='myfreecams'){
+    const parsed=parseCSV(rawText,PLATFORMS[platformId].label)
+    for(const r of parsed){
+      const ts=importDate(r.date_time||r.dateRaw)
+      if(isNaN(ts.getTime()))continue
+      if(r.is_paid_session)paidSessions.push({ts,username:r.username,sessionType:r.session_type,tokens:r.tokens,usd:r.usd})
+      else rows.push({ts,username:r.username,tokens:r.tokens,usd:r.usd,note:r.tip_note||'',tip_type:r.tip_type})
+    }
+  }else{
+    rows=parseRows(rawText,platformId).rows
+    paidSessions=parseBCPaidSessions(rawText).sessions
   }
-
   if(!rows.length&&!paidSessions.length)return null
-  const totalUsd=rows.reduce((s,r)=>s+r.usd,0)
-  const paidUsd=paidSessions.reduce((s,r)=>s+r.usd,0)
-  const allRows=[...rows,...paidSessions.map(s=>({...s,ts:s.ts,username:s.username,tokens:s.tokens,usd:s.usd}))]
-  const fans=new Set([...rows,...paidSessions].map(r=>(r.username||'').toLowerCase().trim()).filter(Boolean)).size
+  const allRows=[...rows,...paidSessions.map(s=>({ts:s.ts,username:s.username,tokens:s.tokens,usd:s.usd,session_type:s.sessionType,is_paid_session:true}))]
+  const summary=summarizeOnboarding(allRows,timeZone)
   const dates=allRows.map(r=>r.ts).sort((a,b)=>a-b)
+  const fans=new Set(allRows.map(r=>(r.username||'').toLowerCase().trim()).filter(Boolean)).size
   const topSpender=Object.entries(allRows.reduce((acc,r)=>{acc[r.username]=(acc[r.username]||0)+r.tokens;return acc},{})).sort((a,b)=>b[1]-a[1])[0]
-  const hourCounts=allRows.reduce((acc,r)=>{const h=r.ts.getHours();acc[h]=(acc[h]||0)+r.tokens;return acc},{})
-  const bestHour=Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]
-  const fmtHour=h=>{const n=parseInt(h);return n===0?'12am':n<12?`${n}am`:n===12?'12pm':`${n-12}pm`}
-  // A raw token-sum peak hour can be driven entirely by a single whale tip on
-  // a single day — that's not evidence of a repeatable streaming window, just
-  // that one big transaction happened to land in that hour. Only call it a
-  // confident "sweet spot" if tips from at least 2 distinct calendar days
-  // landed in that hour; otherwise the UI shows the raw peak without implying
-  // it's a reliable pattern.
-  let bestHourConfident=false
-  if(bestHour){
-    const targetHour=parseInt(bestHour[0])
-    const distinctDays=new Set(allRows.filter(r=>r.ts.getHours()===targetHour).map(r=>r.ts.toDateString()))
-    bestHourConfident=distinctDays.size>=2
-  }
+  const c=summary.full.categories
+  const fmtD=d=>d.toLocaleDateString('en-US',{timeZone,month:'short',day:'numeric',year:'numeric'})
   return{
-    tipsDetected:rows.length,
+    tipsDetected:c.tips.count,
+    privateDetected:c.private.count,
+    membershipsDetected:c.memberships.count,
+    otherDetected:c.other.count,
+    transactionsDetected:c.tips.count+c.private.count+c.memberships.count+c.other.count,
     paidSessionsDetected:paidSessions.length,
     paidSessions,
-    estimatedEarnings:+(totalUsd+paidUsd).toFixed(2),
-    paidEarnings:+paidUsd.toFixed(2),
+    estimatedEarnings:summary.full.usd,
+    paidEarnings:c.private.usd,
     fansDetected:fans,
-    dateRange:dates.length?`${dates[0].toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${dates[dates.length-1].toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`:'—',
+    dateFrom:dates.length?fmtD(dates[0]):null,
+    dateTo:dates.length?fmtD(dates[dates.length-1]):null,
+    dateRange:dates.length?`${fmtD(dates[0])} – ${fmtD(dates[dates.length-1])}`:'—',
+    days:summary.full.days||0,
     topSpender:topSpender?{name:topSpender[0],tokens:topSpender[1]}:null,
-    bestHour:bestHour?fmtHour(bestHour[0]):null,
-    bestHourConfident,
-    sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
-    // Full parsed rows + the shared Free-tier 31-day window computed from
-    // them (lib/analytics.js computeSnapshotStats — same function the CSV
-    // upload API route uses) so the onboarding success states can show real
-    // "full imported range" vs "most recent 31 days" numbers instead of
-    // reusing the flat totals above for both.
+    bestHour:summary.bestHour,
+    bestHourConfident:summary.bestHourConfident,
+    sampleRows:rows.slice(0,5).map(r=>({date:r.ts.toLocaleDateString('en-US',{timeZone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),fan:r.username,tokens:r.tokens,amount:r.usd,platform:platformLabel})),
     rows,
-    snapshot:computeSnapshotStats(rows.map(r=>({date:r.ts,tokens:r.tokens,usd:r.usd})),31),
+    snapshot:summary,
   }
 }
 
@@ -610,6 +609,14 @@ const CSS=`
     .ob-plat-icon{width:40px!important;height:40px!important;border-radius:12px!important;font-size:12px!important;margin-bottom:6px!important}
     .ob-plat-name{font-size:12px!important}
     .ob-plat-blurb{display:none}
+    .ob-det-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ob-s2-actions{grid-template-columns:1fr!important}
+    .ob-s2-actions{gap:8px!important}
+    .ob-s2-actions>button:first-child{order:2;height:40px!important}
+    .ob-det-head{flex-wrap:wrap;gap:8px!important;margin-bottom:10px!important}
+    .ob-det-title{font-size:14.5px!important}
+    .ob-det-grid{gap:9px 12px!important}
+    .ob-paste{height:120px!important}
     .ob-step1-title{font-size:24px!important}
     .ob-step1-sub{font-size:12.5px!important}
     .ob-tz-row{padding:12px 14px!important;gap:10px!important;flex-wrap:wrap;position:relative}
@@ -869,6 +876,12 @@ export default function OnboardingPage(){
   // Optional. No longer asked for in onboarding; if the profile already has a
   // Chaturbate username it's used only to deep-link the stats page on Import.
   const[cbUsername,setCbUsername]=useState('')
+  // Step 2 detection: 'empty' | 'validating' | 'detected' | 'invalid'
+  const[detectStatus,setDetectStatus]=useState('empty')
+  const[rawOpen,setRawOpen]=useState(true)
+  const[pasteHelpOpen,setPasteHelpOpen]=useState(false)
+  const justPastedRef=useRef(false)
+  const parseFailTrackedRef=useRef('')
   const[pasteText,setPasteText]=useState('')
   const[preview,setPreview]=useState(null)
   const[parseError,setParseError]=useState('')
@@ -940,6 +953,29 @@ export default function OnboardingPage(){
     if(!user)return
     track('onboarding_step_viewed',{step,platform:platformId})
   },[step,user])
+
+  // Step 2 instant detection — re-parses (debounced) as the creator pastes or
+  // edits, using the same buildPreview the import uses, so what's shown is
+  // exactly what will be imported. Raw text collapses after a paste is
+  // recognized; "Edit data" reopens it without losing anything.
+  useEffect(()=>{
+    if(step!=='paste')return
+    if(!pasteText.trim()){setDetectStatus('empty');setPreview(null);setRawOpen(true);return}
+    setDetectStatus('validating')
+    const t=setTimeout(()=>{
+      const p=buildPreview(pasteText,platformId,platform.label,timezone)
+      if(p&&p.transactionsDetected>0){
+        setPreview(p);setDetectStatus('detected');setParseError('')
+        if(justPastedRef.current)setRawOpen(false)
+      }else{
+        setPreview(null);setDetectStatus('invalid')
+        if(parseFailTrackedRef.current!==pasteText){parseFailTrackedRef.current=pasteText;track('onboarding_paste_parse_failed',{platform:platformId,source:'auto_detect'})}
+      }
+      justPastedRef.current=false
+    },300)
+    return()=>clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[pasteText,platformId,timezone,step])
 
   // Fires exactly once per session when a logged-in user actually lands in
   // onboarding — distinct from onboarding_step_viewed (which fires per-step
@@ -1059,8 +1095,8 @@ export default function OnboardingPage(){
   function handlePreview(){
     setParseError('')
     if(!pasteText.trim()){setParseError('Paste your tip history above first.');return}
-    const p=buildPreview(pasteText,platformId,platform.label)
-    if(!p||( p.tipsDetected===0&&p.paidSessionsDetected===0)){
+    const p=buildPreview(pasteText,platformId,platform.label,timezone)
+    if(!p||( p.transactionsDetected===0)){
       setParseError("We couldn't find any tip rows. Make sure you copied the full table including dates and token amounts.")
       track('onboarding_paste_parse_failed',{platform:platformId})
 
@@ -1107,10 +1143,13 @@ export default function OnboardingPage(){
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
-      // Send the already-parsed rows as a clean CSV instead of the raw paste —
-      // the server has its own independent parser, and re-parsing the raw text
-      // there can disagree with what this page's parseRows() already validated.
-      const{blob:csvBlob}=pasteToCSVBlob(pasteText,platformId)
+      // Chaturbate / MyFreeCams: send the raw paste — preview and server share
+      // the canonical parser, so private earnings are classified identically
+      // and stored through the route's deduplicating paid-session path.
+      // BongaCams: send the already-parsed tips as a clean CSV; its paid
+      // chats go to /api/upload-paid-sessions below.
+      const rawToServer=platformId==='chaturbate'||platformId==='myfreecams'
+      const{blob:csvBlob}=rawToServer?{blob:new Blob([pasteText],{type:'text/plain'})}:pasteToCSVBlob(pasteText,platformId)
       const file=new File([csvBlob],'pasted_import.csv',{type:'text/csv'})
       const minWait=isFirstImport?5500:1800
       const msgs=isFirstImport?LOADING_MESSAGES:EXTRA_MSGS
@@ -1125,18 +1164,18 @@ export default function OnboardingPage(){
       const tipUploadPromise=fetch('/api/upload',{
         method:'POST',
         headers:{Authorization:`Bearer ${session.access_token}`},
-        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);return f})(),
+        body:(()=>{const f=new FormData();f.append('file',file);f.append('platform',platform.label);f.append('time_zone',timezone);return f})(),
         signal:controller.signal
       })
 
-      // Upload BongaCams paid sessions if any detected
+      // Upload BongaCams paid chats (deduplicated server-side)
       let paidUploadPromise=Promise.resolve(null)
       if(platformId==='bongacams'&&p?.paidSessionsDetected>0){
         const paidBlob=paidSessionsToCSVBlob(p.paidSessions)
         const paidFile=new File([paidBlob],'paid_sessions_import.csv',{type:'text/csv'})
         const paidForm=new FormData()
         paidForm.append('file',paidFile)
-        paidForm.append('platform','BongaCams')
+        paidForm.append('platform',platform.label)
         paidUploadPromise=fetch('/api/upload-paid-sessions',{
           method:'POST',
           headers:{Authorization:`Bearer ${session.access_token}`},
@@ -1145,7 +1184,7 @@ export default function OnboardingPage(){
         })
       }
 
-      const[res,,]=await Promise.all([
+      const[res,paidRes]=await Promise.all([
         tipUploadPromise,
         paidUploadPromise,
         new Promise(r=>setTimeout(r,minWait)),
@@ -1158,14 +1197,23 @@ export default function OnboardingPage(){
         err.code=json.code;err.upgradeUrl=json.upgradeUrl
         throw err
       }
+      // Never report success when any batch (tips or private earnings) failed.
+      assertImportComplete(json)
+      let paidInserted=json.paidSessionsInserted??0
+      if(paidRes){
+        const paidJson=await readUploadJson(paidRes)
+        if(!paidRes.ok||paidJson.error)throw new Error(paidJson.error||'Private earnings could not be saved. Retry this import — duplicates are skipped safely.')
+        assertImportComplete(paidJson)
+        paidInserted=paidJson.inserted??0
+      }
       const inserted=json.inserted??p?.tipsDetected??0
-      setImportResult({inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0})
+      setImportResult({inserted,skipped:json.skipped??0,paidInserted})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
       track('onboarding_import_completed',{platform:platformId,inserted,skipped:json.skipped??0,source:'paste'})
       if(isFirstImport){track('onboarding_completed',{platform:platformId});setIsFirstImport(false);setShowSparkle(true);setTimeout(()=>setShowSparkle(false),4000)}
       if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
       setPlatformResults(prev=>({...prev,[platformId]:{
-        status:'connected',inserted,skipped:json.skipped??0,paidInserted:p?.paidSessionsDetected??0,
+        status:'connected',inserted,skipped:json.skipped??0,paidInserted,
         snapshot:p?.snapshot||null,topSpender:p?.topSpender||null,
         bestHour:p?.bestHour||null,bestHourConfident:p?.bestHourConfident||false,
       }}))
@@ -1231,7 +1279,7 @@ export default function OnboardingPage(){
     try{
       const{data:{session}}=await supabase.auth.getSession()
       if(!session)throw new Error('Not logged in')
-      const form=new FormData();form.append('file',file);form.append('platform',platform.label)
+      const form=new FormData();form.append('file',file);form.append('platform',platform.label);form.append('time_zone',timezone)
       const minWait=isFirstImport?5500:1800
       const start=Date.now()
       const pi=setInterval(()=>{const p=Math.min((Date.now()-start)/minWait,0.95);setLoadingProgress(Math.round(p*100))},60)
@@ -1247,6 +1295,7 @@ export default function OnboardingPage(){
       clearInterval(pi);setLoadingProgress(100)
       const json=await readUploadJson(res)
       if(!res.ok||json.error)throw new Error(json.error||'Upload failed')
+      assertImportComplete(json)
       const inserted=json.inserted??preview?.tipsDetected??0
       setImportResult({inserted,skipped:json.skipped??0})
       setImportedPlatforms(prev=>prev.includes(platformId)?prev:[...prev,platformId])
@@ -1255,7 +1304,8 @@ export default function OnboardingPage(){
       if(queueIndex>0)track('onboarding_secondary_platform_connected',{platform:platformId,platforms_selected:selectedPlatforms.length})
       setPlatformResults(prev=>({...prev,[platformId]:{
         status:'connected',inserted,skipped:json.skipped??0,
-        snapshot:json.snapshot||null,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo,source:'csv',
+        snapshot:json.onboardingSummary||json.snapshot||null,totalUsd:json.totalUsd,dateFrom:json.dateFrom,dateTo:json.dateTo,source:'csv',
+        bestHour:json.onboardingSummary?.bestHour||null,bestHourConfident:!!json.onboardingSummary?.bestHourConfident,
       }}))
       track('onboarding_results_viewed',{platform:platformId,source:'csv'})
       setStep('platformSuccess')
@@ -1309,7 +1359,7 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div className={`ob-card-shell${step==='platforms'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+      <div className={`ob-card-shell${step==='platforms'||step==='paste'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
         <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
@@ -1386,57 +1436,104 @@ export default function OnboardingPage(){
           )}
 
           {/* ══ PASTE ══ */}
-          {step==='paste'&&(
-            <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — {platform.label}{queuePosLabel}</div>
-              <div style={{textAlign:'center',marginBottom:16}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:7}}>{isPrimaryInQueue?'Paste your tip history':`You also stream on ${platform.label}`}</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.7,maxWidth:360,margin:'0 auto'}}>{isPrimaryInQueue?<>Copy your earning rows from {platform.label} and paste them below. CamCash will clean and organize everything automatically.</>:<>Let's see what CamCash can uncover there. Start with one export — you can add more history anytime.</>}</p>
+          {step==='paste'&&(()=>{
+            const det=detectStatus==='detected'&&preview
+            const helpLink=platformId==='chaturbate'
+              ?(cbUsername?{href:platform.earningsUrl(cbUsername),label:'Open your Chaturbate token stats ↗'}:null)
+              :{href:platform.earningsUrl(),label:platformId==='bongacams'?'Open BongaCams reports ↗':'Open MyFreeCams token sessions ↗'}
+            const metric=(k,label,value,sub,color='#F1F5F9')=>(
+              <div key={k} data-testid={`detected-${k}`} className="ob-det-cell" style={{minWidth:0}}>
+                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginBottom:3}}>{label}</div>
+                <div style={{fontSize:16,fontWeight:800,color}}>{value}</div>
+                {sub&&<div style={{fontSize:11,color:'rgba(148,163,184,0.7)',marginTop:2}}>{sub}</div>}
+              </div>
+            )
+            return(
+            <div className="ob-step1-col" style={{animation:'fadeUp 0.3s ease both'}}>
+              <div className="ob-step1-head" style={{textAlign:'center',marginBottom:18}}>
+                <h1 className="ob-step1-title" style={{fontSize:30,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.12,marginBottom:8}}>{isPrimaryInQueue?<>Paste your {platform.label} <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>tip history</span></>:`You also stream on ${platform.label}`}</h1>
+                <p className="ob-step1-sub" style={{fontSize:14.5,color:'rgba(166,168,189,0.9)',lineHeight:1.5,maxWidth:540,margin:'0 auto'}}>Copy your earnings rows from {platform.label} and paste them below.</p>
               </div>
 
-              {/* BongaCams paid chat notice */}
-              {platformId==='bongacams'&&(
-                <div style={{borderRadius:12,border:'1px solid rgba(255,47,174,0.22)',background:'rgba(255,47,174,0.055)',padding:'12px 14px',marginBottom:12,fontSize:11,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>
-                  <span style={{color:PINK,fontWeight:700}}>💳 Tip:</span> You can paste your <strong style={{color:'#fff'}}>Free Chat</strong> and <strong style={{color:'#fff'}}>Paid Chat</strong> sections together — CamCash automatically separates tips from private sessions.
+              {(rawOpen||!det)&&(
+                <textarea aria-label={`Paste your ${platform.label} tip history`} value={pasteText}
+                  onPaste={()=>{justPastedRef.current=true}}
+                  onChange={e=>setPasteText(e.target.value)} placeholder={`Paste your ${platform.label} tip history here…`}
+                  className="ob-paste"
+                  style={{width:'100%',height:det?110:140,resize:'none',borderRadius:16,border:`1px solid ${detectStatus==='invalid'?'rgba(248,113,113,0.55)':'rgba(96,165,250,0.32)'}`,background:'rgba(2,4,14,0.92)',padding:'14px 16px',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:12.5,lineHeight:1.55,color:'#E2E8F0',outline:'none',marginBottom:12,transition:'border-color 0.18s,box-shadow 0.18s'}}
+                  onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
+                  onBlur={e=>{e.target.style.borderColor=detectStatus==='invalid'?'rgba(248,113,113,0.55)':'rgba(96,165,250,0.32)';e.target.style.boxShadow='none'}}
+                />
+              )}
+
+              {detectStatus==='validating'&&<div data-testid="detect-validating" style={{display:'flex',alignItems:'center',gap:8,fontSize:12.5,color:'rgba(148,163,184,0.85)',marginBottom:12}}><span style={{width:12,height:12,border:'2px solid rgba(33,230,243,0.25)',borderTopColor:CYAN,borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/>Checking your data…</div>}
+
+              {det&&(
+                <div data-testid="detected-summary" style={{borderRadius:16,padding:'14px 18px 16px',marginBottom:14,textAlign:'left',background:'linear-gradient(180deg,rgba(30,16,52,0.55),rgba(12,14,36,0.7)) padding-box,linear-gradient(135deg,rgba(33,230,243,0.7),rgba(168,85,247,0.6),rgba(255,47,174,0.7)) border-box',border:'1.5px solid transparent',boxShadow:'0 0 22px rgba(168,85,247,0.18)'}}>
+                  <div className="ob-det-head" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <span aria-hidden="true" style={{width:24,height:24,borderRadius:'50%',background:CYAN,color:'#04101b',fontSize:13,fontWeight:900,display:'inline-flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 12px rgba(33,230,243,0.5)'}}>✓</span>
+                      <span className="ob-det-title" style={{fontSize:16,fontWeight:800,color:'#F8FAFC'}}><span data-testid="detected-count">{preview.transactionsDetected.toLocaleString('en-US')}</span> transactions detected!</span>
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      {!rawOpen&&<button type="button" onClick={()=>setRawOpen(true)} style={{padding:'6px 12px',borderRadius:10,border:'1px solid rgba(148,163,184,0.35)',background:'rgba(255,255,255,0.03)',color:'#F1F5F9',fontSize:12,fontWeight:700,cursor:'pointer'}}>Edit data</button>}
+                      <button type="button" onClick={()=>{setPasteText('');setRawOpen(true)}} style={{padding:'6px 12px',borderRadius:10,border:'1px solid rgba(148,163,184,0.2)',background:'transparent',color:'rgba(203,213,225,0.8)',fontSize:12,fontWeight:600,cursor:'pointer'}}>Replace data</button>
+                    </div>
+                  </div>
+                  <div className="ob-det-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:'12px 16px'}}>
+                    {metric('platform','Platform',platform.label)}
+                    {metric('range','Date range',preview.dateFrom&&preview.dateTo?(preview.dateFrom===preview.dateTo?preview.dateTo:preview.dateFrom.slice(-4)===preview.dateTo.slice(-4)?`${preview.dateFrom.replace(/, \d{4}$/,'')} – ${preview.dateTo}`:`${preview.dateFrom} – ${preview.dateTo}`):'—',preview.days?`${preview.days.toLocaleString('en-US')} day${preview.days===1?'':'s'}`:null,'#93C5FD')}
+                    {metric('tips','Regular tips',preview.tipsDetected.toLocaleString('en-US'))}
+                    {metric('total','Total earnings',`$${preview.estimatedEarnings.toFixed(2)}`,null,'#4ade80')}
+                    {preview.privateDetected>0&&metric('private','Private earnings',`$${preview.paidEarnings.toFixed(2)}`,`${preview.privateDetected.toLocaleString('en-US')} private ${preview.privateDetected===1?'session':'sessions'}`,PINK)}
+                    {preview.membershipsDetected>0&&metric('memberships','Memberships',preview.membershipsDetected.toLocaleString('en-US'),`$${preview.snapshot.full.categories.memberships.usd.toFixed(2)}`,'#a78bfa')}
+                  </div>
                 </div>
               )}
 
-              <div className="ob-howto-card" style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.055)',padding:'14px 16px',marginBottom:12}}>
-                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:10}}>
-                  <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.18em',textTransform:'uppercase',color:'rgba(33,230,243,0.85)'}}>How to copy from {platform.label}</div>
-                  <a href={platform.earningsUrl(cbUsername)} target="_blank" rel="noreferrer" style={{flexShrink:0,padding:'5px 11px',borderRadius:9,border:'1px solid rgba(255,47,174,0.35)',background:'rgba(255,255,255,0.03)',color:'rgba(203,213,225,0.85)',fontSize:10,fontWeight:700,textDecoration:'none',whiteSpace:'nowrap',transition:'all 0.2s'}} onMouseEnter={e=>{e.currentTarget.style.borderColor='rgba(33,230,243,0.55)';e.currentTarget.style.color='#fff'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='rgba(255,47,174,0.35)';e.currentTarget.style.color='rgba(203,213,225,0.85)'}}>Open earnings page ↗</a>
+              {detectStatus==='invalid'&&(
+                <div role="alert" data-testid="detect-invalid" style={{marginBottom:12,padding:'12px 14px',borderRadius:13,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.28)',textAlign:'left'}}>
+                  <div style={{fontSize:13,fontWeight:800,color:'#FCA5A5',marginBottom:3}}>We couldn’t recognize this {platform.label} history.</div>
+                  <div style={{fontSize:12,color:'rgba(203,213,225,0.8)',lineHeight:1.5}}>Make sure you copied the full table, including dates and token amounts. Your pasted text is still here.</div>
+                  <div style={{display:'flex',gap:14,marginTop:8}}>
+                    <button type="button" onClick={()=>{setPasteText('');setRawOpen(true)}} style={{background:'none',border:'none',padding:0,color:CYAN,fontSize:12,fontWeight:700,cursor:'pointer'}}>Try again</button>
+                    <button type="button" onClick={()=>setPasteHelpOpen(true)} style={{background:'none',border:'none',padding:0,color:CYAN,fontSize:12,fontWeight:700,cursor:'pointer'}}>Show copy instructions</button>
+                  </div>
                 </div>
-                <p style={{fontSize:12,color:'rgba(148,163,184,0.8)',lineHeight:1.6,marginBottom:10}}>{platform.instructions}</p>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
-                  {['No password required','You control what gets imported','Takes about 60 seconds'].map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'rgba(148,163,184,0.75)'}}><span style={{color:CYAN,fontSize:11}}>✓</span>{t}</div>))}
-                </div>
-              </div>
+              )}
 
-              <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder={platform.placeholder}
-                style={{width:'100%',height:156,resize:'none',borderRadius:13,border:'1px solid rgba(33,230,243,0.18)',borderTop:'1.5px solid rgba(33,230,243,0.48)',background:'rgba(1,3,12,0.98)',padding:'12px 14px',fontFamily:'monospace',fontSize:11,lineHeight:1.65,color:'#a5f3fc',outline:'none',transition:'border-color 0.2s,box-shadow 0.2s',marginBottom:parseError?9:12,boxShadow:'inset 0 2px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(33,230,243,0.08)'}}
-                onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.08)'}}
-                onBlur={e=>{e.target.style.borderColor='rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
-              />
-
-              {parseError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
+              {parseError&&detectStatus!=='invalid'&&<div role="alert" style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {parseError}</div>}
 
               {upgradeBlocked&&(
                 <div style={{marginBottom:10,padding:'12px 14px',borderRadius:12,background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.35)'}}>
                   <div style={{fontSize:12,fontWeight:800,color:'#a78bfa',marginBottom:4}}>🔒 Upgrade to add {platform.label}</div>
                   <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5,marginBottom:9}}>{upgradeBlocked.message}</div>
-                  <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See upgrade options →</button>
+                  <button onClick={()=>window.open('https://www.camcashgrl.com/pricing','_blank')} style={{padding:'8px 16px',borderRadius:9,border:'none',cursor:'pointer',background:'linear-gradient(135deg,#a78bfa,#7c3aed)',color:'#fff',fontSize:12,fontWeight:700}}>See plans</button>
                 </div>
               )}
-              {importError&&<div style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
+              {importError&&<div role="alert" style={{marginBottom:10,padding:'9px 12px',borderRadius:11,background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.22)',fontSize:12,color:'#f87171'}}>⚠️ {importError}</div>}
 
-              <div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10,marginBottom:6,marginTop:12}}>
-                <OBSecBtn onClick={()=>setStep('platforms')} style={{height:46}}>← Back</OBSecBtn>
-                <OBBtn onClick={handlePreview} disabled={!pasteText.trim()} style={{height:46,fontSize:13}}>Import & build dashboard →</OBBtn>
+              {pasteHelpOpen&&(
+                <div data-testid="paste-help" style={{marginBottom:12,padding:'12px 14px',borderRadius:13,border:'1px solid rgba(96,165,250,0.22)',background:'rgba(255,255,255,0.025)',textAlign:'left'}}>
+                  <div style={{fontSize:12.5,fontWeight:800,color:'#F1F5F9',marginBottom:4}}>How to copy from {platform.label}</div>
+                  <div style={{fontSize:12,color:'rgba(203,213,225,0.8)',lineHeight:1.55}}>{platform.instructions}{platformId==='chaturbate'&&!cbUsername?' You’ll find Token Stats on your broadcaster profile page.':''}</div>
+                  {platformId==='bongacams'&&<div style={{fontSize:11.5,color:'rgba(148,163,184,0.8)',marginTop:6}}>You can paste your Free Chat and Paid Chat sections together.</div>}
+                  {helpLink&&<a href={helpLink.href} target="_blank" rel="noreferrer" style={{display:'inline-block',marginTop:8,fontSize:12,fontWeight:700,color:CYAN,textDecoration:'none'}}>{helpLink.label}</a>}
+                </div>
+              )}
+
+              <div className="ob-s2-actions" style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:10}}>
+                <OBSecBtn onClick={()=>setStep('platforms')} style={{height:58,padding:'0 18px'}}>← Back</OBSecBtn>
+                <OBBtn onClick={handlePreview} disabled={!det} style={det?{height:58,fontSize:16,borderRadius:16}:{height:58,fontSize:16,borderRadius:16,color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>{det?'Continue →':'Import & build dashboard →'}</OBBtn>
               </div>
-              <OBLinks links={[{label:'Upload CSV instead',onClick:()=>setStep('csv')},...(!isPrimaryInQueue?[{label:'Skip for now — connect later',onClick:skipCurrentPlatform}]:[])]}/>
-              <OBTrust/>
+              <div style={{display:'flex',justifyContent:'center',gap:18,marginTop:12,flexWrap:'wrap'}}>
+                <button type="button" onClick={()=>setPasteHelpOpen(o=>!o)} style={{background:'none',border:'none',padding:0,fontSize:12,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>{pasteHelpOpen?'Hide copy instructions':'Need help copying your history?'}</button>
+                <button type="button" onClick={()=>setStep('csv')} style={{background:'none',border:'none',padding:0,fontSize:12,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Upload CSV instead</button>
+                {!isPrimaryInQueue&&<button type="button" onClick={skipCurrentPlatform} style={{background:'none',border:'none',padding:0,fontSize:12,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Skip for now — connect later</button>}
+              </div>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:11,color:'rgba(100,116,139,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and never shared.</span></div>
             </div>
-          )}
+          )})()}
 
           {/* ══ CSV ══ */}
           {step==='csv'&&(
@@ -1519,16 +1616,29 @@ export default function OnboardingPage(){
                 <p style={{fontSize:12,color:'rgba(148,163,184,0.75)',marginBottom:12}}>{fmtDate(full.from)} — {fmtDate(full.to)} · {full.days} day{full.days===1?'':'s'} of data imported</p>
               )}
 
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:12}}>
-                <div className="stat-card" style={{padding:'12px 10px'}}>
-                  <div style={{fontSize:9,color:'rgba(148,163,184,0.6)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>Earnings</div>
-                  <div style={{fontSize:18,fontWeight:900,color:CYAN}}>${(full?.usd??currentResult.totalUsd??0).toFixed(2)}</div>
-                </div>
-                <div className="stat-card" style={{padding:'12px 10px'}}>
-                  <div style={{fontSize:9,color:'rgba(148,163,184,0.6)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>Tips</div>
-                  <div style={{fontSize:18,fontWeight:900,color:'#4ade80'}}>{full?.tips??currentResult.inserted??0}</div>
-                </div>
-              </div>
+              {/* Real imported categories only (lib/onboardingSummary.js). Private
+                  earnings and memberships are shown separately and never
+                  counted as tips; Total earnings includes all three. */}
+              {(()=>{
+                const cat=full?.categories
+                const cards=[
+                  {k:'earnings',label:'Total earnings',value:`$${(full?.usd??currentResult.totalUsd??0).toFixed(2)}`,color:CYAN},
+                  {k:'tips',label:'Regular tips',value:(cat?cat.tips.count:(full?.tips??currentResult.inserted??0)).toLocaleString('en-US'),sub:cat?`$${cat.tips.usd.toFixed(2)}`:null,color:'#4ade80'},
+                  ...(cat&&cat.private.count>0?[{k:'private',label:'Private earnings',value:`$${cat.private.usd.toFixed(2)}`,sub:`${cat.private.count.toLocaleString('en-US')} private ${cat.private.count===1?'session':'sessions'}`,color:PINK}]:[]),
+                  ...(cat&&cat.memberships.count>0?[{k:'memberships',label:'Memberships',value:`$${cat.memberships.usd.toFixed(2)}`,sub:`${cat.memberships.count.toLocaleString('en-US')} ${cat.memberships.count===1?'membership':'memberships'}`,color:'#a78bfa'}]:[]),
+                ]
+                return(
+                  <div data-testid="first-insight-stats" style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(cards.length,4)},1fr)`,gap:9,marginBottom:12}}>
+                    {cards.map(c=>(
+                      <div key={c.k} data-testid={`stat-${c.k}`} className="stat-card" style={{padding:'12px 10px'}}>
+                        <div style={{fontSize:9,color:'rgba(148,163,184,0.6)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>{c.label}</div>
+                        <div style={{fontSize:18,fontWeight:900,color:c.color}}>{c.value}</div>
+                        {c.sub&&<div style={{fontSize:10.5,color:'rgba(148,163,184,0.7)',marginTop:2}}>{c.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
 
               <div style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',padding:'12px 14px',marginBottom:12,textAlign:'left'}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
@@ -1548,8 +1658,8 @@ export default function OnboardingPage(){
                 {full&&full.days>0&&(
                   <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:6}}>You imported {full.days} day{full.days===1?'':'s'} of streaming history.</div>
                 )}
-                {preview?.bestHour&&preview.bestHourConfident?(
-                  <div style={{fontSize:12,color:'rgba(203,213,225,0.88)',lineHeight:1.55}}>⚡ Your biggest tips land around <strong style={{color:PINK}}>{preview.bestHour}</strong>, across more than one day of streaming.</div>
+                {currentResult.bestHour&&currentResult.bestHourConfident?(
+                  <div style={{fontSize:12,color:'rgba(203,213,225,0.88)',lineHeight:1.55}}>⚡ Your biggest tips land around <strong style={{color:PINK}}>{currentResult.bestHour}</strong>, across more than one day of streaming.</div>
                 ):(
                   <div style={{fontSize:11.5,color:'rgba(148,163,184,0.78)',lineHeight:1.55}}>We need a little more history to identify your strongest earning patterns. Keep using Live Mode or import more history.</div>
                 )}

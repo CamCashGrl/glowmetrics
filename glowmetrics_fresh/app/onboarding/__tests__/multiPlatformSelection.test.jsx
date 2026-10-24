@@ -239,7 +239,7 @@ describe('Onboarding Step 1 — returning users keep saved secondary platforms',
     fireEvent.click(screen.getByText('Chaturbate'))
     fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
     // Lands on the primary's connect step with no "(1 of N)" queue position.
-    expect(await screen.findByText(/Step 2 of 3 — Chaturbate/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Paste your Chaturbate tip history'))
     expect(screen.queryByText(/\(1 of \d\)/)).not.toBeInTheDocument()
   })
 })
@@ -318,7 +318,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
     fireEvent.click(screen.getByText('BongaCams'))
     fireEvent.click(screen.getByRole('button', { name: 'Continue with BongaCams →' }))
-    expect(await screen.findByText(/Step 2 of 3 — BongaCams/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Paste your BongaCams tip history'))
     expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
   })
 })

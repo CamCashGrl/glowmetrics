@@ -1,0 +1,57 @@
+import { computeSnapshotStats, toLocalHour } from './analytics'
+
+// Display categories do not change storage, dedup keys, or session eligibility.
+export function earningCategory(row) {
+  if (row.is_paid_session || row.session_type) return 'private'
+  if (/membership|fan club/i.test(row.tip_type || '') || /^Fan Club Membership(?::|$)/i.test(row.tip_note || row.note || '')) return 'memberships'
+  if (/sale|snapchat|social|other/i.test(row.tip_type || '')) return 'other'
+  return 'tips'
+}
+
+// Upload timestamps without offsets use the existing UTC storage contract.
+export function importDate(value) {
+  if(value instanceof Date)return value
+  const text=String(value||'').replace(' ','T')
+  return new Date(/^\d{4}-\d{2}-\d{2}T/.test(text)&&!/(Z|[+-]\d{2}:?\d{2})$/i.test(text)?text+'Z':text)
+}
+
+export function summarizeOnboarding(rows, timeZone = 'UTC') {
+  const normalized = rows.map(r => ({ ...r, date: importDate(r.date_time || r.dateRaw || r.date || r.ts) }))
+    .filter(r => !isNaN(r.date.getTime()))
+  const window = computeSnapshotStats(normalized, 31)
+  const summarize = entries => {
+    const categories = Object.fromEntries(['tips', 'private', 'memberships', 'other'].map(k => [k, { count: 0, tokens: 0, usd: 0 }]))
+    const fans = new Set()
+    for (const r of entries) {
+      const c = categories[earningCategory(r)]
+      c.count++; c.tokens += Number(r.tokens) || 0; c.usd += Number(r.usd) || 0
+      const name = String(r.username || '').trim().toLowerCase()
+      if (name && !['anonymous', 'unknown'].includes(name)) fans.add(name)
+    }
+    for (const c of Object.values(categories)) c.usd = +c.usd.toFixed(2)
+    return { categories, tips: categories.tips.count, usd: +['tips','private','memberships'].reduce((n, k) => n + categories[k].usd, 0).toFixed(2), fans: fans.size }
+  }
+  const hours = new Map()
+  const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  for (const r of normalized) {
+    const hour = toLocalHour(r.date.toISOString(), timeZone)
+    const bucket = hours.get(hour) || { usd: 0, days: new Set() }
+    bucket.usd += Number(r.usd) || 0
+    bucket.days.add(dayFormatter.format(r.date))
+    hours.set(hour, bucket)
+  }
+  const peak = [...hours].sort((a, b) => b[1].usd - a[1].usd)[0]
+  return {
+    full: { ...window.full, ...summarize(normalized) },
+    recent: { ...window.recent, ...summarize(normalized.filter(r => r.date >= window.recent.from)) },
+    bestHour: peak ? `${peak[0] % 12 || 12}${peak[0] < 12 ? 'am' : 'pm'}` : null,
+    bestHourConfident: !!peak && peak[1].days.size >= 2,
+    timeZone,
+  }
+}
+
+export function assertImportComplete(json) {
+  if (json.error || json.ok === false || json.warnings?.length || json.paidSessionsWarnings?.length) {
+    throw new Error(json.error || 'Some rows could not be saved. Some data may already be imported. Retry the same import; duplicates are safely skipped.')
+  }
+}

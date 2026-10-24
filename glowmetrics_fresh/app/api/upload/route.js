@@ -1,3 +1,4 @@
+import { summarizeOnboarding } from '../../../lib/onboardingSummary'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, detectDateOrder, computeSnapshotStats } from '../../../lib/analytics'
@@ -6,6 +7,10 @@ import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
 
 const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
+
+function validTimeZone(value) {
+  try { const tz = String(value || 'UTC'); new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz } catch { return 'UTC' }
+}
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -411,7 +416,7 @@ async function handleUpload(req) {
 
   // ── RESPONSE ───────────────────────────────────────────────────────────
   const response = {
-    ok:        errors.length === 0,
+    ok:        errors.length === 0 && paidErrors.length === 0,
     inserted,
     skipped,
     total:     tipRows.length,
@@ -424,6 +429,7 @@ async function handleUpload(req) {
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
     snapshot,
+    onboardingSummary: summarizeOnboarding(rows, validTimeZone(fd.get('time_zone'))),
   }
 
   if (errors.length > 0) {
@@ -437,6 +443,7 @@ async function handleUpload(req) {
 
   if (paidErrors.length > 0) {
     response.paidSessionsWarnings = paidErrors
+    response.message = `Some private earnings could not be saved. ${paidInserted} private transactions inserted; retry the import to save remaining rows safely.`
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
   }
 
