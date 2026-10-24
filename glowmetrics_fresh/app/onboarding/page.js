@@ -612,10 +612,8 @@ const CSS=`
     .ob-plat-blurb{display:none}
     .ob-step1-title{font-size:24px!important}
     .ob-step1-sub{font-size:12.5px!important}
-    .ob-tz-row{padding:12px 14px!important;gap:10px!important;flex-wrap:wrap;position:relative}
-    .ob-tz-globe{display:none!important}
-    .ob-tz-change{position:absolute;top:10px;right:12px;padding:5px 11px!important;font-size:12px!important}
-    .ob-tz-help{font-size:11px!important}
+    .ob-tz-row{padding:0 12px!important;gap:9px!important}
+    .ob-tz-iana{font-size:11.5px!important}
   }
   @media(min-width:601px){
     .ob-card-shell{max-width:min(600px,calc(100vw - 32px))!important}
@@ -623,10 +621,16 @@ const CSS=`
     .ob-card{padding:clamp(14px,2.4dvh,22px) 28px clamp(12px,2dvh,18px)!important}
   }
   /* Step 1: wider card on desktop with one centered content column. */
-  .ob-step1-col{max-width:800px;margin:0 auto}
+  .ob-step1-col{max-width:600px;margin:0 auto}
+  .ob-tz-list::-webkit-scrollbar{width:6px}
+  .ob-tz-list::-webkit-scrollbar-thumb{background:rgba(148,163,184,0.25);border-radius:6px}
+  .ob-tz-list{scrollbar-width:thin;scrollbar-color:rgba(148,163,184,0.25) transparent}
+  /* Step 1 never scrolls on normal screens; one internal scroll only as a fallback on very short ones. */
+  .ob-card.ob-card--step1{overflow:hidden!important}
+  @media(max-height:620px){.ob-card.ob-card--step1{overflow-y:auto!important}}
   @media(min-width:601px){
-    .ob-card-shell.ob-card-shell--wide{max-width:min(940px,calc(100vw - 48px))!important}
-    .ob-card-shell--wide .ob-card{padding:clamp(18px,3.2dvh,34px) clamp(28px,4.5vw,64px) clamp(16px,2.8dvh,28px)!important}
+    .ob-card-shell.ob-card-shell--wide{max-width:min(760px,calc(100vw - 48px))!important}
+    .ob-card-shell--wide .ob-card{padding:clamp(18px,3dvh,30px) clamp(28px,4vw,56px) clamp(16px,2.6dvh,24px)!important}
   }
   @media(min-width:601px) and (max-height:760px){
     .ob-step1-head{margin-bottom:14px!important}
@@ -739,7 +743,8 @@ function OBTimezonePicker({value,onPick,onClose,anchorRef}){
   const zones=useMemo(()=>allTimeZones().map(z=>({z,label:timeZoneLabel(z)})),[])
   const q=query.trim().toLowerCase()
   const matches=useMemo(()=>{
-    const list=q?zones.filter(({z,label})=>label.toLowerCase().includes(q)||z.toLowerCase().replace(/_/g,' ').includes(q)||z.toLowerCase().includes(q.replace(/\s+/g,'_'))):zones
+    // Matches the readable name ("Pacific Time"), the city ("Los Angeles") or the IANA id.
+    const list=q?zones.filter(({z,label})=>label.toLowerCase().includes(q)||z.split('/').pop().replace(/_/g,' ').toLowerCase().includes(q)||z.toLowerCase().replace(/_/g,' ').includes(q)||z.toLowerCase().includes(q.replace(/\s+/g,'_'))):zones
     // Current selection first, then the most common creator zones, then A–Z.
     const rank=o=>o.z===value?-1:(TZ_COMMON.indexOf(o.z)+1||TZ_COMMON.length+1)
     return [...list].sort((a,b)=>rank(a)-rank(b))
@@ -750,9 +755,11 @@ function OBTimezonePicker({value,onPick,onClose,anchorRef}){
       const el=anchorRef.current; if(!el)return
       const r=el.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight
       if(vw<600){setPos({sheet:true});return}
-      const H=Math.min(320,vh-24),below=vh-r.bottom-8,above=r.top-8
-      const top=below>=H||below>=above?r.bottom+6:Math.max(8,r.top-6-Math.min(H,above))
-      setPos({sheet:false,top,left:r.left,width:r.width,maxH:Math.min(H,below>=H||below>=above?below:above)})
+      // Floats directly beneath the field (never in document flow, so the
+      // card never grows); flips above only if there isn't room below.
+      const H=Math.min(300,vh-24),below=vh-r.bottom-14,above=r.top-14
+      const down=below>=180||below>=above
+      setPos({sheet:false,top:down?r.bottom+8:Math.max(8,r.top-8-Math.min(H,above)),left:r.left,width:r.width,maxH:Math.min(H,down?below:above)})
     }
     place()
     window.addEventListener('resize',place);window.addEventListener('scroll',place,true)
@@ -785,18 +792,18 @@ function OBTimezonePicker({value,onPick,onClose,anchorRef}){
       <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search city or timezone…" aria-label="Search timezones"
         role="combobox" aria-expanded="true" aria-controls="ob-tz-list" aria-activedescendant={matches[active]?`ob-tz-${active}`:undefined}
         style={{width:'100%',padding:'10px 12px',background:'rgba(4,6,18,0.9)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:11,color:'#f8fafc',fontSize:13,outline:'none',marginBottom:8}}/>
-      <div id="ob-tz-list" role="listbox" aria-label="Timezone" style={{overflowY:'auto',flex:1,minHeight:0}}>
+      <div id="ob-tz-list" role="listbox" aria-label="Timezone" className="ob-tz-list" style={{overflowY:'auto',flex:1,minHeight:0,display:'flex',flexDirection:'column',gap:2,paddingRight:2}}>
         {matches.length===0&&<div style={{padding:'12px 10px',fontSize:12,color:'rgba(148,163,184,0.75)'}}>No matching timezones</div>}
         {matches.map((o,i)=>{
           const cur=o.z===value
           return(
             <div key={o.z} id={`ob-tz-${i}`} data-idx={i} role="option" aria-selected={cur} onMouseDown={e=>e.preventDefault()} onClick={()=>choose(o.z)} onMouseEnter={()=>setActive(i)}
-              style={{display:'flex',alignItems:'center',gap:10,padding:'9px 10px',borderRadius:10,cursor:'pointer',background:i===active?'rgba(33,230,243,0.08)':cur?'rgba(124,92,255,0.10)':'transparent'}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:'#F1F5F9'}}>{o.label}</div>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',fontFamily:'monospace',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.z}</div>
-              </div>
-              {cur&&<span aria-hidden="true" style={{color:CYAN,fontWeight:900,fontSize:13}}>✓</span>}
+              style={{display:'flex',alignItems:'center',gap:10,height:40,flexShrink:0,padding:'0 10px',borderRadius:10,cursor:'pointer',border:'1px solid transparent',
+                ...(cur?{background:'linear-gradient(90deg,rgba(33,230,243,0.12),rgba(124,92,255,0.16),rgba(255,47,174,0.12)) padding-box,linear-gradient(#10152c,#10152c) padding-box,linear-gradient(90deg,rgba(33,230,243,0.65),rgba(168,85,247,0.6),rgba(255,47,174,0.65)) border-box',boxShadow:'0 0 14px rgba(124,92,255,0.18)'}:i===active?{background:'rgba(255,255,255,0.05)'}:{})}}>
+              <span aria-hidden="true" style={{fontSize:13,opacity:0.75,flexShrink:0}}>🌐</span>
+              <span style={{fontSize:13,fontWeight:cur?800:600,color:cur?'#fff':'#E2E8F0',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',width:'42%',flexShrink:0}}>{o.label}</span>
+              <span style={{flex:1,minWidth:0,fontSize:12,color:cur?'rgba(165,243,252,0.9)':'rgba(148,163,184,0.8)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.z}</span>
+              {cur&&<span aria-hidden="true" style={{color:CYAN,fontWeight:900,fontSize:14,flexShrink:0}}>✓</span>}
             </div>
           )
         })}
@@ -806,28 +813,26 @@ function OBTimezonePicker({value,onPick,onClose,anchorRef}){
   return createPortal(sheet?<><div aria-hidden="true" style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:999}}/>{panel}</>:panel,document.body)
 }
 
-function OBTimezone({value,onChange,detected=false}){
+function OBTimezone({value,onChange,detected=false,status=null}){
   const[open,setOpen]=useState(false)
   const anchorRef=useRef(null)
   const btnRef=useRef(null)
   const close=(refocus)=>{setOpen(false);if(refocus)btnRef.current?.focus()}
+  const badge=status||(detected?'Detected':null)
   return(
-    <div data-testid="timezone-card" ref={anchorRef} style={{textAlign:'left'}}>
-      <button ref={btnRef} type="button" aria-label="Change timezone" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(o=>!o)} className="ob-tz-row" style={{
-        width:'100%',display:'flex',alignItems:'center',gap:18,padding:'18px 22px',borderRadius:16,cursor:'pointer',textAlign:'left',
+    <div data-testid="timezone-card" ref={anchorRef} style={{textAlign:'left',position:'relative'}}>
+      <button ref={btnRef} type="button" aria-label="Change timezone" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(o=>!o)} className="ob-tz-row" title="Used for your best hours, daily earnings, sessions, and stream recommendations." style={{
+        width:'100%',display:'flex',alignItems:'center',gap:12,padding:'0 16px',height:52,borderRadius:14,cursor:'pointer',textAlign:'left',
         background:'linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))',
-        border:`1px solid ${open?'rgba(33,230,243,0.55)':'rgba(96,165,250,0.20)'}`,boxShadow:open?'0 0 0 3px rgba(33,230,243,0.10)':'inset 0 1px 0 rgba(255,255,255,0.05)',transition:'border-color 0.18s,box-shadow 0.18s',
+        border:`1px solid ${open?'rgba(124,92,255,0.7)':'rgba(96,165,250,0.22)'}`,boxShadow:open?'0 0 0 3px rgba(124,92,255,0.14),0 0 18px rgba(33,230,243,0.12)':'inset 0 1px 0 rgba(255,255,255,0.05)',transition:'border-color 0.18s,box-shadow 0.18s',
       }}>
-        <span aria-hidden="true" className="ob-tz-globe" style={{width:52,height:52,borderRadius:'50%',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(148,163,184,0.2)'}}>🌐</span>
-        <span style={{flex:1,minWidth:0}}>
-          <span style={{display:'flex',alignItems:'center',gap:6,fontSize:15,fontWeight:800,color:'#F8FAFC',marginBottom:4}}>Your timezone<span aria-hidden="true" title="Saved to your profile" style={{width:15,height:15,borderRadius:'50%',border:'1px solid rgba(148,163,184,0.6)',fontSize:9,fontWeight:700,color:'rgba(148,163,184,0.85)',display:'inline-flex',alignItems:'center',justifyContent:'center'}}>i</span></span>
-          <span style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-            <span style={{fontSize:13.5,color:'rgba(203,213,225,0.9)'}}>{timeZoneLabel(value)} — <span data-testid="timezone-iana" style={{color:'#F1F5F9',fontWeight:600}}>{value}</span></span>
-            {detected&&<span data-testid="timezone-detected" style={{fontSize:11,fontWeight:700,color:'#4ade80',background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:8,padding:'2px 9px'}}>Detected</span>}
-          </span>
-          <span className="ob-tz-help" style={{display:'block',fontSize:12,color:'rgba(148,163,184,0.78)',marginTop:6,lineHeight:1.4}}>Used for your best hours, daily earnings, sessions, and stream recommendations.</span>
+        <span aria-hidden="true" style={{fontSize:17,flexShrink:0,opacity:0.9}}>🌐</span>
+        <span style={{flex:1,minWidth:0,display:'flex',alignItems:'baseline',gap:10,overflow:'hidden'}}>
+          <span style={{fontSize:15,fontWeight:800,color:'#F8FAFC',whiteSpace:'nowrap'}}>{timeZoneLabel(value)}</span>
+          <span data-testid="timezone-iana" className="ob-tz-iana" style={{fontSize:13,color:'rgba(148,163,184,0.85)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{value}</span>
         </span>
-        <span className="ob-tz-change" style={{flexShrink:0,display:'inline-flex',alignItems:'center',gap:6,padding:'9px 18px',borderRadius:11,border:'1px solid rgba(148,163,184,0.35)',background:'rgba(255,255,255,0.03)',fontSize:13,fontWeight:700,color:'#F1F5F9'}}>Change<span aria-hidden="true" style={{fontSize:8,opacity:0.7,transform:open?'rotate(180deg)':'none',transition:'transform 0.18s'}}>▼</span></span>
+        {badge&&<span data-testid={badge==='Detected'?'timezone-detected':'timezone-status'} style={{flexShrink:0,fontSize:11.5,fontWeight:700,borderRadius:8,padding:'3px 10px',...(badge==='Detected'?{color:'#4ade80',background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)'}:{color:CYAN,background:'rgba(33,230,243,0.12)',border:'1px solid rgba(33,230,243,0.32)'})}}>{badge}</span>}
+        <span aria-hidden="true" style={{flexShrink:0,fontSize:11,color:'rgba(226,232,240,0.8)',transform:open?'rotate(180deg)':'none',transition:'transform 0.18s'}}>⌄</span>
       </button>
       {open&&<OBTimezonePicker value={value} anchorRef={anchorRef} onClose={close} onPick={tz=>{onChange(tz);close(true)}}/>}
     </div>
@@ -835,7 +840,7 @@ function OBTimezone({value,onChange,detected=false}){
 }
 
 // Step 1 card order (matches the approved onboarding reference).
-const STEP1_PLATFORM_ORDER=['chaturbate','bongacams','myfreecams']
+const STEP1_PLATFORM_ORDER=['chaturbate','myfreecams','bongacams']
 
 // ── Main component ─────────────────────────────────────────────
 export default function OnboardingPage(){
@@ -882,6 +887,8 @@ export default function OnboardingPage(){
   // True only when the shown zone came from a successful browser detection
   // (not a saved value, not the UTC fallback, not a manual pick).
   const[timezoneDetected,setTimezoneDetected]=useState(false)
+  // Badge for a non-detected zone: 'Saved' (from the profile) or 'Selected' (picked here).
+  const[timezoneSource,setTimezoneSource]=useState(null)
   const[upgradeBlocked,setUpgradeBlocked]=useState(null)
   const[isFirstImport,setIsFirstImport]=useState(true)
   const[showSparkle,setShowSparkle]=useState(false)
@@ -929,6 +936,7 @@ export default function OnboardingPage(){
       }
       if(profile?.chaturbate_username)setCbUsername(String(profile.chaturbate_username))
       setTimezone(resolveCreatorTimeZone(profile?.timezone))
+      if(isValidTimeZone(profile?.timezone))setTimezoneSource('Saved')
       setTimezoneDetected(!isValidTimeZone(profile?.timezone)&&isValidTimeZone((()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch{return null}})()))
       setUser(user);setBooting(false)
     })()
@@ -940,6 +948,15 @@ export default function OnboardingPage(){
     if(!user)return
     track('onboarding_step_viewed',{step,platform:platformId})
   },[step,user])
+
+  // The page itself never scrolls while onboarding is open — the card is the
+  // only (fallback) scroll region.
+  useEffect(()=>{
+    const html=document.documentElement,body=document.body
+    const prev=[html.style.overflow,body.style.overflow]
+    html.style.overflow='hidden';body.style.overflow='hidden'
+    return()=>{html.style.overflow=prev[0];body.style.overflow=prev[1]}
+  },[])
 
   // Fires exactly once per session when a logged-in user actually lands in
   // onboarding — distinct from onboarding_step_viewed (which fires per-step
@@ -1310,7 +1327,7 @@ export default function OnboardingPage(){
 
       {/* ── CARD ── */}
       <div className={`ob-card-shell${step==='platforms'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div className={`ob-card ob-card-inner${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+        <div className={`ob-card ob-card-inner${step==='platforms'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:28,border:'1px solid rgba(255,255,255,0.12)',background:'linear-gradient(180deg,rgba(10,15,35,0.94),rgba(6,9,24,0.96))',backdropFilter:'blur(34px)',WebkitBackdropFilter:'blur(34px)',padding:'26px 28px 24px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 26px 96px rgba(0,0,0,0.58),inset 0 1px 0 rgba(255,255,255,0.10)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
               don't add empty scrollable space to the card. */}
@@ -1339,17 +1356,17 @@ export default function OnboardingPage(){
           {/* ══ PLATFORMS (single select — primary only) ══ */}
           {step==='platforms'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div className="ob-step1-head" style={{textAlign:'center',marginBottom:22}}>
-                <h1 className="ob-step1-title" style={{fontSize:32,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.12,marginBottom:10}}>Where do you <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>stream?</span></h1>
-                <p className="ob-step1-sub" style={{fontSize:14.5,color:'rgba(166,168,189,0.9)',lineHeight:1.55,maxWidth:540,margin:'0 auto'}}>Choose your primary platform to get started. We’ll use this to guide the import process and give you the most relevant insights.</p>
+              <div className="ob-step1-head" style={{textAlign:'center',marginBottom:18}}>
+                <h1 className="ob-step1-title" style={{fontSize:30,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.12,marginBottom:8}}>Let’s get <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>started</span></h1>
+                <p className="ob-step1-sub" style={{fontSize:14,color:'rgba(166,168,189,0.9)',lineHeight:1.55,maxWidth:400,margin:'0 auto'}}>Choose your primary platform to import your data and get your first insights.</p>
               </div>
               <div className="ob-step1-col">
-                  <div className="ob-plat-row" role="radiogroup" aria-label="Primary platform" style={{display:'flex',gap:14,marginBottom:18}}>
+                  <div className="ob-plat-row" role="radiogroup" aria-label="Primary platform" style={{display:'flex',gap:12,marginBottom:14}}>
                     {STEP1_PLATFORM_ORDER.map(key=>[key,PLATFORMS[key]]).map(([key,p])=>{
                       const sel=selectedPlatforms[0]===key
                       return(
                         <button key={key} className="ob-plat-card" role="radio" aria-checked={sel} onClick={()=>selectPrimary(key)} style={{
-                          flex:'1 1 0',minWidth:0,padding:'20px 12px 18px',borderRadius:18,textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                          flex:'1 1 0',minWidth:0,padding:'16px 10px 14px',borderRadius:18,textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
                           // Selected: cyan → pink gradient border via padding-box/border-box layers.
                           background:sel?'linear-gradient(180deg,rgba(30,16,52,0.96),rgba(12,14,36,0.97)) padding-box,linear-gradient(135deg,#21E6F3,#A855F7 45%,#FF2FAE) border-box':'linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))',
                           border:sel?'2px solid transparent':'1px solid rgba(96,165,250,0.18)',
@@ -1361,20 +1378,19 @@ export default function OnboardingPage(){
                         onMouseLeave={e=>{e.currentTarget.style.transform=sel?'translateY(-2px)':'';if(!sel){e.currentTarget.style.borderColor='rgba(96,165,250,0.18)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
                         >
                           {sel&&<div aria-hidden="true" style={{position:'absolute',top:10,right:10,width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#D946EF,#FF2FAE)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#fff',boxShadow:'0 0 12px rgba(255,47,174,0.55)'}}>✓</div>}
-                          <div className="ob-plat-icon" style={{width:60,height:60,borderRadius:17,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,fontWeight:900,margin:'0 auto 12px',flexShrink:0,overflow:'hidden',...(p.logoSrc?{}:p.iconStyle)}}>
-                            {/* Set PLATFORMS[key].logoSrc to an official asset to replace the badge; the fixed 60×60 container keeps all cards identical. */}
+                          <div className="ob-plat-icon" style={{width:52,height:52,borderRadius:15,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:900,margin:'0 auto 9px',flexShrink:0,overflow:'hidden',...(p.logoSrc?{}:p.iconStyle)}}>
+                            {/* Set PLATFORMS[key].logoSrc to an official asset to replace the badge; the fixed 52×52 container keeps all cards identical. */}
                             {p.logoSrc?<img src={p.logoSrc} alt="" style={{width:'78%',height:'78%',objectFit:'contain'}}/>:p.short}
                           </div>
                           <div className="ob-plat-name" style={{fontSize:15,fontWeight:800,color:sel?'#fff':'rgba(226,232,240,0.78)'}}>{p.label}</div>
-                          <div className="ob-plat-blurb" style={{fontSize:12,lineHeight:1.45,color:sel?'rgba(203,213,225,0.85)':'rgba(148,163,184,0.72)',marginTop:6,maxWidth:170}}>Import your tip history and see your insights.</div>
                         </button>
                       )
                     })}
                   </div>
 
-                  <OBTimezone value={timezone} detected={timezoneDetected} onChange={tz=>{setTimezone(tz);setTimezoneDetected(false);setPrimarySaveError('');track('onboarding_timezone_changed',{timezone:tz})}}/>
+                  <OBTimezone value={timezone} detected={timezoneDetected} status={timezoneDetected?null:timezoneSource} onChange={tz=>{setTimezone(tz);setTimezoneDetected(false);setTimezoneSource('Selected');setPrimarySaveError('');track('onboarding_timezone_changed',{timezone:tz})}}/>
 
-                  <div style={{height:20}}/>
+                  <div style={{height:14}}/>
 
                   {primarySaveError&&<div role="alert" data-testid="primary-save-error" style={{color:'#F87171',fontSize:13,marginBottom:10,textAlign:'center'}}>{primarySaveError} Tap Continue to retry.</div>}
                   <OBBtn onClick={confirmPlatforms} disabled={!primaryPlatformId} style={primaryPlatformId?{height:58,fontSize:16,borderRadius:16}:{height:58,fontSize:16,borderRadius:16,color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>
