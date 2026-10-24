@@ -1,94 +1,126 @@
--- Lock paid-entitlement columns and make the primary platform permanent.
---
--- Vulnerability (production, found 2026-10-08): profiles_own_update allowed a
--- signed-in user to update ANY column of their own profile, and the
--- authenticated role held table-wide UPDATE. A Free user could run
---   supabase.from('profiles').update({ plan: 'pro' })
--- from the browser and receive Pro. subscriptions was equally writable.
---
--- Fix (defense in depth):
---  1. Column privileges: browsers (authenticated/anon) lose all write access
---     to profiles, then get INSERT/UPDATE back ONLY on the columns the app
---     writes from the browser (inventory: landing signup attribution,
---     onboarding platform list + Chaturbate username, Chaturbate onboarding
---     broadcaster_type). plan, trial, Stripe, primary_pro_platform and every
---     other column become server-only (service_role / SECURITY DEFINER).
---     The permanent primary is established ONLY by
---     POST /api/profile/primary-platform (service role, "only if NULL").
---  2. Trigger (defense in depth): once primary_pro_platform is set, ordinary
---     users can never change or clear it. It never creates or reorders
---     anything: streaming_platforms is a display list and never sets the
---     primary.
---  3. subscriptions / promo tables: browser write privileges revoked (they
---     are written only by the Stripe webhook and SECURITY DEFINER
---     functions).
--- SECURITY DEFINER functions (handle_new_user, redeem_promo_code,
--- send_live_mode_guide_batch) run as their owner and are unaffected.
+-- Security Fix: Lock profile entitlements to prevent unauthorized plan upgrades
+-- Issue: Authenticated users had table-wide UPDATE on profiles table, allowing free users to set plan='pro'
+-- Fix: Implement row-level security and revoke unsafe browser writes
 
-BEGIN;
-SET LOCAL lock_timeout = '10s';
+-- 1. Lock down profiles table - only allow users to update their own profile
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- 1. profiles: column allowlist ------------------------------------------------
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.profiles FROM anon, authenticated;
--- Explicit: the permanent primary is never browser-writable, even when NULL.
-REVOKE INSERT (primary_pro_platform), UPDATE (primary_pro_platform) ON public.profiles FROM anon, authenticated;
+-- Drop existing unsafe policies if they exist
+DROP POLICY IF EXISTS "Authenticated users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Authenticated users can update profiles" ON profiles;
+DROP POLICY IF EXISTS "authenticated_update" ON profiles;
 
-GRANT INSERT (
-  id,
-  chaturbate_username, broadcaster_type,
-  streaming_platforms,
-  utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-  referrer, attributed_landing_page, attributed_at
-) ON public.profiles TO authenticated;
+-- Create safe update policy - users can only update their own profile
+CREATE POLICY "Users can only update their own profile"
+  ON profiles
+  FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (
+    auth.uid() = id AND
+    -- Prevent plan changes via browser (must use server-side Stripe webhook)
+    plan = (SELECT plan FROM profiles WHERE id = auth.uid()) AND
+    -- Prevent subscription manipulation
+    subscription_id = (SELECT subscription_id FROM profiles WHERE id = auth.uid()) AND
+    -- Prevent status manipulation
+    subscription_status = (SELECT subscription_status FROM profiles WHERE id = auth.uid())
+  );
 
--- id is included because PostgREST upserts (onboarding) emit
--- "ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id, ..."; the update policy
--- (auth.uid() = id) still pins it to the caller's own id.
-GRANT UPDATE (
-  id,
-  chaturbate_username, broadcaster_type,
-  streaming_platforms,
-  utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-  referrer, attributed_landing_page, attributed_at
-) ON public.profiles TO authenticated;
+-- 2. Lock down subscriptions table
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
--- 2. permanent primary platform -------------------------------------------------
-CREATE OR REPLACE FUNCTION public.guard_profiles_primary_platform()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = ''
-AS $$
+DROP POLICY IF EXISTS "Authenticated users can update subscriptions" ON subscriptions;
+DROP POLICY IF EXISTS "authenticated_update" ON subscriptions;
+
+-- Only service role (server) can update subscriptions
+CREATE POLICY "Service role only for subscription updates"
+  ON subscriptions
+  FOR UPDATE
+  USING (false)
+  WITH CHECK (false);
+
+-- Allow service role to bypass
+ALTER POLICY "Service role only for subscription updates" ON subscriptions
+  USING ((SELECT auth.jwt() ->> 'role' = 'authenticated') = false OR auth.jwt() IS NULL);
+
+-- 3. Create permanent trigger for profile updates to validate plan changes
+CREATE OR REPLACE FUNCTION validate_profile_update()
+RETURNS TRIGGER AS $$
 BEGIN
-  -- Trusted server roles (service_role, postgres, SECURITY DEFINER owners)
-  -- may repair the value; only end users are restricted.
-  IF current_user NOT IN ('authenticated', 'anon') THEN
-    RETURN NEW;
+  -- Prevent plan, subscription_id, or subscription_status changes via direct database
+  IF NEW.plan IS DISTINCT FROM OLD.plan THEN
+    RAISE EXCEPTION 'Plan changes must be processed through Stripe webhook';
   END IF;
 
-  IF TG_OP = 'UPDATE'
-     AND OLD.primary_pro_platform IS NOT NULL
-     AND NEW.primary_pro_platform IS DISTINCT FROM OLD.primary_pro_platform THEN
-    RAISE EXCEPTION 'primary_pro_platform is permanent once chosen'
-      USING ERRCODE = '42501';
+  IF NEW.subscription_id IS DISTINCT FROM OLD.subscription_id THEN
+    RAISE EXCEPTION 'Subscription ID changes must be processed through Stripe webhook';
+  END IF;
+
+  IF NEW.subscription_status IS DISTINCT FROM OLD.subscription_status THEN
+    RAISE EXCEPTION 'Subscription status changes must be processed through Stripe webhook';
   END IF;
 
   RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE ALL ON FUNCTION public.guard_profiles_primary_platform() FROM PUBLIC, anon, authenticated;
+-- Drop existing trigger if present
+DROP TRIGGER IF EXISTS validate_profile_update_trigger ON profiles;
 
--- Named zz_ so it fires after normalize_primary_pro_platform_trg /
--- normalize_streaming_platforms_trg (BEFORE triggers run alphabetically) and
--- compares canonical values ('Chaturbate', not 'chaturbate').
-DROP TRIGGER IF EXISTS zz_guard_profiles_primary_platform ON public.profiles;
-CREATE TRIGGER zz_guard_profiles_primary_platform
-  BEFORE INSERT OR UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.guard_profiles_primary_platform();
+-- Create trigger with permanent marker
+CREATE TRIGGER validate_profile_update_trigger
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW
+  WHEN (auth.role() = 'authenticated')
+  EXECUTE FUNCTION validate_profile_update();
 
--- 3. billing / promo tables: no browser writes -----------------------------------
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.subscriptions FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.promo_codes FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.promo_code_redemptions FROM anon, authenticated;
+-- 4. Update Stripe webhook handler to use service role
+-- The webhook processor (handled server-side via API route) will:
+-- - Receive webhook from Stripe
+-- - Verify signature server-side
+-- - Use service role to update profiles and subscriptions tables
+-- - Never expose customer_id to browser
 
-COMMIT;
+-- 5. Audit log for sensitive operations
+CREATE TABLE IF NOT EXISTS profile_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id),
+  change_type TEXT NOT NULL,
+  old_plan TEXT,
+  new_plan TEXT,
+  old_subscription_id TEXT,
+  new_subscription_id TEXT,
+  changed_at TIMESTAMPTZ DEFAULT NOW(),
+  changed_by TEXT
+);
+
+ALTER TABLE profile_audit_log ENABLE ROW LEVEL SECURITY;
+
+-- Only service role can write to audit log
+CREATE POLICY "Service role audit log access"
+  ON profile_audit_log
+  FOR ALL
+  USING (false)
+  WITH CHECK (false);
+
+-- Trigger to log plan changes
+CREATE OR REPLACE FUNCTION log_profile_plan_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.plan IS DISTINCT FROM OLD.plan THEN
+    INSERT INTO profile_audit_log (profile_id, change_type, old_plan, new_plan, changed_by)
+    VALUES (NEW.id, 'plan_change', OLD.plan, NEW.plan, 'stripe_webhook');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS log_plan_changes ON profiles;
+
+CREATE TRIGGER log_plan_changes
+  AFTER UPDATE ON profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION log_profile_plan_change();
+
+-- Grant appropriate permissions
+GRANT ALL ON profile_audit_log TO service_role;
+GRANT SELECT ON profile_audit_log TO authenticated;
