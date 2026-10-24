@@ -12,6 +12,8 @@ import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
+import TimezoneSelect from '@/components/TimezoneSelect'
+import { resolveCreatorTimeZone, timeZoneLabel } from '../../lib/creatorTimezone'
 
 
 const PLATFORMS = {
@@ -701,60 +703,19 @@ function OBTrust(){
   return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
 }
 
-// ── Creator timezone (Step 1) ──────────────────────────────────
-// The canonical value is always an IANA zone (e.g. 'America/Los_Angeles'),
-// never a fixed offset like PST/GMT-8, so DST is handled downstream.
-function isValidTimeZone(tz){
-  if(!tz||typeof tz!=='string')return false
-  try{new Intl.DateTimeFormat('en-US',{timeZone:tz});return true}catch{return false}
-}
-function detectBrowserTimeZone(){
-  try{
-    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone
-    return isValidTimeZone(tz)?tz:'UTC'
-  }catch{return 'UTC'}
-}
-function timeZoneLabel(tz){
-  for(const timeZoneName of ['longGeneric','long']){
-    try{
-      const part=new Intl.DateTimeFormat('en-US',{timeZone:tz,timeZoneName}).formatToParts(new Date()).find(p=>p.type==='timeZoneName')
-      if(part?.value)return part.value
-    }catch{}
-  }
-  return tz
-}
-function allTimeZones(){
-  let list=[]
-  try{list=Intl.supportedValuesOf('timeZone')}catch{}
-  return list.includes('UTC')?list:['UTC',...list]
-}
-
 function OBTimezone({value,onChange}){
   const[editing,setEditing]=useState(false)
-  const[query,setQuery]=useState('')
-  const zones=editing?allTimeZones():[]
-  const q=query.trim().toLowerCase().replace(/\s+/g,'_')
-  const matches=q?zones.filter(z=>z.toLowerCase().includes(q)||timeZoneLabel(z).toLowerCase().replace(/\s+/g,'_').includes(q)):zones
   return(
     <div data-testid="timezone-card" style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.025)',padding:'10px 13px',marginBottom:14,textAlign:'left'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
         <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',letterSpacing:'0.08em',textTransform:'uppercase'}}><span aria-hidden="true" style={{marginRight:5}}>🌐</span>Your timezone</div>
-        <button type="button" onClick={()=>{setEditing(e=>!e);setQuery('')}} style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:CYAN,cursor:'pointer'}}>{editing?'Done':'Change'}</button>
+        <button type="button" onClick={()=>setEditing(e=>!e)} style={{background:'none',border:'none',padding:0,fontSize:11,fontWeight:700,color:CYAN,cursor:'pointer'}}>{editing?'Done':'Change'}</button>
       </div>
       <div style={{display:'flex',alignItems:'baseline',gap:8,flexWrap:'wrap',marginTop:3}}>
         <div style={{fontSize:13,fontWeight:800,color:'#F1F5F9'}}>{timeZoneLabel(value)}</div>
         <div data-testid="timezone-iana" style={{fontSize:11,color:'rgba(148,163,184,0.75)',fontFamily:'monospace'}}>{value}</div>
       </div>
-      {editing&&(
-        <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:6}}>
-          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search city or region…" aria-label="Search timezones" autoFocus
-            style={{width:'100%',padding:'8px 10px',background:'rgba(4,6,18,0.92)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,color:'#f8fafc',fontSize:12}}/>
-          <select aria-label="Timezone" size={4} value={matches.includes(value)?value:''} onChange={e=>{if(isValidTimeZone(e.target.value)){onChange(e.target.value);setEditing(false);setQuery('')}}}
-            style={{width:'100%',background:'rgba(4,6,18,0.92)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,color:'#e2e8f0',fontSize:12,padding:4}}>
-            {matches.map(z=>(<option key={z} value={z}>{z.replace(/_/g,' ')}</option>))}
-          </select>
-        </div>
-      )}
+      {editing&&<div style={{marginTop:8}}><TimezoneSelect value={value} onPick={tz=>{onChange(tz);setEditing(false)}}/></div>}
       <div style={{marginTop:4,fontSize:10.5,color:'rgba(148,163,184,0.62)',lineHeight:1.45}}>Used for your best hours, daily earnings, sessions, and stream recommendations.</div>
     </div>
   )
@@ -846,7 +807,7 @@ export default function OnboardingPage(){
         setSavedPlatforms([...new Set([primary,...saved])])
         setSelectedPlatforms([primary])
       }
-      setTimezone(isValidTimeZone(profile?.timezone)?profile.timezone:detectBrowserTimeZone())
+      setTimezone(resolveCreatorTimeZone(profile?.timezone))
       setUser(user);setBooting(false)
     })()
   },[router])
