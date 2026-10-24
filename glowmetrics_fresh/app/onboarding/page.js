@@ -672,7 +672,7 @@ function OBLogo({showSub=false}){
 function OBProgress({current,onBack}){
   const steps=[{n:1,label:'Platform'},{n:2,label:'Import'},{n:3,label:'Insights'}]
   return(
-    <div className="ob-stepper" style={{marginBottom:14}}>
+    <div className="ob-stepper" style={{marginBottom:10}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
@@ -683,7 +683,7 @@ function OBProgress({current,onBack}){
               background:s.n===current?GRAD:s.n<current?CYAN:'rgba(255,255,255,0.05)',
               border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
               color:s.n===current?'#fff':s.n<current?'#04101b':'rgba(255,255,255,0.25)',
-              boxShadow:s.n===current?`0 0 18px rgba(33,230,243,0.55),0 0 30px rgba(168,85,247,0.35),0 0 44px rgba(255,47,174,0.25)`:s.n<current?`0 0 14px rgba(33,230,243,0.4)`:'none',
+              boxShadow:s.n===current?`0 0 22px rgba(33,230,243,0.75),0 0 40px rgba(168,85,247,0.5),0 0 56px rgba(255,47,174,0.38)`:s.n<current?`0 0 14px rgba(33,230,243,0.4)`:'none',
             }}>
               {s.n<current?'✓':s.n}
             </Tag>)})()}
@@ -1400,7 +1400,7 @@ export default function OnboardingPage(){
 
       {/* ── CARD ── */}
       <div className={`ob-card-shell${step==='platforms'||step==='paste'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'24px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
               don't add empty scrollable space to the card. */}
@@ -1485,7 +1485,8 @@ export default function OnboardingPage(){
             const onlyTips=ok&&preview.privateDetected===0&&preview.membershipsDetected===0&&preview.otherDetected===0
             const count=ok?(onlyTips?preview.tipsDetected:preview.transactionsDetected):0
             const range=ok&&preview.dateFrom&&preview.dateTo?(preview.dateFrom===preview.dateTo?preview.dateTo:preview.dateFrom.slice(-4)===preview.dateTo.slice(-4)?`${preview.dateFrom.replace(/, \d{4}$/,'')} – ${preview.dateTo}`:`${preview.dateFrom} – ${preview.dateTo}`):'—'
-            const slot={minHeight:100,borderRadius:14,marginTop:14,textAlign:'left'}
+            // Reserve the success card's height so parsing → success/error never jumps.
+            const slot={minHeight:129,borderRadius:14,marginTop:10,textAlign:'left'}
             const col=(k,label,value,sub,color='#F1F5F9',first=false)=>(
               <div key={k} data-testid={`detected-${k}`} style={{minWidth:0,padding:first?'0 14px 0 0':'0 14px',borderLeft:first?'none':'1px solid rgba(148,163,184,0.16)'}}>
                 <div style={{fontSize:11.5,color:'rgba(148,163,184,0.8)',marginBottom:3}}>{label}</div>
@@ -1495,18 +1496,25 @@ export default function OnboardingPage(){
             )
             return(
             <div className="ob-s2" style={{animation:'fadeUp 0.3s ease both',maxWidth:600,margin:'0 auto'}}>
-              <div style={{textAlign:'center',marginBottom:14}}>
+              <div style={{textAlign:'center',marginBottom:10}}>
                 <h1 className="ob-s2-title" style={{fontSize:28,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.15,marginBottom:6}}>{isPrimaryInQueue?<>Paste your {platform.label} <span style={{background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>tip history</span></>:`You also stream on ${platform.label}`}</h1>
                 <p style={{fontSize:13.5,color:'rgba(166,168,189,0.9)',lineHeight:1.45}}>Copy your earnings rows from {platform.label} and paste them below.</p>
               </div>
 
+              <div style={{position:'relative'}}>
               <textarea ref={pasteRef} aria-label={`Paste your ${platform.label} tip history`} value={pasteText}
                 onChange={e=>setPasteText(e.target.value)} placeholder={`Paste your ${platform.label} tip history here…`}
                 className="ob-paste" spellCheck={false}
-                style={{display:'block',width:'100%',height:110,minHeight:105,maxHeight:125,resize:'none',borderRadius:14,border:`1px solid ${detectStatus==='error'?'rgba(248,113,113,0.5)':'rgba(34,211,238,0.28)'}`,background:'rgba(4,10,24,0.85)',padding:'12px 14px',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:12,lineHeight:1.5,color:'#E2E8F0',outline:'none',transition:'border-color 0.18s,box-shadow 0.18s'}}
+                style={{display:'block',width:'100%',height:125,minHeight:125,maxHeight:125,resize:'none',borderRadius:14,border:`1px solid ${detectStatus==='error'?'rgba(248,113,113,0.5)':'rgba(34,211,238,0.28)'}`,background:'rgba(4,10,24,0.85)',padding:'12px 14px',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:12,lineHeight:1.5,color:'#E2E8F0',outline:'none',transition:'border-color 0.18s,box-shadow 0.18s'}}
                 onFocus={e=>{e.target.style.borderColor='rgba(34,211,238,0.6)';e.target.style.boxShadow='0 0 0 3px rgba(34,211,238,0.08)'}}
                 onBlur={e=>{e.target.style.borderColor=detectStatus==='error'?'rgba(248,113,113,0.5)':'rgba(34,211,238,0.28)';e.target.style.boxShadow='none'}}
               />
+              {!pasteText&&(
+                <div aria-hidden="true" style={{position:'absolute',left:15,right:14,top:36,pointerEvents:'none',fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:11.5,lineHeight:1.6,color:'rgba(148,163,184,0.42)',whiteSpace:'pre-line'}}>
+                  {`e.g.  Jun 18, 2026, 8:27 PM  ·  Tip From: fan_name  ·  500 tokens`}
+                </div>
+              )}
+              </div>
 
               {/* Status / result slot — in place, directly beneath the paste field */}
               {(importError||upgradeBlocked)?(
@@ -1558,8 +1566,8 @@ export default function OnboardingPage(){
                 </div>
               ):null}
 
-              <div style={{marginTop:14}}>
-                <OBBtn onClick={handlePreview} disabled={!ok} style={ok?{height:54,fontSize:15.5,borderRadius:13}:{height:54,fontSize:15.5,borderRadius:13,color:'rgba(226,232,240,0.55)',border:'1px solid rgba(255,255,255,0.10)'}}>Continue →</OBBtn>
+              <div style={{marginTop:10}}>
+                <OBBtn onClick={handlePreview} disabled={!ok} style={ok?{height:54,fontSize:15.5,borderRadius:13}:{height:54,fontSize:15.5,borderRadius:13,background:'linear-gradient(90deg,rgba(34,211,238,0.14),rgba(168,85,247,0.14),rgba(255,47,174,0.14))',color:'rgba(226,232,240,0.5)',border:'1px solid rgba(34,211,238,0.16)',cursor:'not-allowed'}}>Continue →</OBBtn>
               </div>
 
               <div style={{position:'relative',display:'flex',justifyContent:'center',gap:18,marginTop:10,flexWrap:'wrap',fontSize:12}}>
@@ -1571,7 +1579,7 @@ export default function OnboardingPage(){
                   </div>
                 )}
                 <button type="button" onClick={()=>setPasteHelpOpen(o=>!o)} style={{background:'none',border:'none',padding:0,color:'rgba(203,213,225,0.8)',cursor:'pointer'}}>{pasteHelpOpen?'Hide copy instructions':'Need help copying your history?'}</button>
-                <button type="button" onClick={()=>setStep('csv')} style={{background:'none',border:'none',padding:0,color:'#22d3ee',fontWeight:600,cursor:'pointer'}}>Upload CSV instead</button>
+                <button type="button" onClick={()=>setStep('csv')} style={{padding:'4px 12px',borderRadius:9,border:'1px solid rgba(34,211,238,0.42)',background:'rgba(34,211,238,0.06)',color:'#E0F7FF',fontWeight:700,cursor:'pointer'}}>⇪ Upload CSV instead</button>
                 {!isPrimaryInQueue&&<button type="button" onClick={skipCurrentPlatform} style={{background:'none',border:'none',padding:0,color:'rgba(148,163,184,0.85)',cursor:'pointer'}}>Skip for now</button>}
               </div>
               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:8,fontSize:11,color:'rgba(148,163,184,0.7)'}}><span aria-hidden="true">🔒</span><span>Your data is stored securely and never shared.</span></div>
