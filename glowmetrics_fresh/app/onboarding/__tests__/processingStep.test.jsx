@@ -20,6 +20,7 @@ jest.mock('../../../lib/supabase', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        limit: async () => ({ data: [], error: null }),
         insert: async () => ({ data: null, error: null }),
         single: async () => {
           if (table === 'beta_users') return { data: { onboarding_complete: false } }

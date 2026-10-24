@@ -9,7 +9,7 @@ import { readUploadJson } from '../../lib/readUploadJson'
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats, parseCSV } from '../../lib/analytics'
 import { summarizeOnboarding, assertImportComplete, earningDateRange, formatDay, canonicalImportDataset, streamPatterns, bestStreamingTimes } from '../../lib/onboardingSummary'
-import { FREE_ANALYSIS_WINDOW_DAYS, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
+import { FREE_ANALYSIS_WINDOW_DAYS, FREE_PLATFORM_LIMIT, isProPlan } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
@@ -549,6 +549,8 @@ const GRAD='linear-gradient(90deg,#21E6F3,#6C5CFF,#FF2FAE)'
 // tests later. Benefits only list features with real Pro gating in code:
 // FREE_ANALYSIS_WINDOW_DAYS (history), Platforms Intelligence (top fans
 // 3 vs 10), StreamPlanner isPro gating.
+const TRIAL_DAYS=7 // matches /api/stripe/checkout trial_days
+const PRO_MONTHLY_PRICE='9.99' // matches /pricing standard_monthly
 const TRIAL_COPY={
   headline:'Your first insight is just the beginning.',
   sub:'Start your 7-day Pro trial and let CamCash build a deeper picture of your earnings, fans, platforms, and best streaming times.',
@@ -598,7 +600,7 @@ const CSS=`
   .ob-proc-status{animation:obProcFade 0.3s ease-out both}
   .ob-proc-row{overflow:hidden}
   .ob-proc-row--active::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(34,211,238,0.07),transparent);animation:obProcSweep 1.8s ease-in-out infinite}
-  @media(max-width:640px){.ob-proc-visual{display:none!important}}
+  @media(max-width:640px){.ob-proc-visual{display:none!important}.ob-s5-top,.ob-s5-bottom{grid-template-columns:1fr!important}}
   @media(prefers-reduced-motion:reduce){
     .ob-dash-sweep,.ob-dash-dissolve{animation:none!important}
     .ob-ext-tip{animation:none!important}
@@ -1022,6 +1024,12 @@ export default function OnboardingPage(){
   const[dashboardTransitioning,setDashboardTransitioning]=useState(false)
   // null until the user picks on the trial screen; 'trial' | 'free' after.
   const[trialChoice,setTrialChoice]=useState(null)
+  // Existing subscription state from profiles (no local trial state).
+  const[billing,setBilling]=useState({isPro:false,trialEndsAt:null,subscriptionStatus:null})
+  const[trialBusy,setTrialBusy]=useState(false)
+  // Extension connected = at least one tip the extension has sent (the same
+  // signal the Live page uses). Null while checking.
+  const[extConnected,setExtConnected]=useState(null)
   const csvRef=useRef()
 
   function enterDashboard(){
@@ -1042,7 +1050,8 @@ export default function OnboardingPage(){
       if(!user){router.replace('/login');return}
       const{data}=await supabase.from('beta_users').select('onboarding_complete').eq('user_id',user.id).single()
       if(data?.onboarding_complete){router.replace('/dashboard');return}
-      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform,timezone,chaturbate_username').eq('id',user.id).single()
+      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform,timezone,chaturbate_username,trial_ends_at,subscription_status,plan_expires_at').eq('id',user.id).single()
+      setBilling({isPro:isProPlan(profile?.plan),trialEndsAt:profile?.trial_ends_at||null,subscriptionStatus:profile?.subscription_status||null})
       setUserPlan(profile?.plan==='pro'?'pro':'free')
       // Restore an in-progress platform selection if the user left and came
       // back — matches beta_users.onboarding_complete already gating re-entry.
@@ -1425,8 +1434,26 @@ export default function OnboardingPage(){
     setStep('freeReady')
   }
 
+  useEffect(()=>{
+    if(step!=='trial'||!user||extConnected!==null)return
+    let live=true
+    supabase.from('tips').select('id').eq('source','extension').limit(1).then(({data})=>{if(live)setExtConnected(!!(data&&data.length))},()=>{if(live)setExtConnected(false)})
+    return()=>{live=false}
+  },[step,user,extConnected])
+
+  // Step 5 state from existing subscription data only.
+  const trialStatus=(()=>{
+    if(billing.isPro)return 'pro'
+    const now=Date.now()
+    const ends=billing.trialEndsAt?new Date(billing.trialEndsAt).getTime():null
+    if(billing.subscriptionStatus==='trialing'&&ends&&ends>now)return 'trialing'
+    if(ends)return 'used'          // a trial was started before; Stripe decides eligibility
+    return 'eligible'
+  })()
+
   async function handleStartTrial(){
-    if(!user)return
+    if(!user||trialBusy)return
+    setTrialBusy(true)
     track('onboarding_trial_started',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
     setTrialChoice('trial')
     // Mark complete before leaving for Stripe: both success_url and
@@ -1452,6 +1479,7 @@ export default function OnboardingPage(){
     }catch(e){
       console.error('Trial checkout failed:',e)
       trackCheckoutEvent('failed',{source:'onboarding'})
+      setTrialBusy(false)
       alert(e.message||'Failed to start trial. Please try again.')
     }
   }
@@ -1814,7 +1842,11 @@ export default function OnboardingPage(){
 
               <div data-testid="step4-free-note" style={{display:'flex',alignItems:'flex-start',gap:10,textAlign:'left',fontSize:11,color:'rgba(148,163,184,0.85)',lineHeight:1.5,marginBottom:14}}>
                 <span aria-hidden="true">🗄️</span>
-                <span>Your full history is saved. Free includes full history for your primary platform; additional platforms are limited to the most recent 31 days.</span>
+                <span>
+                  <span style={{display:'block',color:'#fff',fontWeight:700}}>All {(range?.calendarDays||0).toLocaleString('en-US')} days are safely stored.</span>
+                  <span style={{display:'block'}}>Your full history is saved. Free includes full history for your primary platform; additional platforms are limited to the most recent 31 days.</span>
+                  {!billing.isPro&&<span style={{display:'block',marginTop:3,color:'#c4b5fd'}}>Upgrade to unlock your full history and advanced insights.</span>}
+                </span>
               </div>
 
               <OBBtn onClick={goToTrial}>Continue →</OBBtn>
@@ -1966,7 +1998,7 @@ export default function OnboardingPage(){
             return(
             <div data-testid="step5-trial" style={{animation:'fadeUp 0.3s ease both'}}>
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                <div style={{display:'grid',gridTemplateColumns:'1.15fr 1fr',gap:12,alignItems:'stretch'}}>
+                <div className="ob-s5-top" style={{display:'grid',gridTemplateColumns:'1.15fr 1fr',gap:12,alignItems:'stretch'}}>
                   {/* Extension card: animated tip feed (decorative) + manual install */}
                   <div className="ob-ext-card" style={{borderRadius:14,padding:'12px 12px 10px',background:'linear-gradient(160deg,rgba(34,211,238,0.08),rgba(168,85,247,0.10) 60%,rgba(255,47,174,0.08))',border:'1px solid rgba(34,211,238,0.22)',textAlign:'left'}}>
                     <div aria-hidden="true" style={{position:'relative',height:86,borderRadius:10,background:'rgba(4,10,24,0.7)',border:'1px solid rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10}}>
@@ -1977,12 +2009,19 @@ export default function OnboardingPage(){
                           <span style={{marginLeft:'auto',fontSize:10,color:t.c,fontWeight:800}}>{t.u}</span>
                         </div>))}
                     </div>
-                    <a href="/camcash-extension.zip" download="camcash-extension.zip" data-testid="ext-download" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:40,borderRadius:11,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',color:'#fff',fontSize:13,fontWeight:900,textDecoration:'none',boxShadow:'0 0 18px rgba(33,230,243,0.2)'}}>⬇ Download CamCash Extension</a>
-                    <ol style={{margin:'8px 0 0',paddingLeft:16,fontSize:10.5,color:'rgba(148,163,184,0.85)',lineHeight:1.5}}>
-                      <li>Unzip the download.</li>
-                      <li>Open chrome://extensions and turn on Developer mode.</li>
-                      <li>Click Load unpacked and choose the unzipped folder.</li>
-                    </ol>
+                    {extConnected?(
+                      <div data-testid="ext-connected" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:40,borderRadius:11,border:'1px solid rgba(74,222,128,0.45)',background:'rgba(74,222,128,0.08)',color:'#86efac',fontSize:13,fontWeight:900}}>✓ Extension connected</div>
+                    ):(
+                      <>
+                        <a href="/camcash-extension.zip" download="camcash-extension.zip" data-testid="ext-download" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:40,borderRadius:11,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',color:'#fff',fontSize:13,fontWeight:900,textDecoration:'none',boxShadow:'0 0 18px rgba(33,230,243,0.2)'}}>⬇ Download CamCash Extension</a>
+                        <ol style={{margin:'8px 0 0',paddingLeft:16,fontSize:10.5,color:'rgba(148,163,184,0.85)',lineHeight:1.5}}>
+                          <li>Unzip the download.</li>
+                          <li>Open chrome://extensions and turn on Developer mode.</li>
+                          <li>Click Load unpacked and choose the unzipped folder.</li>
+                        </ol>
+                        <div style={{fontSize:10,color:'rgba(148,163,184,0.7)',marginTop:6}}>Optional — you can add it later.</div>
+                      </>
+                    )}
                   </div>
 
                   <div style={{textAlign:'left',paddingTop:2}}>
@@ -1992,13 +2031,32 @@ export default function OnboardingPage(){
                   </div>
                 </div>
 
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'stretch'}}>
-                  {/* Trial: price copy unchanged from the current configuration */}
-                  <div style={{borderRadius:14,border:'1px solid rgba(167,139,250,0.4)',background:'rgba(255,255,255,0.02)',padding:'12px 12px 14px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
-                    <div style={{fontSize:26,fontWeight:900,color:'#fff'}}><span style={{color:CYAN}}>$0</span> today</div>
-                    <div style={{fontSize:20,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginTop:2}}>7 days free</div>
-                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.8)',margin:'4px 0 10px'}}>Then $9.99/month • Cancel anytime</div>
-                    <OBBtn onClick={handleStartTrial} style={{height:46,fontSize:13.5}}>{TRIAL_COPY.cta}</OBBtn>
+                {trialStatus==='pro'?(
+                  <div data-testid="trial-pro" style={{borderRadius:14,border:'1px solid rgba(74,222,128,0.35)',background:'rgba(74,222,128,0.06)',padding:'16px',textAlign:'center'}}>
+                    <div style={{fontSize:16,fontWeight:900,color:'#fff',marginBottom:4}}>You’re on CamCash Pro</div>
+                    <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',marginBottom:12}}>Full history and every insight are unlocked.</div>
+                    <OBBtn onClick={enterDashboard}>Enter CamCash →</OBBtn>
+                  </div>
+                ):(
+                <div className="ob-s5-bottom" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'stretch'}}>
+                  {/* Trial card: state from existing subscription data */}
+                  <div data-testid="trial-card" style={{borderRadius:14,border:'1px solid rgba(167,139,250,0.4)',background:'rgba(255,255,255,0.02)',padding:'12px 12px 14px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                    {trialStatus==='trialing'?(<>
+                      <div style={{fontSize:16,fontWeight:900,color:'#fff'}}>Your Pro trial is active</div>
+                      <div style={{fontSize:11,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>Ends {new Date(billing.trialEndsAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · then $9.99/month</div>
+                      <OBBtn onClick={enterDashboard}>Enter CamCash →</OBBtn>
+                    </>):(<>
+                      {trialStatus==='eligible'?(<>
+                        <div style={{fontSize:26,fontWeight:900,color:'#fff'}}><span style={{color:CYAN}}>$0</span> today</div>
+                        <div style={{fontSize:20,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginTop:2}}>{TRIAL_DAYS} days free</div>
+                        <div style={{fontSize:10.5,color:'rgba(148,163,184,0.8)',margin:'4px 0 10px'}}>Then ${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
+                        <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:46,fontSize:13.5}}>{`Start my ${TRIAL_DAYS}-day Pro trial →`}</OBBtn>
+                      </>):(<>
+                        <div style={{fontSize:16,fontWeight:900,color:'#fff'}}>Upgrade to Pro</div>
+                        <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
+                        <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:46,fontSize:13.5}}>Upgrade to Pro →</OBBtn>
+                      </>)}
+                    </>)}
                   </div>
 
                   {/* Free: only what is enforced today */}
@@ -2008,6 +2066,7 @@ export default function OnboardingPage(){
                     <button onClick={handleChooseFree} style={{marginTop:6,width:'100%',height:34,borderRadius:10,border:'1px solid rgba(148,163,184,0.35)',background:'transparent',color:'rgba(226,232,240,0.9)',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>Continue with Free</button>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           )})()}
