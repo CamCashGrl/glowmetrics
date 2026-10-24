@@ -108,7 +108,8 @@ describe('/api/upload date order', () => {
   const AMB = ['date_time,username,tokens', '06/11/2024 11:21,fanA,10', '07/08/2024 04:44,fanB,5'].join('\n')
   const DMY = ['date_time,username,tokens', '06/11/2024 11:21,fanA,10', '25/08/2024 04:44,fanB,5'].join('\n')
   const MIX = ['date_time,username,tokens', '13/11/2024 11:21,fanA,10', '08/25/2024 04:44,fanB,5'].join('\n')
-  const day = (t) => { const d = new Date(t.date_time); return `${d.getMonth() + 1}/${d.getDate()}` }
+  // Stored times are real instants; read the day on the creator's clock (UTC here), not the test machine's.
+  const day = (t) => { const d = new Date(t.date_time); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}` }
 
   test('an all-ambiguous file is rejected until the user chooses, nothing written', async () => {
     const res = await upload(req(AMB, { platform: 'BongaCams' }))
