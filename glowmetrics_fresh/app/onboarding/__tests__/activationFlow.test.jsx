@@ -61,12 +61,17 @@ beforeEach(() => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ inserted: 2, skipped: 0 }), text: async () => JSON.stringify({ inserted: 2, skipped: 0 }) })
 })
 
+// The username screen was removed from onboarding: Step 1 goes straight to Import.
+const expectNoUsernameStep = () => {
+  expect(screen.queryByPlaceholderText('your_username')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Continue to Tip Import/ })).not.toBeInTheDocument()
+}
+
 async function importPrimary() {
   render(<OnboardingPage />)
   fireEvent.click(await screen.findByText('Chaturbate'))
   fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
-  fireEvent.change(await screen.findByPlaceholderText('your_username'), { target: { value: 'me' } })
-  fireEvent.click(screen.getByRole('button', { name: /Continue to Tip Import/ }))
+  expectNoUsernameStep()
   fireEvent.change(await screen.findByPlaceholderText(/Paste|paste/), { target: { value: PASTE } })
   fireEvent.click(screen.getByRole('button', { name: /Import & build dashboard/ }))
   await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })
@@ -119,8 +124,7 @@ test('a returning user with saved secondaries still only imports the primary in 
   await waitFor(() => expect(screen.getByRole('radio', { name: /BongaCams/ })).toHaveAttribute('aria-checked', 'true'))
   fireEvent.click(screen.getByText('Chaturbate'))
   fireEvent.click(screen.getByRole('button', { name: 'Continue with Chaturbate →' }))
-  fireEvent.change(await screen.findByPlaceholderText('your_username'), { target: { value: 'me' } })
-  fireEvent.click(screen.getByRole('button', { name: /Continue to Tip Import/ }))
+  expectNoUsernameStep()
   fireEvent.change(await screen.findByPlaceholderText(/Paste|paste/), { target: { value: PASTE } })
   fireEvent.click(screen.getByRole('button', { name: /Import & build dashboard/ }))
   await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })
@@ -128,4 +132,44 @@ test('a returning user with saved secondaries still only imports the primary in 
   // Saved secondary is preserved in the profile, just not walked through now.
   const saved = upserts.filter(u => u.table === 'profiles' && u.row.streaming_platforms).map(u => u.row.streaming_platforms)
   expect(saved).toEqual([['chaturbate', 'bongacams']])
+}, 20000)
+
+test('Step 1 Continue goes directly to Import with platform + timezone preserved, no username needed', async () => {
+  render(<OnboardingPage />)
+  fireEvent.click(await screen.findByText('Chaturbate'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
+  // Lands on the Chaturbate import screen immediately.
+  expect(await screen.findByPlaceholderText(/Paste|paste/)).toBeInTheDocument()
+  expect(screen.getByText(/Step 2 of 3 — Chaturbate/)).toBeInTheDocument()
+  expectNoUsernameStep()
+  expect(screen.getByText('Import')).toHaveAttribute('aria-current', 'step')
+  expect(screen.queryByText(/^Username$/i)).not.toBeInTheDocument()
+  // Platform list + timezone were saved by Step 1; no username was ever written.
+  const profileRows = upserts.filter(u => u.table === 'profiles').map(u => u.row)
+  expect(profileRows[0]).toEqual(expect.objectContaining({ streaming_platforms: ['chaturbate'], timezone: expect.any(String) }))
+  expect(profileRows.some(r => 'chaturbate_username' in r)).toBe(false)
+  // Import completes without a username.
+  fireEvent.change(screen.getByPlaceholderText(/Paste|paste/), { target: { value: PASTE } })
+  fireEvent.click(screen.getByRole('button', { name: /Import & build dashboard/ }))
+  expect(await screen.findByText(/Your Chaturbate data is ready/, {}, { timeout: 10000 })).toBeInTheDocument()
+}, 20000)
+
+test('a saved Chaturbate username is still used for the stats-page link, but never required', async () => {
+  mockProfile = { plan: 'free', streaming_platforms: null, primary_pro_platform: null, chaturbate_username: 'savedname' }
+  render(<OnboardingPage />)
+  fireEvent.click(await screen.findByText('Chaturbate'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
+  await screen.findByPlaceholderText(/Paste|paste/)
+  expect(document.querySelector('a[href="https://chaturbate.com/p/savedname/?tab=tokens"]')).not.toBeNull()
+  expectNoUsernameStep()
+}, 20000)
+
+test('Back from Import returns to Step 1 (no username screen in between)', async () => {
+  render(<OnboardingPage />)
+  fireEvent.click(await screen.findByText('Chaturbate'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
+  await screen.findByPlaceholderText(/Paste|paste/)
+  fireEvent.click(screen.getAllByRole('button', { name: '← Back' })[0])
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Where do you stream?')
+  expect(screen.getByRole('radio', { name: /Chaturbate/ })).toHaveAttribute('aria-checked', 'true')
 }, 20000)

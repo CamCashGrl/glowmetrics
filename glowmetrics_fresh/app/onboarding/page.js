@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import { readUploadJson } from '../../lib/readUploadJson'
@@ -12,8 +13,7 @@ import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
 import OnboardingExitSurvey from '@/components/OnboardingExitSurvey'
-import TimezoneSelect from '@/components/TimezoneSelect'
-import { isValidTimeZone, resolveCreatorTimeZone, timeZoneLabel } from '../../lib/creatorTimezone'
+import { isValidTimeZone, resolveCreatorTimeZone, timeZoneLabel, allTimeZones } from '../../lib/creatorTimezone'
 
 
 const PLATFORMS = {
@@ -609,6 +609,13 @@ const CSS=`
     .ob-plat-card{padding:10px 4px 9px!important}
     .ob-plat-icon{width:40px!important;height:40px!important;border-radius:12px!important;font-size:12px!important;margin-bottom:6px!important}
     .ob-plat-name{font-size:12px!important}
+    .ob-plat-blurb{display:none}
+    .ob-step1-title{font-size:24px!important}
+    .ob-step1-sub{font-size:12.5px!important}
+    .ob-tz-row{padding:12px 14px!important;gap:10px!important;flex-wrap:wrap;position:relative}
+    .ob-tz-globe{display:none!important}
+    .ob-tz-change{position:absolute;top:10px;right:12px;padding:5px 11px!important;font-size:12px!important}
+    .ob-tz-help{font-size:11px!important}
   }
   @media(min-width:601px){
     .ob-card-shell{max-width:min(600px,calc(100vw - 32px))!important}
@@ -616,9 +623,15 @@ const CSS=`
     .ob-card{padding:clamp(14px,2.4dvh,22px) 28px clamp(12px,2dvh,18px)!important}
   }
   /* Step 1: wider card on desktop with one centered content column. */
-  .ob-step1-col{max-width:600px;margin:0 auto}
-  @media(min-width:1100px){
-    .ob-card-shell.ob-card-shell--wide{max-width:min(760px,calc(100vw - 32px))!important}
+  .ob-step1-col{max-width:800px;margin:0 auto}
+  @media(min-width:601px){
+    .ob-card-shell.ob-card-shell--wide{max-width:min(940px,calc(100vw - 48px))!important}
+    .ob-card-shell--wide .ob-card{padding:clamp(18px,3.2dvh,34px) clamp(28px,4.5vw,64px) clamp(16px,2.8dvh,28px)!important}
+  }
+  @media(min-width:601px) and (max-height:760px){
+    .ob-step1-head{margin-bottom:14px!important}
+    .ob-plat-row{margin-bottom:14px!important}
+    .ob-plat-card{padding:14px 10px 12px!important}
   }
   .ob-card{max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px)}
   .ob-gap{margin-bottom:clamp(10px,1.8dvh,16px)!important}
@@ -712,29 +725,117 @@ function OBTrust(){
   return(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,fontSize:10,color:'rgba(100,116,139,0.55)'}}><span>🔒</span><span>Your data is stored securely and never shared.</span></div>)
 }
 
+// Step 1 timezone: a glass row (closed by default) that opens a styled,
+// searchable picker. The picker is portalled to <body> so the card's own
+// overflow/backdrop-filter can't clip it; on phones it's a bottom sheet.
+// Only valid IANA zones can be picked.
+const TZ_COMMON=['America/Los_Angeles','America/Denver','America/Phoenix','America/Chicago','America/New_York','America/Toronto','America/Bogota','America/Sao_Paulo','Europe/London','Europe/Berlin','Europe/Madrid','Europe/Bucharest','Europe/Kyiv','Europe/Kiev','Europe/Moscow','Asia/Manila','Australia/Sydney','UTC']
+function OBTimezonePicker({value,onPick,onClose,anchorRef}){
+  const[query,setQuery]=useState('')
+  const[active,setActive]=useState(0)
+  const[pos,setPos]=useState(null)
+  const panelRef=useRef(null)
+  const inputRef=useRef(null)
+  const zones=useMemo(()=>allTimeZones().map(z=>({z,label:timeZoneLabel(z)})),[])
+  const q=query.trim().toLowerCase()
+  const matches=useMemo(()=>{
+    const list=q?zones.filter(({z,label})=>label.toLowerCase().includes(q)||z.toLowerCase().replace(/_/g,' ').includes(q)||z.toLowerCase().includes(q.replace(/\s+/g,'_'))):zones
+    // Current selection first, then the most common creator zones, then A–Z.
+    const rank=o=>o.z===value?-1:(TZ_COMMON.indexOf(o.z)+1||TZ_COMMON.length+1)
+    return [...list].sort((a,b)=>rank(a)-rank(b))
+  },[q,zones,value])
+  useEffect(()=>{setActive(0)},[q])
+  useEffect(()=>{
+    const place=()=>{
+      const el=anchorRef.current; if(!el)return
+      const r=el.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight
+      if(vw<600){setPos({sheet:true});return}
+      const H=Math.min(320,vh-24),below=vh-r.bottom-8,above=r.top-8
+      const top=below>=H||below>=above?r.bottom+6:Math.max(8,r.top-6-Math.min(H,above))
+      setPos({sheet:false,top,left:r.left,width:r.width,maxH:Math.min(H,below>=H||below>=above?below:above)})
+    }
+    place()
+    window.addEventListener('resize',place);window.addEventListener('scroll',place,true)
+    return()=>{window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true)}
+  },[anchorRef])
+  useEffect(()=>{inputRef.current?.focus()},[pos?.sheet])
+  useEffect(()=>{
+    const down=e=>{if(panelRef.current?.contains(e.target)||anchorRef.current?.contains(e.target))return;onClose()}
+    document.addEventListener('mousedown',down);document.addEventListener('touchstart',down)
+    return()=>{document.removeEventListener('mousedown',down);document.removeEventListener('touchstart',down)}
+  },[onClose,anchorRef])
+  const choose=z=>{if(isValidTimeZone(z))onPick(z)}
+  const onKey=e=>{
+    if(e.key==='Escape'){e.preventDefault();onClose(true)}
+    else if(e.key==='ArrowDown'){e.preventDefault();setActive(i=>Math.min(i+1,matches.length-1))}
+    else if(e.key==='ArrowUp'){e.preventDefault();setActive(i=>Math.max(i-1,0))}
+    else if(e.key==='Enter'){e.preventDefault();if(matches[active])choose(matches[active].z)}
+  }
+  useEffect(()=>{panelRef.current?.querySelector(`[data-idx="${active}"]`)?.scrollIntoView?.({block:'nearest'})},[active])
+  if(!pos)return null
+  const sheet=pos.sheet
+  const panel=(
+    <div ref={panelRef} data-testid="timezone-picker" onKeyDown={onKey} style={{
+      position:'fixed',zIndex:1000,display:'flex',flexDirection:'column',
+      ...(sheet?{left:0,right:0,bottom:0,maxHeight:'70vh',borderRadius:'20px 20px 0 0',padding:'14px 14px 18px'}:{top:pos.top,left:pos.left,width:pos.width,maxHeight:pos.maxH,borderRadius:16,padding:10}),
+      background:'linear-gradient(180deg,#0e1328,#080b1a)',border:'1px solid rgba(96,165,250,0.25)',
+      boxShadow:'0 24px 60px rgba(0,0,0,0.6),0 0 24px rgba(124,92,255,0.18)',fontFamily:"'Inter',system-ui,sans-serif",
+    }}>
+      {sheet&&<div aria-hidden="true" style={{width:40,height:4,borderRadius:4,background:'rgba(255,255,255,0.2)',margin:'0 auto 12px'}}/>}
+      <input ref={inputRef} value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search city or timezone…" aria-label="Search timezones"
+        role="combobox" aria-expanded="true" aria-controls="ob-tz-list" aria-activedescendant={matches[active]?`ob-tz-${active}`:undefined}
+        style={{width:'100%',padding:'10px 12px',background:'rgba(4,6,18,0.9)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:11,color:'#f8fafc',fontSize:13,outline:'none',marginBottom:8}}/>
+      <div id="ob-tz-list" role="listbox" aria-label="Timezone" style={{overflowY:'auto',flex:1,minHeight:0}}>
+        {matches.length===0&&<div style={{padding:'12px 10px',fontSize:12,color:'rgba(148,163,184,0.75)'}}>No matching timezones</div>}
+        {matches.map((o,i)=>{
+          const cur=o.z===value
+          return(
+            <div key={o.z} id={`ob-tz-${i}`} data-idx={i} role="option" aria-selected={cur} onMouseDown={e=>e.preventDefault()} onClick={()=>choose(o.z)} onMouseEnter={()=>setActive(i)}
+              style={{display:'flex',alignItems:'center',gap:10,padding:'9px 10px',borderRadius:10,cursor:'pointer',background:i===active?'rgba(33,230,243,0.08)':cur?'rgba(124,92,255,0.10)':'transparent'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:'#F1F5F9'}}>{o.label}</div>
+                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',fontFamily:'monospace',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.z}</div>
+              </div>
+              {cur&&<span aria-hidden="true" style={{color:CYAN,fontWeight:900,fontSize:13}}>✓</span>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+  return createPortal(sheet?<><div aria-hidden="true" style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:999}}/>{panel}</>:panel,document.body)
+}
+
 function OBTimezone({value,onChange,detected=false}){
-  const[editing,setEditing]=useState(false)
+  const[open,setOpen]=useState(false)
+  const anchorRef=useRef(null)
+  const btnRef=useRef(null)
+  const close=(refocus)=>{setOpen(false);if(refocus)btnRef.current?.focus()}
   return(
-    <div data-testid="timezone-card" style={{textAlign:'left'}}>
-      <button type="button" aria-label="Change timezone" aria-expanded={editing} onClick={()=>setEditing(e=>!e)} style={{
-        width:'100%',display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:12,cursor:'pointer',textAlign:'left',
-        background:'rgba(4,6,18,0.7)',border:`1px solid ${editing?'rgba(33,230,243,0.55)':'rgba(255,255,255,0.12)'}`,transition:'border-color 0.18s',
+    <div data-testid="timezone-card" ref={anchorRef} style={{textAlign:'left'}}>
+      <button ref={btnRef} type="button" aria-label="Change timezone" aria-haspopup="listbox" aria-expanded={open} onClick={()=>setOpen(o=>!o)} className="ob-tz-row" style={{
+        width:'100%',display:'flex',alignItems:'center',gap:18,padding:'18px 22px',borderRadius:16,cursor:'pointer',textAlign:'left',
+        background:'linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))',
+        border:`1px solid ${open?'rgba(33,230,243,0.55)':'rgba(96,165,250,0.20)'}`,boxShadow:open?'0 0 0 3px rgba(33,230,243,0.10)':'inset 0 1px 0 rgba(255,255,255,0.05)',transition:'border-color 0.18s,box-shadow 0.18s',
       }}>
-        <span aria-hidden="true" style={{fontSize:14}}>🌐</span>
-        <span style={{flex:1,minWidth:0,display:'flex',alignItems:'baseline',gap:8,flexWrap:'wrap'}}>
-          <span style={{fontSize:13,fontWeight:800,color:'#F1F5F9'}}>{timeZoneLabel(value)}</span>
-          <span data-testid="timezone-iana" style={{fontSize:11,color:'rgba(148,163,184,0.75)',fontFamily:'monospace'}}>{value}</span>
+        <span aria-hidden="true" className="ob-tz-globe" style={{width:52,height:52,borderRadius:'50%',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(148,163,184,0.2)'}}>🌐</span>
+        <span style={{flex:1,minWidth:0}}>
+          <span style={{display:'flex',alignItems:'center',gap:6,fontSize:15,fontWeight:800,color:'#F8FAFC',marginBottom:4}}>Your timezone<span aria-hidden="true" title="Saved to your profile" style={{width:15,height:15,borderRadius:'50%',border:'1px solid rgba(148,163,184,0.6)',fontSize:9,fontWeight:700,color:'rgba(148,163,184,0.85)',display:'inline-flex',alignItems:'center',justifyContent:'center'}}>i</span></span>
+          <span style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span style={{fontSize:13.5,color:'rgba(203,213,225,0.9)'}}>{timeZoneLabel(value)} — <span data-testid="timezone-iana" style={{color:'#F1F5F9',fontWeight:600}}>{value}</span></span>
+            {detected&&<span data-testid="timezone-detected" style={{fontSize:11,fontWeight:700,color:'#4ade80',background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:8,padding:'2px 9px'}}>Detected</span>}
+          </span>
+          <span className="ob-tz-help" style={{display:'block',fontSize:12,color:'rgba(148,163,184,0.78)',marginTop:6,lineHeight:1.4}}>Used for your best hours, daily earnings, sessions, and stream recommendations.</span>
         </span>
-        {detected&&<span data-testid="timezone-detected" style={{flexShrink:0,fontSize:9.5,fontWeight:800,letterSpacing:'0.04em',color:'#4ade80',background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.35)',borderRadius:999,padding:'2px 8px'}}>Detected</span>}
-        <span aria-hidden="true" style={{flexShrink:0,fontSize:10,color:'rgba(148,163,184,0.7)',transform:editing?'rotate(180deg)':'none',transition:'transform 0.18s'}}>▼</span>
+        <span className="ob-tz-change" style={{flexShrink:0,display:'inline-flex',alignItems:'center',gap:6,padding:'9px 18px',borderRadius:11,border:'1px solid rgba(148,163,184,0.35)',background:'rgba(255,255,255,0.03)',fontSize:13,fontWeight:700,color:'#F1F5F9'}}>Change<span aria-hidden="true" style={{fontSize:8,opacity:0.7,transform:open?'rotate(180deg)':'none',transition:'transform 0.18s'}}>▼</span></span>
       </button>
-      {editing&&<div style={{marginTop:8}}><TimezoneSelect value={value} onPick={tz=>{onChange(tz);setEditing(false)}}/></div>}
+      {open&&<OBTimezonePicker value={value} anchorRef={anchorRef} onClose={close} onPick={tz=>{onChange(tz);close(true)}}/>}
     </div>
   )
 }
 
 // Step 1 card order (matches the approved onboarding reference).
-const STEP1_PLATFORM_ORDER=['chaturbate','myfreecams','bongacams']
+const STEP1_PLATFORM_ORDER=['chaturbate','bongacams','myfreecams']
 
 // ── Main component ─────────────────────────────────────────────
 export default function OnboardingPage(){
@@ -765,8 +866,9 @@ export default function OnboardingPage(){
   // parse/import machinery below is unchanged and keys off this exactly as
   // it always did — only what drives it (a queue instead of one click) is new.
   const[platformId,setPlatformId]=useState('chaturbate')
+  // Optional. No longer asked for in onboarding; if the profile already has a
+  // Chaturbate username it's used only to deep-link the stats page on Import.
   const[cbUsername,setCbUsername]=useState('')
-  const[cbUsernameError,setCbUsernameError]=useState('')
   const[pasteText,setPasteText]=useState('')
   const[preview,setPreview]=useState(null)
   const[parseError,setParseError]=useState('')
@@ -804,7 +906,7 @@ export default function OnboardingPage(){
 
   const platform=PLATFORMS[platformId]
   const primaryPlatformId=selectedPlatforms[0]||null
-  const stepNum={platforms:1,username:1,paste:2,csv:2,loading:2,platformSuccess:2,finalSummary:3,trial:3,freeReady:3,step4:3,done:3}[step]||1
+  const stepNum={platforms:1,paste:2,csv:2,loading:2,platformSuccess:2,finalSummary:3,trial:3,freeReady:3,step4:3,done:3}[step]||1
   const showProgress=!['loading'].includes(step)
 
   useEffect(()=>{
@@ -813,7 +915,7 @@ export default function OnboardingPage(){
       if(!user){router.replace('/login');return}
       const{data}=await supabase.from('beta_users').select('onboarding_complete').eq('user_id',user.id).single()
       if(data?.onboarding_complete){router.replace('/dashboard');return}
-      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform,timezone').eq('id',user.id).single()
+      const{data:profile}=await supabase.from('profiles').select('plan,streaming_platforms,primary_pro_platform,timezone,chaturbate_username').eq('id',user.id).single()
       setUserPlan(profile?.plan==='pro'?'pro':'free')
       // Restore an in-progress platform selection if the user left and came
       // back — matches beta_users.onboarding_complete already gating re-entry.
@@ -825,6 +927,7 @@ export default function OnboardingPage(){
         setSavedPlatforms([...new Set([primary,...saved])])
         setSelectedPlatforms([primary])
       }
+      if(profile?.chaturbate_username)setCbUsername(String(profile.chaturbate_username))
       setTimezone(resolveCreatorTimeZone(profile?.timezone))
       setTimezoneDetected(!isValidTimeZone(profile?.timezone)&&isValidTimeZone((()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone}catch{return null}})()))
       setUser(user);setBooting(false)
@@ -881,7 +984,7 @@ export default function OnboardingPage(){
   function startConnecting(id){
     setPlatformId(id)
     setPasteText('');setPreview(null);setParseError('');setImportError('');setCsvError('');setUpgradeBlocked(null);setHowItWorksOpen(false)
-    if(id==='chaturbate'&&!cbUsername)setStep('username');else setStep('paste')
+    setStep('paste')
   }
 
   async function confirmPlatforms(){
@@ -940,15 +1043,6 @@ export default function OnboardingPage(){
   function finishOnboarding(){
     track('onboarding_complete',{platforms:selectedPlatforms,primary:primaryPlatformId})
     setStep('trial')
-  }
-
-  async function handleUsernameSubmit(){
-    setCbUsernameError('')
-    const cleaned=cbUsername.trim().toLowerCase().replace(/[^a-z0-9_-]/g,'')
-    if(!cleaned){setCbUsernameError('Enter your Chaturbate username to continue.');return}
-    setCbUsername(cleaned)
-    if(user)await supabase.from('profiles').upsert({id:user.id,chaturbate_username:cleaned},{onConflict:'id'})
-    setStep('paste')
   }
 
   function handleCloseClick(){
@@ -1196,13 +1290,17 @@ export default function OnboardingPage(){
       <style>{CSS}</style>
 
       {/* ── BACKGROUND ── */}
-      <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
-        <div style={{position:'absolute',inset:0,background:'linear-gradient(90deg,rgba(7,178,207,0.22) 0%,rgba(8,14,31,0.92) 48%,rgba(29,12,45,0.88) 72%,rgba(255,47,174,0.16) 100%),radial-gradient(ellipse at 14% 46%,rgba(33,230,243,0.24) 0%,transparent 54%),radial-gradient(ellipse at 86% 50%,rgba(255,47,174,0.22) 0%,transparent 58%),radial-gradient(ellipse at 50% 100%,rgba(139,92,246,0.12) 0%,transparent 50%)'}}/>
-        <div style={{position:'absolute',left:'-12%',top:'8%',width:620,height:620,borderRadius:'50%',background:'rgba(33,230,243,0.22)',filter:'blur(100px)'}}/>
-        <div style={{position:'absolute',right:'-14%',bottom:'2%',width:640,height:640,borderRadius:'50%',background:'rgba(255,47,174,0.20)',filter:'blur(110px)'}}/>
-        <div style={{position:'absolute',left:'35%',top:'30%',width:420,height:420,borderRadius:'50%',background:'rgba(139,92,246,0.12)',filter:'blur(90px)'}}/>
-        <div style={{position:'absolute',left:'50%',top:'-5%',transform:'translateX(-50%)',width:400,height:300,borderRadius:'50%',background:'rgba(33,230,243,0.10)',filter:'blur(80px)'}}/>
-        <div style={{position:'absolute',inset:0,opacity:0.13,backgroundImage:'radial-gradient(rgba(255,255,255,0.58) 1px,transparent 1px)',backgroundSize:'28px 28px'}}/>
+      {/* Shared by every onboarding step: neutral dark centre that frames the
+          card, teal light on the left, magenta/purple light on the right, and
+          a faint irregular star field (several offset tile sizes so it never
+          reads as a grid). */}
+      <div aria-hidden="true" style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,background:'#05070f'}}>
+        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse 34% 70% at -6% 44%,rgba(20,184,206,0.30) 0%,rgba(14,116,144,0.10) 45%,transparent 75%),radial-gradient(ellipse 34% 70% at 106% 54%,rgba(219,39,119,0.28) 0%,rgba(126,34,206,0.12) 45%,transparent 75%),radial-gradient(ellipse 28% 30% at 4% 100%,rgba(37,99,235,0.12) 0%,transparent 70%),radial-gradient(ellipse 28% 30% at 96% 100%,rgba(79,70,229,0.12) 0%,transparent 70%)'}}/>
+        <div style={{position:'absolute',left:'-16%',top:'22%',width:480,height:480,borderRadius:'50%',background:'rgba(20,184,206,0.10)',filter:'blur(130px)'}}/>
+        <div style={{position:'absolute',right:'-16%',bottom:'14%',width:500,height:500,borderRadius:'50%',background:'rgba(219,39,119,0.10)',filter:'blur(140px)'}}/>
+        <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse 58% 70% at 50% 50%,rgba(4,6,13,0.96) 0%,rgba(4,6,13,0.7) 55%,transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,opacity:0.38,backgroundImage:'radial-gradient(1px 1px at 23px 41px,rgba(255,255,255,0.55),transparent),radial-gradient(1px 1px at 131px 97px,rgba(255,255,255,0.35),transparent),radial-gradient(1.5px 1.5px at 77px 163px,rgba(186,230,253,0.45),transparent),radial-gradient(1px 1px at 189px 19px,rgba(255,255,255,0.3),transparent)',backgroundSize:'211px 197px'}}/>
+        <div style={{position:'absolute',inset:0,opacity:0.28,backgroundImage:'radial-gradient(1px 1px at 61px 211px,rgba(251,207,232,0.5),transparent),radial-gradient(1px 1px at 257px 83px,rgba(255,255,255,0.35),transparent),radial-gradient(1.5px 1.5px at 173px 281px,rgba(255,255,255,0.4),transparent)',backgroundSize:'331px 307px'}}/>
       </div>
 
       <AmbientParticles/>
@@ -1241,30 +1339,34 @@ export default function OnboardingPage(){
           {/* ══ PLATFORMS (single select — primary only) ══ */}
           {step==='platforms'&&(
             <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={{textAlign:'center',marginBottom:14}}>
-                <h1 style={{fontSize:25,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:6}}>Let’s get started</h1>
-                <p style={{fontSize:13.5,color:'rgba(166,168,189,0.88)',lineHeight:1.5,maxWidth:360,margin:'0 auto'}}>Choose your primary platform to import your data and get your first insights.</p>
+              <div className="ob-step1-head" style={{textAlign:'center',marginBottom:22}}>
+                <h1 className="ob-step1-title" style={{fontSize:32,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.03em',lineHeight:1.12,marginBottom:10}}>Where do you <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>stream?</span></h1>
+                <p className="ob-step1-sub" style={{fontSize:14.5,color:'rgba(166,168,189,0.9)',lineHeight:1.55,maxWidth:540,margin:'0 auto'}}>Choose your primary platform to get started. We’ll use this to guide the import process and give you the most relevant insights.</p>
               </div>
               <div className="ob-step1-col">
-                  <div className="ob-plat-row" role="radiogroup" aria-label="Primary platform" style={{display:'flex',gap:10,marginBottom:14}}>
+                  <div className="ob-plat-row" role="radiogroup" aria-label="Primary platform" style={{display:'flex',gap:14,marginBottom:18}}>
                     {STEP1_PLATFORM_ORDER.map(key=>[key,PLATFORMS[key]]).map(([key,p])=>{
                       const sel=selectedPlatforms[0]===key
                       return(
                         <button key={key} className="ob-plat-card" role="radio" aria-checked={sel} onClick={()=>selectPrimary(key)} style={{
-                          flex:1,padding:'12px 8px 10px',borderRadius:16,textAlign:'center',
+                          flex:'1 1 0',minWidth:0,padding:'20px 12px 18px',borderRadius:18,textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
                           // Selected: cyan → pink gradient border via padding-box/border-box layers.
-                          background:sel?'linear-gradient(180deg,rgba(14,22,44,0.96),rgba(10,14,34,0.96)) padding-box,linear-gradient(135deg,#21E6F3,#FF2FAE) border-box':'rgba(255,255,255,0.03)',
+                          background:sel?'linear-gradient(180deg,rgba(30,16,52,0.96),rgba(12,14,36,0.97)) padding-box,linear-gradient(135deg,#21E6F3,#A855F7 45%,#FF2FAE) border-box':'linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))',
                           border:sel?'2px solid transparent':'1px solid rgba(96,165,250,0.18)',
-                          boxShadow:sel?'0 0 0 1px rgba(168,85,247,0.25),-6px 0 22px rgba(33,230,243,0.30),6px 0 26px rgba(255,47,174,0.38),0 8px 22px rgba(124,58,237,0.25),inset 0 1px 0 rgba(255,255,255,0.08)':'inset 0 1px 0 rgba(255,255,255,0.04)',
+                          boxShadow:sel?'0 0 0 1px rgba(168,85,247,0.25),-8px 0 26px rgba(33,230,243,0.28),8px 0 32px rgba(255,47,174,0.45),0 12px 30px rgba(124,58,237,0.32),inset 0 1px 0 rgba(255,255,255,0.08)':'inset 0 1px 0 rgba(255,255,255,0.04)',
                           transform:sel?'translateY(-2px)':'none',
                           cursor:'pointer',transition:'all 0.2s ease',position:'relative',
                         }}
                         onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';if(!sel){e.currentTarget.style.borderColor='rgba(33,230,243,0.45)';e.currentTarget.style.background='rgba(33,230,243,0.05)'}}}
                         onMouseLeave={e=>{e.currentTarget.style.transform=sel?'translateY(-2px)':'';if(!sel){e.currentTarget.style.borderColor='rgba(96,165,250,0.18)';e.currentTarget.style.background='rgba(255,255,255,0.03)'}}}
                         >
-                          {sel&&<div aria-hidden="true" style={{position:'absolute',top:8,right:8,width:18,height:18,borderRadius:'50%',background:'linear-gradient(135deg,#D946EF,#FF2FAE)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#fff',boxShadow:'0 0 12px rgba(255,47,174,0.55)'}}>✓</div>}
-                          <div className="ob-plat-icon" style={{width:44,height:44,borderRadius:13,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:900,margin:'0 auto 7px',...p.iconStyle}}>{p.short}</div>
-                          <div className="ob-plat-name" style={{fontSize:13,fontWeight:800,color:sel?'#fff':'rgba(226,232,240,0.78)'}}>{p.label}</div>
+                          {sel&&<div aria-hidden="true" style={{position:'absolute',top:10,right:10,width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#D946EF,#FF2FAE)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'#fff',boxShadow:'0 0 12px rgba(255,47,174,0.55)'}}>✓</div>}
+                          <div className="ob-plat-icon" style={{width:60,height:60,borderRadius:17,display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,fontWeight:900,margin:'0 auto 12px',flexShrink:0,overflow:'hidden',...(p.logoSrc?{}:p.iconStyle)}}>
+                            {/* Set PLATFORMS[key].logoSrc to an official asset to replace the badge; the fixed 60×60 container keeps all cards identical. */}
+                            {p.logoSrc?<img src={p.logoSrc} alt="" style={{width:'78%',height:'78%',objectFit:'contain'}}/>:p.short}
+                          </div>
+                          <div className="ob-plat-name" style={{fontSize:15,fontWeight:800,color:sel?'#fff':'rgba(226,232,240,0.78)'}}>{p.label}</div>
+                          <div className="ob-plat-blurb" style={{fontSize:12,lineHeight:1.45,color:sel?'rgba(203,213,225,0.85)':'rgba(148,163,184,0.72)',marginTop:6,maxWidth:170}}>Import your tip history and see your insights.</div>
                         </button>
                       )
                     })}
@@ -1272,41 +1374,14 @@ export default function OnboardingPage(){
 
                   <OBTimezone value={timezone} detected={timezoneDetected} onChange={tz=>{setTimezone(tz);setTimezoneDetected(false);setPrimarySaveError('');track('onboarding_timezone_changed',{timezone:tz})}}/>
 
-                  <div style={{fontSize:11,color:'rgba(148,163,184,0.7)',margin:'6px 2px 14px',textAlign:'left'}}>Used for your best stream times and daily insights.</div>
+                  <div style={{height:20}}/>
 
                   {primarySaveError&&<div role="alert" data-testid="primary-save-error" style={{color:'#F87171',fontSize:13,marginBottom:10,textAlign:'center'}}>{primarySaveError} Tap Continue to retry.</div>}
-                  <OBBtn onClick={confirmPlatforms} disabled={!primaryPlatformId} style={primaryPlatformId?{height:54,fontSize:15}:{height:54,fontSize:15,color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>
+                  <OBBtn onClick={confirmPlatforms} disabled={!primaryPlatformId} style={primaryPlatformId?{height:58,fontSize:16,borderRadius:16}:{height:58,fontSize:16,borderRadius:16,color:'rgba(226,232,240,0.6)',border:'1px solid rgba(255,255,255,0.10)'}}>
                     {primaryPlatformId?`Continue with ${PLATFORMS[primaryPlatformId].label} →`:'Choose a platform'}
                   </OBBtn>
-                  <div style={{marginTop:10,textAlign:'center',fontSize:12,color:'rgba(203,213,225,0.8)'}}><span aria-hidden="true" style={{marginRight:5}}>⚡</span>You can add more platforms later.</div>
+                  <div style={{marginTop:12,textAlign:'center',fontSize:12.5,color:'rgba(203,213,225,0.8)'}}><span aria-hidden="true" style={{marginRight:5}}>⚡</span>You can add more platforms later.</div>
               </div>
-            </div>
-          )}
-
-          {/* ══ USERNAME ══ */}
-          {step==='username'&&(
-            <div style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={EYE}>Step 2 of 3 — Chaturbate{queuePosLabel}</div>
-              <div className="ob-gap" style={{textAlign:'center'}}>
-                <h1 style={{fontSize:23,fontWeight:900,color:'#F8FAFC',letterSpacing:'-0.025em',lineHeight:1.15,marginBottom:6}}>{isPrimaryInQueue?'Connect your Chaturbate data':`You also stream on ${platform.label}`}</h1>
-                <p style={{fontSize:13,color:'rgba(166,168,189,0.88)',lineHeight:1.55,maxWidth:360,margin:'0 auto'}}>Enter your username so we can link you directly to your token stats page.</p>
-              </div>
-              <div className="ob-gap">
-                <div style={{fontSize:10,fontWeight:700,color:'rgba(166,168,189,0.6)',marginBottom:7,letterSpacing:'0.08em',textTransform:'uppercase'}}>Chaturbate username</div>
-                <div style={{position:'relative'}}>
-                  <input value={cbUsername} onChange={e=>{setCbUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g,''));setCbUsernameError('')}} onKeyDown={e=>e.key==='Enter'&&handleUsernameSubmit()} placeholder="your_username" autoFocus
-                    style={{width:'100%',padding:'12px 14px',background:'rgba(4,6,18,0.92)',border:`1px solid ${cbUsernameError?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.1)'}`,borderRadius:13,color:'#f8fafc',fontSize:13,fontFamily:'monospace',transition:'all 0.2s'}}
-                    onFocus={e=>{e.target.style.borderColor='rgba(33,230,243,0.65)';e.target.style.boxShadow='0 0 0 3px rgba(33,230,243,0.09)'}}
-                    onBlur={e=>{e.target.style.borderColor=cbUsernameError?'rgba(248,113,113,0.5)':'rgba(255,255,255,0.1)';e.target.style.boxShadow='none'}}
-                  />
-                </div>
-                {cbUsernameError&&<div style={{marginTop:6,fontSize:12,color:'#f87171'}}>⚠️ {cbUsernameError}</div>}
-                {cbUsername&&<div style={{marginTop:6,fontSize:11,color:'rgba(100,116,139,0.7)'}}>Your stats page: <span style={{color:CYAN}}>chaturbate.com/p/{cbUsername}/?tab=tokens</span></div>}
-                <div style={{marginTop:5,fontSize:10,color:'rgba(100,116,139,0.45)'}}>Exact username you use to broadcast (not display name)</div>
-              </div>
-              <OBBtn onClick={handleUsernameSubmit} style={{marginBottom:10}}>Continue to Tip Import →</OBBtn>
-              <OBLinks links={[{label:'← Back',onClick:()=>setStep('platforms')},{label:"Skip — I'll navigate there myself",onClick:()=>{setCbUsername('');setStep('paste')}}]}/>
-              <OBTrust/>
             </div>
           )}
 

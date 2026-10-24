@@ -6,7 +6,7 @@
  * and returning users keep their already-saved secondaries, reordered behind
  * the chosen primary, never deleted or duplicated.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 
 // The page renders a decorative <canvas> particle background (AmbientParticles)
@@ -63,6 +63,7 @@ beforeEach(() => {
 })
 afterEach(() => jest.restoreAllMocks())
 const TZ = 'America/Los_Angeles'
+const pickTz = (z) => fireEvent.click(within(screen.getByRole('listbox', { name: 'Timezone' })).getByText(z))
 
 const NEW_USER = { plan: 'free', streaming_platforms: null, primary_pro_platform: null }
 const card = (name) => screen.getByRole('radio', { name: new RegExp(name) })
@@ -72,7 +73,7 @@ describe('Onboarding Step 1 — single-select primary platform', () => {
 
   test('shows the new headline and the shared PLATFORM / IMPORT / INSIGHTS stepper', async () => {
     render(<OnboardingPage />)
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Let’s get started')
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Where do you stream?')
     expect(screen.getByText('Platform')).toHaveAttribute('aria-current', 'step')
     expect(screen.getByText('Import')).not.toHaveAttribute('aria-current')
     expect(screen.getByText('Insights')).not.toHaveAttribute('aria-current')
@@ -252,8 +253,8 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
   test('no saved timezone: the browser timezone is suggested with a readable label', async () => {
     render(<OnboardingPage />)
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
-    expect(screen.getByText('Pacific Time')).toBeInTheDocument()
-    expect(screen.getByText('Used for your best stream times and daily insights.')).toBeInTheDocument()
+    expect(screen.getByTestId('timezone-card')).toHaveTextContent('Pacific Time — America/Los_Angeles')
+    expect(screen.getByText('Used for your best hours, daily earnings, sessions, and stream recommendations.')).toBeInTheDocument()
   })
 
   test('a saved creator timezone overrides browser detection', async () => {
@@ -283,11 +284,10 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
     fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
     fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'new york' } })
-    const select = screen.getByLabelText('Timezone')
-    expect(Array.from(select.options).map((o) => o.value)).toContain('America/New_York')
-    fireEvent.change(select, { target: { value: 'America/New_York' } })
+    expect(within(screen.getByRole('listbox', { name: 'Timezone' })).getByText('America/New_York')).toBeInTheDocument()
+    pickTz('America/New_York')
     expect(shownTz()).toBe('America/New_York')
-    expect(screen.queryByLabelText('Timezone')).not.toBeInTheDocument()
+    expect(screen.queryByRole('listbox', { name: 'Timezone' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('BongaCams'))
     fireEvent.click(screen.getByRole('button', { name: 'Continue with BongaCams →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
@@ -300,7 +300,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
     fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
     fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'Tokyo' } })
-    fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Tokyo' } })
+    pickTz('Asia/Tokyo')
     fireEvent.click(screen.getByText('MyFreeCams'))
     fireEvent.click(screen.getByRole('button', { name: 'Continue with MyFreeCams →' }))
     expect(await screen.findByTestId('primary-save-error')).toHaveTextContent('could not save your platforms and timezone')
@@ -326,15 +326,15 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
 describe('Onboarding Step 1 — compact reference layout', () => {
   beforeEach(() => { mockProfile = NEW_USER })
 
-  test('compact card: no section headings, no explainer boxes, no card descriptions; order CB → MFC → BC', async () => {
+  test('reference layout: headline, copy, equal cards CB → BC → MFC with one description, no extra boxes', async () => {
     render(<OnboardingPage />)
     await screen.findByText('Chaturbate')
-    expect(screen.getByText('Choose your primary platform to import your data and get your first insights.')).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Where do you stream?' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'What’s your timezone?' })).not.toBeInTheDocument()
+    expect(screen.getByText('Choose your primary platform to get started. We’ll use this to guide the import process and give you the most relevant insights.')).toBeInTheDocument()
     expect(screen.queryByText('Why this matters?')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Import your (token|earnings) history/)).not.toBeInTheDocument()
-    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['CBChaturbate', 'MFCMyFreeCams', 'BCBongaCams'])
+    expect(screen.queryByText(/STEP 1 OF 3/i)).not.toBeInTheDocument()
+    const cards = screen.getAllByRole('radio')
+    expect(cards.map((r) => r.querySelector('.ob-plat-name').textContent)).toEqual(['Chaturbate', 'BongaCams', 'MyFreeCams'])
+    for (const c of cards) expect(c).toHaveTextContent('Import your tip history and see your insights.')
   })
 
   test('still single-select with the new cards', async () => {
@@ -394,8 +394,58 @@ describe('Onboarding Step 1 — compact reference layout', () => {
     await screen.findByTestId('timezone-detected')
     fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
     fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'tokyo' } })
-    fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Tokyo' } })
+    pickTz('Asia/Tokyo')
     expect(screen.getByTestId('timezone-iana')).toHaveTextContent('Asia/Tokyo')
     expect(screen.queryByTestId('timezone-detected')).not.toBeInTheDocument()
+  })
+})
+
+describe('Onboarding Step 1 — timezone picker behaviour', () => {
+  beforeEach(() => { mockProfile = NEW_USER })
+  const open = async () => {
+    await screen.findByTestId('timezone-iana')
+    fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
+    return screen.getByRole('listbox', { name: 'Timezone' })
+  }
+
+  test('opens with the current zone first and checked, then common US zones', async () => {
+    render(<OnboardingPage />)
+    const list = await open()
+    const opts = within(list).getAllByRole('option')
+    expect(opts[0]).toHaveAttribute('aria-selected', 'true')
+    expect(opts[0]).toHaveTextContent('America/Los_Angeles')
+    expect(opts.slice(1, 5).map((o) => o.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('America/Denver'), expect.stringContaining('America/Chicago')]))
+  })
+
+  test('search matches readable names and IANA ids', async () => {
+    render(<OnboardingPage />)
+    await open()
+    fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'Eastern Time' } })
+    expect(within(screen.getByRole('listbox', { name: 'Timezone' })).getByText('America/New_York')).toBeInTheDocument()
+  })
+
+  test('Escape closes without changing the zone', async () => {
+    render(<OnboardingPage />)
+    await open()
+    fireEvent.keyDown(screen.getByLabelText('Search timezones'), { key: 'Escape' })
+    expect(screen.queryByRole('listbox', { name: 'Timezone' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('timezone-iana')).toHaveTextContent('America/Los_Angeles')
+  })
+
+  test('clicking outside closes it', async () => {
+    render(<OnboardingPage />)
+    await open()
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('listbox', { name: 'Timezone' })).not.toBeInTheDocument()
+  })
+
+  test('keyboard: arrow down + Enter picks the highlighted zone', async () => {
+    render(<OnboardingPage />)
+    await open()
+    const input = screen.getByLabelText('Search timezones')
+    fireEvent.change(input, { target: { value: 'tokyo' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByTestId('timezone-iana')).toHaveTextContent('Asia/Tokyo')
+    expect(screen.queryByRole('listbox', { name: 'Timezone' })).not.toBeInTheDocument()
   })
 })
