@@ -38,6 +38,7 @@ jest.mock('../../../lib/supabase', () => ({
           return { data: null }
         },
         upsert: jest.fn(async (v) => { mockUpserts.push({ table, v }); return { data: null, error: table === 'profiles' ? mockUpsertError : null } }),
+        update: jest.fn((v) => ({ eq: () => ({ select: () => ({ maybeSingle: async () => { mockUpserts.push({ table, v }); return { data: { id: 'u1' }, error: table === 'profiles' ? mockUpsertError : null } } }) }) })),
       }
       return chain
     }),
@@ -151,7 +152,7 @@ describe('Onboarding Step 1 — saving platforms and the permanent primary', () 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
     // Brand-new user: only the selected primary is saved — the earlier click
     // on Chaturbate was replaced, not kept as a secondary.
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams'], timezone: TZ }])
+    expect(profileUpserts()).toEqual([{ streaming_platforms: ['bongacams'], timezone: TZ }])
     expect(profileUpserts()[0]).not.toHaveProperty('primary_pro_platform')
     const [url, init] = global.fetch.mock.calls[0]
     expect(url).toBe('/api/profile/primary-platform')
@@ -220,7 +221,7 @@ describe('Onboarding Step 1 — returning users keep saved secondary platforms',
     fireEvent.click(screen.getByText('Chaturbate'))
     fireEvent.click(await screen.findByRole('button', { name: 'Continue with Chaturbate →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['chaturbate', 'bongacams', 'myfreecams'], timezone: TZ }])
+    expect(profileUpserts()).toEqual([{ streaming_platforms: ['chaturbate', 'bongacams', 'myfreecams'], timezone: TZ }])
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual({ platform: 'chaturbate' })
   })
 
@@ -229,7 +230,7 @@ describe('Onboarding Step 1 — returning users keep saved secondary platforms',
     render(<OnboardingPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Continue with BongaCams →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams', 'myfreecams'], timezone: TZ }])
+    expect(profileUpserts()).toEqual([{ streaming_platforms: ['bongacams', 'myfreecams'], timezone: TZ }])
   })
 
   test('saved secondaries are not walked through in onboarding — only the primary is connected', async () => {
@@ -292,7 +293,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     fireEvent.click(screen.getByText('BongaCams'))
     fireEvent.click(screen.getByRole('button', { name: 'Continue with BongaCams →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts()).toEqual([{ id: 'u1', streaming_platforms: ['bongacams'], timezone: 'America/New_York' }])
+    expect(profileUpserts()).toEqual([{ streaming_platforms: ['bongacams'], timezone: 'America/New_York' }])
   })
 
   test('save failure shows an inline error, keeps the selection, and retry succeeds', async () => {
@@ -311,7 +312,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     mockUpsertError = null
     fireEvent.click(screen.getByRole('button', { name: 'Continue with MyFreeCams →' }))
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1))
-    expect(profileUpserts().at(-1)).toEqual({ id: 'u1', streaming_platforms: ['myfreecams'], timezone: 'Asia/Tokyo' })
+    expect(profileUpserts().at(-1)).toEqual({ streaming_platforms: ['myfreecams'], timezone: 'Asia/Tokyo' })
   })
 
   test('after a successful save Step 1 continues to the primary platform connect step', async () => {

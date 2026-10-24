@@ -1048,8 +1048,11 @@ export default function OnboardingPage(){
       // (never dropped, never duplicated). Brand-new users save just [primary].
       const platformsToSave=[...new Set([selectedPlatforms[0],...savedPlatforms])]
       // Browser saves only the platform list; the permanent primary is set only by the server route.
-      const{error:listErr}=await supabase.from('profiles').upsert({id:user.id,streaming_platforms:platformsToSave,timezone},{onConflict:'id'})
-      if(listErr){setPrimarySaveError('We could not save your platforms and timezone. Your choices are kept.');return}
+      // One scoped UPDATE (not an upsert): every signed-in user already has a
+      // profile row (created by handle_new_user), and browsers hold UPDATE on
+      // these columns but not INSERT. maybeSingle() makes a missing row an error.
+      const{data:savedRow,error:listErr}=await supabase.from('profiles').update({streaming_platforms:platformsToSave,timezone}).eq('id',user.id).select('id').maybeSingle()
+      if(listErr||!savedRow){setPrimarySaveError('We could not save your platforms and timezone. Your choices are kept.');return}
       const res=await fetch('/api/profile/primary-platform',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:selectedPlatforms[0]})}).catch(()=>null)
       const body=res?await res.json().catch(()=>({})):{}
       const alreadySame=res?.status===409&&String(body?.primary_pro_platform||'').toLowerCase()===selectedPlatforms[0]

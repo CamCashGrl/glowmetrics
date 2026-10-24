@@ -33,7 +33,7 @@ jest.mock('../../../lib/supabase', () => ({
           return { data: null }
         },
         upsert: jest.fn(async (v) => { mockWrites.push({ table, v }); return { data: null, error: null } }),
-        update: jest.fn((v) => { mockWrites.push({ table, v }); return chain }),
+        update: jest.fn((v) => { mockWrites.push({ table, v }); const done = { ...chain, maybeSingle: async () => ({ data: { id: 'u1' }, error: null }) }; return { eq: () => ({ select: () => done }) } }),
       }
       return chain
     }),

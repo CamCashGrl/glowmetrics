@@ -34,6 +34,7 @@ jest.mock('../../../lib/supabase', () => ({
           return { data: null }
         },
         upsert: async (row) => { upserts.push({ table, row }); return { data: null, error: null } },
+        update: (row) => ({ eq: () => ({ select: () => ({ maybeSingle: async () => { upserts.push({ table, row }); return { data: { id: 'u1' }, error: null } } }) }) }),
       }
       return chain
     }),
