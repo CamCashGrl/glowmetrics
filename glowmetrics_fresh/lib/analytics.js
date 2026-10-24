@@ -390,6 +390,9 @@ function normalizeDate(raw) {
   }
   const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
   if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
+  // An explicit zone ('Z', '+02:00') marks a real instant — keep it, so the
+  // upload stores that instant instead of re-reading it as wall-clock time.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw.trim())) return raw.trim()
   return raw.replace('T', ' ').replace('Z', '')
 }
 

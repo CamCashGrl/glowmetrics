@@ -10,8 +10,10 @@ jest.mock('next/server', () => ({
 
 let rpcCalls
 let mockPaidMode
+let mockSavedTz // the creator's saved profiles.timezone
 function mockSupabase() {
-  const chain = { insert: jest.fn(async () => ({ error: null })), delete: jest.fn(() => chain), eq: jest.fn(async () => ({ error: null })) }
+  const eqResult = { then: (resolve) => resolve({ error: null }), maybeSingle: async () => ({ data: { timezone: mockSavedTz }, error: null }) }
+  const chain = { insert: jest.fn(async () => ({ error: null })), delete: jest.fn(() => chain), select: jest.fn(() => chain), eq: jest.fn(() => eqResult) }
   return {
     auth: { getUser: jest.fn(async () => ({ data: { user: { id: 'creator-1' } }, error: null })) },
     from: jest.fn(() => chain),
@@ -30,8 +32,9 @@ jest.mock('@supabase/supabase-js', () => ({ createClient: () => mockSupabase() }
 const { POST: upload } = require('../route')
 const { POST: uploadPaid } = require('../../upload-paid-sessions/route')
 
-function req(text, { name = 'upload.csv', platform, dateOrder } = {}) {
+function req(text, { name = 'upload.csv', platform, dateOrder, timeZone } = {}) {
   const fd = new Map([['file', { name, text: async () => text }]])
+  if (timeZone !== undefined) fd.set('time_zone', timeZone)
   if (platform !== undefined) fd.set('platform', platform)
   if (dateOrder !== undefined) fd.set('date_order', dateOrder)
   return {
@@ -44,7 +47,7 @@ function req(text, { name = 'upload.csv', platform, dateOrder } = {}) {
 const CLEAN = ['date_time,username,tokens', '2025-05-19 21:04,fanA,900', '2025-07-18 05:43,fanB,50'].join('\n')
 const insertedTips = () => rpcCalls.filter((c) => c.name === 'insert_tips_dedup').flatMap((c) => c.params.tips)
 
-beforeEach(() => { rpcCalls = [];mockPaidMode='success' })
+beforeEach(() => { rpcCalls = [];mockPaidMode='success';mockSavedTz='UTC' })
 
 describe('/api/upload platform labelling', () => {
   test('undetectable platform with no choice is rejected and nothing is written', async () => {
@@ -164,5 +167,55 @@ describe('Chaturbate category-aware persistence',()=>{
     expect(json.inserted).toBe(1)
     expect(json.paidSessionsInserted).toBe(0)
     expect(json.paidSessionsWarnings).toEqual([expect.objectContaining({error:'simulated paid storage failure'})])
+  })
+})
+
+// Storage contract: export times are the creator's wall clock. They are read in
+// the creator's saved zone and stored as real UTC instants — never as UTC.
+describe('/api/upload stores creator-local export times as real instants', () => {
+  const CB_PASTE = 'Oct 9, 2026, 5:33 AM\nTip From: fanA\n11  13'
+
+  test('naive export time is read in the saved zone (Pacific) and stored as UTC', async () => {
+    mockSavedTz = 'America/Los_Angeles'
+    const res = await upload(req(CB_PASTE, { platform: 'Chaturbate' }))
+    expect(res.status).toBe(200)
+    expect(insertedTips()[0].date_time).toBe('2026-10-09T12:33:00.000Z')
+    expect((await res.json()).timeZone).toBe('America/Los_Angeles')
+  })
+
+  test('the saved zone wins over the zone the client sent', async () => {
+    mockSavedTz = 'Asia/Tokyo'
+    await upload(req(CB_PASTE, { platform: 'Chaturbate', timeZone: 'America/New_York' }))
+    expect(insertedTips()[0].date_time).toBe('2026-10-08T20:33:00.000Z')
+  })
+
+  test('with no saved zone, the client-resolved zone is used', async () => {
+    mockSavedTz = null
+    await upload(req(CB_PASTE, { platform: 'Chaturbate', timeZone: 'America/New_York' }))
+    expect(insertedTips()[0].date_time).toBe('2026-10-09T09:33:00.000Z')
+  })
+
+  test('with no zone at all, nothing is stored (no UTC guess)', async () => {
+    mockSavedTz = null
+    const res = await upload(req(CB_PASTE, { platform: 'Chaturbate' }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('timezone_required')
+    expect(insertedTips()).toHaveLength(0)
+  })
+
+  test('times that already carry an offset are stored unchanged', async () => {
+    mockSavedTz = 'America/Los_Angeles'
+    const csv = ['date_time,username,tokens', '2026-10-09T05:33:00Z,fanA,10'].join('\n')
+    await upload(req(csv, { platform: 'Chaturbate' }))
+    expect(insertedTips()[0].date_time).toBe('2026-10-09T05:33:00.000Z')
+  })
+
+  test('paid sessions use the same contract', async () => {
+    mockSavedTz = 'Asia/Tokyo'
+    const csv = ['date_time,username,session_type,tokens,usd', '2026-06-18 14:32:00,fanB,Private Chat,120,3'].join('\n')
+    const res = await uploadPaid(req(csv, { platform: 'BongaCams' }))
+    expect(res.status).toBe(200)
+    const paid = rpcCalls.filter((c) => c.name === 'insert_paid_sessions_dedup').flatMap((c) => c.params.sessions || c.params.rows || [])
+    expect(paid[0].date_time).toBe('2026-06-18T05:32:00.000Z')
   })
 })

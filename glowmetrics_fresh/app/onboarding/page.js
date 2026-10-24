@@ -71,11 +71,10 @@ const CB_PRIVATE_SHOW_PATTERN = /^Private Show:/i
 const MFC_PRIVATE_TYPE = 'Private'
 
 // ── Parsers ────────────────────────────────────────────────────
-// tryParseDate's Date is built in the browser's zone — that is what the
-// BongaCams upload has always stored, and it stays as-is until the saved-data
-// timezone migration. `.wall` keeps the export's literal wall-clock time
-// ('YYYY-MM-DD HH:MM:00') so analysis reads it in the creator's selected zone
-// (creatorInstant) instead of the browser's.
+// `.wall` keeps the export's literal wall-clock time ('YYYY-MM-DD HH:MM:00').
+// Uploads send that text and the server reads it in the creator's selected
+// zone (lib/creatorTimezone toStoredInstant); analysis reads it the same way
+// (creatorInstant). The Date itself is only a fallback for other formats.
 const pad2=n=>String(n).padStart(2,'0')
 function withWall(d,y,mo,day,h,mi){if(isNaN(d.getTime()))return null;d.wall=`${y}-${pad2(mo)}-${pad2(day)} ${pad2(h)}:${pad2(mi)}:00`;return d}
 function tryParseDate(str){
@@ -368,7 +367,7 @@ export function parseRows(rawText,platformId){
 function pasteToCSVBlob(rawText,platformId){
   const{rows,skipped}=parseRows(rawText,platformId)
   const csvRows=['date_time,username,tokens,usd,note']
-  for(const r of rows){const isoTs=r.ts.toISOString().replace('T',' ').slice(0,19);csvRows.push(`${isoTs},${r.username.replace(/,/g,'')},${r.tokens},${r.usd},${r.note.replace(/,/g,'')}`)}
+  for(const r of rows){const isoTs=r.ts.wall||r.ts.toISOString();csvRows.push(`${isoTs},${r.username.replace(/,/g,'')},${r.tokens},${r.usd},${r.note.replace(/,/g,'')}`)}
   return{blob:new Blob([csvRows.join('\n')],{type:'text/csv'}),rowCount:rows.length,skipped}
 }
 
@@ -376,7 +375,7 @@ function pasteToCSVBlob(rawText,platformId){
 function paidSessionsToCSVBlob(sessions){
   const csvRows=['date_time,username,session_type,tokens,usd']
   for(const s of sessions){
-    const isoTs=s.ts.toISOString().replace('T',' ').slice(0,19)
+    const isoTs=s.ts.wall||s.ts.toISOString()
     csvRows.push(`${isoTs},${s.username.replace(/,/g,'')},${s.sessionType.replace(/,/g,'')},${s.tokens},${s.usd}`)
   }
   return new Blob([csvRows.join('\n')],{type:'text/csv'})
@@ -1355,6 +1354,7 @@ export default function OnboardingPage(){
         const paidForm=new FormData()
         paidForm.append('file',new File([paidSessionsToCSVBlob(parseBCPaidSessions(pasteText).sessions)],'paid_sessions_import.csv',{type:'text/csv'}))
         paidForm.append('platform',platform.label)
+        paidForm.append('time_zone',timezone)
         paidUpload=fetch('/api/upload-paid-sessions',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`},body:paidForm,signal:controller.signal})
       }
       const[res,paidRes]=await Promise.all([tipUpload,paidUpload])

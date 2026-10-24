@@ -113,6 +113,24 @@ export function creatorInstant(value, tz) {
   return new Date(ms)
 }
 
+// Upload storage contract: every saved tip / paid-session time is a real UTC
+// instant (ISO 'Z'). Timezone-naive export times are resolved on the creator's
+// clock first (creatorInstant), so the dashboard, onboarding and dedup all see
+// the same instant. Returns null for an unreadable time.
+export function toStoredInstant(value, tz) {
+  const at = creatorInstant(value, tz)
+  return isNaN(at.getTime()) ? null : at.toISOString()
+}
+
+// The zone an import is read in: the creator's saved profiles.timezone is the
+// source of truth; the zone the client resolved is used only when none is
+// saved. No UTC/server guess — null means the import must not be stored yet.
+export function importTimeZone(savedTimeZone, requestedTimeZone) {
+  if (isValidTimeZone(savedTimeZone)) return savedTimeZone
+  if (isValidTimeZone(requestedTimeZone)) return requestedTimeZone
+  return null
+}
+
 // Wall-clock date ('YYYY-MM-DD') + time ('HH:MM') on the creator's clock → the
 // real instant. Two passes settle the zone offset, including across DST edges.
 export function zonedWallTimeToDate(dateStr,timeStr,tz){

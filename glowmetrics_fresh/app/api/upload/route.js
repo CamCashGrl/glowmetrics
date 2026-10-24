@@ -4,13 +4,10 @@ import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, detectDateOrder, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
 import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
+import { importTimeZone, toStoredInstant } from '../../../lib/creatorTimezone'
 
 const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
-
-function validTimeZone(value) {
-  try { const tz = String(value || 'UTC'); new Intl.DateTimeFormat('en-US', { timeZone: tz }); return tz } catch { return 'UTC' }
-}
 
 const BATCH_SIZE = 250 // Safe batch size — never hit Supabase limits
 
@@ -57,6 +54,18 @@ async function handleUpload(req) {
   const fd = await req.formData()
   const file = fd.get('file')
   const replace = fd.get('replace') === 'true'
+
+  // Export times carry no timezone; they are the creator's wall clock. Read
+  // them in the creator's saved zone (or the zone the client resolved when
+  // none is saved) and store real instants — never guess UTC/server time.
+  const { data: tzProfile } = await supabase.from('profiles').select('timezone').eq('id', user.id).maybeSingle()
+  const timeZone = importTimeZone(tzProfile?.timezone, fd.get('time_zone'))
+  if (!timeZone) {
+    return NextResponse.json(
+      { error: 'Choose your timezone before importing so your earnings land on the right days and hours.', code: 'timezone_required' },
+      { status: 400 }
+    )
+  }
 
   if (!file) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
@@ -155,7 +164,7 @@ async function handleUpload(req) {
 
     return {
       user_id:   user.id,
-      date_time: row.dateRaw || row.date_time || null,
+      date_time: toStoredInstant(row.dateRaw || row.date_time, timeZone),
       platform:  row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
       username:  row.username  || 'Unknown',
       tip_type:  row.tip_type  || 'Tip',
@@ -429,7 +438,8 @@ async function handleUpload(req) {
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
     snapshot,
-    onboardingSummary: summarizeOnboarding(rows, validTimeZone(fd.get('time_zone'))),
+    onboardingSummary: summarizeOnboarding(rows, timeZone),
+    timeZone,
   }
 
   if (errors.length > 0) {
