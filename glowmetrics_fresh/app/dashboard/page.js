@@ -33,6 +33,7 @@ import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
+import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD } from '../../lib/creatorTimezone'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -871,8 +872,8 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
 
   const buildCtx = (overrides = {}) => {
     const now = new Date()
-    const currentHour = now.getHours() // local hour, not UTC
-    const todayDay = now.toLocaleDateString("en-US", { weekday: "long" })
+    const currentHour = zonedHour(now, creatorTz) // creator-local hour, not UTC
+    const todayDay = now.toLocaleDateString("en-US", { weekday: "long", timeZone: creatorTz })
     const _analyticsBestHourCtx = analytics?.bestHour || null
     let bestHour = null
     if (_analyticsBestHourCtx) {
@@ -880,7 +881,7 @@ function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
     } else {
       const hourUSD = {}; const hourCount = {}
       ;(sessions || []).forEach(s => {
-        const h = new Date(s.startTime).getHours() // local hour
+        const h = zonedHour(s.startTime, creatorTz) // creator-local hour
         hourUSD[h] = (hourUSD[h] || 0) + s.totalUSD
         hourCount[h] = (hourCount[h] || 0) + 1
       })
@@ -1528,21 +1529,37 @@ export default function Dashboard() {
     loadData(user.id, true, { silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveEngine.completedShowsVersion, user?.id])
-  // Timezone for the session start/duration readout — same localStorage key
-  // app/live/page.js uses, so a choice made on either surface carries over.
-  const [liveTimezone, setLiveTimezone] = useState(() => {
-    if (typeof window === 'undefined') return 'UTC'
-    const stored = localStorage.getItem('cc_live_timezone')
-    if (stored) return stored
-    if (typeof Intl !== 'undefined') {
-      const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
-      if (resolved) return resolved
-    }
-    return 'UTC'
-  })
-  useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('cc_live_timezone', liveTimezone)
-  }, [liveTimezone])
+  // Creator timezone — the dashboard's single clock for best hours, day
+  // boundaries, session timestamps and time-based recommendations. Source of
+  // truth is profiles.timezone (set in onboarding Step 1 or via the sidebar);
+  // falls back to the browser zone, then UTC. The ref is read by code that
+  // runs outside render (loadData, realtime handlers).
+  const [creatorTz, setCreatorTz] = useState('UTC')
+  const creatorTzRef = useRef(null)
+  const ensureCreatorTz = async (uid) => {
+    if (creatorTzRef.current) return creatorTzRef.current
+    let saved = null
+    try {
+      const { data } = await supabase.from('profiles').select('timezone').eq('id', uid).maybeSingle()
+      saved = data?.timezone ?? null
+    } catch (_) { /* fall back to browser zone */ }
+    const tz = resolveCreatorTimeZone(saved)
+    creatorTzRef.current = tz
+    setCreatorTz(tz)
+    return tz
+  }
+  // Sidebar "Change": save first, then switch the dashboard clock and re-run
+  // analytics (engine + get_user_insights) on the new zone. On failure the
+  // current zone stays in effect and the error is returned to the caller.
+  const changeCreatorTimezone = async (tz) => {
+    if (!user?.id || !isValidTimeZone(tz)) return { error: 'invalid' }
+    const { error } = await supabase.from('profiles').update({ timezone: tz }).eq('id', user.id)
+    if (error) return { error }
+    creatorTzRef.current = tz
+    setCreatorTz(tz)
+    loadData(user.id, true, { silent: true })
+    return {}
+  }
   const fmtDuration = (secs) => {
     const s = Math.max(0, Math.floor(secs || 0))
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60
@@ -1635,8 +1652,7 @@ export default function Dashboard() {
     if (gatingKeyRef.current === key || !tips.length) { gatingKeyRef.current = key; return }
     gatingKeyRef.current = key
     try {
-      let tz = 'UTC'
-      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch (_) {}
+      const tz = creatorTzRef.current || resolveCreatorTimeZone(null)
       const r = runEngine(isPro ? tips : applyFreeAnalysisWindow(tips, { windowDays: 31, unlimitedPlatform: freeUnlimitedPlatform }), tz)
       if (r) setAnalytics(r)
     } catch (e) { console.error('gating re-run failed:', e) }
@@ -1944,7 +1960,7 @@ export default function Dashboard() {
         }
       }
       supabase.from('profiles')
-        .select('plan, primary_pro_platform, streaming_platforms')
+        .select('plan, primary_pro_platform, streaming_platforms, timezone')
         .eq('id', user.id)
         .maybeSingle()
         .then(({ data }) => { if (data) setProfile(data) })
@@ -2000,11 +2016,7 @@ export default function Dashboard() {
           if (!newRows.length) return prev
           const updated = [...prev, ...newRows].sort((a,b) => new Date(a.date_time)-new Date(b.date_time))
           try {
-            let userTz = 'UTC'
-            if (typeof Intl !== 'undefined') {
-              const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
-              if (resolved) userTz = resolved
-            }
+            const userTz = creatorTzRef.current || resolveCreatorTimeZone(null)
             const analysisTips = gatingRef.current.isPro ? updated : applyFreeAnalysisWindow(updated, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
@@ -2059,11 +2071,7 @@ export default function Dashboard() {
             return prev // unchanged since the last engine run — skip the recompute
           }
           try {
-            let userTz = 'UTC'
-            if (typeof Intl !== 'undefined') {
-              const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
-              if (resolved) userTz = resolved
-            }
+            const userTz = creatorTzRef.current || resolveCreatorTimeZone(null)
             const analysisTips = gatingRef.current.isPro ? prev : applyFreeAnalysisWindow(prev, { windowDays: 31, unlimitedPlatform: gatingRef.current.unlimited })
             const r = runEngine(analysisTips, userTz)
             if (r) setAnalytics(r)
@@ -2182,11 +2190,7 @@ export default function Dashboard() {
     if (silent) setIsRefreshing(true)
     else setLoading(true)
     try {
-      let userTz = 'UTC'
-      if (typeof Intl !== 'undefined') {
-        const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
-        if (resolved) userTz = resolved
-      }
+      const userTz = await ensureCreatorTz(uid)
       let allData = []
       let from = 0
       const PAGE = 1000
@@ -2585,7 +2589,7 @@ const stopImportMessageRotation = () => {
     if (chartDrillDay) {
       const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username?.toLowerCase() === w.username?.toLowerCase())
       const tippedOnDay = fanTips.some(t => {
-        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(t.date_time || t.dateRaw).getUTCDay()]
+        const dayShort = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][zonedDay(t.date_time || t.dateRaw, creatorTz)]
         return dayShort === chartDrillDay
       })
       if (!tippedOnDay) return false
@@ -2780,9 +2784,9 @@ const stopImportMessageRotation = () => {
   const buildDailyBrief = () => {
     if (!tips || tips.length === 0 || !analytics) return null
     const now = new Date()
-    const utcHour = now.getHours() // local hour — analytics hours are already local
+    const utcHour = zonedHour(now, creatorTz) // creator-local hour — analytics hours are in creatorTz too
     const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    const todayName = DAYS[now.getDay()] // local day of week
+    const todayName = DAYS[zonedDay(now, creatorTz)] // creator-local day of week
 
     // Best hour: today-specific per platform first, then all-time fallback
     // Formula: SUM(usd) / COUNT(DISTINCT hour-bucket) for THIS day of week on THIS platform
@@ -2834,7 +2838,7 @@ const stopImportMessageRotation = () => {
     // Use bestHour?.avg (median-based from analytics) as canonical metric
     // This is calculated from ALL tips and represents typical earnings at that hour
     const sessionsAtPeak = (analytics?.sessions || []).filter(s => {
-      const h = new Date(s.startTime).getHours() // local hour
+      const h = zonedHour(s.startTime, creatorTz) // creator-local hour
       return bh !== null && Math.abs(h - bh) <= 1
     })
     // Use displayAvg (which is now consistently the peak hour value) for prediction
@@ -2895,7 +2899,7 @@ const stopImportMessageRotation = () => {
         if (!w.tips || w.tips.length < 3) return false
         if (w.totalUSD < 3) return false
         const hc = {}
-        w.tips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hc[h] = (hc[h] || 0) + 1 })
+        w.tips.forEach(t => { const h = zonedHour(t.date_time || t.dateRaw, creatorTz); hc[h] = (hc[h] || 0) + 1 })
         const peakH = parseInt(Object.entries(hc).sort((a,b) => b[1]-a[1])[0][0])
         return (peakH - utcHour + 24) % 24 <= 1
       })
@@ -2909,18 +2913,20 @@ const stopImportMessageRotation = () => {
 
   const buildRealTimeAlerts = () => {
     const now = Date.now()
-    const alertCurrentHour = new Date().getUTCHours()
-    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    // Creator-local, matching the analytics hours these alerts compare against
+    // (previously getUTCHours(), which misfired for anyone outside UTC).
+    const alertCurrentHour = zonedHour(new Date(), creatorTz)
+    const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long', timeZone: creatorTz })
     const alerts = []
 
     // --- PLATFORM DAY-OF-WEEK PERFORMANCE ---
-    // Use UTC day to avoid timezone shifts (DB stores UTC timestamps)
+    // Creator-local day (same clock as currentDay above)
     const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     const platDayMap = {}
     tips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
-      const day = UTC_DAYS_LONG[d.getUTCDay()]
+      const day = UTC_DAYS_LONG[zonedDay(d, creatorTz)]
       if (!platDayMap[p]) platDayMap[p] = {}
       if (!platDayMap[p][day]) platDayMap[p][day] = 0
       platDayMap[p][day] += t.usd || 0
@@ -2936,14 +2942,14 @@ const stopImportMessageRotation = () => {
 
     // --- PLATFORM vs PLATFORM HOUR COMPARISON ---
     // FIX: use avg USD per hour-session (not raw cumulative totals)
-    // FIX: use getUTCHours() — tips are stored in UTC
+    // Hours are bucketed on the creator's clock (same clock as "now" below).
     const platHourUSD = {}; const platHourSessions = {}
     tips.forEach(t => {
       const p = t.platform
       const d = new Date(t.date_time || t.dateRaw)
       // Floor to UTC hour-bucket key for deduplication
       const bucketKey = Math.floor(d.getTime() / 3600000)
-      const h = d.getUTCHours()
+      const h = zonedHour(d, creatorTz)
       if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourSessions[p] = {} }
       if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourSessions[p][h] = new Set() }
       platHourUSD[p][h] += t.usd || 0
@@ -2960,8 +2966,8 @@ const stopImportMessageRotation = () => {
     })
 
     const platNames = Object.keys(platHourAvg)
-    // Use UTC current hour to match stored data
-    const currentUTCHour = new Date().getUTCHours()
+    // Creator-local current hour, matching the buckets above
+    const currentUTCHour = zonedHour(new Date(), creatorTz)
     if (platNames.length >= 2) {
       platNames.forEach(plat => {
         const hourVal = platHourAvg[plat][currentUTCHour] || 0
@@ -2970,7 +2976,7 @@ const stopImportMessageRotation = () => {
           const otherVal = platHourAvg[other][currentUTCHour] || 0
           if (hourVal > 0 && otherVal > 0 && hourVal >= otherVal * 1.5) {
             const mult = (hourVal / otherVal).toFixed(1)
-            const label = (() => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((currentUTCHour+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })()
+            const label = (() => { const _lh=currentUTCHour; return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` })() // already creator-local
             alerts.push({
               type: 'platform_hour', priority: 1, icon: '⚡', color: '#22D3EE',
               title: `Right now ${plat} earns ${mult}x more than ${other}`,
@@ -2993,14 +2999,14 @@ const stopImportMessageRotation = () => {
       // Use local hours — tips' date_time is UTC but getHours() converts to browser local
       const hourCounts = {}
       fanTips.forEach(t => {
-        const h = new Date(t.date_time || t.dateRaw).getHours() // local hour
+        const h = zonedHour(t.date_time || t.dateRaw, creatorTz) // creator-local hour
         hourCounts[h] = (hourCounts[h] || 0) + 1
       })
       const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])
       if (!sortedHours.length) return
 
       const peakHour = parseInt(sortedHours[0][0]) // already local
-      const hoursAway = (peakHour - new Date().getHours() + 24) % 24
+      const hoursAway = (peakHour - zonedHour(new Date(), creatorTz) + 24) % 24
       const _pf1 = sortedHours[0][1] / fanTips.length
       const _pd1 = hoursAway === 0 ? 1.0 : hoursAway === 1 ? 0.65 : 0.35
       const confidence = Math.min(90, Math.max(25, Math.round(_pf1 * 200 * _pd1)))
@@ -3303,7 +3309,7 @@ const stopImportMessageRotation = () => {
       </div>
 
       {/* SIDEBAR — desktop only, hidden on mobile via CSS */}
-      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} />{/* MAIN CONTENT */}
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); if (typeof window !== "undefined") { localStorage.setItem("camcash_tab", tab); window.scrollTo({ top: 0, behavior: "instant" }); } }} user={user} onSignOut={async () => { await supabase.auth.signOut(); router.replace("/login"); }} isPro={isPro} creatorTz={creatorTz} onChangeTimezone={changeCreatorTimezone} />{/* MAIN CONTENT */}
       <div className="dash-main" style={{ marginLeft: 240, width: "calc(100% - 240px)", minWidth: 0, padding: 32, boxSizing: "border-box", overflowX: "hidden" }}>
 
         {/* ── STICKY COMMAND BAR — shown on every tab (Go Live must stay
@@ -3332,7 +3338,7 @@ const stopImportMessageRotation = () => {
           const momentumColor = !liveActive ? '#475569'
             : atPeak ? '#10B981'
             : liveRoomHealth.directionColor
-          const localNow = new Date().getHours()
+          const localNow = zonedHour(new Date(), creatorTz)
           const hoursUntilLocal = canonicalPeakHourLocal != null ? (canonicalPeakHourLocal - localNow + 24) % 24 : brief?.hoursUntilPeak
           const peakLabel = hoursUntilLocal === 0 ? 'NOW' : hoursUntilLocal === 1 ? 'in 1 hr' : (hoursUntilLocal > 0 && !isNaN(hoursUntilLocal)) ? `in ${hoursUntilLocal}h` : null
           const _eiPeakLabel = canonicalPeakLabel || brief?.bhLabel
@@ -3532,13 +3538,14 @@ const stopImportMessageRotation = () => {
             {/* ═══════════════════════════════════════
                 TOKENS VS HOURS ONLINE + MONTHLY GROWTH
             ═══════════════════════════════════════ */}
-            {accessible.tips.length > 0 && <DashboardGrowthCharts tips={accessible.tips} sessions={sessions} />}
+            {accessible.tips.length > 0 && <DashboardGrowthCharts tips={accessible.tips} sessions={sessions} tz={creatorTz} />}
 
             {/* ═══════════════════════════════════════
                 YOUR NEXT BEST MOVE — Command Center
                 Replaces Daily Brief with comprehensive strategic overview
             ═══════════════════════════════════════ */}
             <CommandCenter
+              tz={creatorTz}
               analytics={analytics}
               isPro={isPro}
               firstName={profile?.display_name || null}
@@ -3555,7 +3562,7 @@ const stopImportMessageRotation = () => {
                   const gl = engineInsights.go_live_status
                   const glColor = gl.status === 'peak' ? C.green : gl.status === 'good' ? C.cyan : C.muted
                   const glIcon = gl.status === 'peak' ? '🟢' : gl.status === 'good' ? '⚡' : '⏰'
-                  const localHour = gl.current_hour ?? toLocalHour(new Date().toISOString(), creatorTz)
+                  const localHour = gl.current_hour ?? zonedHour(new Date(), creatorTz)
                   const localLabel = localHour === 0 ? '12 AM' : localHour < 12 ? `${Math.floor(localHour)} AM` : localHour === 12 ? '12 PM' : `${Math.floor(localHour) - 12} PM`
                   const glText = gl.multiplier
                     ? `${gl.status === 'peak' ? 'Peak hour right now' : 'Good time to stream'} (${localLabel}) — this window earns ${gl.multiplier}x your average. Go live on ${analytics?.bestPlatformByRate?.platform || 'your top platform'}.`
@@ -3665,7 +3672,7 @@ const stopImportMessageRotation = () => {
 
               {/* Platform ROI + Per-Platform Best Time (mandatory: always show platform context) */}
               {(() => {
-                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+                const fmtH = h => { if (h == null || isNaN(h)) return 'N/A'; const _lh=Math.round(((h%24)+24)%24); /* engine hours are already creator-local */ return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
                 const platColors = { Chaturbate: C.cyan, BongaCams: C.pink, MyFreeCams: C.gold }
                 const allPlats = [...(analytics?.platforms || [])].sort((a,b) => b.totalUSD - a.totalUSD)
                 if (!allPlats.length) return null
@@ -3688,7 +3695,7 @@ const stopImportMessageRotation = () => {
                             <div style={{ fontSize: 22, fontWeight: 900, color: C.white, marginBottom: 2 }}>{roi !== null ? `$${(roi || 0).toFixed(2)}/hr` : '—'}</div>
                             <div style={{ fontSize: 11, color: C.muted, marginBottom: bestTime ? 8 : 0 }}>${(p.totalUSD || 0).toFixed(0)} total · {(p.hours || 0).toFixed(0)}h streamed</div>
                             {(() => {
-                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                            const todayUTCName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][zonedDay(new Date(), creatorTz)] // creator-local day, matching engine bestHourByDay keys
                             const ptimes = analytics?.platformBestTimes?.[p.platform]
                             const todayHour = ptimes?.bestHourByDay?.[todayUTCName]
                             const bestDayEntry = ptimes?.bestDay
@@ -3743,7 +3750,7 @@ const stopImportMessageRotation = () => {
                 const platDayUSD = {}; const platDayDates = {}
                 tips.forEach(t => {
                   const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
-                  const shortDay = UTC_DAYS[dt.getUTCDay()]; const dateKey = dt.toISOString().slice(0, 10)
+                  const shortDay = UTC_DAYS[zonedDay(dt, creatorTz)]; const dateKey = zonedYMD(dt, creatorTz) // creator-local day + date
                   if (!platDayUSD[p]) platDayUSD[p] = {}
                   if (!platDayDates[p]) platDayDates[p] = {}
                   platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
@@ -3760,8 +3767,8 @@ const stopImportMessageRotation = () => {
                 })
                 const platList = Object.keys(platDayAvg)
                 if (platList.length < 1) return null
-                const todayShort = UTC_DAYS[new Date().getUTCDay()]
-                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getUTCDay()]
+                const todayShort = UTC_DAYS[zonedDay(new Date(), creatorTz)]
+                const todayLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][zonedDay(new Date(), creatorTz)]
                 return (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -3811,15 +3818,15 @@ const stopImportMessageRotation = () => {
                 A. Likely Online Now  B. Milestones  C. At Risk
             ═══════════════════════════════════════ */}
             {(() => {
-              const currentUTCHourTE = new Date().getUTCHours()
-              const labelH = h => { const _off=new Date().getTimezoneOffset()/-60; const _lh=Math.round(((h+_off)%24+24)%24); return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
+              const currentUTCHourTE = zonedHour(new Date(), creatorTz) // creator-local
+              const labelH = h => { const _lh=h; /* already creator-local */ return _lh===0?'12 AM':_lh<12?`${_lh} AM`:_lh===12?'12 PM':`${_lh-12} PM` }
 
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
                   const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
                   const hourCounts = {}
-                  fanTips.forEach(t => { const h = new Date(t.date_time || t.dateRaw).getUTCHours(); hourCounts[h] = (hourCounts[h] || 0) + 1 })
+                  fanTips.forEach(t => { const h = zonedHour(t.date_time || t.dateRaw, creatorTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
                   if (!sorted.length) return null
                   const peakHour = parseInt(sorted[0][0])
@@ -5364,7 +5371,7 @@ const stopImportMessageRotation = () => {
             onStartLive={() => handleTabChange('live')}
             plannedStreams={plannedStreams}
             onOpenPlanner={() => handleTabChange('planner')}
-            tz={liveTimezone}
+            tz={creatorTz}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}
             live={liveEngine.phase === 'active' && liveEngine.duration
@@ -5447,7 +5454,7 @@ const stopImportMessageRotation = () => {
               .map(b => ({
                 minute: b.idx * 5,
                 usd: parseFloat(b.usd.toFixed(2)),
-                time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                time: new Date(startMs + b.idx * 5 * 60000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: creatorTz }),
               }))
 
             // ── PERFORMANCE vs historical avg ────────────────────────
@@ -5571,7 +5578,7 @@ const stopImportMessageRotation = () => {
                 if (!bd) return null
                 const perf = PERF[bd.performance]
                 const maxBucketUSD = Math.max(...bd.buckets.map(b => b.usd), 0.01)
-                const fmt = dt => new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                const fmt = dt => new Date(dt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: creatorTz })
 
                 return (
                   <div key={si} style={{ ...glassCard, borderRadius: 16, marginBottom: 24, overflow: "hidden" }}>
@@ -5581,7 +5588,7 @@ const stopImportMessageRotation = () => {
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                           <span style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-                            {new Date(s.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                            {new Date(s.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: creatorTz })}
                           </span>
                           <span style={{ fontSize: 13, color: C.muted }}>{fmt(s.startTime)} → {fmt(s.endTime)}</span>
                           <span style={{ fontSize: 12, color: C.muted }}>• {s.platform}</span>
@@ -5863,7 +5870,7 @@ const stopImportMessageRotation = () => {
                       <tbody>
                         {pageTips.map((t, i) => (
                           <tr key={t.id || i} className="whale-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                            <td style={{ padding: "12px 16px", color: C.white, fontSize: 12 }}>{new Date(t.date_time).toLocaleDateString()}</td>
+                            <td style={{ padding: "12px 16px", color: C.white, fontSize: 12 }}>{new Date(t.date_time).toLocaleDateString(undefined, { timeZone: creatorTz })}</td>
                             <td style={{ padding: "12px 16px", color: C.white, fontWeight: 600 }}>{t.username}</td>
                             <td style={{ padding: "12px 16px", color: C.muted }}>{t.platform}</td>
                             <td style={{ padding: "12px 16px", color: C.green, fontWeight: 700 }}>${t.usd.toFixed(2)}</td>
@@ -6488,16 +6495,16 @@ const stopImportMessageRotation = () => {
           </div>
         )}
 
-        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} />}
+        {activeTab === 'analytics' && <AnalyticsCharts analytics={analytics} tz={creatorTz} />}
         {activeTab === 'planner' && (
           _plannerLock.locked
-            ? <div style={{ padding: '32px 0' }}>{user && <PlannedStreams userId={user.id} plans={plannedStreams} onChanged={loadPlannedStreams} defaultPlatform={freeUnlimitedPlatform || 'Chaturbate'} />}<LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <StreamPlanner tips={analysisTips} isPro={isPro} planned={user ? { userId: user.id, plans: plannedStreams, onChanged: loadPlannedStreams, defaultPlatform: freeUnlimitedPlatform || 'Chaturbate' } : null} />
+            ? <div style={{ padding: '32px 0' }}>{user && <PlannedStreams userId={user.id} plans={plannedStreams} onChanged={loadPlannedStreams} defaultPlatform={freeUnlimitedPlatform || 'Chaturbate'} tz={creatorTz} />}<LockedInsightCard title="Stream Planner" description="Plan your schedule around your best earning windows." lockType="needs_data" requirement={_plannerLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
+            : <StreamPlanner tips={analysisTips} isPro={isPro} tz={creatorTz} planned={user ? { userId: user.id, plans: plannedStreams, onChanged: loadPlannedStreams, defaultPlatform: freeUnlimitedPlatform || 'Chaturbate', tz: creatorTz } : null} />
         )}
         {activeTab === 'moneymap' && (
           _moneyMapLock.locked
             ? <div style={{ padding: '32px 0' }}><LockedInsightCard title="Money Map" description="See where and when your money comes from across sessions and platforms." lockType="needs_data" requirement={_moneyMapLock.message} ctaLabel="Upload More Data" ctaAction={() => handleTabChange('upload')} /></div>
-            : <MoneyMap tips={analysisTips} isPro={isPro} />
+            : <MoneyMap tips={analysisTips} isPro={isPro} tz={creatorTz} />
         )}
       </div>
 
@@ -6565,7 +6572,7 @@ const stopImportMessageRotation = () => {
         const dayKeys = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
         const dayCounts = { Mon:0,Tue:0,Wed:0,Thu:0,Fri:0,Sat:0,Sun:0 }
         whaleTips.forEach(t => {
-          const d = new Date(t.date_time).getUTCDay()
+          const d = zonedDay(t.date_time, creatorTz)
           const key = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]
           if (key in dayCounts) dayCounts[key]++
         })
@@ -6626,8 +6633,8 @@ const stopImportMessageRotation = () => {
                     <div className="whale-intel-split">
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {[
-                          { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet" },
-                          { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
+                          { icon: "📅", label: "First tip", value: firstTip ? new Date(firstTip.date_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: creatorTz }) : "Not enough data yet" },
+                          { icon: "📅", label: "Last tip", value: w.lastTipDate ? new Date(w.lastTipDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: creatorTz }) : "Not enough data yet", sub: daysSinceLastTip !== null ? `${daysSinceLastTip.toLocaleString()} days ago` : null },
                           { icon: "🕐", label: "Avg days between visits", value: w.avgDaysBetweenTips != null ? `Every ~${Math.round(w.avgDaysBetweenTips)} days` : "Not enough data yet" },
                           { icon: "⚠️", label: "Churn risk", value: churnRisk || "Not enough data yet", color: churnColor },
                         ].map(({ icon, label, value, sub, color }) => (
@@ -6709,7 +6716,7 @@ const stopImportMessageRotation = () => {
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span style={{ fontSize: 14 }}>{["🥇","🥈","🥉"][i]}</span>
-                          <span style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString()}</span>
+                          <span style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString(undefined, { timeZone: creatorTz })}</span>
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: C.gold }}>${t.usd.toFixed(2)}</div>
                       </div>
@@ -6721,7 +6728,7 @@ const stopImportMessageRotation = () => {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {sortedTips.slice(0, 5).map((t, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                        <div style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString()} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div style={{ fontSize: 12, color: C.text }}>{new Date(t.date_time).toLocaleDateString(undefined, { timeZone: creatorTz })} at {new Date(t.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: creatorTz })}</div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>${t.usd.toFixed(2)}</div>
                       </div>
                     ))}
@@ -6738,8 +6745,8 @@ const stopImportMessageRotation = () => {
                         { label: "Avg value per private", value: `$${(fanPrivateUSD / fanPaidSessions.length).toFixed(2)}` },
                         { label: "Avg private token rate", value: fanPrivateTokens > 0 ? `$${(fanPrivateUSD / fanPrivateTokens).toFixed(4)}/tok` : "Not enough data yet" },
                         { label: "Most common session type", value: fanMostCommonType || "Not enough data yet" },
-                        { label: "First private session", value: fanPrivateSorted[0] ? new Date(fanPrivateSorted[0].date_time).toLocaleDateString() : "Not enough data yet" },
-                        { label: "Most recent private session", value: fanPrivateSorted[fanPrivateSorted.length - 1] ? new Date(fanPrivateSorted[fanPrivateSorted.length - 1].date_time).toLocaleDateString() : "Not enough data yet" },
+                        { label: "First private session", value: fanPrivateSorted[0] ? new Date(fanPrivateSorted[0].date_time).toLocaleDateString(undefined, { timeZone: creatorTz }) : "Not enough data yet" },
+                        { label: "Most recent private session", value: fanPrivateSorted[fanPrivateSorted.length - 1] ? new Date(fanPrivateSorted[fanPrivateSorted.length - 1].date_time).toLocaleDateString(undefined, { timeZone: creatorTz }) : "Not enough data yet" },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ padding: 14, background: "rgba(168,85,247,0.06)", borderRadius: 10, border: "1px solid rgba(168,85,247,0.15)" }}>
                           <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{label}</div>
@@ -6750,7 +6757,7 @@ const stopImportMessageRotation = () => {
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {[...fanPaidSessions].sort((a, b) => new Date(b.date_time) - new Date(a.date_time)).slice(0, 5).map(s => (
                         <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)" }}>
-                          <div style={{ fontSize: 12, color: C.text }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString()}</div>
+                          <div style={{ fontSize: 12, color: C.text }}>{s.session_type} · {new Date(s.date_time).toLocaleDateString(undefined, { timeZone: creatorTz })}</div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: "#a855f7" }}>${parseFloat(s.usd).toFixed(2)}</div>
                         </div>
                       ))}
@@ -6993,7 +7000,7 @@ const stopImportMessageRotation = () => {
                       </div>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{w.username}</div>
-                        <div style={{ fontSize: 11, color: C.muted }}>{w.platform} · {w.tipCount} tips · last {new Date(w.lastTipDate).toLocaleDateString()}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{w.platform} · {w.tipCount} tips · last {new Date(w.lastTipDate).toLocaleDateString(undefined, { timeZone: creatorTz })}</div>
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
