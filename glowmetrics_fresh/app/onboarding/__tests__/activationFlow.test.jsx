@@ -92,7 +92,8 @@ test('primary success goes to the trial with no secondary-platform step; complet
   expect(track).toHaveBeenCalledWith('onboarding_first_insight_viewed', expect.objectContaining({ primary_platform: 'chaturbate' }))
 
   fireEvent.click(screen.getByRole('button', { name: /^Continue →$/ }))
-  expect(await screen.findByText('Your first insight is just the beginning.')).toBeInTheDocument()
+  expect(await screen.findByTestId('step5-trial')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Download CamCash Extension/ })).toHaveAttribute('href', '/camcash-extension.zip')
   expect(screen.getByRole('button', { name: /Start my 7-day Pro trial/ })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Continue with Free/ })).toBeInTheDocument()
   expect(screen.queryByText(/Whales/)).not.toBeInTheDocument()

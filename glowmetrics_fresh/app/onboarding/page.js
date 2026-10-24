@@ -9,7 +9,7 @@ import { readUploadJson } from '../../lib/readUploadJson'
 import { PLATFORM_TOKEN_RATES, tokenRate } from '../../lib/constants'
 import { computeSnapshotStats, parseCSV } from '../../lib/analytics'
 import { summarizeOnboarding, assertImportComplete, earningDateRange, formatDay, canonicalImportDataset, streamPatterns, bestStreamingTimes } from '../../lib/onboardingSummary'
-import { FREE_ANALYSIS_WINDOW_DAYS } from '../../lib/planLimits'
+import { FREE_ANALYSIS_WINDOW_DAYS, FREE_PLATFORM_LIMIT } from '../../lib/planLimits'
 import { track } from '../../lib/track'
 import { trackCheckoutEvent } from '../../lib/analytics-client'
 import { logParseAttempt, analyzeFormat } from '../../lib/parseTracking'
@@ -573,6 +573,8 @@ const CSS=`
   @keyframes dashboardSweep{0%{opacity:0;transform:translateX(-30%) scaleX(0.6)}45%{opacity:1}100%{opacity:0;transform:translateX(30%) scaleX(1.4)}}
   @keyframes dashboardDissolve{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.03)}}
   /* Step 3 · Processing — subtle motion only; all of it stops under reduced motion. */
+  @keyframes obExtTip{0%,100%{transform:translateY(0);opacity:0.75}50%{transform:translateY(-3px);opacity:1}}
+  .ob-ext-tip{animation:obExtTip 3s ease-in-out infinite}
   @keyframes obProcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
   @keyframes obProcHalo{0%,100%{opacity:0.35;transform:scale(0.96)}50%{opacity:0.6;transform:scale(1.05)}}
   @keyframes obProcOrbit{to{transform:rotate(360deg)}}
@@ -599,6 +601,7 @@ const CSS=`
   @media(max-width:640px){.ob-proc-visual{display:none!important}}
   @media(prefers-reduced-motion:reduce){
     .ob-dash-sweep,.ob-dash-dissolve{animation:none!important}
+    .ob-ext-tip{animation:none!important}
     .ob-proc-orb,.ob-proc-halo,.ob-proc-ring,.ob-proc-beam,.ob-proc-spark,.ob-proc-spin,.ob-proc-check,.ob-proc-status{animation:none!important}
     .ob-proc-scan,.ob-proc-rise,.ob-proc-row--active::after{animation:none!important;opacity:0!important}
   }
@@ -1400,6 +1403,9 @@ export default function OnboardingPage(){
       snapshot:p.snapshot||null,topSpender:p.topSpender||null,
       bestHour:p.bestHour||null,bestHourConfident:p.bestHourConfident||false,
       ...(source==='csv'?{totalUsd:saved.totalUsd,dateFrom:saved.dateFrom,dateTo:saved.dateTo}:{}),
+      // Creator-local range from the same dataset Step 3 analyzed; timezone shown with best times.
+      range:{dateFrom:p.dateFrom,dateTo:p.dateTo,calendarDays:p.calendarDays},
+      timezone:p.dataset?.timeZone||null,
       // Step 3's analysis of the creator-local canonical dataset, for Step 4.
       dataset:p.dataset,analysis,
     }}))
@@ -1758,7 +1764,64 @@ export default function OnboardingPage(){
           )})()}
 
           {/* ══ PLATFORM SUCCESS (primary or secondary) ══ */}
-          {step==='platformSuccess'&&currentResult&&(()=>{
+          {step==='platformSuccess'&&currentResult&&isPrimaryInQueue&&(()=>{
+            const snap=currentResult.snapshot
+            const full=snap?.full
+            const cat=full?.categories
+            const best=currentResult.analysis?.bestTimes?.canonicalBestTimes?.bestWindow||null
+            const rate=currentResult.analysis?.bestTimes
+            const hourly=rate&&rate.hourlyRateSessionCount>0?rate.estimatedHourlyRate:null
+            const range=currentResult.range
+            const tipCount=cat?cat.tips.count:(currentResult.inserted??0)
+            const hourLabel=h=>`${h%12||12} ${h<12?'AM':'PM'}`
+            const confident=best&&(best.tier==='high'||best.tier==='supported')
+            const stat=(label,value,sub,color)=>(
+              <div className="stat-card" style={{padding:'12px 10px',textAlign:'left'}}>
+                <div style={{fontSize:9,color:'rgba(148,163,184,0.7)',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.1em',fontWeight:700}}>{label}</div>
+                <div style={{fontSize:18,fontWeight:900,color,lineHeight:1.15}}>{value}</div>
+                {sub&&<div style={{fontSize:10,color:'rgba(148,163,184,0.75)',marginTop:3}}>{sub}</div>}
+              </div>)
+            return(
+            <div data-testid="step4-insights" style={{animation:'fadeUp 0.35s ease both',textAlign:'center'}}>
+              <div style={EYE}>Your first insights</div>
+              <h1 style={{fontSize:20,fontWeight:900,color:'#fff',marginBottom:4}}>Your {platform.label} data is ready!</h1>
+              <p style={{fontSize:12.5,color:'rgba(148,163,184,0.8)',marginBottom:12}}>Here’s a first look at your insights.</p>
+
+              <div data-testid="step4-stats" style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:9,marginBottom:10}}>
+                <div data-testid="stat-earnings" style={{display:'contents'}}>{stat('Total earnings',`$${(full?.usd??currentResult.totalUsd??0).toFixed(2)}`,null,'#4ade80')}</div>
+                <div data-testid="stat-tips" style={{display:'contents'}}>{stat('Tips',tipCount.toLocaleString('en-US'),'Regular tips only',CYAN)}</div>
+                {stat('Date range',range?.calendarDays?`${range.calendarDays.toLocaleString('en-US')} days`:'—',range?.dateFrom&&range?.dateTo?`${range.dateFrom} – ${range.dateTo}`:null,'#93C5FD')}
+                {stat('Avg. $/hour',hourly!==null?`$${hourly.toFixed(2)}`:'—',hourly!==null?'Estimated · from your sessions':'Not enough data yet',PINK)}
+              </div>
+
+              {(cat?.private.count>0||cat?.memberships.count>0)&&(
+                <div data-testid="step4-other-earnings" style={{display:'grid',gridTemplateColumns:`repeat(${[cat.private.count>0,cat.memberships.count>0].filter(Boolean).length},1fr)`,gap:9,marginBottom:10}}>
+                  {cat.private.count>0&&<div data-testid="stat-private" style={{display:'contents'}}>{stat('Private earnings',`$${cat.private.usd.toFixed(2)}`,`${cat.private.count.toLocaleString('en-US')} private ${cat.private.count===1?'session':'sessions'} · not counted as tips`,PINK)}</div>}
+                  {cat.memberships.count>0&&<div data-testid="stat-memberships" style={{display:'contents'}}>{stat('Memberships',`$${cat.memberships.usd.toFixed(2)}`,`${cat.memberships.count.toLocaleString('en-US')} ${cat.memberships.count===1?'membership':'memberships'}`,'#a78bfa')}</div>}
+                </div>
+              )}
+
+              <div data-testid="step4-best-time" style={{borderRadius:13,border:'1px solid rgba(33,230,243,0.22)',background:'rgba(33,230,243,0.05)',padding:'11px 14px',marginBottom:10,textAlign:'left'}}>
+                {best?(
+                  <>
+                    <div style={{fontSize:10,fontWeight:900,letterSpacing:'0.1em',textTransform:'uppercase',color:confident?CYAN:'#fbbf24',marginBottom:4}}>{confident?'Best streaming time':'Early signal'}</div>
+                    <div style={{fontSize:12.5,color:'#fff',lineHeight:1.5}}>Your tips land most around <strong style={{color:PINK}}>{hourLabel(best.localHour)}</strong> ({best.sessionCount} session{best.sessionCount===1?'':'s'} at that hour, {currentResult.timezone||'your timezone'}).{!confident&&' More streaming history will confirm this.'}</div>
+                  </>
+                ):(
+                  <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.5}}>We need a little more history to find your best streaming time.</div>
+                )}
+              </div>
+
+              <div data-testid="step4-free-note" style={{display:'flex',alignItems:'flex-start',gap:10,textAlign:'left',fontSize:11,color:'rgba(148,163,184,0.85)',lineHeight:1.5,marginBottom:14}}>
+                <span aria-hidden="true">🗄️</span>
+                <span>Your full history is saved. Free includes full history for your primary platform; additional platforms are limited to the most recent 31 days.</span>
+              </div>
+
+              <OBBtn onClick={goToTrial}>Continue →</OBBtn>
+            </div>
+          )})()}
+
+          {step==='platformSuccess'&&currentResult&&!isPrimaryInQueue&&(()=>{
             const snap=currentResult.snapshot
             const full=snap?.full
             const recent=snap?.recent
@@ -1886,41 +1949,66 @@ export default function OnboardingPage(){
 
           {/* ══ TRIAL UPSELL ══ */}
           {step==='trial'&&(()=>{
-            const tipsAnalyzed=Object.values(platformResults).reduce((n,r)=>n+(r?.status==='connected'?(r.inserted||0):0),0)
-            const hasInsight=!!(preview?.bestHour&&preview?.bestHourConfident)
+            // Free column: each bullet is enforced by the code today.
+            //  - 3 platforms: FREE_PLATFORM_LIMIT (lib/planLimits.js) + DB trigger
+            //  - full history on primary, 31 days elsewhere: applyFreeAnalysisWindow
+            //    with the primary as unlimitedPlatform (dashboard + onboarding)
+            //  - top 3 fans: platformIntelligenceAnalytics visibleSpenders (non-Pro)
+            //  - Live Mode: app/api/live/tips route is not plan-gated
+            const freeBullets=[
+              'Full history on your primary platform',
+              'Other platforms: most recent 31 days',
+              `Up to ${FREE_PLATFORM_LIMIT} platforms (1 primary + 2 secondary)`,
+              'Top 3 fans in platform insights',
+              'Live Mode included',
+            ]
+            const proBullets=['Live tip tracking','No more manual imports','More accurate live earnings & fan data','Works while streaming']
             return(
-            <div style={{animation:'fadeUp 0.3s ease both',textAlign:'center'}}>
-              <div style={EYE}>Step 3 of 3</div>
-              <div style={{width:44,height:44,borderRadius:14,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,margin:'0 auto 10px',boxShadow:'0 0 28px rgba(124,92,255,0.45),0 0 50px rgba(255,47,174,0.2)'}}>👑</div>
-              <h1 style={{fontSize:'clamp(19px,2.8dvh,23px)',fontWeight:900,color:'#fff',marginBottom:6,letterSpacing:'-0.02em',lineHeight:1.2}}>{TRIAL_COPY.headline}</h1>
-              <p className="ob-gap" style={{fontSize:13,color:'rgba(166,168,189,0.85)',lineHeight:1.5,maxWidth:440,margin:'0 auto'}}>{TRIAL_COPY.sub}</p>
-              {/* Proof line — only real counts from this session's imports. */}
-              {(tipsAnalyzed>0||hasInsight)&&(
-                <div className="ob-gap" style={{display:'inline-flex',alignItems:'center',gap:8,padding:'7px 16px',borderRadius:10,border:'1px solid rgba(124,92,255,0.35)',background:'rgba(124,92,255,0.08)',fontSize:12,color:'rgba(226,232,240,0.9)'}}>
-                  <span style={{fontSize:14}}>📊</span>
-                  {tipsAnalyzed>0?<span>CamCash already analyzed <strong style={{color:CYAN}}>{tipsAnalyzed} tip{tipsAnalyzed===1?'':'s'}</strong> from your first import.</span>:<span>Your first earning pattern is ready.</span>}
+            <div data-testid="step5-trial" style={{animation:'fadeUp 0.3s ease both'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{display:'grid',gridTemplateColumns:'1.15fr 1fr',gap:12,alignItems:'stretch'}}>
+                  {/* Extension card: animated tip feed (decorative) + manual install */}
+                  <div className="ob-ext-card" style={{borderRadius:14,padding:'12px 12px 10px',background:'linear-gradient(160deg,rgba(34,211,238,0.08),rgba(168,85,247,0.10) 60%,rgba(255,47,174,0.08))',border:'1px solid rgba(34,211,238,0.22)',textAlign:'left'}}>
+                    <div aria-hidden="true" style={{position:'relative',height:86,borderRadius:10,background:'rgba(4,10,24,0.7)',border:'1px solid rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10}}>
+                      {[{u:'100 tokens',c:'#22d3ee'},{u:'25 tokens',c:'#a78bfa'},{u:'50 tokens',c:'#ff2fae'}].map((t,i)=>(
+                        <div key={i} className="ob-ext-tip" style={{position:'absolute',left:10,right:10,top:8+i*26,height:22,borderRadius:7,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',display:'flex',alignItems:'center',gap:8,padding:'0 8px',animationDelay:`${i*0.6}s`}}>
+                          <span style={{width:12,height:12,borderRadius:'50%',background:t.c,boxShadow:`0 0 8px ${t.c}`}}/>
+                          <span style={{fontSize:10,color:'rgba(226,232,240,0.85)',fontWeight:700}}>new tip</span>
+                          <span style={{marginLeft:'auto',fontSize:10,color:t.c,fontWeight:800}}>{t.u}</span>
+                        </div>))}
+                    </div>
+                    <a href="/camcash-extension.zip" download="camcash-extension.zip" data-testid="ext-download" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:40,borderRadius:11,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',color:'#fff',fontSize:13,fontWeight:900,textDecoration:'none',boxShadow:'0 0 18px rgba(33,230,243,0.2)'}}>⬇ Download CamCash Extension</a>
+                    <ol style={{margin:'8px 0 0',paddingLeft:16,fontSize:10.5,color:'rgba(148,163,184,0.85)',lineHeight:1.5}}>
+                      <li>Unzip the download.</li>
+                      <li>Open chrome://extensions and turn on Developer mode.</li>
+                      <li>Click Load unpacked and choose the unzipped folder.</li>
+                    </ol>
+                  </div>
+
+                  <div style={{textAlign:'left',paddingTop:2}}>
+                    <div style={{display:'inline-block',fontSize:9.5,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fff',background:PINK,borderRadius:7,padding:'3px 8px',marginBottom:8}}>Recommended</div>
+                    <h1 style={{fontSize:'clamp(17px,2.4dvh,20px)',fontWeight:900,color:'#fff',lineHeight:1.2,marginBottom:8}}>Track tips automatically while you stream</h1>
+                    {proBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'rgba(226,232,240,0.92)',marginBottom:5}}><span style={{color:CYAN,fontWeight:900}}>✓</span>{t}</div>))}
+                  </div>
                 </div>
-              )}
-              <div className="ob-gap" style={{borderRadius:14,background:'rgba(33,230,243,0.035)',border:'1px solid rgba(33,230,243,0.2)',padding:'12px 18px',textAlign:'left'}}>
-                <div style={{fontSize:9.5,fontWeight:900,letterSpacing:'0.16em',textTransform:'uppercase',color:CYAN,marginBottom:8}}>With CamCash Pro</div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:'6px 16px'}}>
-                  {TRIAL_COPY.benefits.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:9,fontSize:12.5,color:'rgba(226,232,240,0.92)'}}><span style={{flexShrink:0,width:17,height:17,borderRadius:'50%',background:CYAN,color:'#04101b',fontSize:10,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center'}}>✓</span>{t}</div>))}
+
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'stretch'}}>
+                  {/* Trial: price copy unchanged from the current configuration */}
+                  <div style={{borderRadius:14,border:'1px solid rgba(167,139,250,0.4)',background:'rgba(255,255,255,0.02)',padding:'12px 12px 14px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                    <div style={{fontSize:26,fontWeight:900,color:'#fff'}}><span style={{color:CYAN}}>$0</span> today</div>
+                    <div style={{fontSize:20,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginTop:2}}>7 days free</div>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.8)',margin:'4px 0 10px'}}>Then $9.99/month • Cancel anytime</div>
+                    <OBBtn onClick={handleStartTrial} style={{height:46,fontSize:13.5}}>{TRIAL_COPY.cta}</OBBtn>
+                  </div>
+
+                  {/* Free: only what is enforced today */}
+                  <div data-testid="free-column" style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.02)',padding:'12px 12px 14px',textAlign:'left'}}>
+                    <div style={{fontSize:12,fontWeight:900,color:'#fff',marginBottom:7}}>Continue with Free</div>
+                    {freeBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:6,fontSize:10.5,color:'rgba(203,213,225,0.85)',marginBottom:4,lineHeight:1.35}}><span style={{color:'#4ade80',fontWeight:900}}>✓</span>{t}</div>))}
+                    <button onClick={handleChooseFree} style={{marginTop:6,width:'100%',height:34,borderRadius:10,border:'1px solid rgba(148,163,184,0.35)',background:'transparent',color:'rgba(226,232,240,0.9)',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>Continue with Free</button>
+                  </div>
                 </div>
               </div>
-              {/* Price matches /pricing (Standard monthly, plan_type standard_monthly). */}
-              <div className="ob-gap" style={{borderRadius:14,border:'1px solid rgba(167,139,250,0.45)',background:'rgba(255,255,255,0.02)',padding:'10px 14px',boxShadow:'0 0 18px rgba(124,92,255,0.12)'}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:14,flexWrap:'wrap'}}>
-                  <span style={{fontSize:26,fontWeight:900,color:'#fff'}}><span style={{color:CYAN,fontSize:32}}>$0</span> today</span>
-                  <span style={{width:1,height:28,background:'rgba(255,255,255,0.15)'}}/>
-                  <span style={{fontSize:26,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>7 days free</span>
-                </div>
-                <div style={{fontSize:11,color:'rgba(148,163,184,0.75)',marginTop:2}}>Then $9.99/month • Cancel anytime before your trial ends.</div>
-              </div>
-              <OBBtn onClick={handleStartTrial} style={{height:52,fontSize:15}}>{TRIAL_COPY.cta}</OBBtn>
-              <div style={{display:'flex',alignItems:'center',gap:12,maxWidth:300,margin:'10px auto 4px'}}>
-                <span style={{flex:1,height:1,background:'rgba(255,255,255,0.1)'}}/><span style={{fontSize:10,color:'rgba(148,163,184,0.6)'}}>or</span><span style={{flex:1,height:1,background:'rgba(255,255,255,0.1)'}}/>
-              </div>
-              <button onClick={handleChooseFree} style={{background:'none',border:'none',color:'rgba(203,213,225,0.8)',fontSize:12.5,fontWeight:700,cursor:'pointer',padding:'4px 8px'}}>Continue with Free</button>
             </div>
           )})()}
 
