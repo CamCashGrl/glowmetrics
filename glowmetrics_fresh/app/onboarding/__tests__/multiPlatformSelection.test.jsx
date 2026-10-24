@@ -72,7 +72,7 @@ describe('Onboarding Step 1 — single-select primary platform', () => {
 
   test('shows the new headline and the shared PLATFORM / IMPORT / INSIGHTS stepper', async () => {
     render(<OnboardingPage />)
-    expect(await screen.findByText('Choose your primary platform')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Let’s get started')
     expect(screen.getByText('Platform')).toHaveAttribute('aria-current', 'step')
     expect(screen.getByText('Import')).not.toHaveAttribute('aria-current')
     expect(screen.getByText('Insights')).not.toHaveAttribute('aria-current')
@@ -253,7 +253,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     render(<OnboardingPage />)
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
     expect(screen.getByText('Pacific Time')).toBeInTheDocument()
-    expect(screen.getByText(/Used for your best hours, daily earnings, sessions, and stream recommendations/)).toBeInTheDocument()
+    expect(screen.getByText('Used for your best stream times and daily insights.')).toBeInTheDocument()
   })
 
   test('a saved creator timezone overrides browser detection', async () => {
@@ -281,7 +281,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
   test('manual change via search + select is shown and saved as an IANA zone', async () => {
     render(<OnboardingPage />)
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
     fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'new york' } })
     const select = screen.getByLabelText('Timezone')
     expect(Array.from(select.options).map((o) => o.value)).toContain('America/New_York')
@@ -298,7 +298,7 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     mockUpsertError = { message: 'network' }
     render(<OnboardingPage />)
     await waitFor(() => expect(shownTz()).toBe('America/Los_Angeles'))
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
     fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'Tokyo' } })
     fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Tokyo' } })
     fireEvent.click(screen.getByText('MyFreeCams'))
@@ -320,5 +320,82 @@ describe('Onboarding Step 1 — creator timezone confirmation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue with BongaCams →' }))
     expect(await screen.findByText(/Step 2 of 3 — BongaCams/)).toBeInTheDocument()
     expect(screen.queryByTestId('primary-save-error')).not.toBeInTheDocument()
+  })
+})
+
+describe('Onboarding Step 1 — compact reference layout', () => {
+  beforeEach(() => { mockProfile = NEW_USER })
+
+  test('compact card: no section headings, no explainer boxes, no card descriptions; order CB → MFC → BC', async () => {
+    render(<OnboardingPage />)
+    await screen.findByText('Chaturbate')
+    expect(screen.getByText('Choose your primary platform to import your data and get your first insights.')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Where do you stream?' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'What’s your timezone?' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Why this matters?')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Import your (token|earnings) history/)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('radio').map((r) => r.textContent)).toEqual(['CBChaturbate', 'MFCMyFreeCams', 'BCBongaCams'])
+  })
+
+  test('still single-select with the new cards', async () => {
+    render(<OnboardingPage />)
+    fireEvent.click(await screen.findByText('BongaCams'))
+    fireEvent.click(screen.getByText('MyFreeCams'))
+    await waitFor(() => expect(card('MyFreeCams')).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.getAllByRole('radio', { checked: true })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Continue with MyFreeCams →' })).toBeEnabled()
+  })
+
+  test('no feature/unlock panel and no invented numbers on Step 1', async () => {
+    render(<OnboardingPage />)
+    await screen.findByText('Chaturbate')
+    expect(screen.queryByTestId('unlock-panel')).not.toBeInTheDocument()
+    expect(screen.queryByText(/What you’ll unlock/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\$\d|\d+%/)).not.toBeInTheDocument()
+  })
+
+  test('timezone picker is closed by default and opens on click', async () => {
+    render(<OnboardingPage />)
+    await screen.findByTestId('timezone-iana')
+    expect(screen.queryByLabelText('Search timezones')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
+    expect(screen.getByLabelText('Search timezones')).toBeInTheDocument()
+  })
+
+  test('no "Step 1 of 3", no login link, close button still present', async () => {
+    render(<OnboardingPage />)
+    await screen.findByText('Chaturbate')
+    expect(screen.queryByText(/Step 1 of 3/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/log in/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Close onboarding' })).toBeInTheDocument()
+  })
+
+  test('Detected badge shows for a browser-detected zone', async () => {
+    render(<OnboardingPage />)
+    expect(await screen.findByTestId('timezone-detected')).toHaveTextContent('Detected')
+  })
+
+  test('no Detected badge for a saved zone', async () => {
+    mockProfile = { ...NEW_USER, timezone: 'Europe/Berlin' }
+    render(<OnboardingPage />)
+    await waitFor(() => expect(screen.getByTestId('timezone-iana')).toHaveTextContent('Europe/Berlin'))
+    expect(screen.queryByTestId('timezone-detected')).not.toBeInTheDocument()
+  })
+
+  test('no Detected badge when detection failed and UTC is the fallback', async () => {
+    mockBrowserTz = ''
+    render(<OnboardingPage />)
+    await waitFor(() => expect(screen.getByTestId('timezone-iana')).toHaveTextContent('UTC'))
+    expect(screen.queryByTestId('timezone-detected')).not.toBeInTheDocument()
+  })
+
+  test('Detected badge disappears after a manual change', async () => {
+    render(<OnboardingPage />)
+    await screen.findByTestId('timezone-detected')
+    fireEvent.click(screen.getByRole('button', { name: 'Change timezone' }))
+    fireEvent.change(screen.getByLabelText('Search timezones'), { target: { value: 'tokyo' } })
+    fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Tokyo' } })
+    expect(screen.getByTestId('timezone-iana')).toHaveTextContent('Asia/Tokyo')
+    expect(screen.queryByTestId('timezone-detected')).not.toBeInTheDocument()
   })
 })
