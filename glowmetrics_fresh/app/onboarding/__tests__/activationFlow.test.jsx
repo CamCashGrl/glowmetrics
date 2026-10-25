@@ -92,7 +92,7 @@ test('primary success goes to the trial with no secondary-platform step; complet
   expect(completionWrites()).toHaveLength(0)
   expect(track).toHaveBeenCalledWith('onboarding_first_insight_viewed', expect.objectContaining({ primary_platform: 'chaturbate' }))
 
-  fireEvent.click(screen.getByRole('button', { name: /^Continue →$/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Continue to Options →$/ }))
   expect(await screen.findByTestId('step5-trial')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Download CamCash Extension/ })).toHaveAttribute('href', '/camcash-extension.zip')
   expect(screen.getByRole('button', { name: /Start my 7-day Pro trial/ })).toBeInTheDocument()
@@ -103,7 +103,7 @@ test('primary success goes to the trial with no secondary-platform step; complet
 
 test('choosing Free marks onboarding complete and goes to the dashboard without a secondary step', async () => {
   await importPrimary()
-  fireEvent.click(screen.getByRole('button', { name: /^Continue →$/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Continue to Options →$/ }))
   fireEvent.click(await screen.findByRole('button', { name: /Continue with Free/ }))
   expect(await screen.findByText(/You're ready to use CamCash Free/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Enter CamCash/ })).toBeInTheDocument()
@@ -114,7 +114,7 @@ test('choosing Free marks onboarding complete and goes to the dashboard without 
 
 test('starting the trial marks onboarding complete before the Stripe redirect', async () => {
   await importPrimary()
-  fireEvent.click(screen.getByRole('button', { name: /^Continue →$/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Continue to Options →$/ }))
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ error: 'stub' }), text: async () => JSON.stringify({ error: 'stub' }) })
   window.alert = jest.fn()
   fireEvent.click(await screen.findByRole('button', { name: /Start my 7-day Pro trial/ }))

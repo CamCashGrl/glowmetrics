@@ -701,12 +701,13 @@ const CSS=`
 `
 
 // ── UI components ──────────────────────────────────────────────
-function OBLogo({showSub=false}){
+function OBLogo({showSub=false,compact=false}){
+  const mark=compact?26:32
   return(
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:8}}>
-      <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:showSub?4:0}}>
-        <div style={{width:32,height:32,borderRadius:12,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 14px rgba(33,230,243,0.25),0 0 28px rgba(255,47,174,0.12)`}}>$</div>
-        <div style={{fontSize:20,fontWeight:900,letterSpacing:'-0.035em'}}>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:compact?4:8}}>
+      <div style={{display:'flex',alignItems:'center',gap:compact?7:9,marginBottom:showSub?4:0}}>
+        <div style={{width:mark,height:mark,borderRadius:compact?10:12,background:GRAD,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:`0 0 14px rgba(33,230,243,0.25),0 0 28px rgba(255,47,174,0.12)`}}>$</div>
+        <div style={{fontSize:compact?16:20,fontWeight:900,letterSpacing:'-0.035em'}}>
           <span style={{color:'#fff'}}>Cam</span>
           <span style={{background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>Cash</span>
         </div>
@@ -716,17 +717,18 @@ function OBLogo({showSub=false}){
   )
 }
 
-function OBProgress({current,onBack,allDone=false}){
+function OBProgress({current,onBack,allDone=false,compact=false}){
   const steps=[{n:1,label:'Platform'},{n:2,label:'Import'},{n:3,label:'Insights'}]
+  const dot=compact?22:30
   return(
-    <div className="ob-stepper" style={{marginBottom:10}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:250,margin:'0 auto 8px'}}>
+    <div className="ob-stepper" style={{marginBottom:compact?6:10}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',maxWidth:compact?360:250,margin:compact?'0 auto 4px':'0 auto 8px'}}>
         {steps.map((s,i)=>(
           <div key={s.n} style={{display:'flex',alignItems:'center',flex:i<2?1:'none'}}>
             {(()=>{const back=onBack&&s.n===current-1;const Tag=back?'button':'div';return(
             <Tag className="ob-stepper-circle" {...(back?{type:'button',onClick:onBack,'aria-label':`Back to ${s.label}`,title:`Back to ${s.label}`}:{})} style={{
-              width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',padding:0,cursor:back?'pointer':'default',
-              fontSize:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
+              width:dot,height:dot,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',padding:0,cursor:back?'pointer':'default',
+              fontSize:compact?9.5:11,fontWeight:800,flexShrink:0,transition:'all 0.35s',
               background:allDone||s.n<current?CYAN:s.n===current?GRAD:'rgba(255,255,255,0.05)',
               border:s.n>current?'1px solid rgba(255,255,255,0.12)':'none',
               color:allDone||s.n<current?'#04101b':s.n===current?'#fff':'rgba(255,255,255,0.25)',
@@ -738,7 +740,7 @@ function OBProgress({current,onBack,allDone=false}){
           </div>
         ))}
       </div>
-      <div className="ob-stepper-step-labels" style={{display:'flex',justifyContent:'space-between',maxWidth:280,margin:'0 auto'}}>
+      <div className="ob-stepper-step-labels" style={{display:'flex',justifyContent:'space-between',maxWidth:compact?340:280,margin:'0 auto'}}>
         {steps.map(s=>(<div key={s.n} aria-current={s.n===current?'step':undefined} style={{width:60,textAlign:'center',fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.12em',color:s.n===current?CYAN:s.n<current?'rgba(33,230,243,0.7)':'rgba(255,255,255,0.28)',textShadow:s.n===current?'0 0 10px rgba(33,230,243,0.55)':'none',transition:'all 0.35s'}}>{s.label}</div>))}
       </div>
     </div>
@@ -1500,6 +1502,8 @@ export default function OnboardingPage(){
 
   const tipsDisplayed=importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)
   const isPrimaryInQueue=queueIndex===0
+  // Step 4 only: the compact header variant and all-complete progress.
+  const step4Active=step==='platformSuccess'&&isPrimaryInQueue
   const queuePosLabel=selectedPlatforms.length>1?` (${queueIndex+1} of ${selectedPlatforms.length})`:''
   const currentResult=platformResults[platformId]||null
   const nextUnhandledId=selectedPlatforms.find(id=>!platformResults[id])||null
@@ -1568,8 +1572,8 @@ export default function OnboardingPage(){
           )}
 
           <header>
-            <OBLogo showSub={step==='platform'}/>
-            <OBProgress current={stepNum} allDone={step==='platformSuccess'&&isPrimaryInQueue} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
+            <OBLogo showSub={step==='platform'} compact={step4Active}/>
+            <OBProgress current={stepNum} allDone={step4Active} compact={step4Active} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
           </header>
 
           {/* ══ PLATFORMS (single select — primary only) ══ */}
@@ -1873,7 +1877,7 @@ export default function OnboardingPage(){
               </div>
 
               <div style={{flexShrink:0}}>
-                <OBBtn onClick={goToTrial} style={{height:42,fontSize:13,fontWeight:700,borderRadius:8}}>Continue →</OBBtn>
+                <OBBtn onClick={goToTrial} style={{height:42,fontSize:13,fontWeight:700,borderRadius:8}}>Continue to Options →</OBBtn>
               </div>
             </div>
           )})()}

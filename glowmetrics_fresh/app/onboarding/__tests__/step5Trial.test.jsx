@@ -72,7 +72,7 @@ async function toStep5() {
   await screen.findByTestId('detected-summary', {}, { timeout: 5000 })
   fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
   await screen.findByTestId('step4-insights', {}, { timeout: 10000 })
-  fireEvent.click(screen.getByRole('button', { name: 'Continue →' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Continue to Options →' }))
   return await screen.findByTestId('step5-trial', {}, { timeout: 5000 })
 }
 
