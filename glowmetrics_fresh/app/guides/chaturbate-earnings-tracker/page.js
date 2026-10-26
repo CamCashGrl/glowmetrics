@@ -112,7 +112,7 @@ const faqSchema = {
       name: "What are the best hours to stream on Chaturbate?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Platform-wide peak traffic typically runs from 8 PM to 2 AM EST, with Saturday evenings being the busiest. However, your personal best hours depend entirely on when your audience is active. CamCash calculates your individual peak hours from your actual tip history.",
+        text: "Platform-wide traffic is commonly reported to be busiest during US evenings and late nights (Eastern Time), with Friday and Saturday often described as the busiest days — a general starting pattern, not an official figure. However, your personal best hours depend entirely on when your audience is active. CamCash calculates your individual peak hours from your actual tip history.",
       },
     },
     {
@@ -542,7 +542,7 @@ export default function ChaturbateEarningsTrackerPage() {
             </p>
             <div style={{ padding: "16px 20px", borderRadius: 12, background: "rgba(124,92,255,0.07)", border: "1px solid rgba(124,92,255,0.2)", marginBottom: 16 }}>
               <p style={{ ...s.p, marginBottom: 0, fontSize: 14 }}>
-                📖 For a full breakdown of platform peak hours, day-of-week patterns, and how to find your personal best times, see the complete guide: <a href="/guides/best-time-to-stream-on-chaturbate" style={{ color: "#a78bfa", fontWeight: 600 }}>Best Time to Stream on Chaturbate</a>
+                📖 For a full breakdown of platform peak hours, day-of-week patterns, and how to find your personal best times, see the complete guide: <a href="/guides/chaturbate-best-hours" style={{ color: "#a78bfa", fontWeight: 600 }}>Best Time to Stream on Chaturbate</a>
               </p>
             </div>
           </section>
@@ -628,7 +628,7 @@ export default function ChaturbateEarningsTrackerPage() {
                 },
                 {
                   q: "What are the best hours to stream on Chaturbate?",
-                  a: "Platform-wide, peak traffic runs from 8 PM to 2 AM EST. But your personal best hours depend on when your specific audience is active. CamCash calculates your individual peak hours from your actual tip history.",
+                  a: "Platform-wide traffic is commonly reported to be busiest during US evenings and late nights (Eastern Time), with Friday and Saturday often described as the busiest days — a general starting pattern, not an official figure. But your personal best hours depend on when your specific audience is active. CamCash calculates your individual peak hours from your actual tip history.",
                 },
                 {
                   q: "What is whale detection?",
@@ -678,7 +678,7 @@ export default function ChaturbateEarningsTrackerPage() {
                 { href: "/guides/cam-model-analytics",               label: "Cam Model Analytics Dashboard" },
                 { href: "/guides/how-to-increase-cam-tips",          label: "How to Increase Cam Tips" },
                 { href: "/guides/bongacams-analytics",               label: "BongaCams Analytics" },
-                { href: "/guides/best-time-to-stream-on-chaturbate", label: "Best Time to Stream on Chaturbate" },
+                { href: "/guides/chaturbate-best-hours", label: "Best Time to Stream on Chaturbate" },
                 { href: "/guides/chaturbate-token-calculator",       label: "Token Calculator" },
                 { href: "/guides/cam-model-income-tracker",          label: "Cam Model Income Tracker" },
                 { href: "/blog/how-much-do-chaturbate-models-make",  label: "How Much Do Chaturbate Models Make?" },

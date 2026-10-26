@@ -28,11 +28,6 @@ const guides = [
     description: 'Track your BongaCams earnings and top fans.',
   },
   {
-    slug: 'best-time-to-stream-chaturbate',
-    title: 'Best Time to Stream on Chaturbate',
-    description: 'Find your personal peak hours based on your own data.',
-  },
-  {
     slug: 'cam-model-top-tippers',
     title: 'Top Tipper Tracker',
     description: 'Know your most valuable fans and what drives their tipping.',
@@ -64,8 +59,8 @@ const guides = [
   },
   {
     slug: 'chaturbate-best-hours',
-    title: 'Chaturbate Best Hours',
-    description: 'Find when you earn the most on Chaturbate.',
+    title: 'Best Time to Stream on Chaturbate',
+    description: 'Peak hours, best days, and how to find your own highest-earning hours.',
   },
   {
     slug: 'chaturbate-room-title-generator',
