@@ -1504,6 +1504,8 @@ export default function OnboardingPage(){
   const isPrimaryInQueue=queueIndex===0
   // Step 4 only: the compact header variant and all-complete progress.
   const step4Active=step==='platformSuccess'&&isPrimaryInQueue
+  // Steps 4 and 5 share the compact, all-complete header.
+  const completedHeader=step4Active||step==='trial'
   const queuePosLabel=selectedPlatforms.length>1?` (${queueIndex+1} of ${selectedPlatforms.length})`:''
   const currentResult=platformResults[platformId]||null
   const nextUnhandledId=selectedPlatforms.find(id=>!platformResults[id])||null
@@ -1551,8 +1553,8 @@ export default function OnboardingPage(){
       <FeedbackBubble/>
 
       {/* ── CARD ── */}
-      <div className={`ob-card-shell${step==='platforms'||step==='paste'||step==='loading'||(step==='platformSuccess'&&isPrimaryInQueue)?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
-        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'||step==='loading'||(step==='platformSuccess'&&isPrimaryInQueue)?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
+      <div className={`ob-card-shell${step==='platforms'||step==='paste'||step==='loading'||(step==='platformSuccess'&&isPrimaryInQueue)||step==='trial'?' ob-card-shell--wide':''}`} style={{position:'relative',zIndex:10,width:'100%',maxWidth:430}}>
+        <div className={`ob-card ob-card-inner${step==='platforms'||step==='paste'||step==='loading'||(step==='platformSuccess'&&isPrimaryInQueue)||step==='trial'?' ob-card--step1':''}${dashboardTransitioning?' ob-dash-dissolve':''}`} style={{position:'relative',borderRadius:24,border:'1px solid rgba(34,211,238,0.20)',background:'rgba(7,16,31,0.90)',backdropFilter:'blur(40px)',WebkitBackdropFilter:'blur(40px)',padding:'18px 32px',overflowX:'hidden',overflowY:'auto',boxShadow:'0 30px 100px rgba(0,0,0,0.55),0 0 50px rgba(22,244,255,0.10),0 0 70px rgba(255,43,174,0.08),inset 0 1px 0 rgba(255,255,255,0.08)',animation:dashboardTransitioning?'dashboardDissolve 0.7s ease-out both':'none'}}>
           <div style={{position:'absolute',top:0,left:'8%',right:'8%',height:'1px',background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent)',pointerEvents:'none'}}/>
           {/* Decorative glows sit in a clipped layer so their -50px offsets
               don't add empty scrollable space to the card. */}
@@ -1572,8 +1574,8 @@ export default function OnboardingPage(){
           )}
 
           <header>
-            <OBLogo showSub={step==='platform'} compact={step4Active}/>
-            <OBProgress current={stepNum} allDone={step4Active} compact={step4Active} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
+            <OBLogo showSub={step==='platform'} compact={completedHeader}/>
+            <OBProgress current={stepNum} allDone={completedHeader} compact={completedHeader} onBack={step==='paste'?()=>setStep('platforms'):undefined}/>
           </header>
 
           {/* ══ PLATFORMS (single select — primary only) ══ */}
@@ -2010,93 +2012,90 @@ export default function OnboardingPage(){
 
           {/* ══ TRIAL UPSELL ══ */}
           {step==='trial'&&(()=>{
-            // Free column: each bullet is enforced by the code today.
-            //  - 3 platforms: FREE_PLATFORM_LIMIT (lib/planLimits.js) + DB trigger
-            //  - full history on primary, 31 days elsewhere: applyFreeAnalysisWindow
-            //    with the primary as unlimitedPlatform (dashboard + onboarding)
-            //  - top 3 fans: platformIntelligenceAnalytics visibleSpenders (non-Pro)
-            //  - Live Mode: app/api/live/tips route is not plan-gated
+            // Free column: each bullet is enforced by the code today (see lib/planLimits.js,
+            // applyFreeAnalysisWindow, platformIntelligenceAnalytics visibleSpenders, and the
+            // live tips route, which is not plan-gated).
             const freeBullets=[
-              'Full history on your primary platform',
-              'Other platforms: most recent 31 days',
-              `Up to ${FREE_PLATFORM_LIMIT} platforms (1 primary + 2 secondary)`,
-              'Top 3 fans in platform insights',
+              '1 platform with full history',
+              'Other platforms: 31-day view',
+              'Top 3 fans visible',
               'Live Mode included',
             ]
-            const proBullets=['Live tip tracking','No more manual imports','More accurate live earnings & fan data','Works while streaming']
+            const proBullets=['Live tip tracking','No more manual imports','Accurate earnings & fan data','Works while streaming']
+            // Decorative browser window with live-tip cards (no third-party logos).
+            const tipCard=(c,label,tokens,i)=>(
+              <div key={i} className="ob-ext-tip" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 8px',borderRadius:7,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',animationDelay:`${i*0.6}s`}}>
+                <span style={{width:20,height:20,borderRadius:'50%',flexShrink:0,background:c,boxShadow:`0 0 8px ${c}`}}/>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:9,color:'#e2e8f0',fontWeight:700,whiteSpace:'nowrap'}}>{label}</div>
+                  <div style={{fontSize:8.5,color:c,fontWeight:800}}>{tokens}</div>
+                </div>
+                <svg aria-hidden="true" width="12" height="11" viewBox="0 0 24 22" style={{marginLeft:'auto',flexShrink:0}}><path d="M12 21 3 12.2C0.3 9.6 0.2 5.5 2.8 2.9c2.4-2.4 6.3-2.3 8.6.2L12 4l.6-.9c2.3-2.5 6.2-2.6 8.6-.2 2.6 2.6 2.5 6.7-.2 9.3z" fill="#ff2fae"/></svg>
+              </div>)
             return(
-            <div data-testid="step5-trial" style={{animation:'fadeUp 0.3s ease both'}}>
-              <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                <div className="ob-s5-top" style={{display:'grid',gridTemplateColumns:'1.15fr 1fr',gap:12,alignItems:'stretch'}}>
-                  {/* Extension card: animated tip feed (decorative) + manual install */}
-                  <div className="ob-ext-card" style={{borderRadius:14,padding:'12px 12px 10px',background:'linear-gradient(160deg,rgba(34,211,238,0.08),rgba(168,85,247,0.10) 60%,rgba(255,47,174,0.08))',border:'1px solid rgba(34,211,238,0.22)',textAlign:'left'}}>
-                    <div aria-hidden="true" style={{position:'relative',height:86,borderRadius:10,background:'rgba(4,10,24,0.7)',border:'1px solid rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10}}>
-                      {[{u:'100 tokens',c:'#22d3ee'},{u:'25 tokens',c:'#a78bfa'},{u:'50 tokens',c:'#ff2fae'}].map((t,i)=>(
-                        <div key={i} className="ob-ext-tip" style={{position:'absolute',left:10,right:10,top:8+i*26,height:22,borderRadius:7,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',display:'flex',alignItems:'center',gap:8,padding:'0 8px',animationDelay:`${i*0.6}s`}}>
-                          <span style={{width:12,height:12,borderRadius:'50%',background:t.c,boxShadow:`0 0 8px ${t.c}`}}/>
-                          <span style={{fontSize:10,color:'rgba(226,232,240,0.85)',fontWeight:700}}>new tip</span>
-                          <span style={{marginLeft:'auto',fontSize:10,color:t.c,fontWeight:800}}>{t.u}</span>
-                        </div>))}
+            <div data-testid="step5-trial" style={{animation:'fadeUp 0.3s ease both',display:'flex',flexDirection:'column',gap:8,padding:'0 4px'}}>
+              {/* Hero: animated extension promo */}
+              <div className="ob-ext-card" style={{position:'relative',borderRadius:14,padding:'12px 14px',background:'linear-gradient(135deg,rgba(34,211,238,0.07),rgba(168,85,247,0.12) 55%,rgba(255,47,174,0.10))',border:'1px solid rgba(168,85,247,0.35)',boxShadow:'0 0 28px rgba(168,85,247,0.15)'}}>
+                <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:14,alignItems:'center'}}>
+                  <div aria-hidden="true" style={{position:'relative',height:150,borderRadius:12,background:'linear-gradient(160deg,rgba(14,20,44,0.9),rgba(40,16,70,0.9))',border:'1px solid rgba(168,85,247,0.35)',boxShadow:'0 0 30px rgba(236,72,153,0.25)',overflow:'hidden',padding:'9px'}}>
+                    <div style={{height:14,display:'flex',alignItems:'center',gap:4,marginBottom:7}}>
+                      {['#ff5f57','#febc2e','#28c840'].map(c=>(<span key={c} style={{width:6,height:6,borderRadius:'50%',background:c,opacity:0.8}}/>))}
                     </div>
-                    {extConnected?(
-                      <div data-testid="ext-connected" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:40,borderRadius:11,border:'1px solid rgba(74,222,128,0.45)',background:'rgba(74,222,128,0.08)',color:'#86efac',fontSize:13,fontWeight:900}}>✓ Extension connected</div>
-                    ):(
-                      <>
-                        <a href="/camcash-extension.zip" download="camcash-extension.zip" data-testid="ext-download" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:40,borderRadius:11,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',color:'#fff',fontSize:13,fontWeight:900,textDecoration:'none',boxShadow:'0 0 18px rgba(33,230,243,0.2)'}}>⬇ Download CamCash Extension</a>
-                        <ol style={{margin:'8px 0 0',paddingLeft:16,fontSize:10.5,color:'rgba(148,163,184,0.85)',lineHeight:1.5}}>
-                          <li>Unzip the download.</li>
-                          <li>Open chrome://extensions and turn on Developer mode.</li>
-                          <li>Click Load unpacked and choose the unzipped folder.</li>
-                        </ol>
-                        <div style={{fontSize:10,color:'rgba(148,163,184,0.7)',marginTop:6}}>Optional — you can add it later.</div>
-                      </>
-                    )}
+                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      {tipCard('#22d3ee','new tip!','100 tokens',0)}
+                      {tipCard('#a78bfa','new tip!','25 tokens',1)}
+                      {tipCard('#ff2fae','new tip!','50 tokens',2)}
+                    </div>
                   </div>
-
-                  <div style={{textAlign:'left',paddingTop:2}}>
-                    <div style={{display:'inline-block',fontSize:9.5,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fff',background:PINK,borderRadius:7,padding:'3px 8px',marginBottom:8}}>Recommended</div>
-                    <h1 style={{fontSize:'clamp(17px,2.4dvh,20px)',fontWeight:900,color:'#fff',lineHeight:1.2,marginBottom:8}}>Track tips automatically while you stream</h1>
-                    {proBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:'rgba(226,232,240,0.92)',marginBottom:5}}><span style={{color:CYAN,fontWeight:900}}>✓</span>{t}</div>))}
+                  <div style={{textAlign:'left'}}>
+                    <div style={{display:'inline-block',fontSize:9,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fff',background:'linear-gradient(90deg,#ff2fae,#a855f7)',borderRadius:999,padding:'3px 10px',marginBottom:8}}>Recommended</div>
+                    <h1 style={{fontSize:'clamp(18px,2.6dvh,22px)',fontWeight:900,color:'#fff',lineHeight:1.15,marginBottom:8}}>Track tips automatically while you stream</h1>
+                    {proBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:8,fontSize:11.5,color:'rgba(226,232,240,0.92)',marginBottom:4}}><span style={{color:CYAN,fontWeight:900}}>✓</span>{t}</div>))}
                   </div>
                 </div>
-
-                {trialStatus==='pro'?(
-                  <div data-testid="trial-pro" style={{borderRadius:14,border:'1px solid rgba(74,222,128,0.35)',background:'rgba(74,222,128,0.06)',padding:'16px',textAlign:'center'}}>
-                    <div style={{fontSize:16,fontWeight:900,color:'#fff',marginBottom:4}}>You’re on CamCash Pro</div>
-                    <div style={{fontSize:12,color:'rgba(203,213,225,0.85)',marginBottom:12}}>Full history and every insight are unlocked.</div>
-                    <OBBtn onClick={enterDashboard}>Enter CamCash →</OBBtn>
-                  </div>
-                ):(
-                <div className="ob-s5-bottom" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'stretch'}}>
-                  {/* Trial card: state from existing subscription data */}
-                  <div data-testid="trial-card" style={{borderRadius:14,border:'1px solid rgba(167,139,250,0.4)',background:'rgba(255,255,255,0.02)',padding:'12px 12px 14px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
-                    {trialStatus==='trialing'?(<>
-                      <div style={{fontSize:16,fontWeight:900,color:'#fff'}}>Your Pro trial is active</div>
-                      <div style={{fontSize:11,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>Ends {new Date(billing.trialEndsAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · then $9.99/month</div>
-                      <OBBtn onClick={enterDashboard}>Enter CamCash →</OBBtn>
-                    </>):(<>
-                      {trialStatus==='eligible'?(<>
-                        <div style={{fontSize:26,fontWeight:900,color:'#fff'}}><span style={{color:CYAN}}>$0</span> today</div>
-                        <div style={{fontSize:20,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginTop:2}}>{TRIAL_DAYS} days free</div>
-                        <div style={{fontSize:10.5,color:'rgba(148,163,184,0.8)',margin:'4px 0 10px'}}>Then ${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
-                        <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:46,fontSize:13.5}}>{`Start my ${TRIAL_DAYS}-day Pro trial →`}</OBBtn>
-                      </>):(<>
-                        <div style={{fontSize:16,fontWeight:900,color:'#fff'}}>Upgrade to Pro</div>
-                        <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
-                        <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:46,fontSize:13.5}}>Upgrade to Pro →</OBBtn>
-                      </>)}
-                    </>)}
-                  </div>
-
-                  {/* Free: only what is enforced today */}
-                  <div data-testid="free-column" style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.02)',padding:'12px 12px 14px',textAlign:'left'}}>
-                    <div style={{fontSize:12,fontWeight:900,color:'#fff',marginBottom:7}}>Continue with Free</div>
-                    {freeBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:6,fontSize:10.5,color:'rgba(203,213,225,0.85)',marginBottom:4,lineHeight:1.35}}><span style={{color:'#4ade80',fontWeight:900}}>✓</span>{t}</div>))}
-                    <button onClick={handleChooseFree} style={{marginTop:6,width:'100%',height:34,borderRadius:10,border:'1px solid rgba(148,163,184,0.35)',background:'transparent',color:'rgba(226,232,240,0.9)',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>Continue with Free</button>
-                  </div>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginTop:10}}>
+                  {extConnected?(
+                    <div data-testid="ext-connected" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:38,width:'min(440px,100%)',borderRadius:10,border:'1px solid rgba(74,222,128,0.45)',background:'rgba(74,222,128,0.08)',color:'#86efac',fontSize:13,fontWeight:900}}>✓ Extension connected</div>
+                  ):(<>
+                    <a href="/camcash-extension.zip" download="camcash-extension.zip" data-testid="ext-download" onClick={()=>track('extension_download_clicked',{source_page:'onboarding'})} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:38,width:'min(440px,100%)',borderRadius:10,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',color:'#fff',fontSize:13,fontWeight:900,textDecoration:'none',boxShadow:'0 0 20px rgba(236,72,153,0.3)'}}>⬇ Download CamCash Extension</a>
+                    <div style={{fontSize:9.5,color:'rgba(148,163,184,0.85)',marginTop:6,textAlign:'center',lineHeight:1.4}}>Unzip it, open chrome://extensions, turn on Developer mode, then Load unpacked. Optional — you can add it later.</div>
+                  </>)}
                 </div>
-                )}
               </div>
+
+              {/* Bottom: trial (left) and Free (right) */}
+              {trialStatus==='pro'?(
+                <div data-testid="trial-pro" style={{borderRadius:14,border:'1px solid rgba(74,222,128,0.35)',background:'rgba(74,222,128,0.06)',padding:'12px',textAlign:'center'}}>
+                  <div style={{fontSize:15,fontWeight:900,color:'#fff',marginBottom:4}}>You’re on CamCash Pro</div>
+                  <div style={{fontSize:11,color:'rgba(203,213,225,0.85)',marginBottom:10}}>Full history and every insight are unlocked.</div>
+                  <OBBtn onClick={enterDashboard} style={{height:40,fontSize:13}}>Enter CamCash →</OBBtn>
+                </div>
+              ):(
+              <div className="ob-s5-bottom" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,alignItems:'stretch'}}>
+                <div data-testid="trial-card" style={{borderRadius:14,border:'1px solid rgba(34,211,238,0.22)',background:'rgba(4,10,24,0.6)',padding:'12px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                  {trialStatus==='trialing'?(<>
+                    <div style={{fontSize:15,fontWeight:900,color:'#fff'}}>Your Pro trial is active</div>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>Ends {new Date(billing.trialEndsAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · then ${PRO_MONTHLY_PRICE}/month</div>
+                    <OBBtn onClick={enterDashboard} style={{height:40,fontSize:13}}>Enter CamCash →</OBBtn>
+                  </>):trialStatus==='eligible'?(<>
+                    <div style={{fontSize:24,fontWeight:900,color:'#fff',lineHeight:1.1}}><span style={{color:CYAN}}>$0</span> today</div>
+                    <div style={{fontSize:18,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginTop:2}}>{TRIAL_DAYS} days free</div>
+                    <div style={{fontSize:10,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>Then ${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
+                    <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:40,fontSize:13}}>{`Start my ${TRIAL_DAYS}-day Pro trial →`}</OBBtn>
+                  </>):(<>
+                    <div style={{fontSize:15,fontWeight:900,color:'#fff'}}>Upgrade to Pro</div>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
+                    <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:40,fontSize:13}}>Upgrade to Pro →</OBBtn>
+                  </>)}
+                </div>
+
+                <div data-testid="free-column" style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(4,10,24,0.6)',padding:'12px',textAlign:'left',display:'flex',flexDirection:'column'}}>
+                  <div style={{fontSize:12.5,fontWeight:900,color:'#fff',marginBottom:6,textAlign:'center'}}>Continue with Free</div>
+                  {freeBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:6,fontSize:10.5,color:'rgba(203,213,225,0.88)',marginBottom:3,lineHeight:1.35}}><span style={{color:'#4ade80',fontWeight:900}}>✓</span>{t}</div>))}
+                  <button onClick={handleChooseFree} style={{marginTop:'auto',width:'100%',height:32,borderRadius:9,border:'1px solid rgba(148,163,184,0.35)',background:'transparent',color:'rgba(226,232,240,0.9)',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>Continue with Free</button>
+                </div>
+              </div>
+              )}
             </div>
           )})()}
 

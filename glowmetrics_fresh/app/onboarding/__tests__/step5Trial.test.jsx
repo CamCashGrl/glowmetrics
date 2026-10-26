@@ -128,10 +128,9 @@ describe('Step 5 · trial state comes from existing subscription data', () => {
   test('Free column lists only the limits the product enforces', async () => {
     await toStep5()
     const col = screen.getByTestId('free-column')
-    expect(col).toHaveTextContent('Full history on your primary platform')
-    expect(col).toHaveTextContent('Other platforms: most recent 31 days')
-    expect(col).toHaveTextContent('Up to 3 platforms (1 primary + 2 secondary)')
-    expect(col).toHaveTextContent('Top 3 fans in platform insights')
+    expect(col).toHaveTextContent('1 platform with full history')
+    expect(col).toHaveTextContent('Other platforms: 31-day view')
+    expect(col).toHaveTextContent('Top 3 fans visible')
     expect(col).toHaveTextContent('Live Mode included')
   }, 30000)
 })
@@ -156,5 +155,22 @@ describe('Step 5 · extension state', () => {
     await toStep5()
     expect(screen.getByRole('button', { name: 'Start my 7-day Pro trial →' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Continue with Free' })).toBeEnabled()
+  }, 30000)
+})
+
+describe('Step 5 · tracking and Stripe trial wiring', () => {
+  test('download click is tracked with the existing extension event', async () => {
+    const { track } = require('../../../lib/track')
+    await toStep5()
+    fireEvent.click(screen.getByRole('link', { name: /Download CamCash Extension/ }))
+    expect(track).toHaveBeenCalledWith('extension_download_clicked', { source_page: 'onboarding' })
+  }, 30000)
+
+  test('trial click posts to the Stripe checkout route with the standard monthly plan', async () => {
+    await toStep5()
+    fireEvent.click(screen.getByRole('button', { name: 'Start my 7-day Pro trial →' }))
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/stripe/checkout', expect.objectContaining({ method: 'POST' })))
+    const body = JSON.parse(global.fetch.mock.calls.find(([u]) => u === '/api/stripe/checkout')[1].body)
+    expect(body).toEqual({ plan_type: 'standard_monthly' })
   }, 30000)
 })
