@@ -33,7 +33,7 @@ import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
-import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD } from '../../lib/creatorTimezone'
+import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD, zonedMonthKey, zonedParts } from '../../lib/creatorTimezone'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -96,6 +96,12 @@ const glassCard = {
   border: "1px solid rgba(255,255,255,0.08)",
   backdropFilter: "blur(20px)",
   boxShadow: "0 0 40px rgba(59,130,246,0.15), 0 0 80px rgba(236,72,153,0.08)",
+}
+
+// 'YYYY-MM' → the calendar month before it ('2026-01' → '2025-12').
+const prevMonthKey = (key) => {
+  const [y, m] = key.split('-').map(Number)
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
 }
 
 const formatImportDate = (iso) => {
@@ -2571,15 +2577,15 @@ const stopImportMessageRotation = () => {
 
   // Build platformTimes from INDIVIDUAL TIPS (not session start time)
   // so hour/day reflects when money actually came in, not when the session started
-  // Use UTC to match the database timestamps
+  // On the creator's clock (profiles.timezone), like the analytics engine.
   const UTC_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips], () => {
+  const platformTimes = memoOn(derivedCacheRef.current, 'platformTimes', [tips, creatorTz], () => {
     const pt = {}
     tips.forEach(t => {
       if (!pt[t.platform]) pt[t.platform] = { hours: {}, days: {} }
       const dt = new Date(t.date_time || t.dateRaw)
-      const hour = dt.getUTCHours()
-      const day = UTC_DAYS_LONG[dt.getUTCDay()]
+      const hour = zonedHour(dt, creatorTz)
+      const day = UTC_DAYS_LONG[zonedDay(dt, creatorTz)]
       pt[t.platform].hours[hour] = (pt[t.platform].hours[hour] || 0) + (t.usd || 0)
       pt[t.platform].days[day]   = (pt[t.platform].days[day]   || 0) + (t.usd || 0)
     })
@@ -3079,14 +3085,13 @@ const stopImportMessageRotation = () => {
   void minuteTick // ensures re-render when minute changes
 
   // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
-  const _momNow = new Date()
-  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
+  // Months are the creator's calendar months (profiles.timezone), matching monthlyData.
+  const _momMonthKey = zonedMonthKey(new Date(), creatorTz)
   const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
-    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
-      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
+    derivedCacheRef.current, 'momentum', [tips, _momMonthKey, creatorTz], () => {
+      const momPrevKey = prevMonthKey(_momMonthKey)
+      const momThisRev = tips.reduce((s, t) => zonedMonthKey(t.date_time || t.dateRaw, creatorTz) === _momMonthKey ? s + (t.usd || 0) : s, 0)
+      const momPrevRev = tips.reduce((s, t) => zonedMonthKey(t.date_time || t.dateRaw, creatorTz) === momPrevKey ? s + (t.usd || 0) : s, 0)
       const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
       return { momThisRev, momPrevRev, growthPct }
     })
@@ -3447,11 +3452,10 @@ const stopImportMessageRotation = () => {
               // ── empty state — show null; DashboardProgressCard above covers zero-data ──
               if (tips.length === 0) return null
 
-              const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const thisKey = zonedMonthKey(new Date(), creatorTz)
+              const prevKey = prevMonthKey(thisKey)
+              const thisMonthRev = tips.filter(t => zonedMonthKey(t.date_time || t.dateRaw, creatorTz) === thisKey).reduce((s, t) => s + (t.usd || 0), 0)
+              const prevMonthRev = tips.filter(t => zonedMonthKey(t.date_time || t.dateRaw, creatorTz) === prevKey).reduce((s, t) => s + (t.usd || 0), 0)
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
               // First-party comparison only (the creator's own previous month).
@@ -6125,13 +6129,13 @@ const stopImportMessageRotation = () => {
           const spyFans = analytics?.spyShowFans || []
           const bestMo = analytics?.bestMonth
           const totalUSD = analytics?.totalUSD || 0
-          const now = new Date()
-          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+          const nowParts = zonedParts(new Date(), creatorTz)
+          const thisMonthKey = zonedMonthKey(new Date(), creatorTz)
           const thisMonth = monthly.find(m => m.month === thisMonthKey)
           const thisMonthUSD = thisMonth?.usd || 0
           const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
-          const dayOfMonth = now.getUTCDate()
+          const daysInMonth = new Date(Date.UTC(nowParts.year, nowParts.month, 0)).getUTCDate()
+          const dayOfMonth = nowParts.day
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
@@ -6155,7 +6159,7 @@ const stopImportMessageRotation = () => {
                     <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#10B981,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🎯</div>
                     <div>
                       <div style={{ fontSize:16, fontWeight:800, color:C.white }}>Monthly Goal</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{now.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+                      <div style={{ fontSize:12, color:C.muted }}>{new Date().toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:creatorTz})}</div>
                     </div>
                   </div>
                   <button onClick={() => setShowGoalEditor(v => !v)} style={{ padding:"6px 14px", borderRadius:8, background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.35)", color:C.green, fontSize:12, fontWeight:700, cursor:"pointer" }}>
