@@ -1,21 +1,10 @@
 /**
  * Regression tests for the Stripe/Supabase subscription-drift check.
- *
- * This exists so the class of bug found in the Sept 19 audit (Supabase
- * silently disagreeing with Stripe's real subscription status) gets caught
- * automatically instead of by a human happening to look. Must:
- *   - flag a profile whose subscription_status doesn't match Stripe's status
- *   - flag a profile whose plan doesn't match what that Stripe status implies
- *   - never flag a profile that's fully in sync
- *   - never write anything — read-only
+ * Trialing is intentionally capped and therefore maps to plan=free; only
+ * Stripe active maps to paid Pro.
  */
 jest.mock('next/server', () => ({ NextResponse: { json: (body, init) => ({ body, init }) } }))
 
-// route.js does `const stripe = new Stripe(...)` at module top level, so the
-// mock constructor runs during `import { GET } from '../route.js'` below —
-// before any const declared in this file's own body would be initialized
-// (import hoisting runs first). Keeping the retrieve mock self-contained in
-// the factory, and hanging it off the mock constructor, sidesteps that TDZ.
 jest.mock('stripe', () => {
   const StripeMock = jest.fn().mockImplementation(() => ({
     subscriptions: { retrieve: StripeMock.__mockRetrieve },
@@ -81,7 +70,7 @@ describe('check-subscription-drift cron', () => {
 
   test('a fully in-sync profile is never flagged', async () => {
     mockProfilesTable([
-      { id: 'u3', plan: 'pro', subscription_status: 'trialing', stripe_subscription_id: 'sub_3' },
+      { id: 'u3', plan: 'free', subscription_status: 'trialing', stripe_subscription_id: 'sub_3' },
       { id: 'u4', plan: 'free', subscription_status: 'canceled', stripe_subscription_id: 'sub_4' },
     ])
     mockRetrieve
@@ -92,7 +81,18 @@ describe('check-subscription-drift cron', () => {
 
     expect(res.body.checked).toBe(2)
     expect(res.body.mismatches).toHaveLength(0)
-    expect(global.fetch).not.toHaveBeenCalled() // no alert sent when nothing's wrong
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  test('trialing with plan=pro is flagged as entitlement drift', async () => {
+    mockProfilesTable([
+      { id: 'u_trial', plan: 'pro', subscription_status: 'trialing', stripe_subscription_id: 'sub_trial' },
+    ])
+    mockRetrieve.mockResolvedValue({ status: 'trialing' })
+
+    const res = await GET()
+    expect(res.body.mismatches).toHaveLength(1)
+    expect(res.body.mismatches[0].expectedPlan).toBe('free')
   })
 
   test('no profiles with a Stripe subscription: reports zero checked, never calls Stripe', async () => {

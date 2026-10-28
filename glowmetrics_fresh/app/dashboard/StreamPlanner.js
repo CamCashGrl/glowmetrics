@@ -15,6 +15,7 @@ import {
 // worth reconciling in a dedicated follow-up rather than blindly merged here.
 import { calculateConfidence } from "../../lib/analytics"
 import PlannedStreams from "./PlannedStreams"
+import { resolveCreatorTimeZone, zonedHour, zonedDay, zonedMonthKey, zonedParts } from "../../lib/creatorTimezone"
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DESIGN TOKENS
@@ -50,14 +51,15 @@ const localHr  = (h) => { const x = ((h % 24) + 24) % 24; return `${((x + 11) % 
 // UTC day index → local weekday name (2024-01-07 is a Sunday)
 const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 const localDay = (d) => DAY_NAMES[((d % 7) + 7) % 7] ?? "—"
-const todayLocalName = () => new Date().toLocaleDateString("en-US", { weekday: "long" })
+// Creator-local (profiles.timezone via the dashboard's creatorTz), not the device clock.
+const todayLocalName = (tz) => new Date().toLocaleDateString("en-US", { weekday: "long", timeZone: tz })
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PURE DATA FUNCTIONS (no hooks)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Group tips into sessions — tips within 4hr window = same session
-function groupIntoSessions(tips) {
+function groupIntoSessions(tips, tz) {
   if (!tips?.length) return []
   const sorted = [...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time))
   const raw = []
@@ -85,7 +87,7 @@ function groupIntoSessions(tips) {
       // to them as local wall-clock time, and the analytics engine buckets
       // the same way (toLocalDow/toLocalHour), so the planner and the rest of
       // the dashboard name the same window identically.
-      day: s.start.getDay(), hour: s.start.getHours(),
+      day: zonedDay(s.start, tz), hour: zonedHour(s.start, tz),
       platform:  Object.entries(pc).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
       platforms: Object.keys(pc),
       tips: s.tips,
@@ -94,8 +96,8 @@ function groupIntoSessions(tips) {
 }
 
 // Returns { [platform]: { usdPerHr, tokensPerHr, avgTip, sessionCount, bestDay, bestHour } }
-function platformEfficiency(tips) {
-  const sessions = groupIntoSessions(tips)
+function platformEfficiency(tips, tz) {
+  const sessions = groupIntoSessions(tips, tz)
   const acc = {}
   sessions.forEach((s) => {
     if (!s.platform) return
@@ -122,8 +124,8 @@ function platformEfficiency(tips) {
 }
 
 // Returns [{ day, hour, avgUsdPerHr, totalUsd, sessionCount, confidence, topPlatform, newTipperRate }]
-function bestWindows(tips) {
-  const sessions = groupIntoSessions(tips)
+function bestWindows(tips, tz) {
+  const sessions = groupIntoSessions(tips, tz)
   const firstSeen = {}
   ;[...tips].sort((a, b) => new Date(a.date_time) - new Date(b.date_time)).forEach((t) => {
     const u = t.username || "unknown"
@@ -190,7 +192,7 @@ function untestedWindows(tips, allWindows) {
 }
 
 // Whale = 500+ tokens lifetime
-function detectWhales(tips) {
+function detectWhales(tips, tz) {
   const byUser = {}
   tips.forEach((t) => {
     const u = t.username || "unknown"
@@ -204,7 +206,7 @@ function detectWhales(tips) {
     const slots = {}
     u.tips.forEach((t) => {
       const dt = new Date(t.date_time)
-      const k  = `${dt.getDay()}-${dt.getHours()}`
+      const k  = `${zonedDay(dt, tz)}-${zonedHour(dt, tz)}`
       slots[k] = (slots[k] || 0) + 1
     })
     const top      = Object.entries(slots).sort((a, b) => b[1] - a[1])[0]
@@ -234,11 +236,11 @@ function multiStreamAnalysis(sessions) {
 }
 
 // Last 6 months: [{ month, totalUsd, momChange }]
-function monthlyTotals(tips) {
+function monthlyTotals(tips, tz) {
   const map = {}
   tips.forEach((t) => {
     const dt = new Date(t.date_time)
-    const k  = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`
+    const k  = zonedMonthKey(dt, tz)
     map[k]   = (map[k] || 0) + (parseFloat(t.usd) || 0)
   })
   const sorted = Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
@@ -253,11 +255,11 @@ function monthlyTotals(tips) {
 }
 
 // % of tips that fall within recommended windows (±1 hr tolerance)
-function planMatchScore(tips, recommendedWindows) {
+function planMatchScore(tips, recommendedWindows, tz) {
   if (!tips.length || !recommendedWindows.length) return 0
   const inPlan = tips.filter((t) => {
     const dt = new Date(t.date_time)
-    const d = dt.getDay(), h = dt.getHours()
+    const d = zonedDay(dt, tz), h = zonedHour(dt, tz)
     return recommendedWindows.some((w) => w.day === d && Math.abs(w.hour - h) <= 1)
   })
   return Math.round((inPlan.length / tips.length) * 100)
@@ -370,7 +372,7 @@ const GRID_LEGEND = [
   ["weak","Proven weak"],["untested","Untested"],["promising","Under-tested promising"],["whale","Whale window"],
 ]
 
-function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
+function PlanTab({ tips, windows, whales, prefs, savePrefs, tz }) {
   const [showCustomize, setShow] = useState(false)
   const [whyOpen, setWhyOpen]    = useState(null)
 
@@ -393,7 +395,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
   }, [prefs.blocks])
 
   const weekPlan = useMemo(() => {
-    const today = todayLocalName()
+    const today = todayLocalName(tz)
     const mode  = prefs.mode
     return Array.from({ length: 7 }, (_, day) => {
       const dayName = localDay(day)
@@ -416,12 +418,12 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
   const tonight = weekPlan.find((d) => d.isToday && !d.off && d.window)
 
   const whaleTonight = useMemo(() => {
-    const today = new Date().getDay()
+    const today = zonedDay(new Date(), tz)
     const active = whales.filter((w) => w.bestDay === today && w.daysSince < 14)
     return active.length ? { hour: active[0].bestHour, count: active.length } : null
-  }, [whales])
+  }, [whales, tz])
 
-  const sessions       = useMemo(() => groupIntoSessions(tips), [tips])
+  const sessions       = useMemo(() => groupIntoSessions(tips, tz), [tips, tz])
   const avgSessionUsd  = sessions.length ? sessions.reduce((n, s) => n + s.totalUsd, 0) / sessions.length : 0
 
   const whyReasons = (row) => {
@@ -639,7 +641,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs }) {
 // WHALES TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function WhalesTab({ tips, whales }) {
+function WhalesTab({ tips, whales, tz }) {
   const [sortBy, setSortBy] = useState("value")
 
   const sorted = useMemo(() => {
@@ -650,12 +652,12 @@ function WhalesTab({ tips, whales }) {
   }, [whales, sortBy])
 
   const whaleTonight = useMemo(() => {
-    const today = new Date().getDay()
+    const today = zonedDay(new Date(), tz)
     const active = whales.filter((w) => w.bestDay === today && w.daysSince < 14)
     if (!active.length) return null
     const h = active[0].bestHour
     return { startHr: h, count: active.length }
-  }, [whales])
+  }, [whales, tz])
 
   // Whale visit frequency per grid cell
   const whaleGrid = useMemo(() => {
@@ -665,12 +667,12 @@ function WhalesTab({ tips, whales }) {
       const tok = parseFloat(t.tokens) || 0
       if (!whales.some((w) => w.username === (t.username || "unknown"))) return
       const dt = new Date(t.date_time)
-      const k  = `${dt.getDay()}-${Math.floor(dt.getHours() / 4)}`
+      const k  = `${zonedDay(dt, tz)}-${Math.floor(zonedHour(dt, tz) / 4)}`
       freq[k] = (freq[k] || 0) + 1
       if (freq[k] > max) max = freq[k]
     })
     return { freq, max }
-  }, [tips, whales])
+  }, [tips, whales, tz])
 
   const totalRevenue = tips.reduce((n, t) => n + (parseFloat(t.usd) || 0), 0)
   const top3Share = totalRevenue > 0
@@ -795,14 +797,14 @@ function WhalesTab({ tips, whales }) {
 // PROGRESS TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ProgressTab({ tips, windows, prefs }) {
-  const sessions = useMemo(() => groupIntoSessions(tips), [tips])
+function ProgressTab({ tips, windows, prefs, tz }) {
+  const sessions = useMemo(() => groupIntoSessions(tips, tz), [tips, tz])
   const topWindows = useMemo(() => windows.filter((w) => w.sessionCount >= 2).slice(0, 10), [windows])
 
-  const score = useMemo(() => planMatchScore(tips, topWindows), [tips, topWindows])
+  const score = useMemo(() => planMatchScore(tips, topWindows, tz), [tips, topWindows, tz])
 
   const breakdown = useMemo(() => {
-    const platEff   = platformEfficiency(tips)
+    const platEff   = platformEfficiency(tips, tz)
     const bestPlat  = Object.entries(platEff).sort((a, b) => b[1].usdPerHr - a[1].usdPerHr)[0]?.[0]
     const platPct   = bestPlat && tips.length
       ? Math.round(tips.filter((t) => t.platform === bestPlat).length / tips.length * 100)
@@ -832,10 +834,12 @@ function ProgressTab({ tips, windows, prefs }) {
   const liftChart = useMemo(() => {
     const weeks = {}
     sessions.forEach((s) => {
-      const d   = s.start
-      const dow = d.getDay()
-      const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (dow === 0 ? 6 : dow - 1))
-      const k   = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, "0")}-${String(mon.getDate()).padStart(2, "0")}`
+      // Week starts Monday on the creator's calendar. `mon` is a UTC-midnight
+      // marker for that local date (used only as a key/sort value).
+      const p   = zonedParts(s.start, tz)
+      const dow = p.weekday
+      const mon = new Date(Date.UTC(p.year, p.month - 1, p.day - (dow === 0 ? 6 : dow - 1)))
+      const k   = mon.toISOString().slice(0, 10)
       if (!weeks[k]) weeks[k] = { on: [], off: [], ts: mon.getTime() }
       weeks[k][isOnPlan(s) ? "on" : "off"].push(s.usdHr)
     })
@@ -946,7 +950,7 @@ function ProgressTab({ tips, windows, prefs }) {
 
 const TABS = [{ id:"plan", label:"Plan" }, { id:"whales", label:"Whales" }, { id:"progress", label:"Progress" }]
 
-function StreamPlannerContent({ tips, isPro }) {
+function StreamPlannerContent({ tips, isPro, tz }) {
   const [tab, setTab]   = useState("plan")
   const [prefs, setPrefs] = useState(DEFAULT_PREFS)
 
@@ -962,15 +966,15 @@ function StreamPlannerContent({ tips, isPro }) {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(next)) } catch {}
   }, [])
 
-  const windows = useMemo(() => bestWindows(tips),  [tips])
-  const whales  = useMemo(() => detectWhales(tips), [tips])
+  const windows = useMemo(() => bestWindows(tips, tz),  [tips, tz])
+  const whales  = useMemo(() => detectWhales(tips, tz), [tips, tz])
 
   // Overall confidence in the dataset as a whole (spec Step 3) — drives
   // whether a personalized Peak Earning Window claim is shown at all, using
   // the planner's own valid-session-count/streamed-hours inputs against the
   // single calculateConfidence() source of truth.
   const { level: confidenceLevel, label: confidenceLabel } = useMemo(() => {
-    const sessions = groupIntoSessions(tips)
+    const sessions = groupIntoSessions(tips, tz)
     const validSessions = sessions.filter((s) => s.tips.length >= 2)
     const streamedHours = validSessions.reduce((n, s) => n + (s.durationHrs || 0), 0)
     return calculateConfidence(validSessions.length, streamedHours)
@@ -1022,9 +1026,9 @@ function StreamPlannerContent({ tips, isPro }) {
         ))}
       </div>
 
-      {tab === "plan"     && <PlanTab     tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} />}
-      {tab === "whales"   && <WhalesTab   tips={tips} whales={whales} />}
-      {tab === "progress" && <ProgressTab tips={tips} windows={windows} prefs={prefs} />}
+      {tab === "plan"     && <PlanTab     tips={tips} windows={windows} whales={whales} prefs={prefs} savePrefs={savePrefs} tz={tz} />}
+      {tab === "whales"   && <WhalesTab   tips={tips} whales={whales} tz={tz} />}
+      {tab === "progress" && <ProgressTab tips={tips} windows={windows} prefs={prefs} tz={tz} />}
     </div>
   )
 }
@@ -1036,7 +1040,8 @@ function StreamPlannerContent({ tips, isPro }) {
 // inside StreamPlannerContent (Very Low/Low/Medium/High) now decides what
 // personalized claim, if any, is shown — the Pro teaser only appears at
 // Medium confidence, next to a real (not fabricated) personalized result.
-export default function StreamPlanner({ tips = [], isPro = false, planned = null }) {
+export default function StreamPlanner({ tips = [], isPro = false, planned = null, tz = null }) {
+  tz = resolveCreatorTimeZone(tz)
   // Saved dated plans are available whatever the tip history size.
   const plans = planned ? <div style={{ background:BG, padding:"24px 24px 0" }}><PlannedStreams {...planned} /></div> : null
   if (tips.length < 20) {
@@ -1053,5 +1058,5 @@ export default function StreamPlanner({ tips = [], isPro = false, planned = null
     </>)
   }
 
-  return <>{plans}<StreamPlannerContent tips={tips} isPro={isPro} /></>
+  return <>{plans}<StreamPlannerContent tips={tips} isPro={isPro} tz={tz} /></>
 }

@@ -1,6 +1,8 @@
 "use client"
 import { useState } from "react"
 import Button from "../../components/ui/Button"
+import TimezoneSelect from "../../components/TimezoneSelect"
+import { timeZoneLabel } from "../../lib/creatorTimezone"
 
 const C = {
   bg: "#05070f", card: "#0d1322", border: "#1e2d45",
@@ -52,7 +54,40 @@ const NAV = [
   },
 ]
 
-export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false }) {
+// Compact creator-timezone row under the plan badge. The saved
+// profiles.timezone is the dashboard's single clock; changing it here saves
+// it and re-runs analytics. A failed save keeps the old value and shows a
+// retryable inline error.
+function CreatorTimezoneRow({ tz, onChange }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const pick = async (next) => {
+    if (next === tz) { setEditing(false); return }
+    setSaving(true); setError("")
+    const res = await onChange(next)
+    setSaving(false)
+    if (res?.error) setError("Couldn't save your timezone. Try again.")
+    else setEditing(false)
+  }
+  return (
+    <div data-testid="sidebar-timezone" style={{ marginBottom: 8, padding: "0 4px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, fontSize: 11 }}>
+        <span title={tz} style={{ color: "#7d8aa3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          Timezone · <span style={{ color: C.text, fontWeight: 600 }}>{timeZoneLabel(tz)}</span>
+        </span>
+        <button onClick={() => { setEditing(e => !e); setError("") }} disabled={saving}
+          style={{ flexShrink: 0, background: "none", border: "none", padding: 0, fontSize: 11, fontWeight: 700, color: C.cyan, cursor: saving ? "wait" : "pointer" }}>
+          {saving ? "Saving…" : editing ? "Cancel" : "Change"}
+        </button>
+      </div>
+      {editing && <div style={{ marginTop: 6 }}><TimezoneSelect value={tz} onPick={pick} fontSize={11} /></div>}
+      {error && <div role="alert" style={{ marginTop: 4, fontSize: 10.5, color: "#F87171" }}>{error}</div>}
+    </div>
+  )
+}
+
+export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro = false, creatorTz = null, onChangeTimezone = null }) {
   const [hoveredId, setHoveredId] = useState(null)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -142,6 +177,8 @@ export default function Sidebar({ activeTab, onTabChange, user, onSignOut, isPro
           ✦ Upgrade to Pro
         </Button>
       )}
+
+      {creatorTz && onChangeTimezone && <CreatorTimezoneRow tz={creatorTz} onChange={onChangeTimezone} />}
 
       {/* User footer — email + sign out share one compact row */}
       {user && (

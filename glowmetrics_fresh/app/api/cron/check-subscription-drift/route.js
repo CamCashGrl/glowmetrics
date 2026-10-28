@@ -2,18 +2,14 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 
-// Cron endpoint — must run fresh on every invocation (real DB state, never
-// a build-time snapshot). Same reasoning as the other cron routes.
 export const dynamic = 'force-dynamic'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
-// Mirrors the plan-gate logic in app/api/stripe/webhook/route.js — a
-// subscription only earns 'pro' while it's active or trialing; everything
-// else (past_due, unpaid, canceled, incomplete_expired, ...) should read
-// as 'free'/that Stripe status, never as a healthy 'active'.
+// Only a paid active subscription earns full Pro. A Stripe trial stays on the
+// capped trial entitlement path even though it has a subscription record.
 function expectedPlanFor(stripeStatus) {
-  return stripeStatus === 'active' || stripeStatus === 'trialing' ? 'pro' : 'free'
+  return stripeStatus === 'active' ? 'pro' : 'free'
 }
 
 async function sendDriftAlert(mismatches) {
@@ -40,13 +36,6 @@ async function sendDriftAlert(mismatches) {
   }
 }
 
-// Catches the class of bug found in the Sept 19 audit: the webhook writing
-// a Stripe status into Supabase incorrectly (or a webhook delivery being
-// missed entirely) leaves profiles.subscription_status silently wrong until
-// someone happens to look. This compares Stripe's live status against what
-// Supabase has on file for every profile with a Stripe subscription, and
-// alerts instead of relying on a human noticing during an unrelated task.
-// Read-only — reports mismatches, never writes anything.
 export async function GET() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -76,8 +65,6 @@ export async function GET() {
     try {
       sub = await stripe.subscriptions.retrieve(profile.stripe_subscription_id)
     } catch (e) {
-      // Deleted/invalid subscription IDs are a separate, lower-urgency data
-      // hygiene issue — log but don't fail the whole run over one bad row.
       console.error(`[cron/check-subscription-drift] could not retrieve ${profile.stripe_subscription_id}:`, e.message)
       continue
     }

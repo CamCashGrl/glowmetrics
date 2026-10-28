@@ -87,7 +87,7 @@ export default function HomePage() {
           <a href="/blog/best-cam-model-tools">Best Cam Model Tools</a>
           <a href="/guides/chaturbate-earnings-tracker">Chaturbate Earnings Tracker</a>
           <a href="/guides/cam-model-analytics">Cam Model Analytics Guide</a>
-          <a href="/guides/best-time-to-stream-chaturbate">Best Time to Stream on Chaturbate</a>
+          <a href="/guides/chaturbate-best-hours">Best Time to Stream on Chaturbate</a>
         </nav>
       </div>
 

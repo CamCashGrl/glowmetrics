@@ -41,6 +41,14 @@ export async function POST(request) {
       )
     }
 
+    // Billing writes and billing analytics are server-owned. Bind every write
+    // to the authenticated user above; never accept a user id from the client.
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    )
+
     // Get or create customer — profiles is the single source of truth
     let customerId
     const { data: profile, error: profileError } = await supabase
@@ -65,11 +73,6 @@ export async function POST(request) {
       // stripe_customer_id is a server-only billing column (browser roles have
       // no UPDATE on it — migration 20261010), so it is written with the
       // service role, scoped to the authenticated caller's own id.
-      const admin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-        { auth: { persistSession: false, autoRefreshToken: false } }
-      )
       const { error: updateError } = await admin
         .from('profiles')
         .update({ stripe_customer_id: customerId })
@@ -148,6 +151,50 @@ export async function POST(request) {
 
     if (!session.url) {
       return NextResponse.json({ error: 'Stripe Checkout did not return a payment URL.' }, { status: 500 })
+    }
+
+    // Server-authoritative funnel tracking. Previously these tables depended on
+    // optional client tracking, so pricing/landing checkout attempts could be
+    // invisible even though Stripe customers or sessions were created.
+    const billingCycle = planType === 'standard_annual' ? 'annual' : 'monthly'
+    const planPrice = expected.amount / 100
+    const trackedAt = new Date().toISOString()
+
+    const { error: checkoutTrackError } = await admin.from('checkout_events').insert({
+      user_id: user.id,
+      session_id: session.id,
+      status: 'checkout_created',
+      plan_type: planType,
+      plan_price: planPrice,
+      billing_cycle: billingCycle,
+      stripe_session_id: session.id,
+      properties: {
+        source: 'server_checkout_route',
+        customer_id: customerId,
+        price_id: priceId,
+        trial_days: 7,
+        created_at: trackedAt,
+      },
+    })
+    if (checkoutTrackError) {
+      console.error('Checkout: failed to record checkout event', checkoutTrackError.message)
+    }
+
+    const { error: trialTrackError } = await admin.from('free_trial_events').insert({
+      user_id: user.id,
+      event_type: 'trial_checkout_created',
+      trial_days_offered: 7,
+      properties: {
+        source: 'server_checkout_route',
+        stripe_session_id: session.id,
+        customer_id: customerId,
+        plan_type: planType,
+        billing_cycle: billingCycle,
+        created_at: trackedAt,
+      },
+    })
+    if (trialTrackError) {
+      console.error('Checkout: failed to record trial attempt', trialTrackError.message)
     }
 
     return NextResponse.json({ url: session.url })

@@ -8,6 +8,7 @@
 import React, { useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { canonicalPlatform } from "../../lib/constants"
+import { zonedWallTimeToDate } from "../../lib/creatorTimezone"
 
 const PLATFORMS = ["Chaturbate", "BongaCams", "MyFreeCams"]
 // The database only accepts these exact names; the default can arrive as an
@@ -17,19 +18,21 @@ const C = { cyan: "#22D3EE", white: "#F1F5F9", text: "#94A3B8", muted: "#64748B"
 const box = { background: "rgba(8,11,22,0.72)", border: `1px solid ${C.line}`, borderRadius: 12 }
 const input = { background: "rgba(255,255,255,0.04)", border: `1px solid ${C.line}`, borderRadius: 8, color: C.white, padding: "7px 10px", fontSize: 13 }
 
-const fmt = (iso) => new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-const fmtT = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+// Times are shown and entered on the creator's clock (profiles.timezone via
+// the dashboard's creatorTz). With no tz, the device clock is used as before.
+const fmt = (iso, tz) => new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) })
+const fmtT = (iso, tz) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) })
 
 // Local date + times → ISO; an end time earlier than the start runs past midnight.
-export function planWindow(date, startTime, endTime) {
-  const start = new Date(`${date}T${startTime}`)
-  let end = new Date(`${date}T${endTime}`)
+export function planWindow(date, startTime, endTime, tz = null) {
+  const start = tz ? zonedWallTimeToDate(date, startTime, tz) : new Date(`${date}T${startTime}`)
+  let end = tz ? zonedWallTimeToDate(date, endTime, tz) : new Date(`${date}T${endTime}`)
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return null
   if (end <= start) end = new Date(end.getTime() + 86400000)
   return { start: start.toISOString(), end: end.toISOString() }
 }
 
-export default function PlannedStreams({ userId, plans = [], onChanged = () => {}, defaultPlatform = "Chaturbate" }) {
+export default function PlannedStreams({ userId, plans = [], onChanged = () => {}, defaultPlatform = "Chaturbate", tz = null }) {
   const [date, setDate] = useState("")
   const [startTime, setStartTime] = useState("20:00")
   const [endTime, setEndTime] = useState("22:00")
@@ -43,7 +46,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
   const add = async (ev) => {
     ev.preventDefault()
     setError("")
-    const w = planWindow(date, startTime, endTime)
+    const w = planWindow(date, startTime, endTime, tz)
     if (!w) { setError("Choose a date, start and end time."); return }
     if (new Date(w.start).getTime() <= Date.now()) { setError("Plans can only be added for a future time."); return }
     if (new Date(w.end) - new Date(w.start) > 12 * 3600000) { setError("A plan can be at most 12 hours long."); return }
@@ -81,7 +84,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
           <div style={{ color: C.muted, fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>UPCOMING</div>
           {upcoming.map((p) => (
             <div key={p.id} data-testid="plan-upcoming" style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "6px 0", borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.white }}>
-              <span>{fmt(p.start_at)}–{fmtT(p.end_at)} · {p.platform}</span>
+              <span>{fmt(p.start_at, tz)}–{fmtT(p.end_at, tz)} · {p.platform}</span>
               <button onClick={() => remove(p.id)} style={{ background: "none", border: "none", color: C.text, cursor: "pointer", fontSize: 12 }}>Delete</button>
             </div>
           ))}
@@ -91,7 +94,7 @@ export default function PlannedStreams({ userId, plans = [], onChanged = () => {
         <div style={{ marginTop: 10 }}>
           <div style={{ color: C.muted, fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>PAST (LOCKED)</div>
           {past.map((p) => (
-            <div key={p.id} data-testid="plan-past" style={{ padding: "6px 0", borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.text }}>{fmt(p.start_at)}–{fmtT(p.end_at)} · {p.platform}</div>
+            <div key={p.id} data-testid="plan-past" style={{ padding: "6px 0", borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.text }}>{fmt(p.start_at, tz)}–{fmtT(p.end_at, tz)} · {p.platform}</div>
           ))}
         </div>
       )}

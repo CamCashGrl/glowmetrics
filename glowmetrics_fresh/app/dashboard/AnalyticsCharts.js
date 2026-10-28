@@ -58,7 +58,8 @@ function quantile(sortedArr, q) {
 
 const fmtUSD = v => v == null ? "—" : `$${Number(v).toFixed(v >= 100 ? 0 : 2)}`
 const fmtDur = mins => mins == null ? "—" : mins < 60 ? `${Math.round(mins)}m` : `${Math.floor(mins / 60)}h ${Math.round(mins % 60)}m`
-const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+// Session dates on the creator's clock (creatorTz from the dashboard); undefined → device clock.
+const fmtDate = (iso, tz) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: tz })
 
 // ─── Empty / low-data states ──────────────────────────────────────────────────
 function EmptyState({ title = "Not enough data yet", sub = "Session diagnostics appear once you have enough recorded sessions." }) {
@@ -85,7 +86,7 @@ const RELATIONSHIP_PAIRS = [
   { id: "fans",     label: "Fans → Revenue",       xLabel: "Unique paying fans",  getX: s => s.uniqueFans,        needsKnownDuration: false, xFormat: v => `${Math.round(v)}` },
 ]
 
-function Scatter({ points, xFormat }) {
+function Scatter({ points, xFormat, tz }) {
   const W = 560, H = 240
   const ML = 54, MR = 16, MT = 14, MB = 34
   const plotW = W - ML - MR
@@ -112,7 +113,7 @@ function Scatter({ points, xFormat }) {
       <line x1={ML} x2={ML} y1={MT} y2={MT + plotH} stroke={BORDER} strokeWidth={1} />
       {points.map((p, i) => (
         <circle key={i} cx={xScale(p.x)} cy={yScale(p.y)} r={4} fill={platColor(p.platform)} fillOpacity={0.75} stroke={BG} strokeWidth={0.5}>
-          <title>{`${p.platform} · ${xFormat(p.x)} · ${fmtUSD(p.y)} · ${fmtDate(p.startTime)}`}</title>
+          <title>{`${p.platform} · ${xFormat(p.x)} · ${fmtUSD(p.y)} · ${fmtDate(p.startTime, tz)}`}</title>
         </circle>
       ))}
     </svg>
@@ -132,7 +133,7 @@ function ColorLegend({ platforms }) {
   )
 }
 
-function MetricRelationshipsCard({ sessions }) {
+function MetricRelationshipsCard({ sessions, tz }) {
   const [pairId, setPairId] = useState("duration")
   const pair = RELATIONSHIP_PAIRS.find(p => p.id === pairId)
 
@@ -159,7 +160,7 @@ function MetricRelationshipsCard({ sessions }) {
         <EmptyState sub="Need at least 3 comparable sessions to plot this relationship." />
       ) : (
         <>
-          <Scatter points={points} xFormat={pair.xFormat} />
+          <Scatter points={points} xFormat={pair.xFormat} tz={tz} />
           <ColorLegend platforms={platforms} />
         </>
       )}
@@ -276,7 +277,7 @@ function outlierReason(s, medianDuration) {
   return null
 }
 
-function OutlierCard({ sessions }) {
+function OutlierCard({ sessions, tz }) {
   const outliers = useMemo(() => {
     const timed = sessions.filter(s => !s.durationUnknown && s.usdPerHour != null)
     if (timed.length < OUTLIER_MIN_SESSIONS) return { ready: false, high: [], low: [] }
@@ -304,7 +305,7 @@ function OutlierCard({ sessions }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: platColor(s.platform), flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ color: WHITE, fontSize: 13, fontWeight: 600 }}>{s.platform} · {fmtDate(s.startTime)}</div>
+            <div style={{ color: WHITE, fontSize: 13, fontWeight: 600 }}>{s.platform} · {fmtDate(s.startTime, tz)}</div>
             <div style={{ color: MUTED, fontSize: 11.5 }}>
               {fmtDur(s.durationMinutes)} · {s.tipCount} tips · {s.uniqueFans} fan{s.uniqueFans === 1 ? "" : "s"}
             </div>
@@ -507,7 +508,7 @@ function ReliabilityCard({ allValidSessions, meaningfulSessions }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT EXPORT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AnalyticsCharts({ analytics }) {
+export default function AnalyticsCharts({ analytics, tz }) {
   const allValidSessions = analytics?.allValidSessions || []
   const meaningfulSessions = analytics?.meaningfulSessions || allValidSessions.filter(s => s.sessionQuality === "meaningful")
 
@@ -529,11 +530,11 @@ export default function AnalyticsCharts({ analytics }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 20 }}>
-        <MetricRelationshipsCard sessions={meaningfulSessions} />
+        <MetricRelationshipsCard sessions={meaningfulSessions} tz={tz} />
         <PerformanceDistributionCard sessions={meaningfulSessions} />
       </div>
 
-      <OutlierCard sessions={meaningfulSessions} />
+      <OutlierCard sessions={meaningfulSessions} tz={tz} />
       <PeriodComparisonCard sessions={meaningfulSessions} />
       <ReliabilityCard allValidSessions={allValidSessions} meaningfulSessions={meaningfulSessions} />
     </div>

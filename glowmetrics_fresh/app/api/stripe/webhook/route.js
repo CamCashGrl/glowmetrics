@@ -11,15 +11,6 @@ function getSupabaseAdmin() {
   )
 }
 
-// supabase.auth.admin.listUsers() is paginated — 50 users per page by
-// default, and NOT called with any page param here previously, so it only
-// ever saw the oldest ~50 accounts. Past that (this project has 167+ users),
-// every lookup by email silently returned null and every webhook handler
-// below hit its `if (!user) break` and did nothing — Stripe still saw a 200
-// response, so it never retried, and the failure was completely invisible.
-// This is now only a fallback (see getUserById below, which is exact and
-// O(1)); when it does run, it pages through the whole user list instead of
-// just the first page.
 export async function getUserByEmail(supabase, email) {
   if (!email) return null
   let page = 1
@@ -29,18 +20,11 @@ export async function getUserByEmail(supabase, email) {
     if (error) return null
     const match = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase())
     if (match) return match
-    if (data.users.length < perPage) return null // reached the last page
+    if (data.users.length < perPage) return null
     page++
   }
 }
 
-// Exact, single-lookup user resolution by Supabase auth id — used first.
-// The checkout route sets metadata.userId on both the Checkout Session and
-// the Subscription it creates (app/api/stripe/checkout/route.js), so this
-// is available on every event below without needing to guess from an email
-// Stripe collected at checkout, which is not guaranteed to exactly match
-// the account's signup email (case, aliasing, or the customer editing it
-// in Stripe's hosted checkout page).
 export async function getUserById(supabase, userId) {
   if (!userId) return null
   const { data, error } = await supabase.auth.admin.getUserById(userId)
@@ -48,14 +32,11 @@ export async function getUserById(supabase, userId) {
   return data.user
 }
 
-// Resolution order: metadata.userId (exact) → profiles.stripe_customer_id
-// (exact; covers subscriptions created before checkout set metadata, e.g. the
-// Sep 27 past_due event that was dropped) → email (last resort only).
 export async function getUserByCustomerId(supabase, customerId) {
   if (!customerId) return null
   const { data, error } = await supabase
     .from('profiles').select('id').eq('stripe_customer_id', customerId).limit(2)
-  if (error || !data || data.length !== 1) return null // none, or ambiguous
+  if (error || !data || data.length !== 1) return null
   return getUserById(supabase, data[0].id)
 }
 
@@ -90,27 +71,9 @@ async function sendResendNotification(subject, text, to = process.env.OWNER_EMAI
   }
 }
 
-// Failures here have caused real, silent data drift before (subscribers who
-// paid or lost payment showing as plain "free" users on the admin/dashboard
-// stats that read from profiles/subscriptions) — always alert on a failed
-// write instead of leaving it as a console.error only the deploy logs see,
-// which is what let it go unnoticed for days last time. Sent to a fixed
-// address rather than OWNER_EMAIL so a misconfigured env var can't silently
-// swallow the one alert that exists to catch misconfiguration.
 const SYNC_ALERT_EMAIL = 'daphneoncam@gmail.com'
-
-// Stripe treats ANY 2xx as delivered and never retries it. Every path that
-// failed to sync entitlements used to answer 202, so a dropped event (e.g. an
-// unresolved user on customer.subscription.updated → past_due) was never
-// retried and the profile kept Pro. Failures now answer 500, which Stripe
-// retries with backoff for up to 3 days; processing is idempotent (below).
 export const RETRY_STATUS = 500
 
-// A user-resolution miss is just as silent as a failed DB write — the event
-// still returns 200 (see POST below) so Stripe never retries, and until now
-// nothing but a console.error (which nobody watches) marked it. This is the
-// same alert path as updateProfile/upsertSubscriptionRecord below, so every
-// way this webhook can silently do nothing now raises the same signal.
 async function alertUnresolvedUser(eventType, event, { userId, email, customerId, subscriptionId }) {
   console.error(`Webhook ${eventType}: could not resolve a user (userId=${userId}, email=${email})`)
   await sendResendNotification(
@@ -122,7 +85,6 @@ async function alertUnresolvedUser(eventType, event, { userId, email, customerId
   )
 }
 
-// Updates profiles and returns whether it actually succeeded
 async function updateProfile(supabase, userId, update) {
   const { error } = await supabase.from('profiles').update(update).eq('id', userId)
   if (error) {
@@ -137,9 +99,6 @@ async function updateProfile(supabase, userId, update) {
   return true
 }
 
-// subscriptions.plan_type has a CHECK constraint limited to these values —
-// map Stripe's billing interval onto the closest one instead of writing
-// something like "pro" that the constraint would reject outright.
 function planTypeFor(sub) {
   const interval = sub.items?.data?.[0]?.price?.recurring?.interval
   return interval === 'year' ? 'standard_annual' : 'standard_monthly'
@@ -150,12 +109,6 @@ function billingCycleFor(sub) {
   return interval === 'year' ? 'annual' : 'monthly'
 }
 
-// Keeps public.subscriptions (read by /api/admin/stats and /api/admin-stats
-// for subscriber/revenue counts) in sync with what the webhook already
-// writes to profiles. Previously this table was only ever touched by
-// handle_new_user() at signup (always plan_type='free') and by one-off
-// manual SQL patches (see 20260912_emergency_fix_emmyfox2_subscription_sync.sql)
-// — every real subscribe/renew/cancel silently left it stale.
 async function upsertSubscriptionRecord(supabase, userId, fields) {
   const { error } = await supabase
     .from('subscriptions')
@@ -172,10 +125,8 @@ async function upsertSubscriptionRecord(supabase, userId, fields) {
   return true
 }
 
-// Log subscription events for audit trail and debugging
 async function logSubscriptionEvent(supabase, userId, eventType, details) {
   try {
-    // A Stripe retry must not write the audit row twice.
     if (details.stripeEventId) {
       const { data: existing } = await supabase.from('subscription_events')
         .select('id').eq('stripe_event_id', details.stripeEventId).eq('event_type', eventType).limit(1)
@@ -196,11 +147,9 @@ async function logSubscriptionEvent(supabase, userId, eventType, details) {
   }
 }
 
-// Log webhook events to database for audit trail
 async function logWebhookEvent(supabase, event, status, errorMessage = null) {
   try {
-    // stripe_event_id is UNIQUE: upsert so a retry that succeeds replaces the
-    // earlier failure row instead of being rejected as a duplicate.
+    if (!supabase) return
     await supabase.from('webhook_events').upsert({
       stripe_event_id: event.id,
       event_type: event.type,
@@ -221,18 +170,13 @@ export async function alreadyProcessed(supabase, eventId) {
   return data?.[0]?.status === 'success'
 }
 
-// A late or retried event for a subscription that is no longer the profile's
-// current one (e.g. an old sub deleted after the user re-subscribed) must not
-// overwrite the newer subscription's entitlement.
-// Events can arrive out of order, so "different id" alone is not enough: the
-// event's subscription is stale only if the profile's current one is newer.
 export async function isStaleSubscription(supabase, userId, sub) {
   const { data } = await supabase.from('profiles')
     .select('stripe_subscription_id').eq('id', userId).maybeSingle()
   const currentId = data?.stripe_subscription_id
   if (!currentId || !sub?.id || currentId === sub.id) return false
   const current = await stripe.subscriptions.retrieve(currentId).catch(() => null)
-  if (!current) return false // current id no longer exists in Stripe → apply this event
+  if (!current) return false
   return (current.created || 0) > (sub.created || 0)
 }
 
@@ -250,12 +194,9 @@ export async function POST(request) {
     )
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message)
-    await logWebhookEvent(null, { id: 'unknown', type: 'unknown', data: {} }, 'signature_failed', err.message)
     return NextResponse.json({ error: err.message }, { status: 400 })
   }
 
-  // Idempotency: Stripe may deliver the same event more than once (retries,
-  // at-least-once delivery). One that already succeeded is acknowledged as-is.
   if (await alreadyProcessed(supabase, event.id)) {
     return NextResponse.json({ received: true, status: 'duplicate' })
   }
@@ -271,33 +212,22 @@ export async function POST(request) {
             userId: session.metadata?.userId, email, customerId: session.customer,
           })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
-          // Return 202 Accepted so Stripe will retry later with exponential backoff
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
 
-        // Whether this is trialing or already active gets set precisely by
-        // customer.subscription.created/updated (fired for the same
-        // checkout, momentarily before or after this event) — grant Pro
-        // access here without guessing a status this event can't see.
-        const update = {
-          plan: 'pro',
+        // Checkout completion only stores the Stripe customer link. The
+        // subscription event is the source of truth for trial vs paid access.
+        const ok = await updateProfile(supabase, user.id, {
           stripe_customer_id: session.customer,
-        }
-
-        const ok = await updateProfile(supabase, user.id, update)
+        })
         if (!ok) {
-          console.error(`Webhook checkout: failed to save customer ID for ${email}`)
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
-          // Return retryable error so Stripe tries again
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
 
-        // subscription_started is logged by customer.subscription.created event (fired ~0.3s later)
-        // Don't log it here to avoid duplicate entries in subscription_events
-
         await sendResendNotification(
-          `💰 New CamCash Subscriber — ${email}`,
-          `${email} just completed payment and subscribed to Pro plan.`
+          `💳 CamCash checkout completed — ${email}`,
+          `${email} completed checkout. Subscription status will determine trial or paid Pro access.`
         )
         break
       }
@@ -311,18 +241,13 @@ export async function POST(request) {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
           })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
-          // Retry later
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
 
-        // Carry Stripe's actual status through (trialing/active/past_due/unpaid/...)
-        // instead of collapsing every non-trialing status into 'active' — a
-        // past_due or unpaid subscription must not read as 'active' downstream.
         const subscriptionStatus = sub.status
-
-        // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
+        const plan = subscriptionStatus === 'active' ? 'pro' : 'free'
         const update = {
-          plan: 'pro',
+          plan,
           stripe_customer_id: sub.customer,
           stripe_subscription_id: sub.id,
           subscription_status: subscriptionStatus,
@@ -331,7 +256,6 @@ export async function POST(request) {
 
         const profileOk = await updateProfile(supabase, user.id, update)
         if (!profileOk) {
-          console.error(`Webhook subscription.created: failed to save subscription data for ${email}`)
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
@@ -347,7 +271,6 @@ export async function POST(request) {
           current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
         })
         if (!subsOk) {
-          console.error(`Webhook subscription.created: failed to upsert subscriptions record for ${email}`)
           await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
           return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: RETRY_STATUS })
         }
@@ -356,12 +279,12 @@ export async function POST(request) {
           stripeEventId: event.id,
           customerId: sub.customer,
           subscriptionId: sub.id,
-          newPlan: 'pro',
+          newPlan: plan,
           details: { status: sub.status, trialEnd: sub.trial_end },
         })
 
         await sendResendNotification(
-          `💰 New Subscription — ${email}`,
+          subscriptionStatus === 'active' ? `💰 New Paid Subscription — ${email}` : `🎁 Trial Started — ${email}`,
           `${email} started a ${subscriptionStatus} subscription (ID: ${sub.id}).`
         )
         break
@@ -376,7 +299,6 @@ export async function POST(request) {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
           })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
-          // Retry later
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
 
@@ -393,7 +315,6 @@ export async function POST(request) {
 
         const profileOk = await updateProfile(supabase, user.id, update)
         if (!profileOk) {
-          console.error(`Webhook subscription.deleted: failed to downgrade ${email}`)
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to downgrade profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
@@ -404,7 +325,6 @@ export async function POST(request) {
           status: 'canceled',
         })
         if (!subsOk) {
-          console.error(`Webhook subscription.deleted: failed to upsert subscriptions record for ${email}`)
           await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
           return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: RETRY_STATUS })
         }
@@ -433,7 +353,6 @@ export async function POST(request) {
             userId: sub.metadata?.userId, email, customerId: sub.customer, subscriptionId: sub.id,
           })
           await logWebhookEvent(supabase, event, 'user_resolution_failed', `Could not resolve user: ${email}`)
-          // Retry later
           return NextResponse.json({ error: 'Could not resolve user' }, { status: RETRY_STATUS })
         }
 
@@ -442,14 +361,9 @@ export async function POST(request) {
           return NextResponse.json({ received: true, status: 'stale_subscription_ignored' })
         }
 
-        // Carry Stripe's actual status through (see subscription.created above) —
-        // plan is the pro/free gate; subscription_status must reflect what
-        // Stripe actually reports (e.g. past_due) so it isn't mistaken for a
-        // healthy 'active' subscription downstream.
         const subscriptionStatus = sub.status
-        const plan = (sub.status === 'active' || sub.status === 'trialing') ? 'pro' : 'free'
+        const plan = subscriptionStatus === 'active' ? 'pro' : 'free'
 
-        // NOTE: trial_days is set at signup but NEVER updated. Use trial_ends_at as the source of truth.
         const update = {
           plan,
           stripe_subscription_id: sub.id,
@@ -459,7 +373,6 @@ export async function POST(request) {
 
         const profileOk = await updateProfile(supabase, user.id, update)
         if (!profileOk) {
-          console.error(`Webhook subscription.updated: failed to update ${email}`)
           await logWebhookEvent(supabase, event, 'profile_update_failed', `Failed to update profile for ${email}`)
           return NextResponse.json({ error: 'Failed to update profile' }, { status: RETRY_STATUS })
         }
@@ -475,7 +388,6 @@ export async function POST(request) {
           current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
         })
         if (!subsOk) {
-          console.error(`Webhook subscription.updated: failed to upsert subscriptions record for ${email}`)
           await logWebhookEvent(supabase, event, 'subscriptions_upsert_failed', `Failed to upsert subscriptions for ${email}`)
           return NextResponse.json({ error: 'Failed to upsert subscriptions' }, { status: RETRY_STATUS })
         }
@@ -488,10 +400,15 @@ export async function POST(request) {
           details: { status: sub.status, reason: event.data.previous_attributes },
         })
 
-        if (plan === 'pro') {
+        if (subscriptionStatus === 'active') {
           await sendResendNotification(
-            `💰 Subscription Updated — ${email}`,
-            `${email}'s subscription is now ${subscriptionStatus}.`
+            `💰 Subscription Active — ${email}`,
+            `${email}'s subscription is now active.`
+          )
+        } else if (subscriptionStatus === 'trialing') {
+          await sendResendNotification(
+            `🎁 Trial Updated — ${email}`,
+            `${email}'s subscription remains trialing and capped.`
           )
         } else {
           await sendResendNotification(
@@ -505,17 +422,14 @@ export async function POST(request) {
       default:
         console.warn(`Unhandled Stripe event type: ${event.type}`)
         await logWebhookEvent(supabase, event, 'unhandled_event_type', `Unhandled event type: ${event.type}`)
-        // Return success for unhandled events so Stripe doesn't retry
         break
     }
 
-    // Log successful event processing
     await logWebhookEvent(supabase, event, 'success', null)
     return NextResponse.json({ received: true, status: 'success' })
   } catch (err) {
     console.error('Webhook handler error:', err)
     await logWebhookEvent(supabase, event, 'handler_error', err.message)
-    // Return 202 Accepted so Stripe will retry if there's an unexpected error
     return NextResponse.json({ error: err.message }, { status: RETRY_STATUS })
   }
 }
