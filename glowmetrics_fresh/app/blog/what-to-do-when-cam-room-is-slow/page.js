@@ -197,7 +197,7 @@ export default function BlogPost() {
         <a href="/blog/why-cam-streams-arent-making-money" style={s.link}>→ Why streams aren't making money</a>
         <a href="/blog/viral-cam-room-titles" style={s.link}>→ Cam room titles that convert</a>
         <a href="/blog/how-to-increase-cam-earnings" style={s.link}>→ How to increase cam earnings</a>
-        <a href="/guides/best-time-to-stream-chaturbate" style={s.link}>→ Best times to stream on Chaturbate</a>
+        <a href="/guides/chaturbate-best-hours" style={s.link}>→ Best times to stream on Chaturbate</a>
       </div></div>
     </ArticleLayout>
   )

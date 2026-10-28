@@ -104,7 +104,6 @@ export default function sitemap() {
   ]
 
   const guideSlugs = [
-    'best-time-to-stream-chaturbate',
     'bongacams-analytics',
     'cam-model-analytics',
     'cam-model-income-tracker',

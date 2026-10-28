@@ -31,7 +31,7 @@ const faqs = [
   { q: 'How important is my room title on Chaturbate?', a: 'It\'s one of the most important ranking factors, and most models underestimate it. A vague title like "hi guys come chat" does nothing. A title that creates curiosity, shows activity, includes keywords, and sets a clear goal — like a specific token target — performs dramatically better.' },
   { q: 'What should I do in my first 10 minutes on Chaturbate?', a: "The first 10-15 minutes determine whether your room grows or dies, because Chaturbate boosts rooms that get tips early, have chat activity, and keep viewers watching. Ask questions immediately, greet every viewer by name, encourage small early tips (even 1-2 tokens boosts visibility), and use a goal countdown to create urgency." },
   { q: 'Does an inactive-looking room actually hurt my Chaturbate ranking?', a: 'Yes. If your room looks inactive, viewers leave instantly and the algorithm notices the drop-off. Keep moving, react and smile, talk even when chat is quiet, and use music — silence is one of the fastest ways to kill a stream\'s momentum.' },
-  { q: 'What are the best times to stream on Chaturbate for more viewers?', a: 'Late night (10PM-3AM) and weekends generally perform best, especially around payday periods — but general advice only goes so far. Your specific best hours depend on your actual audience, which is why tracking your personal peak hours from your own tip history matters more than following platform averages.' },
+  { q: 'What are the best times to stream on Chaturbate for more viewers?', a: 'US evenings into late night (Eastern Time) and weekends are commonly cited as the busiest periods — a general starting pattern, not an official figure — but general advice only goes so far. Your specific best hours depend on your actual audience, which is why tracking your personal peak hours from your own tip history matters more than following platform averages.' },
   { q: 'Can external traffic from Reddit, Twitter, or TikTok really help my Chaturbate room?', a: "Yes. Most models rely only on Chaturbate's internal traffic, but pulling viewers in from Reddit, Twitter/X, TikTok teasers, and fan sites can kickstart a slow stream and boost your internal ranking — even a small amount of external traffic creates the early engagement signals the algorithm rewards." },
 ]
 
@@ -160,10 +160,10 @@ export default function BlogPostChaturbateViewers() {
       <div style={s.step}>
         <div style={s.stepH}><div style={s.stepNum}>4</div><div style={s.stepT}>Stream at the Right Times</div></div>
         <div style={s.stepB}>
-          <p style={s.p}>Timing matters more than most models realize. Generally, late night (10PM–3AM) and weekends perform best, especially around payday periods. But don't rely on general advice — your best hours depend on your specific audience.</p>
+          <p style={s.p}>Timing matters more than most models realize. US evenings into late night (Eastern Time) and weekends are commonly cited as the busiest periods, but that is a general starting pattern, not an official figure. But don't rely on general advice — your best hours depend on your specific audience.</p>
           <div style={s.tip}>
             <div style={s.tipLbl}>Data tip</div>
-            <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/best-time-to-stream-chaturbate" style={s.iLink}>Find your personal peak hours</a> from your actual tip history — not platform averages.</p>
+            <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/chaturbate-best-hours" style={s.iLink}>Find your personal peak hours</a> from your actual tip history — not platform averages.</p>
           </div>
         </div>
       </div>
@@ -221,7 +221,7 @@ export default function BlogPostChaturbateViewers() {
             <div style={s.toolN}>Room Title Generator</div>
             <div style={s.toolD}>High-converting titles in seconds</div>
           </a>
-          <a href="/guides/best-time-to-stream-chaturbate" style={s.toolCard}>
+          <a href="/guides/chaturbate-best-hours" style={s.toolCard}>
             <div style={s.toolN}>Best Time Calculator</div>
             <div style={s.toolD}>Your personal peak hours from your data</div>
           </a>

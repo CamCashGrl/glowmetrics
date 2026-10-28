@@ -49,7 +49,6 @@ const URLS = [
   'https://www.camcashgrl.com/guides/cam-model-analytics',
   'https://www.camcashgrl.com/guides/how-to-increase-cam-tips',
   'https://www.camcashgrl.com/guides/bongacams-analytics',
-  'https://www.camcashgrl.com/guides/best-time-to-stream-chaturbate',
   'https://www.camcashgrl.com/guides/cam-model-top-tippers',
   'https://www.camcashgrl.com/guides/cam-model-income-tracker',
   'https://www.camcashgrl.com/guides/myfreecams-analytics',
