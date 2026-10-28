@@ -2356,6 +2356,9 @@ const stopImportMessageRotation = () => {
       fd.append('file', file)
       if (forcePlatform) fd.append('platform', forcePlatform)
       if (dateOrder) fd.append('date_order', dateOrder)
+      // Export times are the creator's wall clock; the server reads them in the
+      // saved zone, or this resolved zone when none is saved yet.
+      fd.append('time_zone', creatorTzRef.current || resolveCreatorTimeZone(null))
 
       const res = await fetch('/api/upload', {
         method: 'POST',

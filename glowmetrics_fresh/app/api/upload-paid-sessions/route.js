@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 // Token rates — always imported from constants, never hardcoded
 import { tokenRate, canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
 import { platformLimitMessage } from '../../../lib/planLimits'
+import { importTimeZone, toStoredInstant } from '../../../lib/creatorTimezone'
 
 const BATCH_SIZE = 250
 
@@ -26,6 +27,17 @@ export async function POST(req) {
 
   const fd = await req.formData()
   const file = fd.get('file')
+
+  // Same storage contract as /api/upload: naive export times are the
+  // creator's wall clock, read in their saved zone and stored as instants.
+  const { data: tzProfile } = await supabase.from('profiles').select('timezone').eq('id', user.id).maybeSingle()
+  const timeZone = importTimeZone(tzProfile?.timezone, fd.get('time_zone'))
+  if (!timeZone) {
+    return NextResponse.json(
+      { error: 'Choose your timezone before importing so your earnings land on the right days and hours.', code: 'timezone_required' },
+      { status: 400 }
+    )
+  }
   if (!file) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
   }
@@ -59,8 +71,8 @@ export async function POST(req) {
     if (!date_time || !username || !session_type) continue
     if (!VALID_SESSION_TYPES.includes(session_type)) continue
 
-    const parsedDate = new Date(date_time)
-    if (isNaN(parsedDate.getTime())) continue
+    const storedAt = toStoredInstant(date_time, timeZone)
+    if (!storedAt) continue
 
     const tokens = parseInt(tokensRaw) || 0
     const rawUsd = parseFloat(usdRaw) || 0
@@ -73,7 +85,7 @@ export async function POST(req) {
 
     rows.push({
       user_id:      user.id,
-      date_time:    parsedDate.toISOString(),
+      date_time:    storedAt,
       platform,
       username:     username.toLowerCase().trim(),
       session_type,

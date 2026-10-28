@@ -27,13 +27,14 @@ jest.mock('../../../lib/supabase', () => ({
       const chain = {
         select: () => chain,
         eq: () => chain,
+        limit: async () => ({ data: [], error: null }),
         single: async () => {
           if (table === 'beta_users') return { data: { onboarding_complete: false } }
           if (table === 'profiles') return { data: mockProfile }
           return { data: null }
         },
         upsert: jest.fn(async (v) => { mockWrites.push({ table, v }); return { data: null, error: null } }),
-        update: jest.fn((v) => { mockWrites.push({ table, v }); return chain }),
+        update: jest.fn((v) => { mockWrites.push({ table, v }); const done = { ...chain, maybeSingle: async () => ({ data: { id: 'u1' }, error: null }) }; return { eq: () => ({ select: () => done }) } }),
       }
       return chain
     }),
