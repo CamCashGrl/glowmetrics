@@ -352,14 +352,15 @@ describe('parseCSV stress test — Chaturbate (15+ shapes)', () => {
     expect(parseCSV(csv, 'Chaturbate')).toHaveLength(2)
   })
 
-  test('12: private show lines routed away from free tips', () => {
+  test('12: private show lines retained and marked for paid persistence', () => {
     const csv = [
       'Jun 18, 2026, 8:27 PM', 'Private Show: fanA', '1000  5000', '',
       'Jun 18, 2026, 8:30 PM', 'Tip From: fanB', '10  100',
     ].join('\n')
     const rows = parseCSV(csv, 'Chaturbate')
-    expect(rows).toHaveLength(1)
-    expect(rows[0].username).toBe('fanb')
+    expect(rows).toHaveLength(2)
+    expect(rows.find(r=>r.username==='fana')).toMatchObject({is_paid_session:true,session_type:'Private Show'})
+    expect(rows.filter(r=>!r.is_paid_session)).toHaveLength(1)
   })
 
   test('13: notes containing common English words do not break parsing', () => {

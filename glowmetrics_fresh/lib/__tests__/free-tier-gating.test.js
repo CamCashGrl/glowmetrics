@@ -99,3 +99,18 @@ test('8. hidden secondary rows cannot leak through private earnings, Live interv
   // 400-day range from Oct 1 2026 starts Aug 28 2025, so old_cb (Jan 2025) is outside it.
   expect(thirty.publicUSD).toBe(5 + 7 + 3)
 })
+
+// Backfill 20261016: single-platform Free users get their only real platform
+// as primary (stored display form, e.g. 'BongaCams'). Rows labelled 'Unknown'
+// are not a real platform and stay on the 31-day window.
+test('backfilled primary (BongaCams + Unknown rows): BongaCams full history, Unknown windowed', () => {
+  const data = [
+    tip('BongaCams', '2025-03-01T12:00:00Z', 20, 'old_bc'),
+    tip('BongaCams', '2026-10-01T12:00:00Z', 4, 'new_bc'),
+    tip('Unknown', '2026-07-01T12:00:00Z', 6, 'old_unknown'),
+    tip('Unknown', '2026-10-01T12:00:00Z', 2, 'new_unknown'),
+  ]
+  const unlimited = resolvePlatformRoles(['BongaCams'], 'BongaCams').primary
+  const names = applyFreeAnalysisWindow(data, { windowDays: 31, unlimitedPlatform: unlimited }).map((r) => r.username).sort()
+  expect(names).toEqual(['new_bc', 'new_unknown', 'old_bc'])
+})

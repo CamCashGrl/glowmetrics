@@ -9,6 +9,7 @@ import {
 // detection locally (was: a duplicate `detectWhales()` below using a
 // hardcoded 500-token threshold that disagreed with lib/analytics.js).
 import { identifyWhales } from "../../lib/analytics"
+import { resolveCreatorTimeZone, zonedHour, zonedDay, zonedYMD, zonedMonthKey, zonedHourDecimal } from "../../lib/creatorTimezone"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BG     = "#0a0e1a"
@@ -29,14 +30,14 @@ const PLATFORM_COLORS = { chaturbate:"#f97316", myfreecams:"#3b82f6", stripchat:
 const SOURCE_COLORS = [CYAN, PURPLE, PINK, AMBER, GREEN, "#ef4444", "#f97316", "#3b82f6"]
 
 // ─── Time helpers ────────────────────────────────────────────────────────────
-function localHour(date) { return new Date(date).getHours() }
-function localDay(date)  { return new Date(date).getDay() }
-// Date keys follow the creator's own clock, matching localHour/localDay above
-// and the analytics engine. Keying by UTC while bucketing hours locally put a
-// late-evening tip on the next calendar day for anyone west of UTC, so the day
-// it was counted in disagreed with the hour it was shown at.
-function localYMD(date)   { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
-function localMonthKey(date) { const d = new Date(date); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` }
+// All bucketing uses the creator's saved timezone (profiles.timezone via the
+// dashboard's creatorTz), the same clock the analytics engine uses. Previously
+// these read the device clock, which disagreed with the engine whenever the
+// creator's saved zone differed from their browser.
+const localHour     = (date, tz) => zonedHour(date, tz)
+const localDay      = (date, tz) => zonedDay(date, tz)
+const localYMD      = (date, tz) => zonedYMD(date, tz)
+const localMonthKey = (date, tz) => zonedMonthKey(date, tz)
 
 function fmtHour(localH) {
   return new Date(2000,0,1,localH).toLocaleTimeString([],{hour:"numeric",hour12:true})
@@ -44,12 +45,7 @@ function fmtHour(localH) {
 function fmtDayName(localDayIdx) {
   return new Date(2024,0,7+localDayIdx).toLocaleDateString("en-US",{weekday:"long"})
 }
-function localHourDecFromDate(date) {
-  const parts = new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",hour12:false}).formatToParts(date)
-  const h = parseInt(parts.find(p=>p.type==="hour")?.value??"0") % 24
-  const m = parseInt(parts.find(p=>p.type==="minute")?.value??"0")
-  return h + m/60
-}
+const localHourDecFromDate = (date, tz) => zonedHourDecimal(date, tz)
 function fmtUsd(n) { return `$${Number(n||0).toFixed(2)}` }
 function fmtDur(mins) {
   if (mins < 60) return `${Math.round(mins)}m`
@@ -67,7 +63,7 @@ function normPlatform(raw) {
 }
 
 // ─── Pure data functions ──────────────────────────────────────────────────────
-function groupIntoSessions(tips) {
+function groupIntoSessions(tips, tz) {
   if (!tips?.length) return []
   const sorted = [...tips].sort((a,b)=>new Date(a.date_time)-new Date(b.date_time))
   const GAP = 4*60*60*1000
@@ -101,11 +97,11 @@ function groupIntoSessions(tips) {
     ...s,
     tippers: s.tippers.size,
     durationMins: (s.end - s.start) / 60000 || 5,
-    localHourStart: localHourDecFromDate(s.start),
+    localHourStart: localHourDecFromDate(s.start, tz),
   }))
 }
 
-function platformEfficiency(tips) {
+function platformEfficiency(tips, tz) {
   const map = {}
   for (const t of tips) {
     const p = normPlatform(t.platform)
@@ -113,7 +109,7 @@ function platformEfficiency(tips) {
     map[p].tokens += Number(t.tokens||0)
     map[p].usd    += Number(t.usd||0)
     map[p].count++
-    map[p].days.add(localYMD(t.date_time))
+    map[p].days.add(localYMD(t.date_time, tz))
   }
   return Object.values(map).map(p => ({
     ...p,
@@ -124,14 +120,14 @@ function platformEfficiency(tips) {
   })).sort((a,b)=>b.usd-a.usd)
 }
 
-function windowStats(tips) {
+function windowStats(tips, tz) {
   const grid = {}
   for (let d=0;d<7;d++) for (const slot of TWO_HR_SLOTS) {
     grid[`${d}_${slot}`] = { day:d, slot, tokens:0, usd:0, count:0, sessions:0 }
   }
   for (const t of tips) {
-    const d = localDay(t.date_time)
-    const h = localHour(t.date_time)
+    const d = localDay(t.date_time, tz)
+    const h = localHour(t.date_time, tz)
     const slot = Math.floor(h/2)*2
     const key = `${d}_${slot}`
     if (grid[key]) {
@@ -143,15 +139,15 @@ function windowStats(tips) {
   return grid
 }
 
-function monthlyTotals(tips) {
+function monthlyTotals(tips, tz) {
   const map = {}
   for (const t of tips) {
-    const mk = localMonthKey(t.date_time)
+    const mk = localMonthKey(t.date_time, tz)
     if (!map[mk]) map[mk] = { month:mk, usd:0, tokens:0, count:0, activeDays:new Set() }
     map[mk].usd    += Number(t.usd||0)
     map[mk].tokens += Number(t.tokens||0)
     map[mk].count++
-    map[mk].activeDays.add(localYMD(t.date_time))
+    map[mk].activeDays.add(localYMD(t.date_time, tz))
   }
   return Object.values(map)
     .map(m=>({...m, activeDays:m.activeDays.size}))
@@ -159,10 +155,10 @@ function monthlyTotals(tips) {
     .slice(-12)
 }
 
-function weeklyEfficiency(sessions) {
+function weeklyEfficiency(sessions, tz) {
   const map = {}
   for (const s of sessions) {
-    const wk = localYMD(s.start).slice(0,7)
+    const wk = localYMD(s.start, tz).slice(0,7)
     if (!map[wk]) map[wk] = { week:wk, usd:0, hours:0, sessions:0 }
     map[wk].usd     += s.usd
     map[wk].hours   += s.durationMins/60
@@ -239,7 +235,7 @@ const CTIP = ({ active, payload }) => {
 }
 
 // ─── TAB: Money Map ───────────────────────────────────────────────────────────
-function MoneyMapTab({ tips }) {
+function MoneyMapTab({ tips, tz }) {
   const [platform, setPlatform] = useState("all")
   const [metric, setMetric]     = useState("usd")
   const [range, setRange]       = useState("all")
@@ -261,7 +257,7 @@ function MoneyMapTab({ tips }) {
     return arr
   },[tips,platform,range])
 
-  const grid = useMemo(()=>windowStats(filtered),[filtered])
+  const grid = useMemo(()=>windowStats(filtered, tz),[filtered, tz])
 
   const maxVal = useMemo(()=>{
     return Math.max(...Object.values(grid).map(c=>c[metric]||0),1)
@@ -392,14 +388,14 @@ function MoneyMapTab({ tips }) {
 }
 
 // ─── TAB: Sessions ────────────────────────────────────────────────────────────
-function SessionsTab({ sessions }) {
+function SessionsTab({ sessions, tz }) {
   const recent = useMemo(()=>[...sessions].sort((a,b)=>b.start-a.start).slice(0,10),[sessions])
 
   // Weekly calendar: last 7 distinct UTC days with sessions
   const calDays = useMemo(()=>{
     const dayMap = {}
     for (const s of sessions) {
-      const dk = localYMD(s.start)
+      const dk = localYMD(s.start, tz)
       if (!dayMap[dk]) dayMap[dk] = { date:s.start, key:dk, sessions:[] }
       dayMap[dk].sessions.push(s)
     }
@@ -479,7 +475,7 @@ function SessionsTab({ sessions }) {
             </div>
             <div style={{flex:"1",minWidth:"120px"}}>
               <div style={{color:TEXT,fontSize:"13px",fontWeight:"700"}}>
-                {s.start.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}
+                {s.start.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",timeZone:tz})}
               </div>
               <div style={{color:SLATE,fontSize:"11px"}}>{fmtDur(s.durationMins)} session</div>
             </div>
@@ -500,14 +496,14 @@ function SessionsTab({ sessions }) {
 }
 
 // ─── TAB: Platforms ───────────────────────────────────────────────────────────
-function PlatformsTab({ tips, sessions }) {
-  const platforms = useMemo(()=>platformEfficiency(tips),[tips])
+function PlatformsTab({ tips, sessions, tz }) {
+  const platforms = useMemo(()=>platformEfficiency(tips, tz),[tips, tz])
 
   // Multistream: sessions with 2+ platforms in same day
   const multiDays = useMemo(()=>{
     const byDay = {}
     for (const s of sessions) {
-      const dk = localYMD(s.start)
+      const dk = localYMD(s.start, tz)
       if (!byDay[dk]) byDay[dk] = { date:dk, platforms:new Set(), usd:0, hours:0 }
       byDay[dk].platforms.add(s.platform)
       byDay[dk].usd   += s.usd
@@ -524,7 +520,7 @@ function PlatformsTab({ tips, sessions }) {
   const platformDayData = useMemo(()=>{
     const map = {}
     for (const t of tips) {
-      const dk = localYMD(t.date_time).slice(5)
+      const dk = localYMD(t.date_time, tz).slice(5)
       const p  = normPlatform(t.platform)
       if (!map[dk]) map[dk] = { date:dk }
       map[dk][p] = (map[dk][p]||0) + Number(t.usd||0)
@@ -605,9 +601,9 @@ function PlatformsTab({ tips, sessions }) {
 }
 
 // ─── TAB: Trends ─────────────────────────────────────────────────────────────
-function TrendsTab({ tips, sessions }) {
-  const monthly   = useMemo(()=>monthlyTotals(tips),[tips])
-  const weekly    = useMemo(()=>weeklyEfficiency(sessions),[sessions])
+function TrendsTab({ tips, sessions, tz }) {
+  const monthly   = useMemo(()=>monthlyTotals(tips, tz),[tips, tz])
+  const weekly    = useMemo(()=>weeklyEfficiency(sessions, tz),[sessions, tz])
   const bySource  = useMemo(()=>earningsBySource(tips),[tips])
   const totalUsd  = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
 
@@ -700,10 +696,10 @@ function TrendsTab({ tips, sessions }) {
 }
 
 // ─── Inner content (all hooks here) ──────────────────────────────────────────
-function MoneyMapContent({ tips, isPro }) {
+function MoneyMapContent({ tips, isPro, tz }) {
   const [tab, setTab] = useState("map")
 
-  const sessions = useMemo(()=>groupIntoSessions(tips),[tips])
+  const sessions = useMemo(()=>groupIntoSessions(tips, tz),[tips, tz])
 
   const totalUsd    = useMemo(()=>tips.reduce((s,t)=>s+Number(t.usd||0),0),[tips])
   const totalTokens = useMemo(()=>tips.reduce((s,t)=>s+Number(t.tokens||0),0),[tips])
@@ -743,10 +739,10 @@ function MoneyMapContent({ tips, isPro }) {
 
       <TabBar tabs={TABS} active={tab} onSelect={setTab}/>
 
-      {tab==="map"       && <MoneyMapTab tips={tips}/>}
-      {tab==="sessions"  && <SessionsTab sessions={sessions}/>}
-      {tab==="platforms" && <PlatformsTab tips={tips} sessions={sessions}/>}
-      {tab==="trends"    && <TrendsTab tips={tips} sessions={sessions}/>}
+      {tab==="map"       && <MoneyMapTab tips={tips} tz={tz}/>}
+      {tab==="sessions"  && <SessionsTab sessions={sessions} tz={tz}/>}
+      {tab==="platforms" && <PlatformsTab tips={tips} sessions={sessions} tz={tz}/>}
+      {tab==="trends"    && <TrendsTab tips={tips} sessions={sessions} tz={tz}/>}
     </div>
   )
 }
@@ -758,7 +754,8 @@ function MoneyMapContent({ tips, isPro }) {
 // has passed the same eligibility bar as lib/analytics.js's tiering (i.e. it
 // is never a blurred teaser built from insufficient evidence — with zero
 // tips there's nothing to blur, so the low-data screen below takes over first).
-export default function MoneyMap({ tips = [], isPro = false }) {
+export default function MoneyMap({ tips = [], isPro = false, tz = null }) {
+  tz = resolveCreatorTimeZone(tz)
   if (tips.length < 20) {
     return (
       <div style={{textAlign:"center",padding:"60px 24px"}}>
@@ -770,5 +767,5 @@ export default function MoneyMap({ tips = [], isPro = false }) {
     )
   }
 
-  return <MoneyMapContent tips={tips} isPro={isPro}/>
+  return <MoneyMapContent tips={tips} isPro={isPro} tz={tz}/>
 }

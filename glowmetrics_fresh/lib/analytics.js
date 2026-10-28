@@ -137,6 +137,16 @@ const CB_NON_EARNING_ACTION_RE = /^(Admin Adjustment|Transfer tokens to)\b/i
 const CB_TOKENS_LINE_RE = /^(\d+)\s+(\d+)$/
 const CB_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
 
+// Both Chaturbate export shapes express the same storage timestamp.
+function chaturbateTimestamp(raw) {
+  const match=String(raw).trim().match(CB_DATE_LINE_RE)
+  if(!match)return null
+  const [,mon,day,year,hr,min,ampm]=match
+  let hour=Number(hr)%12
+  if(/pm/i.test(ampm))hour+=12
+  return `${year}-${String(CB_MONTHS[mon.toLowerCase()]).padStart(2,'0')}-${day.padStart(2,'0')} ${String(hour).padStart(2,'0')}:${min}:00`
+}
+
 function parseChaturbateMultiLine(lines) {
   const results = []
   let i = 0
@@ -146,13 +156,14 @@ function parseChaturbateMultiLine(lines) {
 
     const [, mon, day, year, hr, min, ampm] = dateMatch
     const actionLine = (lines[i + 1] || '').trim()
-    if (CB_PRIVATE_SHOW_PATTERN.test(actionLine)) { i++; continue }
+    const privateMatch = actionLine.match(/^Private Show:\s*(.+)$/i)
     if (CB_NON_EARNING_ACTION_RE.test(actionLine)) { i++; continue }
     const tipMatch = actionLine.match(CB_TIP_FROM_RE)
     const fanClubMatch = !tipMatch && actionLine.match(CB_FAN_CLUB_RE)
-    if (!tipMatch && !fanClubMatch) { i++; continue }
+    const saleMatch = actionLine.match(/^((?:Snapchat|Social|Other)[^:]*):\s*(.+)$/i)
+    if (!tipMatch && !fanClubMatch && !privateMatch && !saleMatch) { i++; continue }
 
-    const username = (tipMatch ? tipMatch[1] : fanClubMatch[1]).trim()
+    const username = (tipMatch?.[1] || fanClubMatch?.[1] || privateMatch?.[1] || saleMatch?.[2]).trim()
     let tokensLine = (lines[i + 2] || '').trim()
     let note = ''
     let tMatch = tokensLine.match(CB_TOKENS_LINE_RE)
@@ -174,7 +185,8 @@ function parseChaturbateMultiLine(lines) {
         results.push({
           dateRaw, date_time: dateRaw, username, platform: 'Chaturbate',
           tokens, usd: parseFloat((tokens * tokenRate('Chaturbate')).toFixed(2)),
-          tip_type: 'Tip', tip_note: note,
+          tip_type: privateMatch ? 'Private Show' : fanClubMatch ? 'Membership' : saleMatch ? 'Other Sale' : 'Tip', tip_note: note,
+          ...(privateMatch ? { is_paid_session: true, session_type: 'Private Show' } : {}),
         })
       }
     }
@@ -248,7 +260,7 @@ function parseCSVInner(text, platform) {
   // Raw multi-line Chaturbate paste (not a proper CSV) — needs block-based stitching
   // instead of the line-by-line parsers below, which mangle date/"Tip From:"/tokens
   // onto separate rows.
-  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()) || CB_FAN_CLUB_RE.test(l.trim()))) {
+  if (allLines.some(l => CB_TIP_FROM_RE.test(l.trim()) || CB_FAN_CLUB_RE.test(l.trim()) || CB_PRIVATE_SHOW_PATTERN.test(l.trim()) || /^(Snapchat|Social|Other)[^:]*:/i.test(l.trim()))) {
     return parseChaturbateMultiLine(allLines).map(normalizeTip).filter(isValidTip)
   }
 
@@ -378,6 +390,9 @@ function normalizeDate(raw) {
   }
   const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})(.*)/)
   if (slash) return `${slash[1]}-${slash[2]}-${slash[3]}${slash[4]}`
+  // An explicit zone ('Z', '+02:00') marks a real instant — keep it, so the
+  // upload stores that instant instead of re-reading it as wall-clock time.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw.trim())) return raw.trim()
   return raw.replace('T', ' ').replace('Z', '')
 }
 
@@ -496,7 +511,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
     const bcPaidChatType = BC_PAID_CHAT_TYPES.find(t => t.toLowerCase() === tipType) || null
 
     // 2. Chaturbate: Action field starts with "Private Show:" (paid), "Tip From:" (free)
-    const cbIsPrivateShow = CB_PRIVATE_SHOW_PATTERN.test(action)
+    const cbIsPrivateShow = CB_PRIVATE_SHOW_PATTERN.test(action) || (platform === 'Chaturbate' && /^private show$/i.test(tipType))
 
     // 3. MyFreeCams: Type column equals "Private" (paid), "Tip" (free)
     const mfcIsPrivate = tipType === MFC_PRIVATE_TYPE.toLowerCase()
@@ -508,7 +523,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
     if (tipType && !tipType.includes('tip') && !tipType.includes('private') &&
         !tipType.includes('spy') && !tipType.includes('show') && !tipType.includes('chat') &&
         !tipType.includes('received') && !tipType.includes('freechat') &&
-        !tipType.includes('sale')) continue
+        !tipType.includes('sale') && !/membership|fan club/.test(tipType)) continue
 
     if (tipType.includes('cash') || tipType.includes('transfer') ||
         tipType.includes('payout') || tipType.includes('refund')) continue
@@ -543,7 +558,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
     if (tokens <= 0 && usd <= 0) continue
 
     const rawDate = row.date_time || row.date || row.timestamp || ''
-    const dateRaw = normalizeDate(rawDate) || new Date().toISOString()
+    const dateRaw = (platform === 'Chaturbate' ? chaturbateTimestamp(rawDate) : null) || normalizeDate(rawDate) || new Date().toISOString()
     const parsedDate = new Date(dateRaw)
     if (isNaN(parsedDate.getTime())) continue
 
@@ -566,7 +581,7 @@ function parseWithHeaders(lines, platform, delimiter = ',') {
       platform: rowPlatform || 'Unknown',
       tokens: tokens > 0 ? tokens : Math.round(usd / tokenRate(rowPlatform)),
       usd: usd > 0 ? parseFloat(usd.toFixed(2)) : parseFloat((tokens * tokenRate(rowPlatform)).toFixed(2)),
-      tip_type: sessionTypeValue || 'Tip',
+      tip_type: sessionTypeValue || ((/membership|fan club/i.test(action + ' ' + tipType) || /^Fan Club Membership(?::|$)/i.test(row.note || row.tip_note || '')) ? 'Membership' : /sale|snapchat|social/i.test(action + ' ' + tipType) ? 'Other Sale' : 'Tip'),
       tip_note: row.note || row.tip_note || '',
       // Paid-chat/spy-mode/private-show rows must be routed to paid_sessions, not tips —
       // stamped here so callers (e.g. /api/upload) can split the flat

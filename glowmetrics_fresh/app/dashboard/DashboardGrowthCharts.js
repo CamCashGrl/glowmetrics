@@ -4,6 +4,7 @@ import {
   ComposedChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts"
+import { resolveCreatorTimeZone, zonedParts, zonedYMD, zonedMonthKey, zonedHour } from "../../lib/creatorTimezone"
 
 const CARD   = "#121826"
 const BORDER = "#1e2d45"
@@ -18,15 +19,21 @@ const FAINT  = "#5E647C"
 
 const fmtUsd = (v) => `$${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
-function isoWeekStart(date) {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+// Buckets follow the creator's calendar (profiles.timezone via the dashboard's
+// creatorTz), so a late-evening tip counts on the creator's own day. Keys are
+// creator-local dates; the UTC formatters below only render those keys.
+function isoWeekStart(date, tz) {
+  const p = zonedParts(date, tz)
+  const d = new Date(Date.UTC(p.year, p.month - 1, p.day))
   const day = d.getUTCDay() || 7 // Mon=1 .. Sun=7
   d.setUTCDate(d.getUTCDate() - day + 1)
   return d
 }
-const dayKey   = (date) => date.toISOString().slice(0, 10)
-const weekKey  = (date) => isoWeekStart(date).toISOString().slice(0, 10)
-const monthKey = (date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
+const dayKey   = (date, tz) => zonedYMD(date, tz)
+const weekKey  = (date, tz) => isoWeekStart(date, tz).toISOString().slice(0, 10)
+const monthKey = (date, tz) => zonedMonthKey(date, tz)
+// A creator-local key ('YYYY-MM-DD' or 'YYYY-MM') as a UTC-midnight marker for the UTC formatters.
+const keyDate  = (key) => new Date(`${key.length === 7 ? `${key}-01` : key}T00:00:00Z`)
 
 const DAY_FMT   = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })
 const WEEK_FMT  = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
@@ -37,24 +44,24 @@ const MODE_CONFIG = {
   daily:   { keyFn: dayKey,   fmt: DAY_FMT,   label: "Daily",   unit: "days",   take: 14 },
   weekly:  { keyFn: weekKey,  fmt: WEEK_FMT,  label: "Weekly",  unit: "weeks",  take: 12 },
   monthly: { keyFn: monthKey, fmt: MONTH_FMT, label: "Monthly", unit: "months", take: 12 },
-  time:    { keyFn: (d) => String(d.getUTCHours()), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
+  time:    { keyFn: (d, tz) => String(zonedHour(d, tz)), fmt: TIME_FMT, label: "Time of Day", unit: "hours", take: 24 },
 }
 
-function tokensVsHoursSeries(tips, sessions, mode) {
+function tokensVsHoursSeries(tips, sessions, mode, tz) {
   const { keyFn, take } = MODE_CONFIG[mode]
   const isTime = mode === "time"
   const map = {}
   for (const t of tips) {
     const d = new Date(t.date_time || t.dateRaw)
     if (isNaN(d.getTime())) continue
-    const k = keyFn(d)
+    const k = keyFn(d, tz)
     if (!map[k]) map[k] = { key: k, sortDate: d, tokens: 0, hours: 0 }
     map[k].tokens += Number(t.tokens || 0)
   }
   for (const s of sessions) {
     const d = new Date(s.startTime)
     if (isNaN(d.getTime())) continue
-    const k = keyFn(d)
+    const k = keyFn(d, tz)
     if (!map[k]) map[k] = { key: k, sortDate: d, tokens: 0, hours: 0 }
     map[k].hours += Number(s.durationHours || 0)
   }
@@ -65,18 +72,18 @@ function tokensVsHoursSeries(tips, sessions, mode) {
     ...row,
     label: isTime
       ? TIME_FMT.format(new Date(Date.UTC(2000, 0, 1, Number(row.key))))
-      : MODE_CONFIG[mode].fmt.format(row.sortDate),
+      : MODE_CONFIG[mode].fmt.format(keyDate(row.key)),
     hours: parseFloat(row.hours.toFixed(1)),
   }))
 }
 
-function monthlyUsdSeries(tips) {
+function monthlyUsdSeries(tips, tz) {
   const map = {}
   for (const t of tips) {
     const d = new Date(t.date_time || t.dateRaw)
     if (isNaN(d.getTime())) continue
-    const k = monthKey(d)
-    if (!map[k]) map[k] = { key: k, sortDate: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)), usd: 0 }
+    const k = monthKey(d, tz)
+    if (!map[k]) map[k] = { key: k, sortDate: keyDate(k), usd: 0 }
     map[k].usd += Number(t.usd || 0)
   }
   return Object.values(map)
@@ -102,11 +109,12 @@ const GrowthTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function DashboardGrowthCharts({ tips, sessions }) {
+export default function DashboardGrowthCharts({ tips, sessions, tz = null }) {
+  tz = resolveCreatorTimeZone(tz)
   const [mode, setMode] = useState("weekly")
 
-  const series = useMemo(() => tokensVsHoursSeries(tips, sessions || [], mode), [tips, sessions, mode])
-  const monthly = useMemo(() => monthlyUsdSeries(tips), [tips])
+  const series = useMemo(() => tokensVsHoursSeries(tips, sessions || [], mode, tz), [tips, sessions, mode, tz])
+  const monthly = useMemo(() => monthlyUsdSeries(tips, tz), [tips, tz])
 
   const thisMonth = monthly[monthly.length - 1] || null
   const prevMonth = monthly[monthly.length - 2] || null
@@ -117,7 +125,7 @@ export default function DashboardGrowthCharts({ tips, sessions }) {
   // monthly[] only has an entry for months that actually have tip data, so the
   // last entry is "the current calendar month" only when its key matches today —
   // otherwise it's a past, already-complete month.
-  const isThisMonthPartial = thisMonth?.key === monthKey(new Date())
+  const isThisMonthPartial = thisMonth?.key === monthKey(new Date(), tz)
 
   if (!tips || tips.length === 0) return null
 

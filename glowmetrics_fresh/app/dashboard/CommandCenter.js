@@ -1,5 +1,6 @@
 "use client"
 import { useMemo } from "react"
+import { zonedHour } from "../../lib/creatorTimezone"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMMAND CENTER
@@ -188,6 +189,7 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
 }
 
 export default function CommandCenter({
+  tz = undefined, // creator timezone (profiles.timezone); undefined → device clock
   analytics,
   isPro = false,
   firstName = null,
@@ -254,7 +256,8 @@ export default function CommandCenter({
   const oppHigh = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS * 1.5 : null
 
   const hasWindow = !!bestWindow
-  const greeting = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
+  const nowHour = tz ? zonedHour(new Date(), tz) : new Date().getHours()
+  const greeting = `Good ${nowHour < 12 ? "morning" : nowHour < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
 
   // Hourly distribution for the evidence bar chart — read straight off the
   // canonical grid, summed per local hour. Presentational shaping of an

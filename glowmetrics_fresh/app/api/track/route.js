@@ -11,7 +11,8 @@ export async function POST(request) {
 
     const {
       eventType,
-      eventName,
+      eventName: eventNameCamel,
+      event_name, // lib/track.js (every website funnel event) sends snake_case
       eventCategory,
       pageUrl,
       referrer,
@@ -22,10 +23,12 @@ export async function POST(request) {
 
     const userId = user?.id ?? null;
     const pageUrlToUse = pageUrl || url;
+    let result = null;
+    const eventName = eventNameCamel || event_name;
 
     // Route to appropriate tracking table based on event type
     if (eventType === 'click') {
-      await supabase.from('click_events').insert({
+      result = await supabase.from('click_events').insert({
         user_id: userId,
         page_path: pageUrlToUse,
         element_type: properties.elementType,
@@ -45,7 +48,7 @@ export async function POST(request) {
         properties,
       });
     } else if (eventType === 'engagement') {
-      await supabase.from('engagement_events').insert({
+      result = await supabase.from('engagement_events').insert({
         user_id: userId,
         page_path: pageUrlToUse,
         page_title: properties.pageTitle,
@@ -60,7 +63,7 @@ export async function POST(request) {
         os: properties.os,
       });
     } else if (eventType === 'error') {
-      await supabase.from('error_events').insert({
+      result = await supabase.from('error_events').insert({
         user_id: userId,
         error_type: properties.errorType,
         error_message: properties.errorMessage,
@@ -73,7 +76,7 @@ export async function POST(request) {
         properties,
       });
     } else if (eventType === 'api_call') {
-      await supabase.from('api_calls').insert({
+      result = await supabase.from('api_calls').insert({
         user_id: userId,
         endpoint: properties.endpoint,
         method: properties.method,
@@ -84,7 +87,7 @@ export async function POST(request) {
         response_summary: properties.responseSummary,
       });
     } else if (eventType === 'csv_upload') {
-      await supabase.from('csv_upload_events').insert({
+      result = await supabase.from('csv_upload_events').insert({
         user_id: userId,
         upload_session_id: properties.uploadSessionId,
         filename: properties.filename,
@@ -101,7 +104,7 @@ export async function POST(request) {
         import_duration_ms: properties.importDurationMs,
       });
     } else if (eventType === 'checkout') {
-      await supabase.from('checkout_events').insert({
+      result = await supabase.from('checkout_events').insert({
         user_id: userId,
         session_id: properties.sessionId,
         status: properties.status,
@@ -116,7 +119,7 @@ export async function POST(request) {
         properties,
       });
     } else if (eventType === 'free_trial') {
-      await supabase.from('free_trial_events').insert({
+      result = await supabase.from('free_trial_events').insert({
         user_id: userId,
         event_type: properties.eventType,
         trial_days_offered: properties.trialDaysOffered,
@@ -127,7 +130,7 @@ export async function POST(request) {
         properties,
       });
     } else if (eventType === 'tip') {
-      await supabase.from('tip_analytics').insert({
+      result = await supabase.from('tip_analytics').insert({
         user_id: userId,
         tipper_username: properties.tipperUsername,
         amount_tokens: properties.amountTokens,
@@ -141,7 +144,7 @@ export async function POST(request) {
         recorded_at: properties.recordedAt,
       });
     } else if (eventType === 'session') {
-      await supabase.from('user_sessions').insert({
+      result = await supabase.from('user_sessions').insert({
         user_id: userId,
         session_id: properties.sessionId || session_id,
         device_type: properties.deviceType,
@@ -157,14 +160,26 @@ export async function POST(request) {
       });
     } else {
       // Legacy: fall back to analytics_events
-      await supabase.from('analytics_events').insert({
+      // analytics_events columns: user_id, event_name, properties, session_id,
+      // url. It has no page_url/event_category/referrer columns — writing them
+      // made every insert that carried a URL (all of lib/track.js's events)
+      // fail, silently, from 2026-09-18 on.
+      result = await supabase.from('analytics_events').insert({
         user_id: userId,
         event_name: eventName || 'unknown',
-        event_category: eventCategory,
-        page_url: pageUrlToUse,
-        referrer,
-        properties,
+        properties: {
+          ...properties,
+          ...(eventCategory ? { event_category: eventCategory } : {}),
+          ...(referrer ? { referrer } : {}),
+        },
+        session_id: session_id || properties.sessionId || null,
+        url: pageUrlToUse || null,
       });
+    }
+
+    if (result?.error) {
+      console.error('[/api/track] insert failed:', eventType || eventName, result.error.message);
+      return Response.json({ success: false, error: 'insert_failed' }, { status: 200 });
     }
 
     return Response.json({ success: true, eventType });

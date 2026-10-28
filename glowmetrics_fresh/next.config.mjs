@@ -44,6 +44,12 @@ const nextConfig = {
         permanent: true,
       },
       {
+        source: '/guides/best-time-to-stream-chaturbate',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/guides/chaturbate-best-hours',
+        statusCode: 301,
+      },
+      {
         source: '/blog/how-to-get-veiws-on-chaturbate',
         has: [{ type: 'host', value: 'camcashgrl.com' }],
         destination: 'https://www.camcashgrl.com/blog/how-to-get-views-on-chaturbate',
@@ -108,6 +114,14 @@ const nextConfig = {
         source: '/guides/best-time-to-stream-on-chaturbate',
         destination: '/guides/chaturbate-best-hours',
         permanent: true,
+      },
+      {
+        // Merged duplicate — same search intent as /guides/chaturbate-best-hours
+        // (the URL with the stronger GSC visibility), which now contains the
+        // combined content of both pages.
+        source: '/guides/best-time-to-stream-chaturbate',
+        destination: '/guides/chaturbate-best-hours',
+        statusCode: 301,
       },
 {
         source: '/blog/how-to-get-veiws-on-chaturbate',

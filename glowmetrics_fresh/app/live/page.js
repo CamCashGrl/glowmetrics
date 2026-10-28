@@ -949,7 +949,7 @@ export default function LivePage() {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
-              {['Chaturbate','BongaCams','MyFreeCams','CamSoda','Stripchat'].map(p => <option key={p} value={p}>{p}</option>)}
+              {['Chaturbate','BongaCams','MyFreeCams'].map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input type="number" value={liveGoalTokens || ''} onChange={e => {
               const next = Math.max(0, Number(e.target.value) || 0);

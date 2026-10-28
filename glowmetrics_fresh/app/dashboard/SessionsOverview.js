@@ -405,11 +405,11 @@ function SessionRow({ e, tz, selected, onSelect, vs }) {
 }
 
 // ── Row 4 right: details ─────────────────────────────────────────────────────
-function Timeline({ data }) {
+function Timeline({ data, tz }) {
   if (!data) return <div data-testid="details-timeline-empty" style={{ fontSize: 12.5, color: C.muted, padding: "18px 0" }}>Not enough time-stamped activity in this session to chart.</div>
   const max = Math.max(...data.buckets.map((b) => Math.max(b.public, b.private)), 0.01)
   const H = 70
-  const fmtT = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+  const fmtT = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: tz })
   return (
     <div data-testid="details-timeline">
       <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: H + 14, paddingTop: 10 }}>
@@ -618,7 +618,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
             <span>● <span style={{ color: C.cyan }}>Public</span></span><span>● <span style={{ color: C.violet }}>Private</span></span><span>● <span style={{ color: C.pink }}>Tips</span></span>
           </span>
         </div>
-        <Timeline data={sessionTimeline(e, { tips })} />
+        <Timeline data={sessionTimeline(e, { tips })} tz={tz} />
       </div>
       {signal && (
         <div data-testid="today-signal" style={{ ...inset, border: `1px solid ${C.cyan}55`, padding: "10px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>

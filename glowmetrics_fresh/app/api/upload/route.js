@@ -1,8 +1,10 @@
+import { summarizeOnboarding } from '../../../lib/onboardingSummary'
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, detectDateOrder, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
 import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
+import { importTimeZone, toStoredInstant } from '../../../lib/creatorTimezone'
 
 const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
@@ -52,6 +54,18 @@ async function handleUpload(req) {
   const fd = await req.formData()
   const file = fd.get('file')
   const replace = fd.get('replace') === 'true'
+
+  // Export times carry no timezone; they are the creator's wall clock. Read
+  // them in the creator's saved zone (or the zone the client resolved when
+  // none is saved) and store real instants — never guess UTC/server time.
+  const { data: tzProfile } = await supabase.from('profiles').select('timezone').eq('id', user.id).maybeSingle()
+  const timeZone = importTimeZone(tzProfile?.timezone, fd.get('time_zone'))
+  if (!timeZone) {
+    return NextResponse.json(
+      { error: 'Choose your timezone before importing so your earnings land on the right days and hours.', code: 'timezone_required' },
+      { status: 400 }
+    )
+  }
 
   if (!file) {
     return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
@@ -150,7 +164,7 @@ async function handleUpload(req) {
 
     return {
       user_id:   user.id,
-      date_time: row.dateRaw || row.date_time || null,
+      date_time: toStoredInstant(row.dateRaw || row.date_time, timeZone),
       platform:  row.platform && row.platform !== 'Unknown' ? row.platform : textDetectedPlatform,
       username:  row.username  || 'Unknown',
       tip_type:  row.tip_type  || 'Tip',
@@ -411,7 +425,7 @@ async function handleUpload(req) {
 
   // ── RESPONSE ───────────────────────────────────────────────────────────
   const response = {
-    ok:        errors.length === 0,
+    ok:        errors.length === 0 && paidErrors.length === 0,
     inserted,
     skipped,
     total:     tipRows.length,
@@ -424,6 +438,8 @@ async function handleUpload(req) {
     paidSessionsInserted: paidInserted,
     paidSessionsSkipped:  paidSkipped,
     snapshot,
+    onboardingSummary: summarizeOnboarding(rows, timeZone),
+    timeZone,
   }
 
   if (errors.length > 0) {
@@ -437,6 +453,7 @@ async function handleUpload(req) {
 
   if (paidErrors.length > 0) {
     response.paidSessionsWarnings = paidErrors
+    response.message = `Some private earnings could not be saved. ${paidInserted} private transactions inserted; retry the import to save remaining rows safely.`
     console.warn('[UPLOAD] Paid-session batches completed with errors:', paidErrors)
   }
 
