@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../lib/liveSession/shape'
+import { enforceActiveLimit, recentLimitEndedSession } from '../../../../lib/liveSession/activeLimit'
 import { corsHeaders } from '../../../../lib/liveSession/cors'
 
 const UNRESOLVED_STATUSES = ['starting', 'live', 'inactive_warning', 'ending']
@@ -25,6 +26,7 @@ export async function GET(req) {
   }
 
   await supabase.rpc('sweep_stale_live_session')
+  await enforceActiveLimit(supabase)
 
   // Always looked up, independent of the flag — an existing session must be
   // found and returned even when the flag is currently disabled or Edge
@@ -47,7 +49,7 @@ export async function GET(req) {
   if (data?.id) {
     const { data: open } = await supabase
       .from('live_private_intervals')
-      .select('id,live_session_id,platform,started_at,rate_per_minute')
+      .select('id,live_session_id,platform,username,started_at,rate_per_minute')
       .eq('live_session_id', data.id)
       .is('ended_at', null)
       .maybeSingle()
@@ -55,7 +57,11 @@ export async function GET(req) {
   }
 
   return NextResponse.json(
-    { session: shapeLiveSession(data), privateInterval },
+    {
+      session: shapeLiveSession(data),
+      privateInterval,
+      limitEnded: data ? null : await recentLimitEndedSession(supabase, user.id),
+    },
     { headers: { 'Cache-Control': 'no-store', ...cors } }
   )
 }

@@ -38,17 +38,21 @@ export async function POST(req) {
     return NextResponse.json({ session: shapeLiveSession(existing) }, { headers: cors })
   }
 
-  // 4. No existing session — create one. There is exactly one Live Engine;
-  // every authenticated account can start it, no flag, no allow-list.
+  // 4. No existing session — create one. There is exactly one Live Engine.
+  // The RPC enforces the plan: Pro unlimited, Free 2 new streams per week
+  // (Monday 00:00 in the creator's saved timezone; the browser's zone is the
+  // fallback when none is saved, then UTC).
   let platform = null
+  let timezone = null
   try {
     const body = await req.json()
     platform = body?.platform ?? null
+    timezone = typeof body?.timezone === 'string' ? body.timezone.slice(0, 64) : null
   } catch (_) {
     // no body / not JSON — platform stays null, RPC defaults it to Chaturbate
   }
 
-  const { data, error } = await supabase.rpc('start_live_session', { p_platform: platform })
+  const { data, error } = await supabase.rpc('start_live_session', { p_platform: platform, p_timezone: timezone })
   if (error) {
     const { status, body } = sanitizedErrorResponse(error)
     return NextResponse.json(body, { status, headers: cors })

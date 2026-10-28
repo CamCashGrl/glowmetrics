@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
+import { enforceActiveLimit } from '../../../../../lib/liveSession/activeLimit'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
 
 export async function OPTIONS(req) {
@@ -28,6 +29,7 @@ export async function POST(req) {
     // malformed/missing body — treated as "not detected", never as "detected"
   }
 
+  const limitEnded = await enforceActiveLimit(supabase)
   const { data, error } = await supabase.rpc('send_extension_heartbeat', {
     p_platform: platform,
     p_broadcaster_page_detected: broadcasterPageDetected,
@@ -37,5 +39,5 @@ export async function POST(req) {
     return NextResponse.json(body, { status, headers: cors })
   }
 
-  return NextResponse.json({ session: shapeLiveSession(data) }, { headers: cors })
+  return NextResponse.json({ session: shapeLiveSession(data), limitEnded }, { headers: cors })
 }

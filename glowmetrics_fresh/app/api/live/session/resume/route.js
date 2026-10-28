@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getLiveSessionCaller } from '../../../../../lib/liveSession/auth'
 import { shapeLiveSession, sanitizedErrorResponse } from '../../../../../lib/liveSession/shape'
+import { enforceActiveLimit } from '../../../../../lib/liveSession/activeLimit'
 import { corsHeaders } from '../../../../../lib/liveSession/cors'
 
 export async function OPTIONS(req) {
@@ -13,6 +14,9 @@ export async function POST(req) {
   const cors = corsHeaders(req)
   const { supabase, user } = await getLiveSessionCaller(req)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: cors })
+
+  const limitEnded = await enforceActiveLimit(supabase)
+  if (limitEnded) return NextResponse.json({ session: null, limitEnded }, { headers: cors })
 
   const { data, error } = await supabase.rpc('resume_live_session')
   if (error) {
