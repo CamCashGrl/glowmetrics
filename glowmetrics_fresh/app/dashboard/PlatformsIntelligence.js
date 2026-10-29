@@ -17,12 +17,17 @@ import {
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
+import { card, Chip, HERO_GRADIENT } from './CommandCenter'
+
+// Visual language is the Command Center's: its glass card, chip, hero
+// gradient, type scale and brand-gradient CTA.
+const CTA_GRADIENT = 'linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)'
 
 const C = {
   card: "#0d1322", card2: "#111829", border: "#1e2d45", border2: "#2a3f5f",
   cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
   green: "#10B981", white: "#F1F5F9", muted: "#475569", text: "#94A3B8",
-  purple: "#a855f7", red: "#F87171",
+  purple: "#a855f7", red: "#F87171", indigo: "#7C5CFF",
 }
 
 const PLATFORM_ACCENT = {
@@ -193,11 +198,7 @@ function NextBestMove({ comparison, efficiency, timeIntel, onOpenPlanner }) {
   }
 
   const planner = onOpenPlanner ? (
-    <button onClick={onOpenPlanner} style={{
-      justifySelf: 'start', padding: '7px 13px', fontSize: 12, fontWeight: 700,
-      borderRadius: 8, cursor: 'pointer', color: '#05070f',
-      border: 'none', background: C.cyan,
-    }}>Build your stream plan →</button>
+    <div><BrandButton onClick={onOpenPlanner}>Build your stream plan →</BrandButton></div>
   ) : null
 
   if (moves.length === 0) {
@@ -464,27 +465,31 @@ function Badge({ kind }) {
 
 function Glass({ children, style, accent, className, onClick, ...rest }) {
   return (
-    <div className={`pl-glass${onClick ? ' pl-click' : ''}${className ? ` ${className}` : ''}`} onClick={onClick} style={{
-      position: 'relative', borderRadius: 14, padding: 16, minWidth: 0,
-      background: 'linear-gradient(180deg, rgba(20,26,44,0.82), rgba(11,15,27,0.82))',
-      border: `1px solid ${accent ? `${accent}38` : 'rgba(255,255,255,0.07)'}`,
-      boxShadow: accent ? `0 0 0 1px ${accent}10, 0 10px 30px -18px ${accent}66` : '0 10px 30px -22px rgba(0,0,0,0.8)',
-      ...style,
-    }} {...rest}>{children}</div>
+    <div className={`pl-glass${onClick ? ' pl-click' : ''}${className ? ` ${className}` : ''}`} onClick={onClick}
+      style={card({ position: 'relative', padding: 20, minWidth: 0, ...(accent ? { border: `1px solid ${accent}40` } : {}), ...style })} {...rest}>
+      {children}
+    </div>
   )
 }
 
 function Label({ children, style }) {
-  return <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.text, ...style }}>{children}</div>
+  return <div style={{ fontSize: 16, fontWeight: 800, color: C.white, letterSpacing: '-0.01em', ...style }}>{children}</div>
+}
+
+const eyebrow = { fontSize: 10.5, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.muted }
+
+function BrandButton({ children, onClick, style }) {
+  return (
+    <button type="button" onClick={onClick} className="pl-brand" style={{
+      background: CTA_GRADIENT, border: 'none', borderRadius: 10, padding: '11px 20px',
+      fontSize: 14, fontWeight: 700, color: C.white, cursor: 'pointer', whiteSpace: 'nowrap',
+      boxShadow: '0 4px 18px rgba(124,92,255,0.30)', ...style,
+    }}>{children}</button>
+  )
 }
 
 function UpgradeLink({ children, onUpgrade, source }) {
-  return (
-    <button type="button" onClick={() => onUpgrade?.(source)} style={{
-      background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-      color: C.pink, fontSize: 12, fontWeight: 700,
-    }}>{children} →</button>
-  )
+  return <BrandButton onClick={() => onUpgrade?.(source)} style={{ padding: '9px 16px', fontSize: 13 }}>{children} →</BrandButton>
 }
 
 const fmtSigned$ = (n) => `${n >= 0 ? '+' : '−'}${fmt$(Math.abs(n))}`
@@ -506,70 +511,70 @@ function PlatformPulse({ comparison, snapshot, recap, learning }) {
   const leader = comparison[0]
   const multi = comparison.length > 1
   return (
-    <Glass accent={C.pink} className="pl-pulse" style={{ padding: '16px 18px', marginBottom: 14 }}>
-      <div className="pl-pulse-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.6fr)', gap: 18, alignItems: 'center' }}>
-        <div style={{ minWidth: 0 }}>
-          <Label>Total platform earnings</Label>
-          <div style={{ fontSize: 34, fontWeight: 800, color: C.white, lineHeight: 1.1, marginTop: 4, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-            <Counter value={snapshot.totalEarnings} />
+    <div style={{
+      background: HERO_GRADIENT, backdropFilter: 'blur(20px)', border: '1px solid rgba(34,211,238,0.28)',
+      borderRadius: 22, padding: 34, position: 'relative', overflow: 'hidden',
+    }}>
+      <div style={{ position: 'absolute', right: -70, top: -70, width: 300, height: 300, borderRadius: '50%', background: 'rgba(236,72,153,0.12)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 420px', minWidth: 0 }}>
+          <div style={{ ...eyebrow, fontSize: 12, color: C.cyan, marginBottom: 14 }}>Platform pulse</div>
+          <div style={{ fontSize: 38, fontWeight: 800, color: C.white, letterSpacing: '-0.035em', lineHeight: 1.12 }}>
+            {multi ? <>{leader.platform} is leading</> : <>Everything on {leader.platform}</>}
           </div>
-          <div style={{ fontSize: 11.5, color: C.text, marginTop: 4 }}>
-            {plural(snapshot.totalTips, 'tip')} · {plural(comparison.length, 'platform')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 14 }}>
+            {multi && (
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.pink, background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.3)', padding: '5px 12px', borderRadius: 20 }}>
+                {leader.earningsPercent}% of earnings
+              </span>
+            )}
+            <span style={{ fontSize: 13, color: C.text }}>
+              <strong style={{ color: C.white }}>{plural(snapshot.totalTips, 'tip')}</strong> across {plural(comparison.length, 'platform')} · {plural(snapshot.sessions, 'meaningful session')}
+            </span>
           </div>
-        </div>
-
-        <div style={{ minWidth: 0, borderLeft: `1px solid ${C.border}`, paddingLeft: 18 }}>
-          {multi ? (
-            <>
-              <Label>Leading platform</Label>
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.white, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 4, background: accentFor(leader.platform), marginRight: 7, verticalAlign: 'middle' }} />
-                {leader.platform}
-              </div>
-              <div style={{ fontSize: 12, color: C.pink, fontWeight: 700, marginTop: 2 }}>{leader.earningsPercent}% of earnings</div>
-            </>
-          ) : (
-            <>
-              <Label>Your platform</Label>
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.white, marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{leader.platform}</div>
-              <div style={{ fontSize: 12, color: C.text, marginTop: 2 }}>{plural(snapshot.sessions, 'meaningful session')}</div>
-            </>
+          <div style={{ marginTop: 22 }}>
+            <div style={eyebrow}>Total platform earnings</div>
+            <div style={{ fontSize: 34, fontWeight: 800, color: C.white, letterSpacing: '-0.03em', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+              <Counter value={snapshot.totalEarnings} />
+            </div>
+          </div>
+          {learning.isLearning && (
+            <div style={{ fontSize: 13.5, color: C.text, marginTop: 14, lineHeight: 1.6, maxWidth: 520 }}>
+              <strong style={{ color: C.white }}>CamCash is still learning your platforms.</strong>{' '}
+              {[
+                learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
+                learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
+              ].filter(Boolean).join(' and ')} will unlock early patterns.
+            </div>
           )}
         </div>
 
-        <div style={{ minWidth: 0, borderLeft: `1px solid ${C.border}`, paddingLeft: 18 }}>
+        <div style={{ flex: '1 1 300px', minWidth: 260, textAlign: 'right' }}>
           {recap ? (
             <>
-              <Label>Your latest stream</Label>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.green, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
-                ↑ <Counter value={recap.earned} /> <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>on {recap.platform}</span>
+              <div style={eyebrow}>Your latest stream</div>
+              <div style={{ fontSize: 30, fontWeight: 800, color: C.green, letterSpacing: '-0.03em', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+                +<Counter value={recap.earned} />
               </div>
-              <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>
-                {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
-                {recap.newSpenders ? <> · <span style={{ color: C.white }}>{plural(recap.newSpenders, 'new spender')}</span></> : null}
+              <div style={{ fontSize: 13, color: C.text, marginTop: 4 }}>
+                on <strong style={{ color: C.white }}>{recap.platform}</strong> · {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
               </div>
+              {recap.tookLead && (
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.pink, marginTop: 10 }}>{recap.platform} moved into the lead</div>
+              )}
             </>
           ) : (
             <>
-              <Label>Since your last stream</Label>
-              <div style={{ fontSize: 12.5, color: C.white, marginTop: 6, lineHeight: 1.45 }}>
+              <div style={eyebrow}>Since your last stream</div>
+              <div style={{ fontSize: 15, color: C.white, marginTop: 10, lineHeight: 1.5 }}>
                 Stream again and CamCash will start showing what changed between sessions.
               </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>A stream counts once it runs 30+ minutes with 2+ tips.</div>
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>A stream counts once it runs 30+ minutes with 2+ tips.</div>
             </>
           )}
         </div>
       </div>
-      {learning.isLearning && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}`, fontSize: 11.5, color: C.text }}>
-          <span style={{ color: C.white, fontWeight: 700 }}>CamCash is still learning your platforms.</span>{' '}
-          {[
-            learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
-            learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
-          ].filter(Boolean).join(' and ')} will unlock early patterns.
-        </div>
-      )}
-    </Glass>
+    </div>
   )
 }
 
@@ -579,29 +584,29 @@ function PlatformPulse({ comparison, snapshot, recap, learning }) {
 
 function LatestStream({ recap, tz, multi }) {
   if (!recap) return null
-  const items = [
-    { text: `${recap.platform} ${fmtSigned$(recap.earned)}`, color: C.green },
-    recap.returningFans ? { text: `${plural(recap.returningFans, 'returning fan')} tipped again`, color: C.cyan } : null,
-    recap.newSpenders ? { text: `${plural(recap.newSpenders, 'new spender')} on ${recap.platform}`, color: C.pink } : null,
-    recap.tookLead ? { text: `${recap.platform} moved into the lead`, color: C.pink } : null,
-    multi && recap.shareShiftPts ? { text: `${recap.platform} ${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts revenue share`, color: recap.shareShiftPts > 0 ? C.green : C.blue } : null,
-    recap.durationMinutes ? { text: `${recap.durationMinutes >= 60 ? `${Math.floor(recap.durationMinutes / 60)}h ` : ''}${recap.durationMinutes % 60}m streamed`, color: C.text } : null,
-  ].filter(Boolean)
-
+  const dur = recap.durationMinutes
   return (
-    <div className="pl-strip" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 800, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.text, marginRight: 2 }}>
-        <span className="pl-dot" style={{ width: 6, height: 6, borderRadius: 3, background: C.green }} />
-        Latest stream · {streamWhen(recap.endTime, tz)}
-      </span>
-      {items.map((it, i) => (
-        <span key={i} className="pl-chip" style={{ animationDelay: `${i * 60}ms`, fontSize: 11.5, fontWeight: 600, color: it.color === C.text ? C.text : C.white, background: `${it.color}12`, border: `1px solid ${it.color}38`, borderRadius: 999, padding: '3px 10px', whiteSpace: 'nowrap' }}>
-          {it.text}
-        </span>
-      ))}
-      {recap.returningFans === null && (
-        <span style={{ fontSize: 11, color: C.muted }}>Returning and new fans appear after a second stream on this platform.</span>
-      )}
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
+        <span className="pl-dot" style={{ width: 8, height: 8, borderRadius: 4, background: C.green }} />
+        <Label>Since your last stream</Label>
+        <span style={{ fontSize: 13, color: C.muted }}>{streamWhen(recap.endTime, tz)}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 11 }}>
+        <Chip icon="💸" title="Earned" value={fmtSigned$(recap.earned)} sub={`${recap.platform} · ${plural(recap.tips, 'tip')}`} accent={C.green} />
+        <Chip icon="🔁" title="Returning fans"
+          value={recap.returningFans === null ? 'First stream here' : plural(recap.returningFans, 'fan')}
+          sub={recap.returningFans === null ? 'Compared from your next stream' : 'tipped again'} accent={recap.returningFans ? C.cyan : C.muted} />
+        <Chip icon="✨" title="New spenders"
+          value={recap.newSpenders === null ? '—' : plural(recap.newSpenders, 'spender')}
+          sub={recap.newSpenders === null ? 'Needs an earlier stream' : 'tipped for the first time'} accent={recap.newSpenders ? C.pink : C.muted} />
+        {multi && recap.shareShiftPts !== null ? (
+          <Chip icon="📊" title="Revenue share" value={`${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`}
+            sub={recap.tookLead ? `${recap.platform} moved into the lead` : `${recap.platform} after this stream`} accent={recap.shareShiftPts > 0 ? C.green : C.blue} />
+        ) : dur ? (
+          <Chip icon="⏱️" title="Streamed" value={`${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`} sub={plural(recap.fans, 'fan') + ' tipped'} accent={C.gold} />
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -622,14 +627,14 @@ function PlatformCard({ row, extras, badges, selected, onSelect }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={{ width: 9, height: 9, borderRadius: 5, background: accent, boxShadow: `0 0 10px ${accent}`, flexShrink: 0 }} />
-          <span style={{ fontSize: 14, fontWeight: 800, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+          <span style={{ fontSize: 16, fontWeight: 800, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
         </div>
         <span style={{ fontSize: 11, color: selected ? accent : C.muted, whiteSpace: 'nowrap' }}>{selected ? 'Viewing ↓' : 'Details →'}</span>
       </div>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', minHeight: 20, marginTop: 9 }}>
         {badges.map(b => <Badge key={b} kind={b} />)}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: C.white, marginTop: 8, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ fontSize: 30, fontWeight: 800, color: C.white, marginTop: 10, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
         <Counter value={row.earnings} />
       </div>
       <div style={{ fontSize: 12, color: accent, fontWeight: 700 }}>{row.earningsPercent}% of your earnings</div>
@@ -671,9 +676,7 @@ function ExpansionCard({ onImport }) {
         ))}
       </div>
       {onImport && (
-        <button type="button" onClick={onImport} style={{ alignSelf: 'flex-start', marginTop: 2, padding: '7px 12px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', color: C.white, background: `${C.pink}22`, border: `1px solid ${C.pink}66` }}>
-          Import another platform →
-        </button>
+        <div><BrandButton onClick={onImport}>Import another platform →</BrandButton></div>
       )}
     </Glass>
   )
@@ -687,20 +690,20 @@ function MoneyBars({ comparison }) {
   const mounted = useMounted()
   return (
     <Glass>
-      <Label style={{ marginBottom: 12 }}>Where your money comes from</Label>
+      <Label style={{ marginBottom: 16 }}>Where your money comes from</Label>
       <div style={{ display: 'grid', gap: 12 }}>
         {comparison.map(p => {
           const accent = accentFor(p.platform)
           return (
             <div key={p.platform}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 12.5, marginBottom: 5 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 14, marginBottom: 7 }}>
                 <span style={{ color: C.white, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{p.platform}</span>
                 <span style={{ color: C.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   {fmt$(p.earnings)} <span style={{ color: C.white, fontWeight: 800, marginLeft: 6 }}>{p.earningsPercent}%</span>
                 </span>
               </div>
-              <div style={{ height: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 5, overflow: 'hidden' }}>
-                <div style={{ width: mounted ? `${Math.max(p.earningsPercent, p.earnings > 0 ? 1 : 0)}%` : 0, height: '100%', borderRadius: 5, background: `linear-gradient(90deg, ${accent}88, ${accent})`, boxShadow: `0 0 12px ${accent}55`, transition: 'width 1s cubic-bezier(.2,.8,.2,1)' }} />
+              <div style={{ height: 14, background: 'rgba(255,255,255,0.05)', borderRadius: 7, overflow: 'hidden' }}>
+                <div style={{ width: mounted ? `${Math.max(p.earningsPercent, p.earnings > 0 ? 1 : 0)}%` : 0, height: '100%', borderRadius: 7, background: `linear-gradient(90deg, ${accent}88, ${accent})`, boxShadow: `0 0 12px ${accent}55`, transition: 'width 1s cubic-bezier(.2,.8,.2,1)' }} />
               </div>
             </div>
           )
@@ -722,7 +725,7 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
   const shown = isPro ? [...cross.map(c => c.text), ...noticed.map(n => n.text)] : noticed.map(n => n.text)
   return (
     <Glass accent={C.purple}>
-      <Label style={{ color: C.purple, marginBottom: 10 }}>✦ CamCash noticed</Label>
+      <Label style={{ marginBottom: 14 }}><span style={{ color: C.pink }}>✦</span> CamCash noticed</Label>
       {shown.length === 0 && freeTeasers.length === 0 ? (
         <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
           {multi
@@ -732,16 +735,16 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
       ) : (
         <div style={{ display: 'grid', gap: 8 }}>
           {shown.slice(0, 4).map((t, i) => (
-            <div key={i} className="pl-chip" style={{ animationDelay: `${i * 70}ms`, fontSize: 12.5, color: C.white, lineHeight: 1.5, padding: '8px 11px', background: 'rgba(168,85,247,0.06)', borderLeft: `2px solid ${C.purple}`, borderRadius: '0 8px 8px 0' }}>
-              {t}
+            <div key={i} className="pl-chip" style={{ animationDelay: `${i * 70}ms`, display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14, color: C.white, lineHeight: 1.55, padding: '14px 15px', borderRadius: 12, background: i === 0 ? `${C.indigo}18` : `${C.indigo}0d`, border: `1px solid ${i === 0 ? `${C.indigo}50` : `${C.indigo}28`}` }}>
+              <span style={{ fontSize: 17, flexShrink: 0 }}>💡</span><span style={{ minWidth: 0 }}>{t}</span>
             </div>
           ))}
           {freeTeasers.slice(0, 2).map(c => (
-            <div key={c.id} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.pink}40`, background: `linear-gradient(135deg, ${C.pink}10, ${C.purple}10)` }}>
+            <div key={c.id} style={{ padding: '14px 15px', borderRadius: 12, border: `1px solid ${C.pink}40`, background: HERO_GRADIENT }}>
               <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.09em', color: C.pink }}>✦ PRO INSIGHT</div>
-              <div style={{ fontSize: 12.5, color: C.white, marginTop: 4, lineHeight: 1.45 }}>{c.teaser}</div>
+              <div style={{ fontSize: 14, color: C.white, marginTop: 5, lineHeight: 1.5 }}>{c.teaser}</div>
               <div aria-hidden style={{ fontSize: 12, color: C.text, marginTop: 4, filter: 'blur(4px)', userSelect: 'none' }}>████████ earns ██% more per ███</div>
-              <div style={{ marginTop: 6 }}><UpgradeLink onUpgrade={onUpgrade} source={`platforms_insight_${c.id}`}>{c.cta}</UpgradeLink></div>
+              <div style={{ marginTop: 10 }}><UpgradeLink onUpgrade={onUpgrade} source={`platforms_insight_${c.id}`}>{c.cta}</UpgradeLink></div>
             </div>
           ))}
         </div>
@@ -770,12 +773,12 @@ function Comparison({ comparison, extras }) {
   return (
     <Glass style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 140 + comparison.length * 130, fontVariantNumeric: 'tabular-nums' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 140 + comparison.length * 130, fontVariantNumeric: 'tabular-nums' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '11px 16px', fontSize: 10, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.text, fontWeight: 800 }}>Platform comparison</th>
+              <th style={{ textAlign: 'left', padding: '16px 20px', fontSize: 16, color: C.white, fontWeight: 800 }}>Platform comparison</th>
               {comparison.map(p => (
-                <th key={p.platform} style={{ textAlign: 'right', padding: '11px 16px', color: C.white, fontWeight: 800, whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <th key={p.platform} style={{ textAlign: 'right', padding: '16px 20px', color: C.white, fontWeight: 800, whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <PlatformCell platform={p.platform} />
                 </th>
               ))}
@@ -788,14 +791,14 @@ function Comparison({ comparison, extras }) {
               const best = finite.length > 1 ? Math.max(...finite) : null
               return (
                 <tr key={r.label} style={{ borderTop: `1px solid ${C.border}`, background: ri % 2 ? 'rgba(255,255,255,0.012)' : 'transparent' }}>
-                  <td style={{ padding: '8px 16px', color: C.text, whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '10px 20px', color: C.text, whiteSpace: 'nowrap' }}>
                     {r.label}{r.note && <span style={{ color: C.muted, fontSize: 10.5, marginLeft: 6 }}>{r.note}</span>}
                   </td>
                   {comparison.map((p, i) => {
                     const v = vals[i]
                     const isBest = best !== null && v === best && v > 0
                     return (
-                      <td key={p.platform} style={{ padding: '8px 16px', textAlign: 'right', whiteSpace: 'nowrap', color: isBest ? C.white : '#cbd5e1', fontWeight: isBest ? 800 : 500 }}>
+                      <td key={p.platform} style={{ padding: '10px 20px', textAlign: 'right', whiteSpace: 'nowrap', color: isBest ? C.white : '#cbd5e1', fontWeight: isBest ? 800 : 500 }}>
                         {r.render ? r.render(p) : v === null ? <span style={{ color: C.muted }}>—</span> : r.fmt(v)}
                         {isBest && !r.render && <span title="Best of your platforms" style={{ display: 'inline-block', width: 5, height: 5, borderRadius: 3, background: C.pink, marginLeft: 6, verticalAlign: 'middle', boxShadow: `0 0 6px ${C.pink}` }} />}
                       </td>
@@ -818,7 +821,7 @@ function Comparison({ comparison, extras }) {
 function ShareShift({ shift }) {
   return (
     <Glass>
-      <Label style={{ marginBottom: 10 }}>Revenue split · last 30 days vs the 30 before</Label>
+      <Label style={{ marginBottom: 14 }}>Revenue split <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>· last 30 days vs the 30 before</span></Label>
       <div style={{ display: 'grid', gap: 7 }}>
         {shift.map(r => (
           <div key={r.platform} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 70px 70px 80px', gap: 10, fontSize: 12.5, alignItems: 'center', fontVariantNumeric: 'tabular-nums' }}>
@@ -840,7 +843,7 @@ function HistoryTeaser({ hiddenTipCount, onUpgrade }) {
     <Glass style={{ border: `1px dashed ${C.pink}55` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ minWidth: 0, flex: '1 1 320px' }}>
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: C.white }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
             How your platform split is moving <ProTag />
           </div>
           <div style={{ fontSize: 12, color: C.text, marginTop: 4, lineHeight: 1.5 }}>
@@ -867,7 +870,7 @@ function LearningPanel({ learning, onImport }) {
   ]
   return (
     <Glass accent={C.purple} style={{ padding: 20, marginBottom: 16 }}>
-      <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>CamCash is learning your platforms</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em' }}>CamCash is learning your platforms</div>
       <div style={{ fontSize: 12.5, color: C.text, marginTop: 5, lineHeight: 1.55, maxWidth: 620 }}>
         {learning.tips > 0
           ? <>Import or stream a little more and we&apos;ll begin comparing where your income, fans and strongest sessions come from.</>
@@ -882,9 +885,7 @@ function LearningPanel({ learning, onImport }) {
         ))}
       </div>
       {onImport && (
-        <button type="button" onClick={onImport} style={{ marginTop: 14, padding: '8px 14px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', color: '#05070f', border: 'none', background: C.cyan }}>
-          Import tips →
-        </button>
+        <div style={{ marginTop: 18 }}><BrandButton onClick={onImport}>Import tips →</BrandButton></div>
       )}
     </Glass>
   )
@@ -966,12 +967,14 @@ export default function PlatformsIntelligence({
   }
 
   return (
-    <div className="pl-root" style={{ maxWidth: 1280 }}>
+    <div className="pl-root" style={{ maxWidth: 1280, display: 'flex', flexDirection: 'column', gap: 22 }}>
       <style>{`
         .pl-root { max-width: 100%; }
         .pl-root section, .pl-root .pi-two-col > *, .pl-root .pl-grid > * { min-width: 0; }
         .pl-root table { font-variant-numeric: tabular-nums; }
         .pl-click { cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+        .pl-brand:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124,92,255,0.45) !important; }
+        .pl-brand { transition: transform .15s, box-shadow .15s; }
         .pl-click:hover { transform: translateY(-2px); border-color: rgba(236,72,153,0.35) !important; box-shadow: 0 14px 34px -18px rgba(236,72,153,0.45) !important; }
         .pl-click:focus-visible { outline: 2px solid ${C.pink}; outline-offset: 2px; }
         @keyframes plGlow { 0% { text-shadow: 0 0 0 transparent; } 30% { text-shadow: 0 0 18px rgba(236,72,153,0.75); } 100% { text-shadow: 0 0 0 transparent; } }
@@ -982,7 +985,9 @@ export default function PlatformsIntelligence({
         .pl-dot { animation: plDot 2.4s ease-in-out 3; }
         @media (prefers-reduced-motion: reduce) {
           .pl-glow, .pl-chip, .pl-badge, .pl-dot { animation: none !important; }
-          .pl-click, .pl-click:hover { transition: none; transform: none; }
+          .pl-click, .pl-brand:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124,92,255,0.45) !important; }
+        .pl-brand { transition: transform .15s, box-shadow .15s; }
+        .pl-click:hover { transition: none; transform: none; }
         }
         @media (max-width: 1000px) {
           .pl-root .pl-pulse-grid { grid-template-columns: 1fr 1fr !important; }
@@ -996,15 +1001,15 @@ export default function PlatformsIntelligence({
         }
       `}</style>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.01em' }}>Platforms</h1>
-          <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>
+          <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, color: C.white, letterSpacing: '-0.025em' }}>Platforms</h1>
+          <div style={{ fontSize: 15, color: C.muted, marginTop: 6 }}>
             See where your money is coming from — and what changed since your last stream.
           </div>
         </div>
         {recap && (
-          <span style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>
             Updated through {streamWhen(recap.endTime, tz)}
           </span>
         )}
@@ -1016,7 +1021,7 @@ export default function PlatformsIntelligence({
         <>
           <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} />
           {!isPro && multi && (
-            <div style={{ fontSize: 11.5, color: C.text, margin: '-6px 0 12px' }}>
+            <div style={{ fontSize: 12.5, color: C.text, marginTop: -10 }}>
               {fullHistoryPlatform && names.includes(fullHistoryPlatform)
                 ? <>Free plan: <span style={{ color: C.white }}>{fullHistoryPlatform}</span> (your primary) includes its full history; other platforms show their latest 31 days, so shares compare different spans.</>
                 : <>Free plan: each platform shows its latest 31 days of activity.</>}
@@ -1024,7 +1029,7 @@ export default function PlatformsIntelligence({
           )}
           <LatestStream recap={recap} tz={tz} multi={multi} />
 
-          <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginBottom: 16 }}>
+          <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
             {comparison.map(row => (
               <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={statuses[row.platform] || []}
                 selected={active === row.platform} onSelect={() => select(row.platform)} />
@@ -1033,30 +1038,31 @@ export default function PlatformsIntelligence({
           </div>
 
           {active && (
-            <div style={{ marginBottom: 16 }}>
+            <div>
               <PlatformDetail analytics={analytics} platformName={active} isPro={isPro} extras={extras[active]} onNavigate={onNavigate} detailRef={detailRef} />
             </div>
           )}
 
-          <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: multi ? 'minmax(0,1fr) minmax(0,1fr)' : '1fr', gap: 12, marginBottom: 16, alignItems: 'start' }}>
+          <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: multi ? 'minmax(0,1fr) minmax(0,1fr)' : '1fr', gap: 14, alignItems: 'start' }}>
             {multi && <MoneyBars comparison={comparison} />}
             <Noticed noticed={noticed} cross={cross} isPro={isPro} onUpgrade={onUpgrade} multi={multi} />
           </div>
 
           {multi && (
-            <div style={{ marginBottom: 16 }}>
+            <div>
               <Comparison comparison={comparison} extras={extras} />
             </div>
           )}
 
           {multi && (isPro
-            ? (shift && <div style={{ marginBottom: 16 }}><ShareShift shift={shift} /></div>)
-            : <div style={{ marginBottom: 16 }}><HistoryTeaser hiddenTipCount={hiddenTipCount} onUpgrade={onUpgrade} /></div>
+            ? (shift && <div><ShareShift shift={shift} /></div>)
+            : <div><HistoryTeaser hiddenTipCount={hiddenTipCount} onUpgrade={onUpgrade} /></div>
           )}
 
-          <Section title="Your next best move">
+          <Glass>
+            <Label style={{ marginBottom: 14 }}>⚡ Your next best move</Label>
             <NextBestMove comparison={comparison} efficiency={efficiency} timeIntel={timeIntel} onOpenPlanner={onOpenPlanner} />
-          </Section>
+          </Glass>
 
           <DataCoverage coverage={coverage} />
         </>
