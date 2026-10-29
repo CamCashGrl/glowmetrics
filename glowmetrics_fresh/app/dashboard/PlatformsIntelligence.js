@@ -463,31 +463,78 @@ const BADGE_HELP = {
 function Badge({ kind }) {
   const b = BADGES[kind]
   if (!b) return null
+
   return (
-    <span className="pl-badge" title={BADGE_HELP[kind]} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999,
-      border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.035)', padding: '4px 10px',
-      fontSize: 9, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: C.text, whiteSpace: 'nowrap',
-    }}>{b.label}</span>
+    <span
+      className="pl-badge"
+      title={BADGE_HELP[kind]}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        borderRadius: 999,
+        border: '1px solid rgba(255,255,255,0.045)',
+        background: 'rgba(255,255,255,0.025)',
+        padding: '4px 9px',
+        fontSize: 9,
+        fontWeight: 600,
+        letterSpacing: '0.09em',
+        textTransform: 'uppercase',
+        color: C.text,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {b.label}
+    </span>
   )
 }
 
 // The one canonical glass surface. Thin low-opacity border, inset top
 // highlight, soft drop shadow. `accent` is for the selected state only;
 // `glow` adds ambient light.
-const GLASS_BG = 'linear-gradient(145deg, rgba(18,21,42,0.80), rgba(8,10,22,0.90))'
-const GLASS_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.045), 0 18px 50px rgba(0,0,0,0.28)'
+const GLASS_BG = 'linear-gradient(145deg, rgba(18,21,42,0.74), rgba(7,9,20,0.92))'
+const GLASS_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.045), 0 22px 56px rgba(0,0,0,0.30)'
+
 function Glass({ children, style, accent, glow, className, onClick, ...rest }) {
   return (
-    <div className={`pl-glass${onClick ? ' pl-click' : ''}${className ? ` ${className}` : ''}`} onClick={onClick}
+    <div
+      className={`pl-glass${onClick ? ' pl-click' : ''}${className ? ` ${className}` : ''}`}
+      onClick={onClick}
       style={{
-        position: 'relative', overflow: 'hidden', borderRadius: 20, padding: 24, minWidth: 0,
-        border: `1px solid ${accent ? `${accent}55` : 'rgba(255,255,255,0.07)'}`,
-        background: GLASS_BG, backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)',
-        boxShadow: accent ? `${GLASS_SHADOW}, 0 0 44px -16px ${accent}88` : GLASS_SHADOW,
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 22,
+        padding: 24,
+        minWidth: 0,
+        border: `1px solid ${accent ? `${accent}38` : 'rgba(255,255,255,0.055)'}`,
+        background: GLASS_BG,
+        backdropFilter: 'blur(30px)',
+        WebkitBackdropFilter: 'blur(30px)',
+        boxShadow: accent
+          ? `${GLASS_SHADOW}, 0 0 54px -24px ${accent}99`
+          : GLASS_SHADOW,
         ...style,
-      }} {...rest}>
-      {glow && <span aria-hidden className="pl-drift" style={{ position: 'absolute', top: -110, right: -80, width: 300, height: 300, borderRadius: '50%', background: glow, opacity: 0.10, filter: 'blur(100px)', pointerEvents: 'none' }} />}
+      }}
+      {...rest}
+    >
+      {glow && (
+        <span
+          aria-hidden
+          className="pl-drift"
+          style={{
+            position: 'absolute',
+            top: -120,
+            right: -90,
+            width: 320,
+            height: 320,
+            borderRadius: '50%',
+            background: glow,
+            opacity: 0.09,
+            filter: 'blur(110px)',
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       <div style={{ position: 'relative' }}>{children}</div>
     </div>
   )
@@ -603,105 +650,363 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
   const leader = comparison[0]
   const multi = comparison.length > 1
   const accent = accentFor(leader.platform)
-  return (
-    <div style={{
-      position: 'relative', overflow: 'hidden', borderRadius: 24, padding: '36px 40px',
-      border: '1px solid rgba(167,139,250,0.14)',
-      background: 'linear-gradient(145deg, rgba(18,21,42,0.92), rgba(7,9,20,0.96))',
-      backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)',
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 28px 70px rgba(0,0,0,0.38)',
-    }}>
-      {/* Neon as light in the environment, not as fill */}
-      <span aria-hidden className="pl-drift" style={{ position: 'absolute', left: -112, top: -128, width: 360, height: 360, borderRadius: '50%', background: 'rgba(34,211,238,0.14)', filter: 'blur(110px)', pointerEvents: 'none' }} />
-      <span aria-hidden className="pl-drift pl-drift-b" style={{ position: 'absolute', right: 0, bottom: -128, width: 300, height: 300, borderRadius: '50%', background: 'rgba(217,70,239,0.10)', filter: 'blur(100px)', pointerEvents: 'none' }} />
 
-      <div className="pl-hero-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: daily ? 'minmax(0,0.9fr) minmax(0,1.1fr)' : 'minmax(0,1fr) 300px', gap: 44, alignItems: 'center' }}>
-        <div style={{ minWidth: 0 }}>
+  return (
+    <div
+      className="pl-pulse"
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: 28,
+        padding: '40px 42px 34px',
+        border: '1px solid rgba(255,255,255,0.065)',
+        background: 'linear-gradient(145deg, rgba(16,19,38,0.92), rgba(6,8,18,0.98))',
+        backdropFilter: 'blur(34px)',
+        WebkitBackdropFilter: 'blur(34px)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255,255,255,0.055), 0 34px 84px rgba(0,0,0,0.42)',
+      }}
+    >
+      <span
+        aria-hidden
+        className="pl-drift"
+        style={{
+          position: 'absolute',
+          left: -150,
+          top: -155,
+          width: 430,
+          height: 430,
+          borderRadius: '50%',
+          background: 'rgba(35,199,255,0.12)',
+          filter: 'blur(120px)',
+          pointerEvents: 'none',
+        }}
+      />
+      <span
+        aria-hidden
+        className="pl-drift pl-drift-b"
+        style={{
+          position: 'absolute',
+          right: -80,
+          top: -80,
+          width: 390,
+          height: 390,
+          borderRadius: '50%',
+          background: 'rgba(139,92,246,0.12)',
+          filter: 'blur(120px)',
+          pointerEvents: 'none',
+        }}
+      />
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          right: '16%',
+          bottom: -190,
+          width: 320,
+          height: 320,
+          borderRadius: '50%',
+          background: 'rgba(255,61,154,0.055)',
+          filter: 'blur(115px)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        className="pl-hero-grid"
+        style={{
+          position: 'relative',
+          display: 'grid',
+          gridTemplateColumns: daily
+            ? 'minmax(0,0.82fr) minmax(0,1.18fr)'
+            : 'minmax(0,1fr) 300px',
+          gap: 48,
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ minWidth: 0, position: 'relative', zIndex: 2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
+            <span
+              className="pl-live"
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                background: C.teal,
+                boxShadow: `0 0 12px ${C.teal}`,
+              }}
+            />
             <span style={eyebrow}>Platform pulse</span>
           </div>
-          <div style={{ fontSize: 48, fontWeight: 600, color: C.white, letterSpacing: '-0.045em', lineHeight: 1.02, marginTop: 18 }}>
-            {multi ? <>{leader.platform}<br /><span style={{ color: C.text }}>is leading</span></> : <>Everything on<br /><span style={{ color: C.text }}>{leader.platform}</span></>}
-          </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 44, flexWrap: 'wrap', marginTop: 32 }}>
-            <div>
-              <div style={{ fontSize: 42, fontWeight: 700, color: C.white, letterSpacing: '-0.045em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                <Counter value={snapshot.totalEarnings} />
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>earnings</div>
-            </div>
-            {multi && (
-              <div>
-                <div style={{ fontSize: 42, fontWeight: 700, color: C.white, letterSpacing: '-0.045em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  {leader.earningsPercent}<span style={{ color: accent, textShadow: `0 0 18px ${accent}88` }}>%</span>
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>revenue share</div>
-              </div>
+          <div
+            style={{
+              marginTop: 17,
+              fontSize: 24,
+              fontWeight: 500,
+              color: C.white,
+              letterSpacing: '-0.025em',
+              lineHeight: 1.18,
+            }}
+          >
+            {multi ? (
+              <>
+                {leader.platform}{' '}
+                <span style={{ color: C.text }}>is leading your tracked revenue</span>
+              </>
+            ) : (
+              <>
+                Everything currently points to{' '}
+                <span style={{ color: C.text }}>{leader.platform}</span>
+              </>
             )}
           </div>
 
-          {multi && <div style={{ marginTop: 26 }}><ShareBar3 comparison={comparison} /></div>}
+          <div
+            style={{
+              marginTop: 24,
+              fontSize: 52,
+              fontWeight: 700,
+              color: C.white,
+              letterSpacing: '-0.05em',
+              lineHeight: 0.98,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <Counter value={snapshot.totalEarnings} />
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+            tracked earnings
+          </div>
 
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 22, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <span>{plural(snapshot.totalTips, 'tip')}</span><span>·</span>
-            <span>{plural(snapshot.sessions, 'session')}</span><span>·</span>
+          {multi && (
+            <div style={{ marginTop: 28, maxWidth: 490 }}>
+              <ShareBar3 comparison={comparison} />
+            </div>
+          )}
+
+          <div
+            style={{
+              fontSize: 13,
+              color: C.muted,
+              marginTop: 24,
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>{plural(snapshot.totalTips, 'tip')}</span>
+            <span>·</span>
+            <span>{plural(snapshot.sessions, 'session')}</span>
+            <span>·</span>
             <span>{plural(comparison.length, 'platform')}</span>
-            {newFans?.total > 0 && <><span>·</span><span style={{ color: C.teal }}>+{plural(newFans.total, 'new fan')} this week</span></>}
+            {newFans?.total > 0 && (
+              <>
+                <span>·</span>
+                <span style={{ color: C.teal }}>
+                  +{plural(newFans.total, 'new fan')} this week
+                </span>
+              </>
+            )}
           </div>
 
           {learning.isLearning && (
-            <div style={{ fontSize: 14, color: C.text, marginTop: 16, lineHeight: 1.6, maxWidth: 520 }}>
-              <span style={{ color: C.white, fontWeight: 600 }}>CamCash is still learning your platforms.</span>{' '}
+            <div
+              style={{
+                fontSize: 13.5,
+                color: C.text,
+                marginTop: 16,
+                lineHeight: 1.65,
+                maxWidth: 510,
+              }}
+            >
+              <span style={{ color: C.white, fontWeight: 600 }}>
+                CamCash is still learning your platforms.
+              </span>{' '}
               {[
-                learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
-                learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
-              ].filter(Boolean).join(' and ')} will unlock early patterns.
+                learning.sessionsNeeded > 0
+                  ? plural(learning.sessionsNeeded, 'more meaningful session')
+                  : null,
+                learning.hoursNeeded > 0
+                  ? `${learning.hoursNeeded} more streamed hours`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' and ')}{' '}
+              will unlock early patterns.
             </div>
           )}
         </div>
 
         {daily ? (
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div
+            style={{
+              minWidth: 0,
+              position: 'relative',
+              padding: '20px 2px 2px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 6,
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
               <span style={eyebrow}>Daily earnings · last 30 days</span>
-              {recap && (
-                <span style={{ fontSize: 13, color: C.text, whiteSpace: 'nowrap' }}>
-                  Latest stream <span style={{ color: C.teal, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>+{fmt$(recap.earned)}</span> on {recap.platform}
+              <span
+                style={{
+                  fontSize: 13,
+                  color: C.text,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {leader.earningsPercent}
+                <span style={{ color: accent }}>%</span> from {leader.platform}
+              </span>
+            </div>
+
+            <div
+              style={{
+                position: 'relative',
+                marginLeft: -8,
+                marginRight: -6,
+                marginTop: 8,
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  inset: '18% 14% 8%',
+                  background:
+                    'radial-gradient(circle, rgba(34,230,209,0.10), transparent 68%)',
+                  filter: 'blur(28px)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <GlowChart values={daily.total} color={C.teal} height={205} />
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: 11,
+                color: C.muted,
+                marginTop: 7,
+                letterSpacing: '0.04em',
+              }}
+            >
+              <span>30 days ago</span>
+              <span>{fmtN(daily.activeDays)} earning days</span>
+              <span>Today</span>
+            </div>
+
+            {recap && (
+              <div
+                style={{
+                  marginTop: 14,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  borderRadius: 999,
+                  padding: '7px 11px',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  background: 'rgba(255,255,255,0.025)',
+                  fontSize: 12.5,
+                  color: C.text,
+                }}
+              >
+                <span
+                  className="pl-live"
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: 3,
+                    background: C.teal,
+                    boxShadow: `0 0 9px ${C.teal}`,
+                  }}
+                />
+                Latest stream
+                <span
+                  style={{
+                    color: C.teal,
+                    fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  +{fmt$(recap.earned)}
                 </span>
-              )}
-            </div>
-            <GlowChart values={daily.total} color={C.teal} height={190} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted, marginTop: 10, letterSpacing: '0.04em' }}>
-              <span>30 days ago</span><span>{fmtN(daily.activeDays)} earning days</span><span>Today</span>
-            </div>
+                <span style={{ color: C.white }}>{recap.platform}</span>
+              </div>
+            )}
           </div>
         ) : (
-        <div style={{
-          borderRadius: 16, padding: 20, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.035)',
-          backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
-        }}>
-          {recap ? (
-            <>
-              <div style={eyebrow}>Latest stream</div>
-              <div style={{ fontSize: 30, fontWeight: 700, color: C.teal, letterSpacing: '-0.04em', lineHeight: 1, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}>
-                +<Counter value={recap.earned} />
-              </div>
-              <div style={{ fontSize: 14, color: C.white, marginTop: 10 }}>{recap.platform}</div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{plural(recap.tips, 'tip')} · {plural(recap.fans, 'fan')}</div>
-              {recap.tookLead && <div style={{ fontSize: 12, color: C.purple, marginTop: 10 }}>Moved into the lead</div>}
-            </>
-          ) : (
-            <>
-              <div style={eyebrow}>Since your last stream</div>
-              <div style={{ fontSize: 14, color: C.white, marginTop: 10, lineHeight: 1.55 }}>
-                Stream again and CamCash will start showing what changed between sessions.
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>A stream counts once it runs 30+ minutes with 2+ tips.</div>
-            </>
-          )}
-        </div>
+          <div
+            style={{
+              borderRadius: 18,
+              padding: 20,
+              border: '1px solid rgba(255,255,255,0.05)',
+              background: 'rgba(255,255,255,0.025)',
+              backdropFilter: 'blur(22px)',
+              WebkitBackdropFilter: 'blur(22px)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+            }}
+          >
+            {recap ? (
+              <>
+                <div style={eyebrow}>Latest stream</div>
+                <div
+                  style={{
+                    fontSize: 30,
+                    fontWeight: 700,
+                    color: C.teal,
+                    letterSpacing: '-0.04em',
+                    lineHeight: 1,
+                    marginTop: 14,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  +<Counter value={recap.earned} />
+                </div>
+                <div style={{ fontSize: 14, color: C.white, marginTop: 10 }}>
+                  {recap.platform}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                  {plural(recap.tips, 'tip')} · {plural(recap.fans, 'fan')}
+                </div>
+                {recap.tookLead && (
+                  <div style={{ fontSize: 12, color: C.purple, marginTop: 10 }}>
+                    Moved into the lead
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div style={eyebrow}>Since your last stream</div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: C.white,
+                    marginTop: 10,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  Stream again and CamCash will start showing what changed between
+                  sessions.
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+                  A stream counts once it runs 30+ minutes with 2+ tips.
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -715,28 +1020,103 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
 function LatestStream({ recap, tz, multi }) {
   if (!recap) return null
   const dur = recap.durationMinutes
+
   const items = [
     { value: fmtSigned$(recap.earned), label: 'earned', color: C.teal },
     recap.returningFans === null
       ? { value: 'First stream here', label: '', color: C.text }
       : { value: plural(recap.returningFans, 'returning fan'), label: '', color: C.white },
-    recap.newSpenders === null ? null : { value: recap.newSpenders ? plural(recap.newSpenders, 'new spender') : 'No new spenders', label: '', color: recap.newSpenders ? C.white : C.text },
+    recap.newSpenders === null
+      ? null
+      : {
+          value: recap.newSpenders
+            ? plural(recap.newSpenders, 'new spender')
+            : 'No new spenders',
+          label: '',
+          color: recap.newSpenders ? C.white : C.text,
+        },
     multi && recap.shareShiftPts
-      ? { value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`, label: 'revenue share', color: recap.shareShiftPts > 0 ? C.green : C.text }
-      : dur ? { value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`, label: 'streamed', color: C.white } : null,
+      ? {
+          value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`,
+          label: 'revenue share',
+          color: recap.shareShiftPts > 0 ? C.green : C.text,
+        }
+      : dur
+        ? {
+            value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`,
+            label: 'streamed',
+            color: C.white,
+          }
+        : null,
   ].filter(Boolean)
+
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px 32px', borderRadius: 16, border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.025)', padding: '16px 20px' }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: C.white }}>
-        <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
+    <div
+      className="pl-stream-rail"
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: '12px 30px',
+        borderRadius: 16,
+        border: '1px solid rgba(255,255,255,0.04)',
+        background:
+          'linear-gradient(90deg, rgba(34,230,209,0.035), rgba(255,255,255,0.018) 48%, rgba(139,92,246,0.025))',
+        padding: '15px 18px',
+      }}
+    >
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 12.5,
+          fontWeight: 600,
+          color: C.white,
+        }}
+      >
+        <span
+          className="pl-live"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            background: C.teal,
+            boxShadow: `0 0 10px ${C.teal}`,
+          }}
+        />
         Since your last stream
-        <span style={{ fontSize: 12, fontWeight: 400, color: C.muted }}>{streamWhen(recap.endTime, tz)}</span>
       </span>
+
       {items.map((it, i) => (
-        <span key={i} style={{ fontSize: 14, color: it.color, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-          {it.value}{it.label && <span style={{ fontWeight: 400, color: C.muted }}> {it.label}</span>}
+        <span
+          key={i}
+          style={{
+            fontSize: 13.5,
+            color: it.color,
+            fontWeight: 600,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {it.value}
+          {it.label && (
+            <span style={{ fontWeight: 400, color: C.muted }}> {it.label}</span>
+          )}
         </span>
       ))}
+
+      <span
+        style={{
+          marginLeft: 'auto',
+          fontSize: 11.5,
+          fontWeight: 400,
+          color: C.muted,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {streamWhen(recap.endTime, tz)}
+      </span>
     </div>
   )
 }
@@ -750,47 +1130,212 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark 
   const mounted = useMounted()
   const fresh = badges.includes('fresh')
   const shownBadges = badges.filter(b => b !== 'fresh').slice(0, 1)
-  return (
-    <Glass accent={selected ? accent : undefined} onClick={onSelect} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
-      aria-pressed={selected} style={{
-        background: leading
-          ? `radial-gradient(circle at 0% 0%, ${accent}1a, transparent 55%), linear-gradient(150deg, rgba(17,20,40,0.76), rgba(8,10,22,0.88))`
-          : 'linear-gradient(150deg, rgba(17,20,40,0.76), rgba(8,10,22,0.88))',
-        ...(selected ? {} : { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 16px 44px rgba(0,0,0,0.24)' }),
-      }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 5, background: accent, boxShadow: `0 0 12px ${accent}b3`, flexShrink: 0 }} />
-          <span style={{ fontSize: 15, fontWeight: 600, color: C.white, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
-          {fresh && <span title={BADGE_HELP.fresh} className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.teal, boxShadow: `0 0 8px ${C.teal}`, flexShrink: 0 }} />}
-        </div>
-        <span style={{ fontSize: 12, color: selected ? accent : C.muted, whiteSpace: 'nowrap' }}>{selected ? 'Viewing ↓' : 'Details →'}</span>
-      </div>
-      <div style={{ minHeight: 22, marginTop: 14 }}>{shownBadges.map(b => <Badge key={b} kind={b} />)}</div>
 
-      <div style={{ fontSize: 36, fontWeight: 700, color: C.white, marginTop: 18, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+  return (
+    <Glass
+      accent={selected ? accent : undefined}
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      className={`pl-platform-card${leading ? ' pl-platform-leading' : ''}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      aria-pressed={selected}
+      style={{
+        padding: '23px 24px 22px',
+        background: leading
+          ? `radial-gradient(circle at 4% -8%, ${accent}17, transparent 48%), linear-gradient(150deg, rgba(15,18,36,0.78), rgba(7,9,20,0.92))`
+          : 'linear-gradient(150deg, rgba(15,18,36,0.72), rgba(7,9,20,0.90))',
+        ...(selected
+          ? {}
+          : {
+              boxShadow:
+                'inset 0 1px 0 rgba(255,255,255,0.035), 0 16px 42px rgba(0,0,0,0.23)',
+            }),
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          // Glass wraps children in a padded, relative box; offset by the
+          // card's 24px padding so the line sits on the card edge, not on the text.
+          left: -24,
+          top: -1,
+          bottom: 0,
+          width: 1,
+          background: `linear-gradient(180deg, transparent, ${accent}70, transparent)`,
+          boxShadow: `0 0 18px ${accent}45`,
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 4,
+                background: accent,
+                boxShadow: `0 0 11px ${accent}99`,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: C.white,
+                letterSpacing: '-0.012em',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {row.platform}
+            </span>
+            {fresh && (
+              <span
+                title={BADGE_HELP.fresh}
+                className="pl-live"
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 3,
+                  background: C.teal,
+                  boxShadow: `0 0 8px ${C.teal}`,
+                  flexShrink: 0,
+                }}
+              />
+            )}
+          </div>
+
+          <div style={{ marginTop: 9, minHeight: 21 }}>
+            {shownBadges.map(b => <Badge key={b} kind={b} />)}
+          </div>
+        </div>
+
+        <span
+          style={{
+            fontSize: 11.5,
+            color: selected ? accent : C.muted,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {selected ? 'Viewing ↓' : 'Details →'}
+        </span>
+      </div>
+
+      <div
+        style={{
+          fontSize: 36,
+          fontWeight: 700,
+          color: C.white,
+          marginTop: 18,
+          letterSpacing: '-0.045em',
+          lineHeight: 1,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
         <Counter value={row.earnings} />
       </div>
-      <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>{row.earningsPercent}% of earnings</div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginTop: 8,
+        }}
+      >
+        <span style={{ fontSize: 12.5, color: C.text }}>
+          {row.earningsPercent}% of earnings
+        </span>
+        <span style={{ fontSize: 12.5 }}>
+          <TrendCell trend={row.trend} />
+        </span>
+      </div>
+
       {spark && spark.some(v => v > 0) ? (
-        <div style={{ marginTop: 16, marginLeft: -4, marginRight: -4 }}>
-          <GlowChart values={spark} color={accent} height={56} strokeWidth={2} pulse={leading} />
+        <div
+          style={{
+            marginTop: 14,
+            marginLeft: -6,
+            marginRight: -6,
+            opacity: 0.95,
+          }}
+        >
+          <GlowChart
+            values={spark}
+            color={accent}
+            height={62}
+            strokeWidth={2}
+            pulse={leading}
+          />
         </div>
       ) : (
-        <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 18 }}>
-          <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', borderRadius: 2, background: `linear-gradient(90deg, ${accent}99, ${accent})`, boxShadow: `0 0 12px ${accent}66`, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
+        <div
+          style={{
+            height: 3,
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: 2,
+            overflow: 'hidden',
+            marginTop: 18,
+          }}
+        >
+          <div
+            style={{
+              width: mounted ? `${row.earningsPercent}%` : 0,
+              height: '100%',
+              borderRadius: 2,
+              background: `linear-gradient(90deg, ${accent}88, ${accent})`,
+              boxShadow: `0 0 11px ${accent}55`,
+              transition: 'width 900ms cubic-bezier(.2,.8,.2,1)',
+            }}
+          />
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 18, fontSize: 13, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
-        <span><span style={{ color: C.text }}>{fmtN(row.tips)}</span> tips</span>
-        <span><span style={{ color: C.text }}>{fmtN(extras?.uniqueFans ?? 0)}</span> fans</span>
-        <span><span style={{ color: C.text }}>{row.avgTipSize > 0 ? fmt$(row.avgTipSize) : '—'}</span> avg</span>
-      </div>
-      <div style={{ marginTop: 12, fontSize: 13, color: C.muted, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-        <span>30-day momentum</span>
-        <TrendCell trend={row.trend} />
+      <div
+        style={{
+          display: 'flex',
+          gap: 18,
+          flexWrap: 'wrap',
+          marginTop: 15,
+          paddingTop: 14,
+          borderTop: '1px solid rgba(255,255,255,0.04)',
+          fontSize: 12.5,
+          color: C.muted,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <span>
+          <span style={{ color: C.text }}>{fmtN(row.tips)}</span> tips
+        </span>
+        <span>
+          <span style={{ color: C.text }}>{fmtN(extras?.uniqueFans ?? 0)}</span>{' '}
+          fans
+        </span>
+        <span>
+          <span style={{ color: C.text }}>
+            {row.avgTipSize > 0 ? fmt$(row.avgTipSize) : '—'}
+          </span>{' '}
+          avg
+        </span>
       </div>
     </Glass>
   )
@@ -821,29 +1366,96 @@ function ExpansionCard({ onImport }) {
 // buildPlatformActivity; nothing is shown when nothing happened.
 function ActivityFeed({ items }) {
   if (!items.length) return null
+
   const shown = items.slice(0, 6)
-  const chip = (it, i, dup) => (
-    <span key={`${dup}${i}`} title={it.sub} aria-hidden={dup ? true : undefined} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0, borderRadius: 999,
-      border: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.025)', padding: '6px 12px',
-      fontSize: 12, color: C.text, whiteSpace: 'nowrap',
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: 3, background: accentFor(it.platform), boxShadow: `0 0 8px ${accentFor(it.platform)}`, flexShrink: 0 }} />
+  const scrolls = shown.length >= 3
+  const mask = scrolls
+    ? 'linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)'
+    : undefined
+
+  const item = (it, i, dup) => (
+    <span
+      key={`${dup}${i}`}
+      title={it.sub}
+      aria-hidden={dup ? true : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 0,
+        fontSize: 12.5,
+        color: C.text,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span
+        style={{
+          width: 4,
+          height: 4,
+          borderRadius: 2,
+          background: accentFor(it.platform),
+          boxShadow: `0 0 7px ${accentFor(it.platform)}`,
+          flexShrink: 0,
+        }}
+      />
       <span style={{ color: C.white }}>{it.text}</span>
       <span style={{ color: C.muted }}>{it.sub}</span>
     </span>
   )
-  const scrolls = shown.length >= 3
-  const mask = scrolls ? 'linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent)' : undefined
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-      <span style={{ ...eyebrow, display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <span className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.cyan, boxShadow: `0 0 8px ${C.cyan}` }} />Just updated
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 18,
+        minWidth: 0,
+        padding: '2px 2px 0',
+      }}
+    >
+      <span
+        style={{
+          ...eyebrow,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          flexShrink: 0,
+        }}
+      >
+        <span
+          className="pl-live"
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: 3,
+            background: C.cyan,
+            boxShadow: `0 0 8px ${C.cyan}`,
+          }}
+        />
+        Just updated
       </span>
-      <div className="pl-ticker" style={{ flex: 1, minWidth: 0, overflow: 'hidden', WebkitMaskImage: mask, maskImage: mask }}>
-        <div className={scrolls ? 'pl-marquee' : undefined} style={{ display: 'flex', gap: 8, width: scrolls ? 'max-content' : undefined, flexWrap: scrolls ? 'nowrap' : 'wrap' }}>
-          {shown.map((it, i) => chip(it, i, ''))}
-          {scrolls && shown.map((it, i) => chip(it, i, 'd'))}
+
+      <div
+        className="pl-ticker"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          overflow: 'hidden',
+          WebkitMaskImage: mask,
+          maskImage: mask,
+        }}
+      >
+        <div
+          className={scrolls ? 'pl-marquee' : undefined}
+          style={{
+            display: 'flex',
+            gap: 22,
+            width: scrolls ? 'max-content' : undefined,
+            flexWrap: scrolls ? 'nowrap' : 'wrap',
+          }}
+        >
+          {shown.map((it, i) => item(it, i, ''))}
+          {scrolls && shown.map((it, i) => item(it, i, 'd'))}
         </div>
       </div>
     </div>
@@ -920,21 +1532,78 @@ function MonthlyHistory({ months, platforms }) {
 
 function MoneyBars({ comparison }) {
   const mounted = useMounted()
+
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ ...eyebrow, marginBottom: 20 }}>Where your money comes from</div>
-      <div style={{ display: 'grid', gap: 20 }}>
+      <div style={{ ...eyebrow, marginBottom: 22 }}>Where your money comes from</div>
+
+      <div style={{ display: 'grid', gap: 22 }}>
         {comparison.map(p => {
           const accent = accentFor(p.platform)
+
           return (
             <div key={p.platform}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 48px', gap: 16, alignItems: 'baseline', marginBottom: 9, fontVariantNumeric: 'tabular-nums' }}>
-                <span style={{ fontSize: 14, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.platform}</span>
-                <span style={{ fontSize: 13, color: C.muted }}>{fmt$(p.earnings)}</span>
-                <span style={{ fontSize: 14, color: C.white, fontWeight: 600, textAlign: 'right' }}>{p.earningsPercent}%</span>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0,1fr) auto auto',
+                  gap: 14,
+                  alignItems: 'baseline',
+                  marginBottom: 10,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: C.white,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {p.platform}
+                </span>
+                <span style={{ fontSize: 12.5, color: C.muted }}>
+                  {fmt$(p.earnings)}
+                </span>
+                <span
+                  style={{
+                    minWidth: 42,
+                    fontSize: 14,
+                    color: C.white,
+                    fontWeight: 600,
+                    textAlign: 'right',
+                  }}
+                >
+                  {p.earningsPercent}%
+                </span>
               </div>
-              <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ width: mounted ? `${Math.max(p.earningsPercent, p.earnings > 0 ? 1 : 0)}%` : 0, height: '100%', borderRadius: 2, background: `linear-gradient(90deg, ${accent}99, ${accent})`, boxShadow: `0 0 12px ${accent}66`, transition: 'width 1s cubic-bezier(.2,.8,.2,1)' }} />
+
+              <div
+                style={{
+                  height: 3,
+                  background: 'rgba(255,255,255,0.045)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    width: mounted
+                      ? `${Math.max(
+                          p.earningsPercent,
+                          p.earnings > 0 ? 1 : 0
+                        )}%`
+                      : 0,
+                    height: '100%',
+                    borderRadius: 2,
+                    background: `linear-gradient(90deg, ${accent}77, ${accent})`,
+                    boxShadow: `0 0 12px ${accent}55`,
+                    transition: 'width 1s cubic-bezier(.2,.8,.2,1)',
+                  }}
+                />
               </div>
             </div>
           )
@@ -947,8 +1616,41 @@ function MoneyBars({ comparison }) {
 // Revenue split + CamCash Noticed: one intelligence surface.
 function IntelligenceArea({ comparison, multi, noticedProps }) {
   return (
-    <Glass style={{ padding: 28 }}>
-      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: multi ? 'minmax(0,0.9fr) minmax(0,1.1fr)' : '1fr', gap: 44, alignItems: 'start' }}>
+    <Glass
+      className="pl-intelligence"
+      style={{
+        padding: '30px 30px 28px',
+        background:
+          'linear-gradient(145deg, rgba(14,17,34,0.78), rgba(7,9,20,0.91))',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          right: -120,
+          top: -160,
+          width: 380,
+          height: 380,
+          borderRadius: '50%',
+          background: 'rgba(139,92,246,0.08)',
+          filter: 'blur(115px)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        className="pi-two-col"
+        style={{
+          position: 'relative',
+          display: 'grid',
+          gridTemplateColumns: multi
+            ? 'minmax(0,0.78fr) minmax(0,1.22fr)'
+            : '1fr',
+          gap: 46,
+          alignItems: 'start',
+        }}
+      >
         {multi && <MoneyBars comparison={comparison} />}
         <Noticed {...noticedProps} />
       </div>
@@ -965,43 +1667,164 @@ function IntelligenceArea({ comparison, multi, noticedProps }) {
 
 function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
   const freeTeasers = isPro ? [] : cross
-  const shown = isPro ? [...cross.map(c => c.text), ...noticed.map(n => n.text)] : noticed.map(n => n.text)
+  const shown = isPro
+    ? [...cross.map(c => c.text), ...noticed.map(n => n.text)]
+    : noticed.map(n => n.text)
   const [lead, ...rest] = shown
+
   return (
-    <div style={{
-      position: 'relative', overflow: 'hidden', minWidth: 0, borderRadius: 20, padding: 24,
-      border: '1px solid rgba(255,255,255,0.06)',
-      background: 'linear-gradient(150deg, rgba(139,92,246,0.09), rgba(34,230,209,0.035), rgba(255,61,154,0.055))',
-    }}>
-      <span aria-hidden className="pl-drift" style={{ position: 'absolute', right: -60, top: -70, width: 220, height: 220, borderRadius: '50%', background: 'rgba(139,92,246,0.22)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+    <div
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        minWidth: 0,
+        borderRadius: 18,
+        padding: '2px 0 2px 26px',
+        borderLeft: '1px solid rgba(139,92,246,0.22)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          position: 'absolute',
+          left: -80,
+          top: -70,
+          width: 220,
+          height: 220,
+          borderRadius: '50%',
+          background: 'rgba(139,92,246,0.10)',
+          filter: 'blur(85px)',
+          pointerEvents: 'none',
+        }}
+      />
+
       <div style={{ position: 'relative' }}>
-        <div style={{ ...eyebrow, color: C.text, marginBottom: 16 }}><span style={{ color: C.purple }}>✦</span> CamCash noticed</div>
+        <div
+          style={{
+            ...eyebrow,
+            color: C.text,
+            marginBottom: 17,
+          }}
+        >
+          <span style={{ color: C.purple }}>✦</span> CamCash noticed
+        </div>
+
         {shown.length === 0 && freeTeasers.length === 0 ? (
-          <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>
             {multi
               ? 'Nothing stands out between your platforms yet. Findings appear here when the gap is big enough to be real.'
               : 'Findings appear here once a pattern in your data is strong enough to call out.'}
           </div>
         ) : (
           <>
-            {lead && <div className="pl-chip" style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.65, color: C.white }}>{lead}</div>}
+            {lead && (
+              <div
+                className="pl-chip"
+                style={{
+                  maxWidth: 660,
+                  fontSize: 17,
+                  fontWeight: 500,
+                  lineHeight: 1.65,
+                  color: C.white,
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {lead}
+              </div>
+            )}
+
             {rest.slice(0, 3).map((t, i) => (
-              <div key={i} className="pl-chip" style={{ animationDelay: `${(i + 1) * 70}ms`, marginTop: 12, fontSize: 13, lineHeight: 1.85, color: C.text }}>{t}</div>
+              <div
+                key={i}
+                className="pl-chip"
+                style={{
+                  animationDelay: `${(i + 1) * 70}ms`,
+                  marginTop: 13,
+                  maxWidth: 660,
+                  fontSize: 13,
+                  lineHeight: 1.8,
+                  color: C.text,
+                }}
+              >
+                {t}
+              </div>
             ))}
+
             {freeTeasers.slice(0, 2).map((c, i) => (
-              <div key={c.id} style={{ marginTop: lead || i ? 18 : 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: C.pink }}>✦ PRO INSIGHT</span>
-                  <span aria-hidden style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
+              <div
+                key={c.id}
+                style={{
+                  marginTop: lead || i ? 20 : 0,
+                  paddingTop: 18,
+                  borderTop: '1px solid rgba(255,255,255,0.045)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: '0.16em',
+                      color: C.pink,
+                    }}
+                  >
+                    ✦ PRO INSIGHT
+                  </span>
+                  <span
+                    aria-hidden
+                    style={{
+                      fontSize: 12,
+                      color: C.text,
+                      filter: 'blur(4px)',
+                      userSelect: 'none',
+                    }}
+                  >
+                    ██████████ · ██%
+                  </span>
                 </div>
-                <div style={{ fontSize: 14, color: C.white, marginTop: 6, lineHeight: 1.55 }}>{c.teaser}</div>
-                <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 6, padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.pink }}>
+
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: C.white,
+                    marginTop: 7,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {c.teaser}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)}
+                  style={{
+                    marginTop: 7,
+                    padding: 0,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: C.pink,
+                  }}
+                >
                   {c.cta} →
                 </button>
               </div>
             ))}
+
             {freeTeasers.length > 2 && (
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>+ {plural(freeTeasers.length - 2, 'more finding')} already found in your data</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>
+                + {plural(freeTeasers.length - 2, 'more finding')} already found
+                in your data
+              </div>
             )}
           </>
         )}
@@ -1301,66 +2124,276 @@ export default function PlatformsIntelligence({
   return (
     <div className="pl-root" style={{ maxWidth: 1280, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <style>{`
-        .pl-root { max-width: 100%; }
-        .pl-root section, .pl-root .pi-two-col > *, .pl-root .pl-grid > * { min-width: 0; }
-        .pl-root table { font-variant-numeric: tabular-nums; }
-        .pl-click { cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
-        .pl-brand:hover { transform: translateY(-1px); box-shadow: 0 0 34px rgba(34,230,209,0.40), 0 0 40px rgba(255,61,154,0.34) !important; }
-        .pl-brand { transition: transform .15s, box-shadow .15s; }
-        .pl-click:hover { transform: translateY(-2px); border-color: rgba(167,139,250,0.26) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.055), 0 24px 60px rgba(0,0,0,0.34) !important; }
-        .pl-click:focus-visible { outline: 2px solid ${C.pink}; outline-offset: 2px; }
-        @keyframes plGlow { 0% { text-shadow: 0 0 0 transparent; } 30% { text-shadow: 0 0 18px rgba(255,61,154,0.75); } 100% { text-shadow: 0 0 0 transparent; } }
-        .pl-glow { animation: plGlow 1.4s ease-out; }
-        @keyframes plIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-        .pl-chip, .pl-badge { animation: plIn .45s ease-out both; }
-        @keyframes plDot { 0%,100% { box-shadow: 0 0 0 0 rgba(34,230,209,0.6); } 50% { box-shadow: 0 0 0 4px rgba(34,230,209,0); } }
-        .pl-dot { animation: plDot 2.4s ease-in-out 3; }
-        /* Alive, never frantic: slow flowing neon borders, drifting light,
-           a live pulse, a moving activity ticker. All off for reduced motion. */
-        @keyframes plDrift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(50px, 24px) scale(1.12); } }
-        .pl-drift { animation: plDrift 14s ease-in-out infinite; }
-        .pl-drift-b { animation-duration: 18s; animation-direction: reverse; }
-        @keyframes plLive { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.75); } }
-        .pl-live { animation: plLive 1.8s ease-in-out infinite; }
-        @keyframes plMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        .pl-marquee { animation: plMarquee 38s linear infinite; }
-        .pl-ticker:hover .pl-marquee { animation-play-state: paused; }
-        @keyframes plDrawK { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
-        .pl-draw { animation: plDrawK 1.6s cubic-bezier(.3,.7,.2,1) both; }
-        @keyframes plFadeK { from { opacity: 0; } to { opacity: 1; } }
-        .pl-fade { animation: plFadeK 1.4s .4s ease-out both; }
-        @keyframes plPingK { 0% { transform: scale(1); opacity: 1; } 70% { transform: scale(1.9); opacity: .35; } 100% { transform: scale(1); opacity: 1; } }
-        .pl-ping { animation: plPingK 2s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) {
-          .pl-draw, .pl-fade, .pl-ping { animation: none !important; }
-          .pl-neon, .pl-bar, .pl-gradtext, .pl-drift, .pl-live, .pl-marquee { animation: none !important; }
-          .pl-glow, .pl-chip, .pl-badge, .pl-dot { animation: none !important; }
-          .pl-click, .pl-click:hover, .pl-brand, .pl-brand:hover { transition: none; transform: none; }
-        }
-        @media (max-width: 900px) {
-          .pl-root .pl-hero-grid { grid-template-columns: 1fr !important; }
-        }
-        @media (max-width: 1000px) {
-          .pl-root .pl-pulse-grid { grid-template-columns: 1fr 1fr !important; }
-          .pl-root .pl-pulse-grid > :last-child { grid-column: 1 / -1; border-left: none !important; padding-left: 0 !important; }
-          .pl-root .pi-two-col { grid-template-columns: 1fr !important; }
-        }
-        @media (max-width: 600px) {
-          .pl-root .pl-pulse-grid { grid-template-columns: 1fr !important; }
-          .pl-root .pl-pulse-grid > * { border-left: none !important; padding-left: 0 !important; }
-          .pi-strip { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
-        }
+.pl-root {
+  max-width: 100%;
+}
+
+.pl-root section,
+.pl-root .pi-two-col > *,
+.pl-root .pl-grid > * {
+  min-width: 0;
+}
+
+.pl-root table {
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-click {
+  cursor: pointer;
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease,
+    background .2s ease;
+}
+
+.pl-click:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139,92,246,.20) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    0 24px 60px rgba(0,0,0,.32) !important;
+}
+
+.pl-click:focus-visible {
+  outline: 2px solid ${C.pink};
+  outline-offset: 3px;
+}
+
+.pl-platform-card:hover {
+  transform: translateY(-3px);
+}
+
+.pl-brand {
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+
+.pl-brand:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 30px rgba(34,230,209,.28),
+    0 0 34px rgba(255,61,154,.20) !important;
+}
+
+@keyframes plGlow {
+  0% { text-shadow: 0 0 0 transparent; }
+  30% { text-shadow: 0 0 18px rgba(34,230,209,.55); }
+  100% { text-shadow: 0 0 0 transparent; }
+}
+
+.pl-glow {
+  animation: plGlow 1.4s ease-out;
+}
+
+@keyframes plIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pl-chip,
+.pl-badge {
+  animation: plIn .42s ease-out both;
+}
+
+@keyframes plDrift {
+  0%, 100% {
+    transform: translate(0,0) scale(1);
+  }
+  50% {
+    transform: translate(42px,20px) scale(1.08);
+  }
+}
+
+.pl-drift {
+  animation: plDrift 16s ease-in-out infinite;
+}
+
+.pl-drift-b {
+  animation-duration: 20s;
+  animation-direction: reverse;
+}
+
+@keyframes plLive {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: .48;
+    transform: scale(.78);
+  }
+}
+
+.pl-live {
+  animation: plLive 2s ease-in-out infinite;
+}
+
+@keyframes plMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.pl-marquee {
+  animation: plMarquee 42s linear infinite;
+}
+
+.pl-ticker:hover .pl-marquee {
+  animation-play-state: paused;
+}
+
+@keyframes plDrawK {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+.pl-draw {
+  animation: plDrawK 1.6s cubic-bezier(.3,.7,.2,1) both;
+}
+
+@keyframes plFadeK {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pl-fade {
+  animation: plFadeK 1.4s .35s ease-out both;
+}
+
+@keyframes plPingK {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1.75);
+    opacity: .4;
+  }
+}
+
+.pl-ping {
+  animation: plPingK 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-draw,
+  .pl-fade,
+  .pl-ping,
+  .pl-drift,
+  .pl-live,
+  .pl-marquee,
+  .pl-glow,
+  .pl-chip,
+  .pl-badge {
+    animation: none !important;
+  }
+
+  .pl-click,
+  .pl-click:hover,
+  .pl-brand,
+  .pl-brand:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .pl-root .pl-hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pl-platform-grid {
+    margin-top: 0 !important;
+  }
+}
+
+@media (max-width: 1000px) {
+  .pl-root .pl-pulse-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .pl-root .pl-pulse-grid > :last-child {
+    grid-column: 1 / -1;
+    border-left: none !important;
+    padding-left: 0 !important;
+  }
+
+  .pl-root .pi-two-col {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .pl-root .pl-pulse-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pl-root .pl-pulse-grid > * {
+    border-left: none !important;
+    padding-left: 0 !important;
+  }
+
+  .pi-strip {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+}
       `}</style>
 
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+          padding: '2px 2px 0',
+        }}
+      >
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 34, fontWeight: 600, color: C.white, letterSpacing: '-0.03em', lineHeight: 1.1 }}>Platforms</h1>
-          <div style={{ fontSize: 14, lineHeight: '24px', color: C.muted, marginTop: 6 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 32,
+              fontWeight: 600,
+              color: C.white,
+              letterSpacing: '-0.035em',
+              lineHeight: 1.08,
+            }}
+          >
+            Platforms
+          </h1>
+
+          <div
+            style={{
+              fontSize: 13.5,
+              lineHeight: '22px',
+              color: C.muted,
+              marginTop: 6,
+            }}
+          >
             See where your money is coming from — and what changed since your last stream.
           </div>
         </div>
+
         {recap && (
-          <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>
+          <span
+            style={{
+              fontSize: 12,
+              color: C.muted,
+              whiteSpace: 'nowrap',
+            }}
+          >
             Updated through {streamWhen(recap.endTime, tz)}
           </span>
         )}
@@ -1382,7 +2415,17 @@ export default function PlatformsIntelligence({
           <LatestStream recap={recap} tz={tz} multi={multi} />
           <ActivityFeed items={activity} />
 
-          <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
+          <div
+  className="pl-grid pl-platform-grid"
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: 16,
+    marginTop: -10,
+    position: 'relative',
+    zIndex: 3,
+  }}
+>
             {comparison.map(row => (
               <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
                 selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} spark={daily?.byPlatform?.[row.platform]} />
