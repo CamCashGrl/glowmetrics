@@ -25,17 +25,17 @@ import { card, HERO_GRADIENT } from './CommandCenter'
 
 // Visual language is the Command Center's: its glass card, chip, hero
 // gradient, type scale and brand-gradient CTA.
-const CTA_GRADIENT = 'linear-gradient(90deg,#22D3EE 0%,#7C5CFF 48%,#EC4899 100%)'
+const CTA_GRADIENT = 'linear-gradient(90deg,#2EF2D0 0%,#7C5CFF 48%,#FF2BAE 100%)'
 
 const C = {
   card: "#0d1322", card2: "#111829", border: "#1e2d45", border2: "#2a3f5f",
-  cyan: "#22D3EE", pink: "#EC4899", gold: "#F59E0B", blue: "#60A5FA",
+  cyan: "#22D3EE", pink: "#FF2BAE", teal: "#2EF2D0", blue: "#60A5FA",
   green: "#10B981", white: "#F1F5F9", muted: "#475569", text: "#94A3B8",
   purple: "#a855f7", red: "#F87171", indigo: "#7C5CFF",
 }
 
 const PLATFORM_ACCENT = {
-  chaturbate: C.purple, bongacams: C.red, myfreecams: C.gold,
+  chaturbate: C.purple, bongacams: C.pink, myfreecams: C.teal,
   camsoda: C.green, stripchat: C.blue, flirt4free: C.pink,
 }
 const accentFor = (p) => PLATFORM_ACCENT[(p || '').toLowerCase().trim()] || C.cyan
@@ -133,13 +133,12 @@ function Empty({ children }) {
 }
 
 function ProTag() {
-  return <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: C.gold, border: `1px solid ${C.gold}55`, borderRadius: 4, padding: '1px 5px', marginLeft: 6 }}>PRO</span>
+  return <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.06em', color: C.teal, border: `1px solid ${C.teal}55`, borderRadius: 4, padding: '1px 5px', marginLeft: 6 }}>PRO</span>
 }
 
 function LockedRow({ text }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', border: `1px dashed ${C.gold}44`, borderRadius: 8, background: `${C.gold}0a` }}>
-      <span style={{ fontSize: 11 }}>🔒</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', border: `1px dashed ${C.teal}44`, borderRadius: 8, background: `${C.teal}0a` }}>
       <span style={{ fontSize: 11.5, color: C.text }}>{text}</span>
       <ProTag />
     </div>
@@ -301,7 +300,7 @@ function SplitView({ analytics, platformName, isPro }) {
           ]} />
           {snap.missedRevenue && (
             <div style={{ marginTop: 8 }}>
-              <FactRow label="Timing gap" accent={C.gold}
+              <FactRow label="Timing gap" accent={C.teal}
                 facts={`Sessions at ${formatHour(snap.missedRevenue.bestHour)} typically earn ${snap.missedRevenue.multiplier}× your average here.`} />
             </div>
           )}
@@ -533,8 +532,8 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
   return (
     <div style={{
       position: 'relative', overflow: 'hidden', borderRadius: 30, padding: '40px 42px',
-      background: `radial-gradient(120% 140% at 0% 0%, rgba(34,211,238,0.10) 0%, transparent 45%),
-        radial-gradient(90% 120% at 100% 100%, rgba(236,72,153,0.12) 0%, transparent 50%),
+      background: `radial-gradient(120% 140% at 0% 0%, rgba(46,242,208,0.10) 0%, transparent 45%),
+        radial-gradient(90% 120% at 100% 100%, rgba(255,43,174,0.12) 0%, transparent 50%),
         linear-gradient(150deg, rgba(24,28,66,0.72) 0%, rgba(10,12,30,0.82) 60%, rgba(18,10,34,0.80) 100%)`,
       backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
       border: '1px solid rgba(255,255,255,0.07)',
@@ -635,16 +634,16 @@ function LatestStream({ recap, tz, multi }) {
   if (!recap) return null
   const dur = recap.durationMinutes
   const items = [
-    { icon: '💸', value: fmtSigned$(recap.earned), label: `earned · ${recap.platform}`, color: C.green },
+    { value: fmtSigned$(recap.earned), label: `earned · ${recap.platform}`, color: C.green },
     recap.returningFans === null
-      ? { icon: '🔁', value: 'First stream here', label: 'returning fans from your next stream', color: C.text }
-      : { icon: '🔁', value: plural(recap.returningFans, 'fan'), label: 'tipped again', color: recap.returningFans ? C.cyan : C.text },
+      ? { value: 'First stream here', label: 'returning fans from your next stream', color: C.text }
+      : { value: plural(recap.returningFans, 'fan'), label: 'tipped again', color: recap.returningFans ? C.cyan : C.text },
     recap.newSpenders === null
       ? null
-      : { icon: '✨', value: recap.newSpenders ? plural(recap.newSpenders, 'new spender') : 'No new spenders', label: 'first-time tippers', color: recap.newSpenders ? C.pink : C.text },
+      : { value: recap.newSpenders ? plural(recap.newSpenders, 'new spender') : 'No new spenders', label: 'first-time tippers', color: recap.newSpenders ? C.pink : C.text },
     multi && recap.shareShiftPts
-      ? { icon: '📊', value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`, label: recap.tookLead ? `${recap.platform} took the lead` : 'revenue share', color: recap.shareShiftPts > 0 ? C.green : C.blue }
-      : dur ? { icon: '⏱️', value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`, label: 'streamed', color: C.gold } : null,
+      ? { value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`, label: recap.tookLead ? `${recap.platform} took the lead` : 'revenue share', color: recap.shareShiftPts > 0 ? C.green : C.blue }
+      : dur ? { value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`, label: 'streamed', color: C.teal } : null,
   ].filter(Boolean)
   return (
     <div style={{
@@ -660,7 +659,7 @@ function LatestStream({ recap, tz, multi }) {
       </div>
       {items.map((it, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-          <span style={{ fontSize: 13, alignSelf: 'center' }}>{it.icon}</span>
+          <span style={{ width: 6, height: 6, borderRadius: 3, alignSelf: 'center', background: it.color === C.text ? C.muted : it.color, boxShadow: `0 0 8px ${it.color}` }} />
           <span style={{ fontSize: 16, fontWeight: 800, color: it.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{it.value}</span>
           <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{it.label}</span>
         </div>
@@ -742,7 +741,6 @@ function ExpansionCard({ onImport }) {
 
 // Lightweight, platform-only activity feed. Every item is a dated event from
 // buildPlatformActivity; nothing is shown when nothing happened.
-const ACTIVITY_ICON = { earned24h: '💸', newFans: '✨', returning: '🔁', share: '📊' }
 function ActivityFeed({ items }) {
   if (!items.length) return null
   return (
@@ -786,7 +784,7 @@ function ComparisonTeaser({ comparison, anchor, onUpgrade }) {
             {others.map(p => (
               <div key={p.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 15 }}>
                 <span style={{ color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><PlatformCell platform={p.platform} /></span>
-                <span style={{ color: C.gold, fontWeight: 700, whiteSpace: 'nowrap' }}>🔒 Pro</span>
+                <span style={{ color: C.teal, fontWeight: 800, fontSize: 12, letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>PRO</span>
               </div>
             ))}
           </div>
@@ -900,10 +898,10 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
       ) : (
         <div style={{
           position: 'relative', overflow: 'hidden', borderRadius: 20, padding: '22px 24px',
-          background: 'linear-gradient(150deg, rgba(124,92,255,0.12) 0%, rgba(34,211,238,0.04) 45%, rgba(236,72,153,0.08) 100%)',
+          background: 'linear-gradient(150deg, rgba(124,92,255,0.12) 0%, rgba(46,242,208,0.05) 45%, rgba(255,43,174,0.08) 100%)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 0 1px rgba(255,255,255,0.045)',
         }}>
-          <span aria-hidden style={{ position: 'absolute', right: -50, top: -60, width: 200, height: 200, borderRadius: '50%', background: '#EC4899', opacity: 0.14, filter: 'blur(60px)', pointerEvents: 'none' }} />
+          <span aria-hidden style={{ position: 'absolute', right: -50, top: -60, width: 200, height: 200, borderRadius: '50%', background: '#FF2BAE', opacity: 0.14, filter: 'blur(60px)', pointerEvents: 'none' }} />
           <div style={{ position: 'relative' }}>
             {lead && (
               <div className="pl-chip" style={{ fontSize: 17, fontWeight: 600, color: C.white, lineHeight: 1.5, letterSpacing: '-0.01em' }}>{lead}</div>
@@ -1028,15 +1026,15 @@ function ShareShift({ shift }) {
 // the panel is hidden when nothing is waiting. No timers, no fake scarcity.
 function UnlockPanel({ findings, platforms, hiddenTipCount, supporters, hasPlatformTiming, onUpgrade }) {
   const items = [
-    findings > 0 && { icon: '✦', text: `${plural(findings, 'cross-platform finding')} already found in your data` },
-    platforms > 1 && { icon: '⚖️', text: `Side-by-side comparison of your ${platforms} platforms: $/hr, fan value and momentum` },
-    hiddenTipCount > 0 && { icon: '🗂️', text: `${fmtN(hiddenTipCount)} older tips saved, with month-by-month platform history` },
-    supporters > 3 && { icon: '👥', text: `All ${fmtN(supporters)} supporters ranked on every platform` },
-    hasPlatformTiming && { icon: '🕐', text: 'Best hour and day for each platform' },
+    findings > 0 && { text: `${plural(findings, 'cross-platform finding')} already found in your data` },
+    platforms > 1 && { text: `Side-by-side comparison of your ${platforms} platforms: $/hr, fan value and momentum` },
+    hiddenTipCount > 0 && { text: `${fmtN(hiddenTipCount)} older tips saved, with month-by-month platform history` },
+    supporters > 3 && { text: `All ${fmtN(supporters)} supporters ranked on every platform` },
+    hasPlatformTiming && { text: 'Best hour and day for each platform' },
   ].filter(Boolean)
   if (items.length === 0) return null
   return (
-    <div style={{ background: HERO_GRADIENT, border: '1px solid rgba(236,72,153,0.30)', borderRadius: 18, padding: 26, position: 'relative', overflow: 'hidden' }}>
+    <div style={{ background: HERO_GRADIENT, border: '1px solid rgba(255,43,174,0.30)', borderRadius: 18, padding: 26, position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', left: -60, bottom: -80, width: 260, height: 260, borderRadius: '50%', background: 'rgba(124,92,255,0.14)', filter: 'blur(70px)', pointerEvents: 'none' }} />
       <div style={{ position: 'relative', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ flex: '1 1 380px', minWidth: 0 }}>
@@ -1048,7 +1046,7 @@ function UnlockPanel({ findings, platforms, hiddenTipCount, supporters, hasPlatf
           <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
             {items.map((it, i) => (
               <div key={i} className="pl-chip" style={{ animationDelay: `${i * 60}ms`, display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, color: C.white, lineHeight: 1.45 }}>
-                <span style={{ width: 22, flexShrink: 0, textAlign: 'center' }}>{it.icon}</span>
+                <span style={{ width: 18, flexShrink: 0, textAlign: 'center', color: C.teal, textShadow: `0 0 10px ${C.teal}` }}>✦</span>
                 <span style={{ minWidth: 0 }}>{it.text}</span>
               </div>
             ))}
@@ -1234,9 +1232,9 @@ export default function PlatformsIntelligence({
         .pl-click { cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
         .pl-brand:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124,92,255,0.45) !important; }
         .pl-brand { transition: transform .15s, box-shadow .15s; }
-        .pl-click:hover { transform: translateY(-2px); border-color: rgba(236,72,153,0.35) !important; box-shadow: 0 14px 34px -18px rgba(236,72,153,0.45) !important; }
+        .pl-click:hover { transform: translateY(-2px); border-color: rgba(255,43,174,0.35) !important; box-shadow: 0 14px 34px -18px rgba(255,43,174,0.45) !important; }
         .pl-click:focus-visible { outline: 2px solid ${C.pink}; outline-offset: 2px; }
-        @keyframes plGlow { 0% { text-shadow: 0 0 0 transparent; } 30% { text-shadow: 0 0 18px rgba(236,72,153,0.75); } 100% { text-shadow: 0 0 0 transparent; } }
+        @keyframes plGlow { 0% { text-shadow: 0 0 0 transparent; } 30% { text-shadow: 0 0 18px rgba(255,43,174,0.75); } 100% { text-shadow: 0 0 0 transparent; } }
         .pl-glow { animation: plGlow 1.4s ease-out; }
         @keyframes plIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
         .pl-chip, .pl-badge { animation: plIn .45s ease-out both; }
