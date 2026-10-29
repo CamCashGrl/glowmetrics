@@ -21,7 +21,7 @@ import {
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
-import { card, Chip, HERO_GRADIENT } from './CommandCenter'
+import { card, HERO_GRADIENT } from './CommandCenter'
 
 // Visual language is the Command Center's: its glass card, chip, hero
 // gradient, type scale and brand-gradient CTA.
@@ -217,9 +217,9 @@ function NextBestMove({ comparison, efficiency, timeIntel, onOpenPlanner }) {
   return (
     <div style={{ display: 'grid', gap: 6 }}>
       {moves.map((m, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '9px 13px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${C.border}`, borderRadius: 8 }}>
+        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0' }}>
           <span style={{ color: C.cyan, fontSize: 12 }}>→</span>
-          <span style={{ fontSize: 12.5, color: C.white, lineHeight: 1.45 }}>{m}</span>
+          <span style={{ fontSize: 14, color: C.white, lineHeight: 1.5 }}>{m}</span>
         </div>
       ))}
       {planner && <div style={{ marginTop: 2 }}>{planner}</div>}
@@ -460,20 +460,33 @@ const BADGE_HELP = {
 function Badge({ kind }) {
   const b = BADGES[kind]
   if (!b) return null
+  const color = b.color === C.muted ? C.text : b.color
   return (
     <span className="pl-badge" title={BADGE_HELP[kind]} style={{
-      fontSize: 9.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase',
-      color: b.color === C.muted ? C.text : b.color, background: `${b.color}14`,
-      border: `1px solid ${b.color}40`, borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap',
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase',
+      color, background: `${b.color}12`, borderRadius: 999, padding: '3px 9px', whiteSpace: 'nowrap',
     }}>{b.label}</span>
   )
 }
 
-function Glass({ children, style, accent, className, onClick, ...rest }) {
+// Suspended glass, in the Command Center "next best move" language: deep
+// navy translucency, a hairline border, an inset top highlight and a soft
+// drop shadow. `glow` adds an ambient corner light without tinting the card.
+const GLASS_BG = 'linear-gradient(160deg, rgba(22,27,58,0.58) 0%, rgba(10,12,28,0.70) 100%)'
+const GLASS_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.06), 0 30px 60px -34px rgba(0,0,0,0.85)'
+function Glass({ children, style, accent, glow, className, onClick, ...rest }) {
   return (
     <div className={`pl-glass${onClick ? ' pl-click' : ''}${className ? ` ${className}` : ''}`} onClick={onClick}
-      style={card({ position: 'relative', padding: 20, minWidth: 0, ...(accent ? { border: `1px solid ${accent}40` } : {}), ...style })} {...rest}>
-      {children}
+      style={{
+        position: 'relative', padding: 22, minWidth: 0, borderRadius: 22, overflow: 'hidden',
+        background: GLASS_BG, backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+        border: `1px solid ${accent ? `${accent}30` : 'rgba(255,255,255,0.06)'}`,
+        boxShadow: accent ? `${GLASS_SHADOW}, 0 0 44px -18px ${accent}55` : GLASS_SHADOW,
+        ...style,
+      }} {...rest}>
+      {glow && <span aria-hidden style={{ position: 'absolute', top: -90, right: -70, width: 240, height: 240, borderRadius: '50%', background: glow, opacity: 0.16, filter: 'blur(70px)', pointerEvents: 'none' }} />}
+      <div style={{ position: 'relative' }}>{children}</div>
     </div>
   )
 }
@@ -516,41 +529,56 @@ function streamWhen(iso, tz) {
 function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
   const leader = comparison[0]
   const multi = comparison.length > 1
+  const accent = accentFor(leader.platform)
   return (
     <div style={{
-      background: HERO_GRADIENT, backdropFilter: 'blur(20px)', border: '1px solid rgba(34,211,238,0.28)',
-      borderRadius: 22, padding: 34, position: 'relative', overflow: 'hidden',
+      position: 'relative', overflow: 'hidden', borderRadius: 30, padding: '40px 42px',
+      background: `radial-gradient(120% 140% at 0% 0%, rgba(34,211,238,0.10) 0%, transparent 45%),
+        radial-gradient(90% 120% at 100% 100%, rgba(236,72,153,0.12) 0%, transparent 50%),
+        linear-gradient(150deg, rgba(24,28,66,0.72) 0%, rgba(10,12,30,0.82) 60%, rgba(18,10,34,0.80) 100%)`,
+      backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 90px -40px rgba(0,0,0,0.9), 0 0 80px -30px rgba(124,92,255,0.35)',
     }}>
-      <div style={{ position: 'absolute', right: -70, top: -70, width: 300, height: 300, borderRadius: '50%', background: 'rgba(236,72,153,0.12)', filter: 'blur(80px)', pointerEvents: 'none' }} />
-      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 420px', minWidth: 0 }}>
-          <div style={{ ...eyebrow, fontSize: 12, color: C.cyan, marginBottom: 14 }}>Platform pulse</div>
-          <div style={{ fontSize: 38, fontWeight: 800, color: C.white, letterSpacing: '-0.035em', lineHeight: 1.12 }}>
-            {multi ? <>{leader.platform} is leading</> : <>Everything on {leader.platform}</>}
+      {/* Atmosphere behind the leading platform */}
+      <span aria-hidden style={{ position: 'absolute', left: -60, top: -120, width: 520, height: 380, borderRadius: '50%', background: accent, opacity: 0.20, filter: 'blur(110px)', pointerEvents: 'none' }} />
+      <span aria-hidden style={{ position: 'absolute', right: '18%', bottom: -160, width: 360, height: 300, borderRadius: '50%', background: '#7C5CFF', opacity: 0.14, filter: 'blur(100px)', pointerEvents: 'none' }} />
+
+      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', gap: 36, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 440px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 4, background: accent, boxShadow: `0 0 14px ${accent}` }} />
+            <span style={{ ...eyebrow, color: C.cyan }}>Platform pulse</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 14 }}>
-            {multi && (
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.pink, background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.3)', padding: '5px 12px', borderRadius: 20 }}>
-                {leader.earningsPercent}% of earnings
-              </span>
-            )}
-            <span style={{ fontSize: 13, color: C.text }}>
-              <strong style={{ color: C.white }}>{plural(snapshot.totalTips, 'tip')}</strong> across {plural(comparison.length, 'platform')} · {plural(snapshot.sessions, 'meaningful session')}
-            </span>
-            {newFans?.total > 0 && (
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.cyan, background: 'rgba(34,211,238,0.10)', border: '1px solid rgba(34,211,238,0.28)', padding: '5px 12px', borderRadius: 20 }}>
-                {plural(newFans.total, 'new fan')} this week
-              </span>
-            )}
+          <div style={{ fontSize: 50, fontWeight: 800, color: C.white, letterSpacing: '-0.045em', lineHeight: 1.04, marginTop: 18, textShadow: `0 0 40px ${accent}44` }}>
+            {multi ? <>{leader.platform}<br /><span style={{ color: 'rgba(241,245,249,0.72)' }}>is leading</span></> : <>Everything on<br />{leader.platform}</>}
           </div>
-          <div style={{ marginTop: 22 }}>
-            <div style={eyebrow}>Total platform earnings</div>
-            <div style={{ fontSize: 34, fontWeight: 800, color: C.white, letterSpacing: '-0.03em', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-              <Counter value={snapshot.totalEarnings} />
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 34, flexWrap: 'wrap', marginTop: 30 }}>
+            <div>
+              <div style={{ fontSize: 44, fontWeight: 800, color: C.white, letterSpacing: '-0.04em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                <Counter value={snapshot.totalEarnings} />
+              </div>
+              <div style={{ fontSize: 13, color: C.text, marginTop: 9 }}>total platform earnings</div>
             </div>
+            {multi && (
+              <div>
+                <div style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1, color: accent, textShadow: `0 0 26px ${accent}66` }}>
+                  {leader.earningsPercent}%
+                </div>
+                <div style={{ fontSize: 13, color: C.text, marginTop: 9 }}>from {leader.platform}</div>
+              </div>
+            )}
           </div>
+
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 22, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <span><span style={{ color: C.text }}>{plural(snapshot.totalTips, 'tip')}</span> across {plural(comparison.length, 'platform')}</span>
+            <span><span style={{ color: C.text }}>{fmtN(snapshot.sessions)}</span> meaningful sessions</span>
+            {newFans?.total > 0 && <span style={{ color: C.cyan }}>+{plural(newFans.total, 'new fan')} this week</span>}
+          </div>
+
           {learning.isLearning && (
-            <div style={{ fontSize: 13.5, color: C.text, marginTop: 14, lineHeight: 1.6, maxWidth: 520 }}>
+            <div style={{ fontSize: 13.5, color: C.text, marginTop: 16, lineHeight: 1.6, maxWidth: 520 }}>
               <strong style={{ color: C.white }}>CamCash is still learning your platforms.</strong>{' '}
               {[
                 learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
@@ -560,15 +588,25 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
           )}
         </div>
 
-        <div style={{ flex: '1 1 300px', minWidth: 260, textAlign: 'right' }}>
+        {/* Latest stream: a secondary glass element inside the hero */}
+        <div style={{
+          flex: '0 1 300px', minWidth: 250, alignSelf: 'center', borderRadius: 22, padding: '22px 24px',
+          background: 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)',
+          backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
+          border: '1px solid rgba(255,255,255,0.07)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), 0 20px 40px -24px rgba(0,0,0,0.7)',
+        }}>
           {recap ? (
             <>
-              <div style={eyebrow}>Your latest stream</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: C.green, letterSpacing: '-0.03em', marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="pl-dot" style={{ width: 7, height: 7, borderRadius: 4, background: C.green }} />
+                <span style={eyebrow}>Your latest stream</span>
+              </div>
+              <div style={{ fontSize: 34, fontWeight: 800, color: C.green, letterSpacing: '-0.035em', marginTop: 12, fontVariantNumeric: 'tabular-nums', textShadow: '0 0 24px rgba(16,185,129,0.35)' }}>
                 +<Counter value={recap.earned} />
               </div>
-              <div style={{ fontSize: 13, color: C.text, marginTop: 4 }}>
-                on <strong style={{ color: C.white }}>{recap.platform}</strong> · {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
+              <div style={{ fontSize: 13, color: C.text, marginTop: 6, lineHeight: 1.5 }}>
+                on <span style={{ color: C.white, fontWeight: 700 }}>{recap.platform}</span><br />
+                {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
               </div>
               {recap.tookLead && (
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: C.pink, marginTop: 10 }}>{recap.platform} moved into the lead</div>
@@ -577,7 +615,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
           ) : (
             <>
               <div style={eyebrow}>Since your last stream</div>
-              <div style={{ fontSize: 15, color: C.white, marginTop: 10, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 14.5, color: C.white, marginTop: 10, lineHeight: 1.5 }}>
                 Stream again and CamCash will start showing what changed between sessions.
               </div>
               <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>A stream counts once it runs 30+ minutes with 2+ tips.</div>
@@ -596,28 +634,37 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
 function LatestStream({ recap, tz, multi }) {
   if (!recap) return null
   const dur = recap.durationMinutes
+  const items = [
+    { icon: '💸', value: fmtSigned$(recap.earned), label: `earned · ${recap.platform}`, color: C.green },
+    recap.returningFans === null
+      ? { icon: '🔁', value: 'First stream here', label: 'returning fans from your next stream', color: C.text }
+      : { icon: '🔁', value: plural(recap.returningFans, 'fan'), label: 'tipped again', color: recap.returningFans ? C.cyan : C.text },
+    recap.newSpenders === null
+      ? null
+      : { icon: '✨', value: recap.newSpenders ? plural(recap.newSpenders, 'new spender') : 'No new spenders', label: 'first-time tippers', color: recap.newSpenders ? C.pink : C.text },
+    multi && recap.shareShiftPts
+      ? { icon: '📊', value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`, label: recap.tookLead ? `${recap.platform} took the lead` : 'revenue share', color: recap.shareShiftPts > 0 ? C.green : C.blue }
+      : dur ? { icon: '⏱️', value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`, label: 'streamed', color: C.gold } : null,
+  ].filter(Boolean)
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
-        <span className="pl-dot" style={{ width: 8, height: 8, borderRadius: 4, background: C.green }} />
-        <Label>Since your last stream</Label>
-        <span style={{ fontSize: 13, color: C.muted }}>{streamWhen(recap.endTime, tz)}</span>
+    <div style={{
+      borderRadius: 20, padding: '16px 22px',
+      background: 'linear-gradient(90deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012))',
+      border: '1px solid rgba(255,255,255,0.045)',
+      display: 'flex', alignItems: 'center', gap: '14px 34px', flexWrap: 'wrap',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+        <span className="pl-dot" style={{ width: 7, height: 7, borderRadius: 4, background: C.green }} />
+        <span style={{ fontSize: 14, fontWeight: 800, color: C.white }}>Since your last stream</span>
+        <span style={{ fontSize: 12, color: C.muted }}>{streamWhen(recap.endTime, tz)}</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 11 }}>
-        <Chip icon="💸" title="Earned" value={fmtSigned$(recap.earned)} sub={`${recap.platform} · ${plural(recap.tips, 'tip')}`} accent={C.green} />
-        <Chip icon="🔁" title="Returning fans"
-          value={recap.returningFans === null ? 'First stream here' : plural(recap.returningFans, 'fan')}
-          sub={recap.returningFans === null ? 'Compared from your next stream' : 'tipped again'} accent={recap.returningFans ? C.cyan : C.muted} />
-        <Chip icon="✨" title="New spenders"
-          value={recap.newSpenders === null ? '—' : plural(recap.newSpenders, 'spender')}
-          sub={recap.newSpenders === null ? 'Needs an earlier stream' : 'tipped for the first time'} accent={recap.newSpenders ? C.pink : C.muted} />
-        {multi && recap.shareShiftPts ? (
-          <Chip icon="📊" title="Revenue share" value={`${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`}
-            sub={recap.tookLead ? `${recap.platform} moved into the lead` : `${recap.platform} after this stream`} accent={recap.shareShiftPts > 0 ? C.green : C.blue} />
-        ) : dur ? (
-          <Chip icon="⏱️" title="Streamed" value={`${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`} sub={plural(recap.fans, 'fan') + ' tipped'} accent={C.gold} />
-        ) : null}
-      </div>
+      {items.map((it, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 13, alignSelf: 'center' }}>{it.icon}</span>
+          <span style={{ fontSize: 16, fontWeight: 800, color: it.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{it.value}</span>
+          <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>{it.label}</span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -626,47 +673,47 @@ function LatestStream({ recap, tz, multi }) {
 // 3 · PLATFORM CARDS
 // ============================================
 
-function PlatformCard({ row, extras, badges, selected, onSelect }) {
+function PlatformCard({ row, extras, badges, selected, onSelect, leading }) {
   const accent = accentFor(row.platform)
   const mounted = useMounted()
-  const trend = row.trend
+  const fresh = badges.includes('fresh')
+  // At most two status labels; "new since last visit" shows as a live dot.
+  const shownBadges = badges.filter(b => b !== 'fresh').slice(0, 2)
   return (
-    <Glass accent={selected ? accent : undefined} onClick={onSelect} role="button" tabIndex={0}
+    <Glass accent={selected ? accent : undefined} glow={accent} onClick={onSelect} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
-      aria-pressed={selected} style={{ padding: 16, overflow: 'hidden' }}>
-      <span aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: accent }} />
+      aria-pressed={selected} style={{
+        padding: '24px 24px 20px',
+        ...(leading ? { background: `radial-gradient(120% 90% at 0% 0%, ${accent}1f 0%, transparent 55%), ${GLASS_BG}`, boxShadow: `${GLASS_SHADOW}, 0 0 60px -26px ${accent}88` } : {}),
+      }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 5, background: accent, boxShadow: `0 0 10px ${accent}`, flexShrink: 0 }} />
-          <span style={{ fontSize: 16, fontWeight: 800, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 5, background: accent, boxShadow: `0 0 14px ${accent}`, flexShrink: 0 }} />
+          <span style={{ fontSize: 17, fontWeight: 800, color: C.white, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+          {fresh && <span title={BADGE_HELP.fresh} className="pl-dot" style={{ width: 6, height: 6, borderRadius: 3, background: C.green, flexShrink: 0 }} />}
         </div>
-        <span style={{ fontSize: 11, color: selected ? accent : C.muted, whiteSpace: 'nowrap' }}>{selected ? 'Viewing ↓' : 'Details →'}</span>
+        <span style={{ fontSize: 11.5, color: selected ? accent : C.muted, whiteSpace: 'nowrap' }}>{selected ? 'Viewing ↓' : 'Details →'}</span>
       </div>
-      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', minHeight: 20, marginTop: 9 }}>
-        {badges.map(b => <Badge key={b} kind={b} />)}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minHeight: 21, marginTop: 12 }}>
+        {shownBadges.map(b => <Badge key={b} kind={b} />)}
       </div>
-      <div style={{ fontSize: 30, fontWeight: 800, color: C.white, marginTop: 10, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+
+      <div style={{ fontSize: 36, fontWeight: 800, color: C.white, marginTop: 22, letterSpacing: '-0.035em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
         <Counter value={row.earnings} />
       </div>
-      <div style={{ fontSize: 12, color: accent, fontWeight: 700 }}>{row.earningsPercent}% of your earnings</div>
-      <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 8 }}>
-        <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', background: `linear-gradient(90deg, ${accent}99, ${accent})`, borderRadius: 2, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
+      <div style={{ fontSize: 13, color: accent, fontWeight: 700, marginTop: 8 }}>{row.earningsPercent}% of your earnings</div>
+      <div style={{ height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 1, overflow: 'hidden', marginTop: 14 }}>
+        <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', background: accent, boxShadow: `0 0 10px ${accent}`, borderRadius: 1, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginTop: 12 }}>
-        {[
-          ['Tips', fmtN(row.tips)],
-          ['Fans', fmtN(extras?.uniqueFans ?? 0)],
-          ['Avg tip', row.avgTipSize > 0 ? fmt$(row.avgTipSize) : '—'],
-        ].map(([l, v]) => (
-          <div key={l} style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted }}>{l}</div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.white, fontVariantNumeric: 'tabular-nums' }}>{v}</div>
-          </div>
-        ))}
+
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 20, fontSize: 12.5, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+        <span><span style={{ color: C.text, fontWeight: 700 }}>{fmtN(row.tips)}</span> tips</span>
+        <span><span style={{ color: C.text, fontWeight: 700 }}>{fmtN(extras?.uniqueFans ?? 0)}</span> fans</span>
+        <span><span style={{ color: C.text, fontWeight: 700 }}>{row.avgTipSize > 0 ? fmt$(row.avgTipSize) : '—'}</span> avg tip</span>
       </div>
-      <div style={{ marginTop: 10, paddingTop: 9, borderTop: `1px solid ${C.border}`, fontSize: 11.5, color: C.text, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ marginTop: 10, fontSize: 12.5, color: C.muted, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <span>30-day momentum</span>
-        <TrendCell trend={trend} />
+        <TrendCell trend={row.trend} />
       </div>
     </Glass>
   )
@@ -699,19 +746,24 @@ const ACTIVITY_ICON = { earned24h: '💸', newFans: '✨', returning: '🔁', sh
 function ActivityFeed({ items }) {
   if (!items.length) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ ...eyebrow, color: C.cyan, marginRight: 4 }}>Just updated</span>
-      {items.slice(0, 6).map((it, i) => (
-        <span key={i} className="pl-chip" title={it.sub} style={{
-          animationDelay: `${i * 60}ms`, display: 'inline-flex', alignItems: 'center', gap: 7,
-          fontSize: 13, color: C.white, padding: '7px 12px', borderRadius: 999,
-          background: `${accentFor(it.platform)}12`, border: `1px solid ${accentFor(it.platform)}40`, maxWidth: '100%',
-        }}>
-          <span>{ACTIVITY_ICON[it.kind]}</span>
-          <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{it.text}</span>
-          <span style={{ color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{it.sub}</span>
-        </span>
-      ))}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 4px' }}>
+      <span style={{ ...eyebrow, fontSize: 10, color: C.cyan, marginRight: 6, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+        <span className="pl-dot" style={{ width: 6, height: 6, borderRadius: 3, background: C.cyan }} />Just updated
+      </span>
+      {items.slice(0, 6).map((it, i) => {
+        const a = accentFor(it.platform)
+        return (
+          <span key={i} className="pl-chip" title={it.sub} style={{
+            animationDelay: `${i * 60}ms`, display: 'inline-flex', alignItems: 'center', gap: 7,
+            fontSize: 12, color: C.white, padding: '5px 11px', borderRadius: 999, maxWidth: '100%',
+            background: 'rgba(255,255,255,0.035)', boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.04), 0 0 18px -10px ${a}`,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: 3, background: a, boxShadow: `0 0 8px ${a}`, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240 }}>{it.text}</span>
+            <span style={{ color: C.muted, fontSize: 11, whiteSpace: 'nowrap' }}>{it.sub}</span>
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -787,25 +839,39 @@ function MonthlyHistory({ months, platforms }) {
 function MoneyBars({ comparison }) {
   const mounted = useMounted()
   return (
-    <Glass>
-      <Label style={{ marginBottom: 16 }}>Where your money comes from</Label>
-      <div style={{ display: 'grid', gap: 12 }}>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ ...eyebrow, marginBottom: 18 }}>Where your money comes from</div>
+      <div style={{ display: 'grid', gap: 18 }}>
         {comparison.map(p => {
           const accent = accentFor(p.platform)
           return (
             <div key={p.platform}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 14, marginBottom: 7 }}>
-                <span style={{ color: C.white, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{p.platform}</span>
-                <span style={{ color: C.text, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmt$(p.earnings)} <span style={{ color: C.white, fontWeight: 800, marginLeft: 6 }}>{p.earningsPercent}%</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 9 }}>
+                <span style={{ fontSize: 14.5, color: C.white, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{p.platform}</span>
+                <span style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 13, color: C.muted }}>{fmt$(p.earnings)}</span>
+                  <span style={{ fontSize: 17, color: C.white, fontWeight: 800, marginLeft: 10 }}>{p.earningsPercent}%</span>
                 </span>
               </div>
-              <div style={{ height: 14, background: 'rgba(255,255,255,0.05)', borderRadius: 7, overflow: 'hidden' }}>
-                <div style={{ width: mounted ? `${Math.max(p.earningsPercent, p.earnings > 0 ? 1 : 0)}%` : 0, height: '100%', borderRadius: 7, background: `linear-gradient(90deg, ${accent}88, ${accent})`, boxShadow: `0 0 12px ${accent}55`, transition: 'width 1s cubic-bezier(.2,.8,.2,1)' }} />
+              <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: mounted ? `${Math.max(p.earningsPercent, p.earnings > 0 ? 1 : 0)}%` : 0, height: '100%', borderRadius: 3, background: `linear-gradient(90deg, ${accent}66, ${accent})`, boxShadow: `0 0 14px ${accent}66`, transition: 'width 1s cubic-bezier(.2,.8,.2,1)' }} />
               </div>
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// "Where your money comes from" and "CamCash noticed" as two halves of one
+// intelligence surface — no divider, separated by space and light.
+function IntelligenceArea({ comparison, multi, noticedProps }) {
+  return (
+    <Glass glow="#7C5CFF" style={{ padding: '28px 30px' }}>
+      <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: multi ? 'minmax(0,0.9fr) minmax(0,1.1fr)' : '1fr', gap: 40, alignItems: 'start' }}>
+        {multi && <MoneyBars comparison={comparison} />}
+        <Noticed {...noticedProps} />
       </div>
     </Glass>
   )
@@ -821,38 +887,54 @@ function MoneyBars({ comparison }) {
 function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
   const freeTeasers = isPro ? [] : cross
   const shown = isPro ? [...cross.map(c => c.text), ...noticed.map(n => n.text)] : noticed.map(n => n.text)
+  const [lead, ...rest] = shown
   return (
-    <Glass accent={C.purple}>
-      <Label style={{ marginBottom: 14 }}><span style={{ color: C.pink }}>✦</span> CamCash noticed</Label>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ ...eyebrow, marginBottom: 18 }}><span style={{ color: C.pink }}>✦</span> CamCash noticed</div>
       {shown.length === 0 && freeTeasers.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.55 }}>
           {multi
             ? 'Nothing stands out between your platforms yet. Findings appear here when the gap is big enough to be real.'
             : 'Findings appear here once a pattern in your data is strong enough to call out.'}
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 8 }}>
-          {shown.slice(0, 4).map((t, i) => (
-            <div key={i} className="pl-chip" style={{ animationDelay: `${i * 70}ms`, display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14, color: C.white, lineHeight: 1.55, padding: '14px 15px', borderRadius: 12, background: i === 0 ? `${C.indigo}18` : `${C.indigo}0d`, border: `1px solid ${i === 0 ? `${C.indigo}50` : `${C.indigo}28`}` }}>
-              <span style={{ fontSize: 17, flexShrink: 0 }}>💡</span><span style={{ minWidth: 0 }}>{t}</span>
-            </div>
-          ))}
-          {freeTeasers.slice(0, 2).map(c => (
-            <div key={c.id} style={{ padding: '14px 15px', borderRadius: 12, border: `1px solid ${C.pink}40`, background: HERO_GRADIENT }}>
-              <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.09em', color: C.pink }}>✦ PRO INSIGHT</div>
-              <div style={{ fontSize: 14, color: C.white, marginTop: 5, lineHeight: 1.5 }}>{c.teaser}</div>
-              <div aria-hidden style={{ fontSize: 12, color: C.text, marginTop: 4, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██% · $██.██</div>
-              <div style={{ marginTop: 10 }}><UpgradeLink onUpgrade={onUpgrade} source={`platforms_insight_${c.id}`}>{c.cta}</UpgradeLink></div>
-            </div>
-          ))}
-          {freeTeasers.length > 2 && (
-            <div style={{ fontSize: 13, color: C.text, paddingLeft: 2 }}>
-              + {plural(freeTeasers.length - 2, 'more finding')} already found in your data
-            </div>
-          )}
+        <div style={{
+          position: 'relative', overflow: 'hidden', borderRadius: 20, padding: '22px 24px',
+          background: 'linear-gradient(150deg, rgba(124,92,255,0.12) 0%, rgba(34,211,238,0.04) 45%, rgba(236,72,153,0.08) 100%)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 0 1px rgba(255,255,255,0.045)',
+        }}>
+          <span aria-hidden style={{ position: 'absolute', right: -50, top: -60, width: 200, height: 200, borderRadius: '50%', background: '#EC4899', opacity: 0.14, filter: 'blur(60px)', pointerEvents: 'none' }} />
+          <div style={{ position: 'relative' }}>
+            {lead && (
+              <div className="pl-chip" style={{ fontSize: 17, fontWeight: 600, color: C.white, lineHeight: 1.5, letterSpacing: '-0.01em' }}>{lead}</div>
+            )}
+            {rest.slice(0, 3).map((t, i) => (
+              <div key={i} className="pl-chip" style={{ animationDelay: `${(i + 1) * 70}ms`, display: 'flex', gap: 10, marginTop: 14, fontSize: 13.5, color: C.text, lineHeight: 1.55 }}>
+                <span style={{ color: C.indigo, flexShrink: 0 }}>✦</span><span style={{ minWidth: 0 }}>{t}</span>
+              </div>
+            ))}
+            {freeTeasers.slice(0, 2).map((c, i) => (
+              <div key={c.id} style={{ marginTop: lead || i ? 18 : 0, paddingTop: lead || i ? 16 : 0, borderTop: lead || i ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: C.pink }}>✦ PRO INSIGHT</span>
+                  <span aria-hidden style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
+                </div>
+                <div style={{ fontSize: 14, color: C.white, marginTop: 6, lineHeight: 1.5 }}>{c.teaser}</div>
+                <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{
+                  marginTop: 8, padding: 0, background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 13, fontWeight: 800, backgroundImage: CTA_GRADIENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+                }}>{c.cta} →</button>
+              </div>
+            ))}
+            {freeTeasers.length > 2 && (
+              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 12 }}>
+                + {plural(freeTeasers.length - 2, 'more finding')} already found in your data
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </Glass>
+    </div>
   )
 }
 
@@ -1014,7 +1096,7 @@ function SinceLastVisit({ visit, tz }) {
     )
   }
   return (
-    <div className="pl-chip" style={card({ padding: '16px 20px', border: '1px solid rgba(16,185,129,0.35)', background: 'linear-gradient(90deg, rgba(16,185,129,0.10), rgba(15,20,32,0.75))' })}>
+    <div className="pl-chip" style={{ borderRadius: 20, padding: '14px 22px', background: 'linear-gradient(90deg, rgba(16,185,129,0.10), rgba(16,185,129,0.02) 60%, transparent)', boxShadow: 'inset 0 0 0 1px rgba(16,185,129,0.16), 0 0 40px -24px rgba(16,185,129,0.6)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <span className="pl-dot" style={{ width: 9, height: 9, borderRadius: 5, background: C.green }} />
         <span style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Since your last visit</span>
@@ -1206,10 +1288,10 @@ export default function PlatformsIntelligence({
           <LatestStream recap={recap} tz={tz} multi={multi} />
           <ActivityFeed items={activity} />
 
-          <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+          <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
             {comparison.map(row => (
               <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
-                selected={active === row.platform} onSelect={() => select(row.platform)} />
+                selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} />
             ))}
             {!multi && <ExpansionCard onImport={onImport} />}
           </div>
@@ -1220,10 +1302,8 @@ export default function PlatformsIntelligence({
             </div>
           )}
 
-          <div className="pi-two-col" style={{ display: 'grid', gridTemplateColumns: multi ? 'minmax(0,1fr) minmax(0,1fr)' : '1fr', gap: 14, alignItems: 'start' }}>
-            {multi && <MoneyBars comparison={comparison} />}
-            <Noticed noticed={noticed} cross={cross} isPro={isPro} onUpgrade={onUpgrade} multi={multi} />
-          </div>
+          <IntelligenceArea comparison={comparison} multi={multi}
+            noticedProps={{ noticed, cross, isPro, onUpgrade, multi }} />
 
           {multi && (
             <div>
@@ -1247,7 +1327,7 @@ export default function PlatformsIntelligence({
           )}
 
           <Glass>
-            <Label style={{ marginBottom: 14 }}>⚡ Your next best move</Label>
+            <div style={{ ...eyebrow, marginBottom: 14 }}>Where to focus</div>
             <NextBestMove comparison={comparison} efficiency={efficiency} timeIntel={timeIntel} onOpenPlanner={onOpenPlanner} />
           </Glass>
 
