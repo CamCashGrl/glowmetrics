@@ -187,6 +187,21 @@ AS $function$
   END
 $function$;
 
+-- Valid IANA names, snapshotted from pg_timezone_names. Reading the
+-- pg_timezone_names view costs ~12 ms per call, so valid names are answered
+-- from this table (primary-key lookup). A name NOT in the table still falls
+-- back to the authoritative view, so a newer tz database is honoured and an
+-- invalid name is still rejected. The table only ever holds names that
+-- pg_timezone_names listed when it was filled.
+CREATE TABLE IF NOT EXISTS public.live_mode_valid_timezones (
+  name text PRIMARY KEY
+);
+ALTER TABLE public.live_mode_valid_timezones ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.live_mode_valid_timezones FROM PUBLIC, anon, authenticated;
+INSERT INTO public.live_mode_valid_timezones (name)
+SELECT z.name FROM pg_catalog.pg_timezone_names z
+ON CONFLICT (name) DO NOTHING;
+
 CREATE OR REPLACE FUNCTION public._valid_iana_timezone(p_tz text)
  RETURNS boolean
  LANGUAGE sql
@@ -196,7 +211,10 @@ CREATE OR REPLACE FUNCTION public._valid_iana_timezone(p_tz text)
 AS $function$
   SELECT p_tz IS NOT NULL
      AND btrim(p_tz) <> ''
-     AND EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names z WHERE z.name = p_tz)
+     AND (
+       EXISTS (SELECT 1 FROM public.live_mode_valid_timezones c WHERE c.name = p_tz)
+       OR EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names z WHERE z.name = p_tz)
+     )
 $function$;
 
 -- ── Creator-local allowance window ───────────────────────────────────────

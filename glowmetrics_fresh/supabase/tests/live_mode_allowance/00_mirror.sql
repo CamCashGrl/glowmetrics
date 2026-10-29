@@ -79,6 +79,10 @@ ALTER TABLE public.live_sessions ADD CONSTRAINT live_sessions_resolution_type_ch
 CREATE UNIQUE INDEX live_sessions_one_running_per_user ON public.live_sessions (user_id)
   WHERE status = ANY (ARRAY['starting','live','inactive_warning','ending']);
 
+-- Production's other live_sessions / pauses indexes (read from production 2026-10-29), so query plans in tests are realistic.
+CREATE INDEX live_sessions_user_active ON public.live_sessions (user_id, is_active, started_at DESC);
+CREATE INDEX idx_live_sessions_user_finalized ON public.live_sessions (user_id, ended_at DESC) WHERE (finalized_at IS NOT NULL);
+
 CREATE TABLE public.live_session_pauses (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id uuid NOT NULL REFERENCES public.live_sessions(id),
@@ -86,6 +90,7 @@ CREATE TABLE public.live_session_pauses (
   paused_at timestamptz, resumed_at timestamptz, pause_duration_seconds integer,
   created_at timestamptz DEFAULT now()
 );
+CREATE INDEX live_session_pauses_session_id_idx ON public.live_session_pauses (session_id);
 CREATE TABLE public.live_private_intervals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL, live_session_id uuid NOT NULL REFERENCES public.live_sessions(id),
