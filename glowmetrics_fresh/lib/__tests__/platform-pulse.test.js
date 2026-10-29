@@ -3,7 +3,7 @@ import {
   buildPlatformComparison, buildPlatformExtras, buildLatestStreamRecap,
   buildPlatformStatuses, buildLearningState, buildCrossPlatformInsights,
   buildShareShift, buildCamCashNoticed,
-  buildPlatformMonthlyHistory, buildNewFans, buildPlatformActivity,
+  buildPlatformMonthlyHistory, buildNewFans, buildPlatformActivity, buildSinceLastVisit,
 } from '../platformIntelligenceAnalytics'
 
 const TZ = 'America/New_York'
@@ -145,5 +145,32 @@ describe('Platform pulse derivations', () => {
     const items = buildPlatformActivity(a, { now })
     expect(items.find(i => i.kind === 'earned24h')).toMatchObject({ platform: 'Chaturbate', text: 'Chaturbate +$40.00' })
     expect(items.find(i => i.kind === 'returning').text).toBe('c0 tipped again')
+  })
+
+  it('since-last-visit counts only tips after the previous visit, per platform', () => {
+    const tips = [
+      ...stream('Chaturbate', '2026-10-01T20:00:00Z', fans10('c'), 2),
+      ...stream('Chaturbate', '2026-10-10T20:00:00Z', ['c0', 'c1', 'c2', 'cnew', 'c0', 'c1', 'c2'], 3),
+      ...stream('MyFreeCams', '2026-10-11T20:00:00Z', fans10('m'), 1),
+    ]
+    const a = aggregateRows(tips, TZ)
+    const now = new Date('2026-10-12T00:00:00Z').getTime()
+    const v = buildSinceLastVisit(a, new Date('2026-10-05T00:00:00Z').getTime(), now)
+    expect(v.totalUSD).toBe(31)
+    expect(v.tips).toBe(17)
+    expect(v.newFans).toBe(11) // cnew + 10 MyFreeCams fans
+    expect(v.platforms).toEqual([
+      { platform: 'Chaturbate', usd: 21, tips: 7 },
+      { platform: 'MyFreeCams', usd: 10, tips: 10 },
+    ])
+  })
+
+  it('since-last-visit is null without a valid previous visit, and zero when nothing arrived', () => {
+    const a = aggregateRows(stream('Chaturbate', '2026-10-01T20:00:00Z', fans10('c'), 2), TZ)
+    const now = new Date('2026-10-12T00:00:00Z').getTime()
+    expect(buildSinceLastVisit(a, null, now)).toBeNull()
+    expect(buildSinceLastVisit(a, NaN, now)).toBeNull()
+    expect(buildSinceLastVisit(a, now + 1000, now)).toBeNull()
+    expect(buildSinceLastVisit(a, new Date('2026-10-05T00:00:00Z').getTime(), now)).toMatchObject({ totalUSD: 0, tips: 0, newFans: 0, platforms: [] })
   })
 })

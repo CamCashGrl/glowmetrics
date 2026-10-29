@@ -613,6 +613,40 @@ export function buildPlatformActivity(analytics, { now = Date.now(), recap = bui
   return items
 }
 
+// What arrived after the viewer's previous visit to this page. `sinceMs` is
+// that visit's timestamp (kept in the viewer's own browser); every figure is
+// read from the engine's session tips and whales, by tip timestamp.
+export function buildSinceLastVisit(analytics, sinceMs, now = Date.now()) {
+  if (!Number.isFinite(sinceMs) || sinceMs <= 0 || sinceMs >= now) return null
+  const byPlatform = {}
+  let totalUSD = 0, tips = 0
+  for (const s of analytics?.allValidSessions || []) {
+    for (const t of s.tips || []) {
+      const ts = new Date(t.dateRaw || t.date_time).getTime()
+      if (!(ts > sinceMs && ts <= now)) continue
+      const p = (byPlatform[s.platform] ||= { usd: 0, tips: 0 })
+      p.usd += t.usd || 0
+      p.tips += 1
+      totalUSD += t.usd || 0
+      tips += 1
+    }
+  }
+  let newFans = 0
+  for (const w of analytics?.whales || []) {
+    const first = new Date(w.firstTipDate).getTime()
+    if (first > sinceMs && first <= now) newFans += 1
+  }
+  return {
+    since: sinceMs,
+    totalUSD: round2(totalUSD),
+    tips,
+    newFans,
+    platforms: Object.entries(byPlatform)
+      .map(([platform, v]) => ({ platform, usd: round2(v.usd), tips: v.tips }))
+      .sort((a, b) => b.usd - a.usd),
+  }
+}
+
 // =============================================
 // HELPERS
 // =============================================

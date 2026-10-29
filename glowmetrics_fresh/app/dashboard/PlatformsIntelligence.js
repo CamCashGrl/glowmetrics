@@ -17,6 +17,7 @@ import {
   buildPlatformMonthlyHistory,
   buildNewFans,
   buildPlatformActivity,
+  buildSinceLastVisit,
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
@@ -445,6 +446,7 @@ const BADGES = {
   gaining: { label: '↑ Gaining', color: C.green },
   cooling: { label: 'Cooling', color: C.blue },
   learning: { label: 'Still learning', color: C.muted },
+  fresh: { label: '● New since last visit', color: C.green },
 }
 const BADGE_HELP = {
   leading: 'Highest earnings of your platforms in the analysed period',
@@ -452,6 +454,7 @@ const BADGE_HELP = {
   gaining: 'Last 30 days earned more than the 30 days before',
   cooling: 'Last 30 days earned less than the 30 days before',
   learning: 'Fewer than 3 meaningful sessions or 3 streamed hours on this platform',
+  fresh: 'Tips arrived on this platform after your previous visit to this page',
 }
 
 function Badge({ kind }) {
@@ -838,10 +841,15 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
             <div key={c.id} style={{ padding: '14px 15px', borderRadius: 12, border: `1px solid ${C.pink}40`, background: HERO_GRADIENT }}>
               <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.09em', color: C.pink }}>✦ PRO INSIGHT</div>
               <div style={{ fontSize: 14, color: C.white, marginTop: 5, lineHeight: 1.5 }}>{c.teaser}</div>
-              <div aria-hidden style={{ fontSize: 12, color: C.text, marginTop: 4, filter: 'blur(4px)', userSelect: 'none' }}>████████ earns ██% more per ███</div>
+              <div aria-hidden style={{ fontSize: 12, color: C.text, marginTop: 4, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██% · $██.██</div>
               <div style={{ marginTop: 10 }}><UpgradeLink onUpgrade={onUpgrade} source={`platforms_insight_${c.id}`}>{c.cta}</UpgradeLink></div>
             </div>
           ))}
+          {freeTeasers.length > 2 && (
+            <div style={{ fontSize: 13, color: C.text, paddingLeft: 2 }}>
+              + {plural(freeTeasers.length - 2, 'more finding')} already found in your data
+            </div>
+          )}
         </div>
       )}
     </Glass>
@@ -933,23 +941,91 @@ function ShareShift({ shift }) {
   )
 }
 
-function HistoryTeaser({ hiddenTipCount, onUpgrade }) {
+// Free: one consolidated, personal "what's already waiting" panel. Each line
+// is a real count from this account; lines without data are left out, and
+// the panel is hidden when nothing is waiting. No timers, no fake scarcity.
+function UnlockPanel({ findings, platforms, hiddenTipCount, supporters, hasPlatformTiming, onUpgrade }) {
+  const items = [
+    findings > 0 && { icon: '✦', text: `${plural(findings, 'cross-platform finding')} already found in your data` },
+    platforms > 1 && { icon: '⚖️', text: `Side-by-side comparison of your ${platforms} platforms: $/hr, fan value and momentum` },
+    hiddenTipCount > 0 && { icon: '🗂️', text: `${fmtN(hiddenTipCount)} older tips saved, with month-by-month platform history` },
+    supporters > 3 && { icon: '👥', text: `All ${fmtN(supporters)} supporters ranked on every platform` },
+    hasPlatformTiming && { icon: '🕐', text: 'Best hour and day for each platform' },
+  ].filter(Boolean)
+  if (items.length === 0) return null
   return (
-    <Glass style={{ border: `1px dashed ${C.pink}55` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ minWidth: 0, flex: '1 1 320px' }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: C.white }}>
-            How your platform split is moving <ProTag />
+    <div style={{ background: HERO_GRADIENT, border: '1px solid rgba(236,72,153,0.30)', borderRadius: 18, padding: 26, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', left: -60, bottom: -80, width: 260, height: 260, borderRadius: '50%', background: 'rgba(124,92,255,0.14)', filter: 'blur(70px)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ flex: '1 1 380px', minWidth: 0 }}>
+          <div style={{ ...eyebrow, color: C.pink, marginBottom: 10 }}>Your full picture</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em' }}>It&apos;s already in your account</div>
+          <div style={{ fontSize: 13.5, color: C.text, marginTop: 6, lineHeight: 1.55 }}>
+            Everything below comes from data you&apos;ve already imported. It&apos;s all there when you upgrade, with no re-upload needed.
           </div>
-          <div style={{ fontSize: 12, color: C.text, marginTop: 4, lineHeight: 1.5 }}>
-            {hiddenTipCount > 0
-              ? `${fmtN(hiddenTipCount)} of your older tips sit outside the free 31-day window. They're saved, so it's all there when you upgrade: Pro shows each platform's share and momentum across your full history.`
-              : 'Pro shows how your revenue split moves month by month across every platform you stream on, with momentum for each.'}
+          <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
+            {items.map((it, i) => (
+              <div key={i} className="pl-chip" style={{ animationDelay: `${i * 60}ms`, display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, color: C.white, lineHeight: 1.45 }}>
+                <span style={{ width: 22, flexShrink: 0, textAlign: 'center' }}>{it.icon}</span>
+                <span style={{ minWidth: 0 }}>{it.text}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <UpgradeLink onUpgrade={onUpgrade} source="platforms_history">Unlock platform history</UpgradeLink>
+        <div style={{ flex: '0 1 auto' }}>
+          <BrandButton onClick={() => onUpgrade?.('platforms_full_picture')} style={{ padding: '15px 28px', fontSize: 16, borderRadius: 12 }}>
+            Unlock my full picture →
+          </BrandButton>
+        </div>
       </div>
-    </Glass>
+    </div>
+  )
+}
+
+// The viewer's previous visit, from their own browser. First paint is null
+// (matches the server); the stored time is read after mount and replaced
+// with now, so the next visit compares against this one.
+const LAST_VISIT_KEY = 'cc_platforms_last_visit'
+function usePreviousVisit() {
+  const [prev, setPrev] = useState(null)
+  const done = useRef(false)
+  useEffect(() => {
+    // Read-then-write exactly once per mount, even when React re-runs effects
+    // (Strict Mode), or the second run would read back our own timestamp.
+    if (done.current) return
+    done.current = true
+    try {
+      const stored = Number(window.localStorage.getItem(LAST_VISIT_KEY))
+      if (Number.isFinite(stored) && stored > 0) setPrev(stored)
+      window.localStorage.setItem(LAST_VISIT_KEY, String(Date.now()))
+    } catch { /* storage unavailable: no comparison, page still renders */ }
+  }, [])
+  return prev
+}
+
+function SinceLastVisit({ visit, tz }) {
+  if (!visit) return null
+  const when = streamWhen(new Date(visit.since).toISOString(), tz)
+  if (visit.tips === 0) {
+    return (
+      <div style={{ fontSize: 13, color: C.muted }}>
+        Nothing new since your last visit ({when}). New tips show up here after your next stream or import.
+      </div>
+    )
+  }
+  return (
+    <div className="pl-chip" style={card({ padding: '16px 20px', border: '1px solid rgba(16,185,129,0.35)', background: 'linear-gradient(90deg, rgba(16,185,129,0.10), rgba(15,20,32,0.75))' })}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <span className="pl-dot" style={{ width: 9, height: 9, borderRadius: 5, background: C.green }} />
+        <span style={{ fontSize: 15, fontWeight: 800, color: C.white }}>Since your last visit</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: C.green, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>+<Counter value={visit.totalUSD} /></span>
+        <span style={{ fontSize: 13.5, color: C.text }}>
+          {plural(visit.tips, 'tip')}{visit.newFans ? ` · ${plural(visit.newFans, 'new fan')}` : ''}
+          {visit.platforms.length > 1 ? ` · ${visit.platforms.map(p => `${p.platform} +${fmt$(p.usd)}`).join(' · ')}` : ` on ${visit.platforms[0].platform}`}
+        </span>
+        <span style={{ fontSize: 12, color: C.muted, marginLeft: 'auto' }}>since {when}</span>
+      </div>
+    </div>
   )
 }
 
@@ -1053,6 +1129,9 @@ export default function PlatformsIntelligence({
   const history = useMemo(() => (isPro ? buildPlatformMonthlyHistory(analytics, tz) : null), [analytics, isPro, tz])
   const newFans = useMemo(() => buildNewFans(analytics), [analytics])
   const activity = useMemo(() => buildPlatformActivity(analytics, { recap }), [analytics, recap])
+  const previousVisit = usePreviousVisit()
+  const visit = useMemo(() => buildSinceLastVisit(analytics, previousVisit), [analytics, previousVisit])
+  const freshPlatforms = useMemo(() => new Set((visit?.platforms || []).filter(p => p.usd > 0).map(p => p.platform)), [visit])
 
   const names = comparison.map(p => p.platform)
   const active = names.includes(selectedPlatform) ? selectedPlatform : null
@@ -1115,6 +1194,7 @@ export default function PlatformsIntelligence({
         <LearningPanel learning={learning} onImport={onImport} />
       ) : (
         <>
+          <SinceLastVisit visit={visit} tz={tz} />
           <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} newFans={newFans} />
           {!isPro && multi && (
             <div style={{ fontSize: 13, color: C.text, marginTop: -8, lineHeight: 1.55 }}>
@@ -1128,7 +1208,7 @@ export default function PlatformsIntelligence({
 
           <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
             {comparison.map(row => (
-              <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={statuses[row.platform] || []}
+              <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
                 selected={active === row.platform} onSelect={() => select(row.platform)} />
             ))}
             {!multi && <ExpansionCard onImport={onImport} />}
@@ -1155,7 +1235,16 @@ export default function PlatformsIntelligence({
 
           {isPro && multi && shift && <div><ShareShift shift={shift} /></div>}
           {isPro && history && <div><MonthlyHistory months={history} platforms={names} /></div>}
-          {!isPro && (multi || hiddenTipCount > 0) && <div><HistoryTeaser hiddenTipCount={hiddenTipCount} onUpgrade={onUpgrade} /></div>}
+          {!isPro && (
+            <UnlockPanel
+              findings={cross.length}
+              platforms={comparison.length}
+              hiddenTipCount={hiddenTipCount}
+              supporters={analytics.uniqueFanCount || 0}
+              hasPlatformTiming={Object.values(analytics.platformBestTimes || {}).some(t => t?.hour || t?.bestDay)}
+              onUpgrade={onUpgrade}
+            />
+          )}
 
           <Glass>
             <Label style={{ marginBottom: 14 }}>⚡ Your next best move</Label>
