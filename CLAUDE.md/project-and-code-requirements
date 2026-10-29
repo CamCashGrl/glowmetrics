@@ -483,4 +483,31 @@ Regression coverage: `lib/analytics/__tests__/timezone-consistency.test.js`.
 
 ---
 
+## CREATOR TIMEZONE vs MACHINE / CI TIMEZONE
+
+The creator's selected IANA timezone (`profiles.timezone`) is the **only**
+source of truth for creator-local logic: parsing timezone-naive timestamps,
+dates, sessions, allowance weeks, best-time analytics, fan activity, private
+timing, and every creator-local calendar calculation.
+
+- Machine, server, browser, device and CI timezones must **never** determine a
+  creator-local result.
+- **UTC is not a fallback** for a missing creator timezone. Use UTC only when
+  the creator actually selected UTC.
+
+### Reproducing CI workflows locally
+
+- Reproduce each GitHub Actions workflow **exactly as its YAML is written**
+  (Node version, working directory, install/test/build commands, guard scripts).
+- **Do not inject `TZ=UTC`** (or any timezone variable) unless the workflow
+  YAML explicitly sets it. Report the timezone the process naturally runs
+  under; do not describe a workflow as "running under UTC" unless the YAML
+  requires it.
+- Machine-timezone checks are a **separate portability check**, run after the
+  exact workflow reproduction: run the suite under several machine timezones
+  (at least `America/Los_Angeles` and UTC) only to prove that changing the
+  machine timezone does not change CamCash results.
+
+---
+
 *Last updated: June 2026 — Port of all CamCash claude.ai skills into Claude Code format*
