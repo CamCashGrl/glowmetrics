@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { readUploadJson } from "../../lib/readUploadJson"
@@ -25,6 +25,8 @@ import SubscriptionManager from './SubscriptionManager'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import LiveModeAllowanceBar from '../live/components/LiveModeAllowanceBar'
+const LIVE_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams']
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
 import PlannedStreams from './PlannedStreams'
@@ -1484,23 +1486,18 @@ export default function Dashboard() {
     }
   }, [selectedWhale])
   // ── LIVE MODE STATE ───────────────────────────────────────
-  const [liveActive, setLiveActive] = useState(false)
-  const [liveStartTime, setLiveStartTime] = useState(null)
   // Real session engine (live_sessions table) — same hook /app/live/page.js
-  // uses. Mirrors its status into the legacy liveActive/liveStartTime state
-  // below so a session started from the extension (or any other surface)
-  // shows up here too, instead of only after a tip arrives. Same rule as
-  // app/live/page.js.
+  // uses. Live state is DERIVED from the canonical server session and nothing
+  // else: it is not React state, so no button and no arriving tip can create,
+  // extend or end it. A session started from the extension (or any other
+  // surface) shows up here through the engine's poll.
   const liveEngine = useLiveSessionEngine()
-  useEffect(() => {
-    const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'live' || status === 'starting')
-    setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
-  }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  const liveServerStatus = liveEngine.serverSession?.status
+  const liveActive = liveServerStatus === 'live' || liveServerStatus === 'starting'
+  const liveStartedAtIso = liveEngine.serverSession?.started_at || null
+  const liveStartTime = useMemo(() => (liveStartedAtIso ? new Date(liveStartedAtIso) : null), [liveStartedAtIso])
   // Go Live / Start Streaming / End on this tab drive the real session
-  // engine (same calls as app/live/page.js). liveActive/liveStartTime then
-  // follow the server session through the mirror effect above — they are
-  // never flipped locally, which the mirror would immediately undo.
+  // engine (same calls as app/live/page.js).
   const startLiveFromDashboard = async () => {
     const session = await liveEngine.goLive(livePlatform)
     if (!session) return // liveEngine.actionError explains why
@@ -1581,7 +1578,24 @@ export default function Dashboard() {
   }
   const [liveEvents, setLiveEvents] = useState([])
   const [liveGoalTokens, setLiveGoalTokens] = useState(0)
-  const [livePlatform, setLivePlatform] = useState('Chaturbate')
+  // No default platform. Restored only from the creator's own last explicit
+  // choice (or mirrored from the live server session); Go Live stays disabled
+  // until one of the three supported platforms is selected.
+  const [livePlatform, setLivePlatform] = useState('')
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('camcash_live_platform')
+      if (LIVE_PLATFORMS.includes(saved)) setLivePlatform(saved)
+    } catch (_) { /* storage unavailable: the creator just picks again */ }
+  }, [])
+  useEffect(() => {
+    const fromSession = liveEngine.serverSession?.stream_platform
+    if (LIVE_PLATFORMS.includes(fromSession)) setLivePlatform(fromSession)
+  }, [liveEngine.serverSession?.stream_platform])
+  const chooseLivePlatform = (value) => {
+    setLivePlatform(value)
+    try { if (LIVE_PLATFORMS.includes(value)) localStorage.setItem('camcash_live_platform', value) } catch (_) {}
+  }
   const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' })
   const [liveAlerts, setLiveAlerts] = useState([])
   const [liveTick, setLiveTick] = useState(0)
@@ -1803,11 +1817,7 @@ export default function Dashboard() {
         if (prev.some(e => e._id === normalized._id)) return prev
         return [...prev, normalized]
       })
-      // Auto-activate live mode on first real tip
-      setLiveActive(active => {
-        if (!active) setLiveStartTime(prev => prev || new Date())
-        return true
-      })
+      // A tip never creates Live state: liveActive follows the server session only.
     }
     window.addEventListener('message', handleExtensionMessage)
     return () => window.removeEventListener('message', handleExtensionMessage)
@@ -1894,10 +1904,7 @@ export default function Dashboard() {
           source:           'extension',
         }
         setLiveEvents(prev => [...prev, normalized])
-        setLiveActive(prev => {
-          if (!prev) setLiveStartTime(st => st || new Date())
-          return true
-        })
+        // A tip never creates Live state: liveActive follows the server session only.
         // Flash animation: highlight the new tip row for 2.5s
         setFlashTipId(normalized._id)
         setTimeout(() => setFlashTipId(null), 2500)
@@ -2159,10 +2166,9 @@ export default function Dashboard() {
         platform:          tip.platform || 'Unknown',
       }))
 
+      // History only. Recent tips are shown, but they never start a session or
+      // set a start time: both come from the canonical server session.
       setLiveEvents(normalized)
-      setLiveActive(true)
-      // Use earliest tip as session start so pace/coaching calculations are accurate
-      setLiveStartTime(prev => prev || new Date(data[0].received_at))
     }
 
     loadRecentLiveTips()
@@ -5059,6 +5065,15 @@ const stopImportMessageRotation = () => {
                 @keyframes cc-glow { 0%,100%{box-shadow:0 0 8px currentColor;} 50%{box-shadow:0 0 18px currentColor;} }
                 @keyframes cc-bar { from{opacity:0.4;} to{opacity:1;} }
               `}</style>
+              {/* ── FREE LIVE MODE ALLOWANCE (database state; shared with /live) ── */}
+              <div style={{ marginBottom: 12 }}>
+                <LiveModeAllowanceBar
+                  allowance={liveEngine.allowance}
+                  receivedAt={liveEngine.allowanceReceivedAt}
+                  onSaveTimezone={changeCreatorTimezone}
+                  onRefresh={liveEngine.refresh}
+                />
+              </div>
               {/* ── COMPACT LIVE HEADER ─────────────────────────────── */}
               <div style={{ position: 'sticky', top: 0, zIndex: 40, background: 'rgba(4,8,18,0.85)', backdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(168,85,247,0.15)', marginBottom: 16, borderRadius: 10, padding: '12px 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
@@ -5092,8 +5107,9 @@ const stopImportMessageRotation = () => {
 
                   {/* Right: Controls */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 11 }}>
-                      {['Chaturbate','BongaCams','MyFreeCams'].map(p => <option key={p} value={p}>{p}</option>)}
+                    <select aria-label="Live platform" data-testid="live-platform" value={livePlatform} onChange={e => chooseLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 11 }}>
+                      <option value="">Platform…</option>
+                      {LIVE_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                     <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)} placeholder="Goal" style={{ ...inp2, width: 100, padding: '5px 10px', fontSize: 11 }} />
                     <select value={liveStrategy} onChange={e => setLiveStrategy(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 11 }}>
@@ -5105,7 +5121,7 @@ const stopImportMessageRotation = () => {
                       <option value="goal">🎯</option>
                     </select>
                     {!liveActive ? (
-                      <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending}
+                      <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending || !livePlatform} title={livePlatform ? undefined : 'Choose your platform first'}
                         style={{ padding: '6px 14px', borderRadius: 6, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         {liveEngine.actionPending ? 'Starting…' : 'Go Live'}
                       </button>
@@ -5148,7 +5164,13 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
                     Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
-                  <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending}
+                  <div style={{ marginBottom: 14 }}>
+                    <select aria-label="Live platform" value={livePlatform} onChange={e => chooseLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '8px 14px', fontSize: 13 }}>
+                      <option value="">Choose your platform…</option>
+                      {LIVE_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending || !livePlatform} title={livePlatform ? undefined : 'Choose your platform first'}
                     style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
                     {liveEngine.actionPending ? 'Starting…' : '▶ Start Streaming'}
                   </button>

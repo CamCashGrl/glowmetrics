@@ -72,6 +72,25 @@
 BEGIN;
 SET LOCAL lock_timeout = '10s';
 
+-- ── Entitlement: THE one definition (the preflight below uses it too) ────
+CREATE OR REPLACE FUNCTION public.live_mode_entitlement(p_user_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT CASE
+           WHEN p.plan = 'pro'
+            AND p.subscription_status = 'active'
+            AND p.stripe_subscription_id IS NOT NULL
+           THEN 'unlimited'
+           ELSE 'capped'
+         END
+  FROM (SELECT p_user_id AS id) u
+  LEFT JOIN public.profiles p ON p.id = u.id
+$function$;
+
 -- ── Preflight ────────────────────────────────────────────────────────────
 DO $$
 DECLARE
@@ -96,9 +115,9 @@ BEGIN
   SELECT count(*) INTO v_drift
   FROM public.profiles p
   WHERE coalesce(p.plan, 'free') <> 'free'
-    AND NOT (p.plan = 'pro' AND p.subscription_status = 'active' AND p.stripe_subscription_id IS NOT NULL);
+    AND public.live_mode_entitlement(p.id) <> 'unlimited';
   IF v_drift > 0 AND coalesce(current_setting('camcash.accept_entitlement_drift', true), '') <> 'on' THEN
-    RAISE EXCEPTION 'ENTITLEMENT_DRIFT: % profile(s) have plan <> free but do not meet the unlimited rule (plan=pro AND subscription_status=active AND stripe_subscription_id present). Reconcile those accounts before applying. Aborting.', v_drift;
+    RAISE EXCEPTION 'ENTITLEMENT_DRIFT: % profile(s) have plan <> free but are not unlimited under public.live_mode_entitlement (plan=pro AND subscription_status=active AND stripe_subscription_id present). Reconcile those accounts before applying. Aborting.', v_drift;
   END IF;
 
   SELECT count(*) INTO v_running
@@ -178,24 +197,6 @@ AS $function$
   SELECT p_tz IS NOT NULL
      AND btrim(p_tz) <> ''
      AND EXISTS (SELECT 1 FROM pg_catalog.pg_timezone_names z WHERE z.name = p_tz)
-$function$;
-
-CREATE OR REPLACE FUNCTION public.live_mode_entitlement(p_user_id uuid)
- RETURNS text
- LANGUAGE sql
- STABLE
- SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
-AS $function$
-  SELECT CASE
-           WHEN p.plan = 'pro'
-            AND p.subscription_status = 'active'
-            AND p.stripe_subscription_id IS NOT NULL
-           THEN 'unlimited'
-           ELSE 'capped'
-         END
-  FROM (SELECT p_user_id AS id) u
-  LEFT JOIN public.profiles p ON p.id = u.id
 $function$;
 
 -- ── Creator-local allowance window ───────────────────────────────────────

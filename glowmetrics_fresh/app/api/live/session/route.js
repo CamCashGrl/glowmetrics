@@ -26,6 +26,12 @@ export async function GET(req) {
 
   await supabase.rpc('sweep_stale_live_session')
 
+  // The database's allowance state (it first enforces the Free 35-minute cap
+  // and closes never-connected sessions). Display only. A failure here must
+  // not break session restore, so it degrades to null.
+  const { data: allowance, error: allowanceError } = await supabase.rpc('get_live_mode_allowance')
+  if (allowanceError) console.error('[live-session] allowance', allowanceError)
+
   // Always looked up, independent of the flag — an existing session must be
   // found and returned even when the flag is currently disabled or Edge
   // Config is unavailable.
@@ -47,7 +53,7 @@ export async function GET(req) {
   if (data?.id) {
     const { data: open } = await supabase
       .from('live_private_intervals')
-      .select('id,live_session_id,platform,started_at,rate_per_minute')
+      .select('id,live_session_id,platform,username,started_at,rate_per_minute')
       .eq('live_session_id', data.id)
       .is('ended_at', null)
       .maybeSingle()
@@ -55,7 +61,7 @@ export async function GET(req) {
   }
 
   return NextResponse.json(
-    { session: shapeLiveSession(data), privateInterval },
+    { session: shapeLiveSession(data), privateInterval, allowance: allowance ?? null, serverNow: new Date().toISOString() },
     { headers: { 'Cache-Control': 'no-store', ...cors } }
   )
 }

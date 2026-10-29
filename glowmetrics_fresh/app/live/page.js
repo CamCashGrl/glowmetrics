@@ -15,6 +15,7 @@ import PlatformBreakdown from './components/PlatformBreakdown';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import PrivateShowControl from './PrivateShowControl';
+import LiveModeAllowanceBar from './components/LiveModeAllowanceBar';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
 
 const C = {
@@ -43,7 +44,10 @@ export default function LivePage() {
   // server-persisted engine (GET /api/live/coaching) — never computed
   // locally. null when nothing is currently active.
   const [coachingPrompt, setCoachingPrompt] = useState(null);
-  const [livePlatform, setLivePlatform] = useState('Chaturbate');
+  // No default platform: restored only from the creator's own last explicit
+  // choice (or mirrored from the live server session); Start is disabled until
+  // one of the three supported platforms is selected.
+  const [livePlatform, setLivePlatform] = useState('');
   const [liveTipInput, setLiveTipInput] = useState({ username: '', tokens: '', usd: '' });
   const [flashTipId, setFlashTipId]   = useState(null);
   const [liveTick, setLiveTick]       = useState(0);
@@ -127,6 +131,33 @@ export default function LivePage() {
     setLiveActive(status === 'live' || status === 'starting');
     setLiveStartTime(engine.serverSession?.started_at ? new Date(engine.serverSession.started_at) : null);
   }, [engine.serverSession?.status, engine.serverSession?.started_at]);
+
+  // Platform: restored only from the creator's own last explicit choice, or
+  // mirrored from the live server session. Never defaulted.
+  const LIVE_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams'];
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('camcash_live_platform');
+      if (LIVE_PLATFORMS.includes(saved)) setLivePlatform(saved);
+    } catch (_) { /* storage unavailable: the creator just picks again */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const fromSession = engine.serverSession?.stream_platform;
+    if (LIVE_PLATFORMS.includes(fromSession)) setLivePlatform(fromSession);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine.serverSession?.stream_platform]);
+  const chooseLivePlatform = (value) => {
+    setLivePlatform(value);
+    try { if (LIVE_PLATFORMS.includes(value)) localStorage.setItem('camcash_live_platform', value); } catch (_) {}
+  };
+  // Saves the creator's timezone for the weekly Free allowance. The database
+  // validates it; the bar re-reads the allowance afterwards.
+  const saveCreatorTimezone = async (tz) => {
+    if (!user?.id) return { error: 'signed_out' };
+    const { error } = await supabase.from('profiles').update({ timezone: tz }).eq('id', user.id);
+    return error ? { error } : {};
+  };
 
   // "Clear Session Tips" never deletes rows — it sets tips_cleared_at on the
   // session (see the clear-tips route). This engine poll picks that up
@@ -917,6 +948,16 @@ export default function LivePage() {
           }}
         />
 
+        {/* ── FREE LIVE MODE ALLOWANCE (database state; shared with the dashboard) ── */}
+        <div style={{ marginBottom: 12 }}>
+          <LiveModeAllowanceBar
+            allowance={engine.allowance}
+            receivedAt={engine.allowanceReceivedAt}
+            onSaveTimezone={saveCreatorTimezone}
+            onRefresh={engine.refresh}
+          />
+        </div>
+
         {/* ── OPERATIONAL STATUS BAR ─────────────────────────────── */}
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '10px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -948,8 +989,9 @@ export default function LivePage() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
-              {['Chaturbate','BongaCams','MyFreeCams'].map(p => <option key={p} value={p}>{p}</option>)}
+            <select aria-label="Live platform" data-testid="live-platform" value={livePlatform} onChange={e => chooseLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 12 }}>
+              <option value="">Platform…</option>
+              {LIVE_PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             <input type="number" value={liveGoalTokens || ''} onChange={e => {
               const next = Math.max(0, Number(e.target.value) || 0);
@@ -989,7 +1031,7 @@ export default function LivePage() {
             </Button>
             <>
                 {engine.phase === 'idle' && (
-                  <button disabled={engine.actionPending} onClick={handleGoLive}
+                  <button disabled={engine.actionPending || !livePlatform} title={livePlatform ? undefined : 'Choose your platform first'} onClick={handleGoLive}
                     style={{ padding: '7px 18px', borderRadius: 8, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 12, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 16px rgba(16,185,129,0.35)' }}>
                     {engine.actionPending ? 'Starting…' : '▶ Start Stream'}
                   </button>
@@ -1130,7 +1172,7 @@ export default function LivePage() {
                 <span>⚡</span> Instant alerts
               </div>
             </div>
-            <button disabled={engine.actionPending} onClick={handleGoLive}
+            <button disabled={engine.actionPending || !livePlatform} title={livePlatform ? undefined : 'Choose your platform first'} onClick={handleGoLive}
               style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: engine.actionPending ? 'default' : 'pointer', opacity: engine.actionPending ? 0.6 : 1, boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
               {engine.actionPending ? 'Starting…' : '▶ Start Streaming'}
             </button>
