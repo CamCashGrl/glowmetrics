@@ -42,7 +42,7 @@ const PLATFORM_ACCENT = {
   chaturbate: C.purple, bongacams: C.pink, myfreecams: C.teal,
   camsoda: C.cyan, stripchat: C.indigo, flirt4free: C.pink,
 }
-const accentFor = (p) => PLATFORM_ACCENT[(p || '').toLowerCase().trim()] || C.cyan
+export const accentFor = (p) => PLATFORM_ACCENT[(p || '').toLowerCase().trim()] || C.cyan
 
 const fmt$ = (n) => n === null || n === undefined ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmt$0 = (n) => n === null || n === undefined ? '—' : `$${Math.round(Number(n)).toLocaleString('en-US')}`
@@ -601,8 +601,16 @@ const ICONS = {
   bars: ['M5 20v-8', 'M12 20V5', 'M19 20v-5'],
   close: ['M6 6l12 12', 'M18 6L6 18'],
   arrow: ['M5 12h14', 'M13 6l6 6-6 6'],
+  lock: ['M5 11h14v9H5z', 'M8 11V8a4 4 0 0 1 8 0v3', 'M12 15v2'],
+  folder: ['M3 7h6l2 2h10v10H3z'],
+  play: ['M8 5l11 7-11 7z'],
+  heart: ['M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z'],
+  video: ['M3 7h12v10H3z', 'M15 11l6-3v8l-6-3'],
+  check: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M8 12.5l3 3 5-6'],
+  trophy: ['M8 4h8v5a4 4 0 0 1-8 0z', 'M8 6H5a3 3 0 0 0 3 4', 'M16 6h3a3 3 0 0 1-3 4', 'M12 13v4', 'M9 20h6'],
+  crown: ['M4 18h16l1-10-5 4-4-6-4 6-5-4z'],
 }
-function Ico({ name, size = 16, color = 'currentColor', style }) {
+export function Ico({ name, size = 16, color = 'currentColor', style }) {
   return (
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
       {(ICONS[name] || []).map((d, i) => <path key={i} d={d} />)}
@@ -613,7 +621,7 @@ function Ico({ name, size = 16, color = 'currentColor', style }) {
 // Platform initials, the same short codes Live mode uses (CB / BC / MFC).
 const PLATFORM_MARK = { chaturbate: 'CB', myfreecams: 'MFC', bongacams: 'BC' }
 const markFor = (p) => PLATFORM_MARK[(p || '').toLowerCase().trim()] || String(p || '?').slice(0, 2).toUpperCase()
-function PlatformMark({ platform, size = 30 }) {
+export function PlatformMark({ platform, size = 30 }) {
   const a = accentFor(platform)
   const m = markFor(platform)
   return (
