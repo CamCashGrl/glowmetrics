@@ -4183,6 +4183,11 @@ const stopImportMessageRotation = () => {
             tips={accessible.tips}
             isPro={isPro}
             onOpenPlanner={() => handleTabChange('planner')}
+            onNavigate={handleTabChange}
+            onUpgrade={(src) => openUpgradeModal(src)}
+            tz={creatorTz}
+            hiddenTipCount={isPro ? 0 : windowSummary.excludedCount}
+            fullHistoryPlatform={freeUnlimitedPlatform}
           />
         )}
 

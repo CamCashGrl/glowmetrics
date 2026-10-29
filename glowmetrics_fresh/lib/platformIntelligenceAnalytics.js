@@ -17,7 +17,7 @@
 //     two platforms stays two people.
 // ============================================
 
-import { calculateConfidence } from './analytics'
+import { calculateConfidence, fanKey } from './analytics'
 
 const round2 = (n) => parseFloat((n || 0).toFixed(2))
 const pct = (part, whole) => whole > 0 ? Math.round((part / whole) * 100) : 0
@@ -222,7 +222,9 @@ export function buildCamCashNoticed(analytics) {
   const efficiency = buildEfficiencyComparison(analytics)
   const fans = buildFanRevenue(analytics)
 
-  if (comparison.length > 1 && comparison[0].earningsPercent >= 60) {
+  // Needs recorded hours: with none, hoursPercent is 0 and the sentence would
+  // claim the platform earns its share from "0% of your streaming hours".
+  if (comparison.length > 1 && comparison[0].earningsPercent >= 60 && comparison[0].hours > 0) {
     const top = comparison[0]
     insights.push({
       icon: '📊',
@@ -326,6 +328,200 @@ export function buildDataCoverage(vaultStats) {
       { days: 31, label: 'Full month of data',        done: historyDays >= 31 },
     ],
   }
+}
+
+// =============================================
+// PLATFORM PULSE — the Platforms page's return loop
+//
+// Everything below re-reads engine output (platform rows, meaningful/valid
+// sessions, whales, platformMomentum). Nothing here re-runs session
+// detection, rate math or windowing; the engine already applied the plan's
+// window, so Free accounts only ever see what they are entitled to.
+// =============================================
+
+// Per-platform figures the engine publishes in pieces: fans come from the
+// whales list (platform + username identity) and the biggest tip from the
+// engine's own session partition, which covers every tip it was given.
+export function buildPlatformExtras(analytics) {
+  const extras = {}
+  const ensure = (p) => (extras[p] ||= { uniqueFans: 0, biggestTip: 0 })
+  for (const w of analytics?.whales || []) ensure(w.platform).uniqueFans += 1
+  for (const s of analytics?.allValidSessions || []) {
+    for (const t of s.tips || []) {
+      const e = ensure(s.platform)
+      if ((t.usd || 0) > e.biggestTip) e.biggestTip = round2(t.usd)
+    }
+  }
+  return extras
+}
+
+// The most recent meaningful session (the engine's definition of a stream:
+// 30+ minutes and 2+ tips) and what it changed. Returning / new are judged
+// against every earlier valid session on the same platform; with no earlier
+// session there is nothing to compare, so those counts are null, not zero.
+export function buildLatestStreamRecap(analytics) {
+  const meaningful = analytics?.meaningfulSessions || analytics?.sessions || []
+  if (meaningful.length === 0) return null
+  const latest = meaningful.reduce((a, b) => (new Date(b.endTime) > new Date(a.endTime) ? b : a))
+  const latestStart = new Date(latest.startTime)
+
+  const earlier = (analytics?.allValidSessions || []).filter(s => new Date(s.endTime) < latestStart)
+  const seenBefore = new Set()
+  for (const s of earlier) for (const t of s.tips || []) seenBefore.add(fanKey(s.platform, t.username))
+
+  const sessionFans = new Set((latest.tips || []).map(t => fanKey(latest.platform, t.username)))
+  const hasHistory = earlier.some(s => s.platform === latest.platform)
+  const returningFans = hasHistory ? [...sessionFans].filter(k => seenBefore.has(k)).length : null
+  const newSpenders = hasHistory ? [...sessionFans].filter(k => !seenBefore.has(k)).length : null
+
+  // Revenue-share movement: the platform rows with and without this session's
+  // own tips. Shares are of the same platform-row total the page shows.
+  const rows = analytics?.platforms || []
+  const totalNow = rows.reduce((s, p) => s + (p.totalUSD || 0), 0)
+  const before = rows.map(p => ({ platform: p.platform, usd: (p.totalUSD || 0) - (p.platform === latest.platform ? latest.totalUSD : 0) }))
+  const totalBefore = before.reduce((s, p) => s + p.usd, 0)
+  const leaderOf = (list, key) => [...list].sort((a, b) => b[key] - a[key])[0]?.platform || null
+  const leaderNow = leaderOf(rows, 'totalUSD')
+  const leaderBefore = totalBefore > 0 ? leaderOf(before, 'usd') : null
+  const row = rows.find(p => p.platform === latest.platform)
+  const shareNow = row && totalNow > 0 ? (row.totalUSD / totalNow) * 100 : 0
+  const shareBefore = totalBefore > 0 ? (before.find(p => p.platform === latest.platform).usd / totalBefore) * 100 : null
+
+  return {
+    platform: latest.platform,
+    startTime: latest.startTime,
+    endTime: latest.endTime,
+    earned: round2(latest.totalUSD),
+    tips: latest.tipCount,
+    fans: sessionFans.size,
+    durationMinutes: latest.durationUnknown ? null : latest.durationMinutes,
+    returningFans,
+    newSpenders,
+    // Only multi-platform accounts have a share to move or a lead to take.
+    shareShiftPts: rows.length > 1 && shareBefore !== null ? Math.round(shareNow - shareBefore) : null,
+    tookLead: rows.length > 1 && leaderBefore !== null && leaderNow === latest.platform && leaderBefore !== latest.platform,
+    priorSessionCount: earlier.length,
+  }
+}
+
+// Deterministic card badges. Each maps to one engine field:
+//   Leading      — top earnings row, only when there is something to lead
+//   Latest stream — platform of the most recent meaningful session
+//   Gaining / Cooling — engine platformMomentum label (last 30 vs prior 30 days)
+//   Still learning — calculateConfidence 'Very Low' on this platform's sample
+export function buildPlatformStatuses(analytics, recap = buildLatestStreamRecap(analytics)) {
+  const comparison = buildPlatformComparison(analytics)
+  const out = {}
+  comparison.forEach((p, i) => {
+    const badges = []
+    if (comparison.length > 1 && i === 0 && p.earnings > 0) badges.push('leading')
+    if (recap && recap.platform === p.platform) badges.push('latest')
+    const label = p.trend?.label
+    if (label === 'Growing' || label === 'Surging') badges.push('gaining')
+    else if (label === 'Declining' || label === 'Inactive') badges.push('cooling')
+    if (calculateConfidence(p.sessions, p.hours).level === 'Very Low') badges.push('learning')
+    out[p.platform] = badges
+  })
+  return out
+}
+
+// Where the account stands against the engine's own confidence bands —
+// counts only, never a made-up progress percentage.
+export function buildLearningState(analytics) {
+  const rows = analytics?.platforms || []
+  const sessions = analytics?.meaningfulSessionCount || 0
+  const hours = (analytics?.totalStreamMinutes || 0) / 60
+  const confidence = calculateConfidence(sessions, hours)
+  return {
+    platforms: rows.length,
+    sessions,
+    tips: rows.reduce((s, p) => s + (p.tips || 0), 0),
+    hours: parseFloat(hours.toFixed(1)),
+    confidence,
+    isLearning: confidence.level === 'Very Low',
+    // The 'Very Low' band ends at 3 meaningful sessions and 3 streamed hours.
+    sessionsNeeded: Math.max(0, 3 - sessions),
+    hoursNeeded: Math.max(0, parseFloat((3 - hours).toFixed(1))),
+  }
+}
+
+// Cross-platform findings that need two or more platforms. Each carries a
+// `teaser` with the platform names withheld, so Free accounts are told a
+// finding exists (it really does) without being shown it.
+export function buildCrossPlatformInsights(analytics) {
+  const comparison = buildPlatformComparison(analytics)
+  if (comparison.length < 2) return []
+  const leader = comparison[0]
+  const out = []
+  // Platform-vs-platform claims need a usable sample on both sides — the
+  // engine's 'Very Low' band (under 3 meaningful sessions or 3 hours) is out.
+  const sampled = (p) => calculateConfidence(p.sessions, p.hours).level !== 'Very Low'
+
+  // Average tip: a smaller platform whose tips are clearly bigger. Both sides
+  // need 10+ tips so one large tip can't manufacture the finding.
+  const biggerTips = comparison.slice(1)
+    .filter(p => sampled(p) && sampled(leader) && p.tips >= 10 && leader.tips >= 10 && leader.avgTipSize > 0 && p.avgTipSize >= leader.avgTipSize * 1.2)
+    .sort((a, b) => b.avgTipSize - a.avgTipSize)[0]
+  if (biggerTips) {
+    const diff = Math.round(((biggerTips.avgTipSize - leader.avgTipSize) / leader.avgTipSize) * 100)
+    out.push({
+      id: 'avg_tip',
+      text: `Your average tip on ${biggerTips.platform} is ${diff}% higher than on ${leader.platform} ($${biggerTips.avgTipSize.toFixed(2)} vs $${leader.avgTipSize.toFixed(2)}), even though ${leader.platform} earns more overall.`,
+      teaser: 'One of your platforms beats your top earner on average tip size.',
+      cta: 'See the insight',
+    })
+  }
+
+  // Growth: only when both platforms have a measured trend (prior period present).
+  if (sampled(leader) && leader.trend?.pct !== null && leader.trend?.pct !== undefined) {
+    const faster = comparison.slice(1)
+      .filter(p => sampled(p) && p.trend?.pct !== null && p.trend?.pct !== undefined && (p.trend.label === 'Growing' || p.trend.label === 'Surging') && p.trend.pct > leader.trend.pct)
+      .sort((a, b) => b.trend.pct - a.trend.pct)[0]
+    if (faster) {
+      out.push({
+        id: 'growth',
+        text: `${leader.platform} generates most of your earnings, but ${faster.platform} is growing faster: ${faster.trend.pct > 0 ? '+' : ''}${faster.trend.pct}% vs ${leader.trend.pct > 0 ? '+' : ''}${leader.trend.pct}% over the last 30 days.`,
+        teaser: 'A platform other than your top earner is growing faster right now.',
+        cta: 'Reveal the platform',
+      })
+    }
+  }
+
+  // Top spenders: where the five biggest supporters actually tip.
+  const top = [...(analytics?.whales || [])].sort((a, b) => b.totalUSD - a.totalUSD).slice(0, 5)
+  if (top.length === 5) {
+    const counts = {}
+    top.forEach(w => { counts[w.platform] = (counts[w.platform] || 0) + 1 })
+    const [mainPlat, n] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+    if (mainPlat !== leader.platform && n >= 3) {
+      out.push({
+        id: 'top_spenders',
+        text: `${n} of your 5 highest-spending fans tip on ${mainPlat}, not ${leader.platform}, your highest-earning platform.`,
+        teaser: 'Your highest-spending fans are not concentrated on your highest-earning platform.',
+        cta: "See where they're spending",
+      })
+    }
+  }
+
+  // Hourly-rate gaps are deliberately absent: buildCamCashNoticed already
+  // states them on every plan, so a Pro teaser for one would sell what Free
+  // users can already read.
+
+  return out
+}
+
+// Last 30 days vs the 30 before, per platform, from the engine's
+// platformMomentum sums. Only returned when the prior period holds revenue.
+export function buildShareShift(analytics) {
+  const m = analytics?.platformMomentum || {}
+  const rows = Object.entries(m).map(([platform, v]) => ({ platform, last: v.last30USD || 0, prior: v.prior30USD || 0 }))
+  const lastTotal = rows.reduce((s, r) => s + r.last, 0)
+  const priorTotal = rows.reduce((s, r) => s + r.prior, 0)
+  if (rows.length < 2 || lastTotal <= 0 || priorTotal <= 0) return null
+  return rows
+    .map(r => ({ ...r, lastPct: pct(r.last, lastTotal), priorPct: pct(r.prior, priorTotal) }))
+    .map(r => ({ ...r, shiftPts: r.lastPct - r.priorPct }))
+    .sort((a, b) => b.lastPct - a.lastPct)
 }
 
 // =============================================

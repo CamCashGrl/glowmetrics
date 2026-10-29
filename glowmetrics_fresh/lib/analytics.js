@@ -675,7 +675,7 @@ function parseHeaderless(lines, platform, delimiter = ',') {
 // ── FAN IDENTITY ─────────────────────────────────────────────────────────
 // "Never merge fans across platforms by username alone" (formula-requirments
 // skill). A username is only unique within one platform.
-function fanKey(platform, username) {
+export function fanKey(platform, username) {
   const normalized = (username || '')
     .trim()
     .toLowerCase()
