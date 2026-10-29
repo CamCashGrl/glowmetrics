@@ -101,6 +101,18 @@ export default function sitemap() {
     'why-cam-model-data-prevents-overspending',
     'why-cam-streams-arent-making-money',
     'why-youre-not-making-money-on-chaturbate',
+
+    // Lovense / VibeMate feature cluster (Oct 2026)
+    'manage-profitable-lovense-cam-show',
+    'vibemate-for-cam-models',
+    'lovense-co-streaming-cam-models',
+    'lovense-control-me-cam-models',
+    'lovense-traffic-boost-more-views',
+    'lovense-obs-panel-more-tips',
+    'lovense-tip-levels-token-amounts',
+    'vibemate-video-spotlight-previews',
+    'lovense-control-link-give-control',
+    'lovense-vibe-with-me',
   ]
 
   const guideSlugs = [

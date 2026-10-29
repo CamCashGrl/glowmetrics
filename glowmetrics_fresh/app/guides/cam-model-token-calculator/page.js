@@ -467,11 +467,12 @@ export default function TokenCalculatorPage() {
             <h2 style={{ fontSize: 24, fontWeight: 800, color: S.white, marginBottom: 20 }}>Related Tools & Guides</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {[
+                { href: '/tools/profile-studio', label: 'Creator Profile Studio', desc: 'Free AI bio and tip menu generator, no sign-up required' },
+                { href: '/blog/lovense-tip-levels-token-amounts', label: 'Lovense Tip Levels Guide', desc: 'Set Lovense token amounts using real $/hr, not guesses' },
                 { href: '/guides/chaturbate-token-tracker', label: 'Chaturbate Token Tracker', desc: 'Log and track tokens earned across sessions' },
                 { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
                 { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
                 { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
-                { href: '/tools/profile-studio', label: 'Creator Profile Studio', desc: 'Free AI bio and tip menu generator, no sign-up required' },
               ].map(({ href, label, desc }) => (
                 <a key={href} href={href} style={{ background: S.card, border: `1px solid ${S.border}`, borderRadius: 14, padding: '18px 20px', textDecoration: 'none', display: 'block', transition: 'border-color 0.15s' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: S.accent, marginBottom: 6 }}>{label}</div>
@@ -485,12 +486,13 @@ export default function TokenCalculatorPage() {
           <div style={{ marginTop: '36px', paddingTop: '24px', borderTop: `1px solid ${S.border}`, marginBottom: '36px' }}>
             <div style={{ fontSize: 11, color: S.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Related cam model tools:</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <a href="/tools/profile-studio" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
+              <a href="/blog/lovense-tip-levels-token-amounts" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ How to set Lovense tip levels for token amounts</a>
               <a href="/guides/cam-model-token-calculator" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam model token calculator</a>
               <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
               <a href="/guides/chaturbate-token-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate token tracker</a>
               <a href="/guides/chaturbate-best-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
               <a href="/guides/cam-model-income-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Cam model income tracker</a>
-              <a href="/tools/profile-studio" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
             </div>
           </div>
 
