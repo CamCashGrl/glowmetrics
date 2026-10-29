@@ -70,3 +70,11 @@ describe('allowance bar', () => {
     expect(live).toMatch(/const \[livePlatform, setLivePlatform\] = useState\(''\)/)
   })
 })
+
+describe('Private Mode on the dashboard Live tab', () => {
+  test('uses the shared control, only while the server session is live', () => {
+    expect(src).toMatch(/import PrivateShowControl from '\.\.\/live\/PrivateShowControl'/)
+    expect(src).toMatch(/liveServerStatus === 'live' && \(\s*<PrivateShowControl engine=\{liveEngine\} platform=\{liveEngine\.serverSession\?\.stream_platform\}/)
+    expect(fs.readdirSync(path.join(__dirname, '..', '..', 'live')).filter((f) => /PrivateShow/.test(f))).toEqual(['PrivateShowControl.js'])
+  })
+})

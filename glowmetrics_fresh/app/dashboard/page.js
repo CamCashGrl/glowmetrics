@@ -26,6 +26,7 @@ import { platformLimitMessage, FREE_PLATFORM_LIMIT, resolvePlatformRoles as reso
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import LiveModeAllowanceBar from '../live/components/LiveModeAllowanceBar'
+import PrivateShowControl from '../live/PrivateShowControl'
 const LIVE_PLATFORMS = ['Chaturbate', 'BongaCams', 'MyFreeCams']
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
@@ -5120,6 +5121,9 @@ const stopImportMessageRotation = () => {
                       <option value="whale">🐋</option>
                       <option value="goal">🎯</option>
                     </select>
+                    {liveServerStatus === 'live' && (
+                      <PrivateShowControl engine={liveEngine} platform={liveEngine.serverSession?.stream_platform} />
+                    )}
                     {!liveActive ? (
                       <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending || !livePlatform} title={livePlatform ? undefined : 'Choose your platform first'}
                         style={{ padding: '6px 14px', borderRadius: 6, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
