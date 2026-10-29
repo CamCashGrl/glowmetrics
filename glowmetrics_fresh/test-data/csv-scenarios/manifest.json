@@ -1,0 +1,170 @@
+[
+  {
+    "name": "01-cb-headers-only.csv",
+    "scenario": "Header row only, no tips → \"no-data\" stage, no $0/NaN on screen",
+    "expect": {
+      "tips": 0,
+      "tokens": 0
+    }
+  },
+  {
+    "name": "02-cb-tiny-import.csv",
+    "scenario": "5 tips, 1 short session → \"tiny-import\" stage, locked cards explain what is needed",
+    "expect": {
+      "tips": 5,
+      "tokens": 29
+    }
+  },
+  {
+    "name": "03-cb-first-valid-data.csv",
+    "scenario": "30 tips, 2 valid sessions, ≥$10 → \"first-valid-data\" stage",
+    "expect": {
+      "tips": 30,
+      "tokens": 700
+    }
+  },
+  {
+    "name": "04-cb-growing-insights.csv",
+    "scenario": "120 tips, 6 valid sessions, ≥$50 → \"growing-insights\" stage",
+    "expect": {
+      "tips": 120,
+      "tokens": 3565
+    }
+  },
+  {
+    "name": "05-cb-full-dashboard.csv",
+    "scenario": "300 tips, 12 valid sessions, ≥$100 → \"full-dashboard\" stage",
+    "expect": {
+      "tips": 300,
+      "tokens": 12125
+    }
+  },
+  {
+    "name": "06-cb-whale-and-shark.csv",
+    "scenario": "whale01 = $120 over 12 tips (Whale); shark01 = $30 over 6 tips (Shark); rest small tippers",
+    "expect": {
+      "tips": 218,
+      "tokens": 3504
+    }
+  },
+  {
+    "name": "07-cb-short-sessions-invalid.csv",
+    "scenario": "8 sessions of 15 min → none pass the 30-min valid-session rule; hourly rate must say \"Not enough data yet\"",
+    "expect": {
+      "tips": 48,
+      "tokens": 881
+    }
+  },
+  {
+    "name": "08-cb-midnight-crossing.csv",
+    "scenario": "Sessions 11:15 PM → 1:15 AM; one session must not split into two days",
+    "expect": {
+      "tips": 100,
+      "tokens": 1885
+    }
+  },
+  {
+    "name": "09-cb-dst-fallback.csv",
+    "scenario": "Stream across US DST end (Nov 1, 2026 1–2 AM repeats); hours must stay on the creator clock",
+    "expect": {
+      "tips": 30,
+      "tokens": 447
+    }
+  },
+  {
+    "name": "10-cb-duplicate-rows.csv",
+    "scenario": "Every row appears twice → dedup must keep 60 tips, not 120",
+    "expect": {
+      "parsedRows": 120,
+      "tipsAfterDbDedup": 60,
+      "tokens": 1189,
+      "note": "parseCSV keeps all rows; insert_tips_dedup removes duplicates on import"
+    }
+  },
+  {
+    "name": "11-cb-native-with-transfers.csv",
+    "scenario": "Native Chaturbate paste; transfers, outbound tips and admin deductions are NOT earnings",
+    "expect": {
+      "tips": 40,
+      "tokens": 524
+    }
+  },
+  {
+    "name": "12-cb-native-private-shows.csv",
+    "scenario": "Private shows mixed with tips; Top Tipper must exclude private revenue, Top Spender includes it",
+    "expect": {
+      "rows": 30,
+      "tokens": 1158,
+      "tipTokens": 258,
+      "privateTokens": 900
+    }
+  },
+  {
+    "name": "13-bonga-free-chat.csv",
+    "scenario": "BongaCams DD.MM.YYYY dates, $0.025/token",
+    "expect": {
+      "tips": 120,
+      "tokens": 2516,
+      "usdExact": 62.9,
+      "usdParsed": 63.23,
+      "note": "parser rounds each row to cents; see README known issue"
+    }
+  },
+  {
+    "name": "14-bonga-paid-chat-types.csv",
+    "scenario": "Mix of Tip / Private / Full-Private / Group / Spy Mode; paid chat is not a manual tip",
+    "expect": {
+      "rows": 60,
+      "tokens": 1257
+    }
+  },
+  {
+    "name": "15-bonga-day-month-ambiguous.csv",
+    "scenario": "Dates like 03.04 must read as 3 April (DD.MM), never 4 March",
+    "expect": {
+      "tips": 60,
+      "tokens": 1280
+    }
+  },
+  {
+    "name": "16-mfc-ordinal-dates.csv",
+    "scenario": "MyFreeCams \"Sep 1st, 2026 9:00 PM\" ordinal dates",
+    "expect": {
+      "tips": 80,
+      "tokens": 1302
+    }
+  },
+  {
+    "name": "17-multi-3-platforms.csv",
+    "scenario": "3 platforms → allowed on Free (1 Primary + 2 Secondary)",
+    "expect": {
+      "tips": 90,
+      "platforms": 3
+    }
+  },
+  {
+    "name": "18-multi-4-platforms-free-limit.csv",
+    "scenario": "4 platforms → Free must block the 4th with the platform-limit message; Pro allows",
+    "expect": {
+      "tips": 120,
+      "platforms": 4
+    }
+  },
+  {
+    "name": "19-secondary-older-than-31-days.csv",
+    "scenario": "Secondary platform with June + October data → Free shows only the last 31 days; Pro shows all",
+    "expect": {
+      "tips": 80,
+      "recentTips": 40
+    }
+  },
+  {
+    "name": "20-malformed-rows.csv",
+    "scenario": "Bad date, missing tokens, text in tokens, negative, blank line, extra column → bad rows skipped, no crash, no NaN",
+    "expect": {
+      "parsedRows": 3,
+      "tokens": 40,
+      "note": "keeps fan01 x2 and fan06 (extra column ignored); drops bad date, blank, text and negative tokens"
+    }
+  }
+]

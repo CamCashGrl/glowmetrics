@@ -1,0 +1,22 @@
+# CamCash Plan Limits (Free vs Pro)
+
+Source of truth: `glowmetrics_fresh/lib/planLimits.js`. Never hardcode these values anywhere else.
+Owner decision: 2026-10-11. Enforced by `lib/planLimits.js`, `applyFreeAnalysisWindow` in `lib/analytics.js`, and the `enforce_free_tier_platform_limit` database trigger.
+
+## Free
+- Up to 3 platforms (`FREE_PLATFORM_LIMIT = 3`): 1 Primary + 2 Secondary
+- Primary platform: full history
+- Secondary platforms: last 31 days only (`FREE_ANALYSIS_WINDOW_DAYS = 31`)
+- No tip cap and no lifetime CSV upload cap
+- Primary is set only by `POST /api/profile/primary-platform` (`profiles.primary_pro_platform`). It is never guessed from order or earnings. If it is not set, every platform stays on the 31-day window.
+
+## Pro
+- `isProPlan(plan)`: plan is `pro` or `unlimited`
+- Unlimited platforms, full history on every platform
+- Price shown on `/pricing`: $9.99/month (check the page and Stripe before quoting it)
+
+## Rules
+- Gating must be enforced server-side. Locked cards in the UI are not security.
+- "Upgrade to unlock" = has data, needs Pro. "Add more history" = needs more data on any plan.
+- Limit message: always use `platformLimitMessage()`.
+- Module data thresholds: `MODULE_DATA_THRESHOLDS` in `lib/planLimits.js`.
