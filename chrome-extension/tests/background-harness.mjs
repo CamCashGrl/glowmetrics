@@ -769,6 +769,77 @@ async function main() {
     check('S3: server reason is passed through to the popup', /Pro feature/.test(res?.error || ''));
   }
 
+  // ---- P1–P6: Start never guesses a platform (Chaturbate / BongaCams / MyFreeCams only) ----
+  {
+    const startBodies = [];
+    const mk = () => {
+      const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
+      state.fetchHandler = (url, opts) => {
+        if (url.includes('/api/live/session/start')) {
+          startBodies.push(JSON.parse(opts?.body || '{}'));
+          return { ok: true, json: async () => ({ session: { id: 's1', status: 'starting' } }) };
+        }
+        if (url.includes('/api/live/session')) return { ok: true, json: async () => ({ session: null }) };
+        return { ok: true, json: async () => ({}) };
+      };
+      return { sandbox, state };
+    };
+    const start = (state, msg) => new Promise((resolve) => state.onMessage({ action: 'live_start', ...msg }, {}, resolve));
+
+    // P1: nothing known → refused, no request, useful message
+    {
+      const { sandbox, state } = mk(); loadBackground(sandbox); await tick(30);
+      startBodies.length = 0;
+      const res = await start(state, {});
+      check('P1: no platform and no broadcaster page → no start request', startBodies.length === 0);
+      check('P1: the reply explains which platforms are supported', /Chaturbate, BongaCams or MyFreeCams/.test(res?.error || ''));
+      check('P1: and never returns a session', !res?.session);
+    }
+    // P2: an unsupported platform is refused, not mapped to Chaturbate
+    {
+      const { sandbox, state } = mk(); loadBackground(sandbox); await tick(30);
+      startBodies.length = 0;
+      const res = await start(state, { platform: 'stripchat' });
+      check('P2: unsupported platform → refused, no request', startBodies.length === 0 && /Chaturbate, BongaCams or MyFreeCams/.test(res?.error || ''));
+    }
+    // P3: a confirmed broadcaster page supplies the canonical platform
+    for (const [raw, canon] of [['chaturbate', 'Chaturbate'], ['bongacams', 'BongaCams'], ['myfreecams', 'MyFreeCams']]) {
+      const { sandbox, state } = mk(); loadBackground(sandbox); await tick(30);
+      startBodies.length = 0;
+      state.onMessage({ action: 'connected', platform: raw }, { tab: { id: 7 } }, () => {});
+      const res = await start(state, {});
+      check(`P3: broadcaster page on ${raw} → request carries "${canon}"`, startBodies.length === 1 && startBodies[0].platform === canon && !!res?.session);
+    }
+    // P4: an explicit, valid platform is canonicalized
+    {
+      const { sandbox, state } = mk(); loadBackground(sandbox); await tick(30);
+      startBodies.length = 0;
+      await start(state, { platform: ' BONGACAMS ' });
+      check('P4: explicit platform is sent in canonical casing', startBodies.length === 1 && startBodies[0].platform === 'BongaCams');
+    }
+    // P5: a broadcaster page that has gone away no longer supplies a platform
+    {
+      const { sandbox, state } = mk(); loadBackground(sandbox); await tick(30);
+      startBodies.length = 0;
+      state.onMessage({ action: 'connected', platform: 'chaturbate' }, { tab: { id: 7 } }, () => {});
+      state.onTabRemoved?.(7);
+      const res = await start(state, {});
+      check('P5: after the broadcaster tab closes, Start is refused again (no stale platform)', startBodies.length === 0 && /Chaturbate, BongaCams or MyFreeCams/.test(res?.error || ''));
+    }
+    // P6: server allowance reasons reach the popup unchanged
+    {
+      const { sandbox, state } = makeContext({ initialStorage: { session: 'fake-token', user: { id: 'u1', email: 'test@test.com' } } });
+      state.fetchHandler = (url) => {
+        if (url.includes('/api/live/session/start')) return { ok: false, status: 403, json: async () => ({ error: 'You’ve used both Free Live Mode streams for this week. Upgrade to Pro for unlimited Live Mode.', code: 'FREE_LIVE_WEEKLY_LIMIT' }) };
+        if (url.includes('/api/live/session')) return { ok: true, json: async () => ({ session: null }) };
+        return { ok: true, json: async () => ({}) };
+      };
+      loadBackground(sandbox); await tick(30);
+      const res = await start(state, { platform: 'chaturbate' });
+      check('P6: weekly-limit reason is passed through to the popup', /both Free Live Mode streams/.test(res?.error || ''));
+    }
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 }

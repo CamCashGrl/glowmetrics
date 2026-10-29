@@ -26,6 +26,23 @@ export function useLiveSessionEngine() {
   const [serverSession, setServerSession] = useState(null)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState(null)
+  // Machine-readable reason for the last refused action (e.g. TIMEZONE_REQUIRED,
+  // FREE_LIVE_WEEKLY_LIMIT, PLATFORM_REQUIRED), straight from the server.
+  const [actionErrorCode, setActionErrorCode] = useState(null)
+  // The DATABASE's Free-allowance state (get_live_mode_allowance), relayed by
+  // GET /api/live/session. Display only: nothing here decides entitlement.
+  const [allowance, setAllowance] = useState(null)
+  const [allowanceReceivedAt, setAllowanceReceivedAt] = useState(null)
+  const applyAllowance = useCallback((a) => {
+    if (a === undefined) return
+    setAllowance(a)
+    setAllowanceReceivedAt(Date.now())
+  }, [])
+  const failAction = useCallback((data) => {
+    setActionError(data?.error || 'Something went wrong. Please try again.')
+    setActionErrorCode(data?.code || null)
+    if (data?.allowance) applyAllowance(data.allowance)
+  }, [applyAllowance])
   // Set only for a terminal resolve() outcome, so the UI can show which of
   // the 4 terminal choices just happened; cleared once the transient
   // 'resolved' display window ends. Never touched by 'still_live'.
@@ -101,6 +118,7 @@ export function useLiveSessionEngine() {
         return
       }
 
+      applyAllowance(data.allowance)
       if (data.session) {
         setServerSession(data.session)
         setPrivateInterval(data.privateInterval || null)
@@ -112,7 +130,7 @@ export function useLiveSessionEngine() {
     } catch (_) {
       setPhase('idle')
     }
-  }, [startHeartbeat])
+  }, [startHeartbeat, applyAllowance])
 
   useEffect(() => {
     restore()
@@ -132,31 +150,56 @@ export function useLiveSessionEngine() {
   // or a resolve()'s terminal-outcome summary, is being displayed (a poll
   // landing mid-summary would otherwise cut it short by clearing
   // serverSession/phase early).
-  const poll = useCallback(async () => {
-    if (actionPendingRef.current) return
-    if (phaseRef.current === 'loading' || phaseRef.current === 'justEnded' || phaseRef.current === 'resolved') return
+  // `force` is for callers that must re-read the server now (the allowance bar
+  // at the limit, the timezone prompt after saving): it skips the guards that
+  // only exist to keep a background poll from cutting an action's own
+  // response short. Returns the database's allowance state.
+  const syncFromServer = useCallback(async ({ force = false } = {}) => {
+    if (!force) {
+      if (actionPendingRef.current) return null
+      if (phaseRef.current === 'loading' || phaseRef.current === 'justEnded' || phaseRef.current === 'resolved') return null
+    }
     try {
       const res = await fetch('/api/live/session', { cache: 'no-store' })
-      if (!res.ok) return
+      if (!res.ok) return null
       const data = await res.json()
+      applyAllowance(data.allowance)
       if (data.session) {
         setServerSession(data.session)
         setPrivateInterval(data.privateInterval || null)
         setPhase(phaseForStatus(data.session.status))
         startHeartbeat()
-      } else {
+      } else if (!(force && (phaseRef.current === 'justEnded' || phaseRef.current === 'resolved'))) {
         // A session this page knew about ended elsewhere (extension, other
-        // tab, inactivity sweep): its finalized show is new data.
+        // tab, inactivity sweep, or the Free 35-minute cap): its finalized
+        // show is new data.
         if (phaseRef.current !== 'idle') markShowCompleted()
         setServerSession(null)
         setPrivateInterval(null)
         setPhase('idle')
         stopHeartbeat()
       }
+      return data.allowance ?? null
     } catch (_) {
       // a failed poll is never surfaced — the next tick retries
+      return null
     }
-  }, [startHeartbeat, stopHeartbeat, markShowCompleted])
+  }, [startHeartbeat, stopHeartbeat, markShowCompleted, applyAllowance])
+  // Allowance only — for moments when session/phase state is being managed by
+  // the caller (the post-stop summary) and must not be touched.
+  const refreshAllowanceOnly = useCallback(async () => {
+    try {
+      const res = await fetch('/api/live/session', { cache: 'no-store' })
+      if (!res.ok) return null
+      const data = await res.json()
+      applyAllowance(data.allowance)
+      return data.allowance ?? null
+    } catch (_) {
+      return null
+    }
+  }, [applyAllowance])
+  const poll = useCallback(() => syncFromServer(), [syncFromServer])
+  const refresh = useCallback(() => syncFromServer({ force: true }), [syncFromServer])
 
   useEffect(() => {
     const id = setInterval(poll, POLL_INTERVAL_MS)
@@ -170,68 +213,87 @@ export function useLiveSessionEngine() {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
+      // No default platform, ever: an unsupported or missing platform is
+      // refused by the server too, but fail fast with the same wording.
+      if (!['Chaturbate', 'BongaCams', 'MyFreeCams'].includes(platform)) {
+        failAction({ code: 'PLATFORM_REQUIRED', error: 'Choose Chaturbate, BongaCams or MyFreeCams. CamCash never guesses your platform.' })
+        return
+      }
       const res = await fetch('/api/live/session/start', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform }),
       })
       const data = await res.json()
       if (!res.ok) {
-        setActionError(data.error)
+        failAction(data)
         return
       }
       setServerSession(data.session)
       setPhase(phaseForStatus(data.session.status))
       startHeartbeat()
+      syncFromServer({ force: true })
       return data.session
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, startHeartbeat])
+  }, [actionPending, startHeartbeat, failAction, syncFromServer])
 
   const pause = useCallback(async () => {
     if (actionPending || serverSession?.status !== 'live' || serverSession?.live_substate !== 'active') return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/pause', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
       if (data.session) setServerSession(data.session)
       // heartbeat interval is intentionally left running through the pause
     } finally {
       setActionPending(false)
+      // The database may have changed state (e.g. the Free cap ended the
+      // stream first): re-read it rather than trust local state.
+      syncFromServer({ force: true })
     }
-  }, [actionPending, serverSession])
+  }, [actionPending, serverSession, failAction, syncFromServer])
 
   const resume = useCallback(async () => {
     if (actionPending || serverSession?.status !== 'live' || serverSession?.live_substate !== 'paused') return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/resume', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
       if (data.session) setServerSession(data.session)
     } finally {
       setActionPending(false)
+      // The database may have changed state (e.g. the Free cap ended the
+      // stream first): re-read it rather than trust local state.
+      syncFromServer({ force: true })
     }
-  }, [actionPending, serverSession])
+  }, [actionPending, serverSession, failAction, syncFromServer])
 
   const stop = useCallback(async () => {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/stop', { method: 'POST' })
       const data = await res.json()
       stopHeartbeat()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
 
       setPrivateInterval(null)
       if (data.alreadyStopped) {
         setServerSession(null)
         setPhase('idle')
+        refreshAllowanceOnly()
         return
       }
 
@@ -239,6 +301,7 @@ export function useLiveSessionEngine() {
       setLastCompletedShow(data.summary || null)
       markShowCompleted()
       setPhase('justEnded')
+      refreshAllowanceOnly()
       stopSummaryTimeoutRef.current = setTimeout(() => {
         setPhase('idle')
         setServerSession(null)
@@ -246,7 +309,7 @@ export function useLiveSessionEngine() {
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, stopHeartbeat, markShowCompleted])
+  }, [actionPending, stopHeartbeat, markShowCompleted, failAction, refreshAllowanceOnly])
 
   const resolve = useCallback(async (choice, endTime) => {
     // actionPending is also the duplicate-submission guard: a second click
@@ -258,13 +321,14 @@ export function useLiveSessionEngine() {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/resolve', {
         method: 'POST',
         body: JSON.stringify({ choice, endTime: endTime ?? null }),
       })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
 
       if (!data.resolved || !data.session) {
         // Nothing was actually resolved — e.g. a duplicate submission that
@@ -300,7 +364,7 @@ export function useLiveSessionEngine() {
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, startHeartbeat, stopHeartbeat, markShowCompleted])
+  }, [actionPending, startHeartbeat, stopHeartbeat, markShowCompleted, failAction])
 
   // Never deletes a live_tips row — sets tips_cleared_at on the current
   // session (see app/api/live/session/clear-tips/route.js). Allowed in any
@@ -310,52 +374,64 @@ export function useLiveSessionEngine() {
     if (actionPending || !serverSession) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/clear-tips', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
       if (data.session) setServerSession(data.session)
     } finally {
       setActionPending(false)
+      // The database may have changed state (e.g. the Free cap ended the
+      // stream first): re-read it rather than trust local state.
+      syncFromServer({ force: true })
     }
-  }, [actionPending, serverSession])
+  }, [actionPending, serverSession, failAction, syncFromServer])
 
   const logout = useCallback(() => {
     stopHeartbeat()
     clearTimeout(stopSummaryTimeoutRef.current)
   }, [stopHeartbeat])
 
-  const startPrivate = useCallback(async (ratePerMinute, platform) => {
+  // Platform and username are required and are sent exactly as chosen: the
+  // server refuses anything it can't canonicalize and never guesses.
+  const startPrivate = useCallback(async (ratePerMinute, platform, username) => {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/private/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ratePerMinute, platform }),
+        body: JSON.stringify({ ratePerMinute, platform, username }),
       })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
       setPrivateInterval(data.privateInterval || null)
     } finally {
       setActionPending(false)
+      syncFromServer({ force: true })
     }
-  }, [actionPending])
+  }, [actionPending, failAction, syncFromServer])
 
   const endPrivate = useCallback(async () => {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
+    setActionErrorCode(null)
     try {
       const res = await fetch('/api/live/session/private/end', { method: 'POST' })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) { failAction(data); return }
       setPrivateInterval(null)
     } finally {
       setActionPending(false)
+      // The database may have changed state (e.g. the Free cap ended the
+      // stream first): re-read it rather than trust local state.
+      syncFromServer({ force: true })
     }
-  }, [actionPending])
+  }, [actionPending, failAction, syncFromServer])
 
   const duration = serverSession ? shapeLiveSession(serverSession) : null
 
@@ -364,6 +440,10 @@ export function useLiveSessionEngine() {
     serverSession,
     actionPending,
     actionError,
+    actionErrorCode,
+    allowance,
+    allowanceReceivedAt,
+    refresh,
     lastResolution,
     duration,
     goLive,

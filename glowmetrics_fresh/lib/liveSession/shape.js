@@ -47,5 +47,40 @@ export function sanitizedErrorResponse(error) {
       body: { error: 'Live Mode is a Pro feature. Upgrade to Pro to start a live session.', code: 'LIVE_MODE_REQUIRES_PRO' },
     }
   }
+  // Free Live Mode allowance. The database decides; these are fixed,
+  // user-facing strings keyed by the code prefix it raises. Raw database text
+  // is never returned.
+  if (error?.code === 'P0001') {
+    const msg = String(error?.message || '')
+    for (const [code, known] of Object.entries(ALLOWANCE_ERRORS)) {
+      if (msg.startsWith(code)) return { status: known.status, body: { error: known.error, code } }
+    }
+  }
   return { status: 500, body: { error: 'Something went wrong. Please try again.' } }
 }
+
+export const ALLOWANCE_ERRORS = {
+  FREE_LIVE_WEEKLY_LIMIT: {
+    status: 403,
+    error: 'You’ve used both Free Live Mode streams for this week. Upgrade to Pro for unlimited Live Mode.',
+  },
+  TIMEZONE_REQUIRED: {
+    status: 403,
+    error: 'Choose your timezone to start Live Mode. Your weekly Free allowance resets on Monday in your timezone.',
+  },
+  PLATFORM_REQUIRED: {
+    status: 400,
+    error: 'Choose Chaturbate, BongaCams or MyFreeCams. CamCash never guesses your platform.',
+  },
+  LIVE_START_CONFLICT: {
+    status: 409,
+    error: 'Something blocked starting Live Mode. Nothing was started. Please refresh and try again.',
+  },
+  USERNAME_REQUIRED: {
+    status: 400,
+    error: 'Enter the fan’s username to start a private show.',
+  },
+}
+
+// Codes after which the client needs the allowance state to explain the lock.
+export const ALLOWANCE_LOCK_CODES = ['FREE_LIVE_WEEKLY_LIMIT', 'TIMEZONE_REQUIRED']

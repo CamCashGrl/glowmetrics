@@ -397,7 +397,7 @@ function renderLiveSession() {
     sessionLabel.textContent = '';
     sessionTimerEl.textContent = '';
     sessionBtnRow.appendChild(liveButton('▶ Start Stream', 'session-btn-start', () => {
-      callLiveAction('live_start', { platform: 'chaturbate' }, sessionBtnRow.firstChild);
+      callLiveAction('live_start', {}, sessionBtnRow.firstChild); // no platform: the background uses the confirmed broadcaster page, or refuses
     }));
     return;
   }
@@ -429,7 +429,7 @@ function renderLiveSession() {
     sessionLabel.textContent = '';
     sessionTimerEl.textContent = '';
     sessionBtnRow.appendChild(liveButton('▶ Start Stream', 'session-btn-start', () => {
-      callLiveAction('live_start', { platform: 'chaturbate' }, sessionBtnRow.firstChild);
+      callLiveAction('live_start', {}, sessionBtnRow.firstChild); // no platform: the background uses the confirmed broadcaster page, or refuses
     }));
     return;
   }

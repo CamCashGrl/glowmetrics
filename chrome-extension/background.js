@@ -214,8 +214,25 @@ async function checkForPendingStart() {
   broadcast({ action: 'state', state: getState() });
 }
 
+// Live Mode never guesses a platform. Start needs one of exactly these three,
+// either passed explicitly by the caller or confirmed by a content script that
+// is attached to that platform's broadcaster page right now. The server
+// (start_live_session) re-validates and refuses anything else.
+const STRICT_PLATFORMS = { chaturbate: 'Chaturbate', bongacams: 'BongaCams', myfreecams: 'MyFreeCams' };
+function strictPlatform(p) {
+  return STRICT_PLATFORMS[String(p || '').trim().toLowerCase()] || null;
+}
+const PLATFORM_UNKNOWN_MESSAGE =
+  'CamCash couldn’t tell which platform you’re on. Open your broadcaster page on Chaturbate, BongaCams or MyFreeCams and press Start again, or start from the CamCash dashboard.';
+
 async function startLiveSession(platform) {
-  const data = await liveSessionCall('/api/live/session/start', 'POST');
+  const strict = strictPlatform(platform) || (broadcasterPageActive ? strictPlatform(broadcasterPlatform) : null);
+  if (!strict) {
+    // No request is sent: nothing is started on a guess.
+    broadcast({ action: 'state', state: getState() });
+    return { error: PLATFORM_UNKNOWN_MESSAGE };
+  }
+  const data = await liveSessionCall('/api/live/session/start', 'POST', { platform: strict });
   if (data?.session) liveSession = data.session;
   broadcast({ action: 'state', state: getState() });
   return data;
