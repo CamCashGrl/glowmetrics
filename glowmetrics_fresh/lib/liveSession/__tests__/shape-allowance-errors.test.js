@@ -14,6 +14,7 @@ describe('allowance error mapping', () => {
     ['TIMEZONE_REQUIRED: Choose your timezone...', 403, 'TIMEZONE_REQUIRED', /Choose your timezone/],
     ['PLATFORM_REQUIRED: Live Mode needs Chaturbate...', 400, 'PLATFORM_REQUIRED', /never guesses your platform/],
     ['USERNAME_REQUIRED: the fan username is required', 400, 'USERNAME_REQUIRED', /fan.s username/],
+    ['LIVE_START_CONFLICT: a conflicting session record', 409, 'LIVE_START_CONFLICT', /Nothing was started/],
   ])('%s', (message, status, code, text) => {
     const r = sanitizedErrorResponse(pg(message))
     expect(r.status).toBe(status); expect(r.body.code).toBe(code); expect(r.body.error).toMatch(text)
@@ -34,6 +35,6 @@ describe('allowance error mapping', () => {
   })
   test('only the two lock codes carry allowance state', () => {
     expect(ALLOWANCE_LOCK_CODES).toEqual(['FREE_LIVE_WEEKLY_LIMIT', 'TIMEZONE_REQUIRED'])
-    expect(Object.keys(ALLOWANCE_ERRORS).sort()).toEqual(['FREE_LIVE_WEEKLY_LIMIT', 'PLATFORM_REQUIRED', 'TIMEZONE_REQUIRED', 'USERNAME_REQUIRED'])
+    expect(Object.keys(ALLOWANCE_ERRORS).sort()).toEqual(['FREE_LIVE_WEEKLY_LIMIT', 'LIVE_START_CONFLICT', 'PLATFORM_REQUIRED', 'TIMEZONE_REQUIRED', 'USERNAME_REQUIRED'])
   })
 })

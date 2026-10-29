@@ -511,6 +511,20 @@ BEGIN
   PERFORM allow_t.ok(r->>'entitlement' = 'capped', 'authenticated can read its own allowance state');
 END $$;
 
+-- ═══ T20  a stray uniqueness conflict must fail loudly, never return an empty session ═══
+DO $$
+DECLARE u uuid := allow_t.capped('t20'); s public.live_sessions; e text;
+BEGIN
+  s := allow_t.mk_session(u, interval '2 seconds', interval '1 second', 'ended', 'active', interval '0', 0, 'BongaCams');
+  UPDATE public.live_sessions SET ended_at = now(), is_active = false, live_substate = NULL WHERE id = s.id;
+  -- Simulates a stray legacy index that production does not have: it collides with the new row
+  -- but is not an "unresolved" status, so there is nothing for the fallback to return.
+  CREATE UNIQUE INDEX t20_stray_conflict ON public.live_sessions (user_id) WHERE stream_platform = 'BongaCams';
+  PERFORM allow_t.raises(u, $q$SELECT public.start_live_session('BongaCams')$q$, 'LIVE_START_CONFLICT%', 'start refuses instead of returning an all-NULL session');
+  PERFORM allow_t.ok((SELECT count(*) FROM public.live_sessions WHERE user_id = u AND status = 'starting') = 0, 'and no pending session was created');
+  DROP INDEX public.t20_stray_conflict;
+END $$;
+
 DO $$
 DECLARE n int;
 BEGIN

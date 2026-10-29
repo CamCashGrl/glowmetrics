@@ -72,6 +72,10 @@ export const ALLOWANCE_ERRORS = {
     status: 400,
     error: 'Choose Chaturbate, BongaCams or MyFreeCams. CamCash never guesses your platform.',
   },
+  LIVE_START_CONFLICT: {
+    status: 409,
+    error: 'Something blocked starting Live Mode. Nothing was started. Please refresh and try again.',
+  },
   USERNAME_REQUIRED: {
     status: 400,
     error: 'Enter the fan’s username to start a private show.',

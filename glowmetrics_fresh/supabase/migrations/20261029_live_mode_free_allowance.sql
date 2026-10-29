@@ -689,6 +689,13 @@ begin
         and status in ('starting','live','inactive_warning','ending')
       order by started_at desc
       limit 1;
+    -- A uniqueness conflict with no unresolved session to return (e.g. a stray
+    -- legacy index/row) must fail loudly. Returning an empty row would hand the
+    -- client a "session" with no id.
+    if not found then
+      raise exception 'LIVE_START_CONFLICT: a conflicting session record blocked Start. Nothing was started.'
+        using errcode = 'P0001';
+    end if;
     return v_result;
   end;
 end;

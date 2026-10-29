@@ -113,6 +113,10 @@ describe('no platform guessing', () => {
     expect(body).not.toMatch(/coalesce\([^)]*Chaturbate|'Chaturbate'\)\s*;/i)
     expect(body).not.toMatch(/Stripchat|CamSoda/)
   })
+  test('a uniqueness conflict with nothing to return fails loudly instead of returning an empty session', () => {
+    const body = noComments(fn(m1, 'start_live_session'))
+    expect(body).toMatch(/if not found then\s+raise exception 'LIVE_START_CONFLICT/)
+  })
   test('strict_canonical_platform returns NULL for anything else', () => {
     const body = noComments(fn(m1, 'strict_canonical_platform'))
     expect(body).toMatch(/ELSE NULL/)
