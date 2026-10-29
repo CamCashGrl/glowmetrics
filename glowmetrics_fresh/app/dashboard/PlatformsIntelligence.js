@@ -93,7 +93,7 @@ export function MetricStrip({ items }) {
 // Dense table. Scrolls inside its own container on narrow screens.
 function DataTable({ columns, rows }) {
   return (
-    <div style={{ overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: 10 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid rgba(255,255,255,0.045)', borderRadius: 12 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 420 }}>
         <thead>
           <tr>
@@ -506,12 +506,12 @@ function Glass({ children, style, accent, glow, className, onClick, ...rest }) {
         borderRadius: 22,
         padding: 24,
         minWidth: 0,
-        border: `1px solid ${accent ? `${accent}38` : 'rgba(255,255,255,0.055)'}`,
+        border: `1px solid ${accent ? `${accent}66` : 'rgba(255,255,255,0.055)'}`,
         background: GLASS_BG,
         backdropFilter: 'blur(30px)',
         WebkitBackdropFilter: 'blur(30px)',
         boxShadow: accent
-          ? `${GLASS_SHADOW}, 0 0 54px -24px ${accent}99`
+          ? `${GLASS_SHADOW}, 0 0 46px -14px ${accent}88`
           : GLASS_SHADOW,
         ...style,
       }}
@@ -588,17 +588,88 @@ function smoothPath(pts) {
   return d
 }
 
-let chartUid = 0
-function GlowChart({ values, color = C.teal, height = 180, strokeWidth = 2.5, pulse = true, fill = true }) {
-  const [id] = useState(() => `plg${++chartUid}`)
-  const W = 600, H = height, pad = 6
-  const max = Math.max(...values, 0.01)
-  const pts = values.map((v, i) => [values.length === 1 ? W / 2 : (i / (values.length - 1)) * W, H - pad - (v / max) * (H - pad * 2)])
-  const line = smoothPath(pts)
-  const last = pts[pts.length - 1]
+
+// Line icons (no emoji). Decorative only: every one is paired with text.
+const ICONS = {
+  dollar: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 6.5v11', 'M14.8 9.3c-.4-.9-1.4-1.5-2.8-1.5-1.5 0-2.7.8-2.7 2 0 2.9 5.6 1.2 5.6 4.2 0 1.2-1.2 2-2.9 2-1.4 0-2.5-.6-2.9-1.6'],
+  users: ['M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-3A3.5 3.5 0 0 0 6 17.5V19', 'M11 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19 19v-1a3 3 0 0 0-2.2-2.9', 'M15.8 5.2a3 3 0 0 1 0 5.6'],
+  sparkle: ['M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z', 'M19 16v4', 'M17 18h4'],
+  clock: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M12 7v5l3 2'],
+  trend: ['M4 16l5-5 3 3 7-8', 'M15 6h4v4'],
+  repeat: ['M17 3l3 3-3 3', 'M4 11V9a3 3 0 0 1 3-3h13', 'M7 21l-3-3 3-3', 'M20 13v2a3 3 0 0 1-3 3H4'],
+  pie: ['M12 3a9 9 0 1 0 9 9h-9z', 'M15 3.5A9 9 0 0 1 20.5 9H15z'],
+  bars: ['M5 20v-8', 'M12 20V5', 'M19 20v-5'],
+  close: ['M6 6l12 12', 'M18 6L6 18'],
+  arrow: ['M5 12h14', 'M13 6l6 6-6 6'],
+}
+function Ico({ name, size = 16, color = 'currentColor', style }) {
   return (
-    <div style={{ position: 'relative', width: '100%', height }}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={height} style={{ display: 'block', overflow: 'visible' }}>
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
+      {(ICONS[name] || []).map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  )
+}
+
+// Platform initials, the same short codes Live mode uses (CB / BC / MFC).
+const PLATFORM_MARK = { chaturbate: 'CB', myfreecams: 'MFC', bongacams: 'BC' }
+const markFor = (p) => PLATFORM_MARK[(p || '').toLowerCase().trim()] || String(p || '?').slice(0, 2).toUpperCase()
+function PlatformMark({ platform, size = 30 }) {
+  const a = accentFor(platform)
+  const m = markFor(platform)
+  return (
+    <span aria-hidden="true" style={{
+      width: size, height: size, borderRadius: Math.round(size * 0.3), flexShrink: 0,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: `${a}1f`, color: a, fontSize: m.length > 2 ? 10 : 11.5, fontWeight: 700, letterSpacing: '0.02em',
+      boxShadow: `inset 0 0 0 1px ${a}33`,
+    }}>{m}</span>
+  )
+}
+
+// `daily.days` keys are already creator-local dates (YYYY-MM-DD); format them
+// as UTC-noon so the label can never slip a day.
+const dayLabel = (key) => {
+  const [y, m, d] = String(key).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+// Round chart top: 1, 2, 4, 8 or 10 x a power of ten, so quarter ticks are clean.
+const niceTop = (m) => {
+  const e = Math.pow(10, Math.floor(Math.log10(m)))
+  const f = m / e
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 4 ? 4 : f <= 8 ? 8 : 10) * e
+}
+const axisMoney = (v) => (v >= 10000 ? `$${(v / 1000).toFixed(v >= 100000 ? 0 : 1)}k` : fmt$0(v))
+
+let chartUid = 0
+function GlowChart({ values, color = C.teal, height = 180, strokeWidth = 2.5, pulse = true, fill = true, dates = null }) {
+  const [id] = useState(() => `plg${++chartUid}`)
+  const [hover, setHover] = useState(null)
+  const axes = Array.isArray(dates) && dates.length === values.length
+  const W = 600, H = height, pad = 6
+  const n = values.length
+  const peak = Math.max(...values, 0.01)
+  // With axes, scale to a round top so the $ ticks read cleanly. This only
+  // sets the vertical scale; every plotted value is the real daily total.
+  const max = axes ? niceTop(peak) : peak
+  const xAt = (i) => (n === 1 ? W / 2 : (i / (n - 1)) * W)
+  const yAt = (v) => H - pad - (v / max) * (H - pad * 2)
+  const pts = values.map((v, i) => [xAt(i), yAt(v)])
+  const line = smoothPath(pts)
+  const last = pts[n - 1]
+  const ticks = axes ? [0, 0.25, 0.5, 0.75, 1].map(f => max * f) : []
+  const xi = axes ? [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * (n - 1))) : []
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const f = (e.clientX - r.left) / Math.max(1, r.width)
+    setHover(Math.max(0, Math.min(n - 1, Math.round(f * (n - 1)))))
+  }
+  const hx = hover === null ? 0 : (xAt(hover) / W) * 100
+  const chart = (
+    <div style={{ position: 'relative', width: '100%', height }} onMouseMove={axes ? onMove : undefined} onMouseLeave={axes ? () => setHover(null) : undefined}>
+      {axes && ticks.map((t, i) => (
+        <span key={i} aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: yAt(t), height: 1, background: 'rgba(255,255,255,0.045)' }} />
+      ))}
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={height} style={{ display: 'block', overflow: 'visible', position: 'relative' }}>
         <defs>
           <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.32" />
@@ -609,12 +680,47 @@ function GlowChart({ values, color = C.teal, height = 180, strokeWidth = 2.5, pu
         <path d={line} fill="none" stroke={color} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" pathLength="1"
           className="pl-draw" style={{ filter: `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 14px ${color}88)` }} />
       </svg>
-      {pulse && (
+      {pulse && hover === null && (
         <span className="pl-ping" style={{
           position: 'absolute', left: `calc(${(last[0] / W) * 100}% - 5px)`, top: last[1] - 5,
           width: 10, height: 10, borderRadius: 5, background: color, boxShadow: `0 0 14px ${color}, 0 0 28px ${color}`,
         }} />
       )}
+      {axes && hover !== null && (
+        <>
+          <span aria-hidden="true" style={{ position: 'absolute', left: `${hx}%`, top: 0, bottom: 0, width: 1, background: `${color}55` }} />
+          <span aria-hidden="true" style={{ position: 'absolute', left: `calc(${hx}% - 4px)`, top: pts[hover][1] - 4, width: 8, height: 8, borderRadius: 4, background: color, boxShadow: `0 0 12px ${color}` }} />
+          <div role="status" style={{
+            position: 'absolute', left: `${hx}%`, top: Math.max(0, pts[hover][1] - 58), pointerEvents: 'none', zIndex: 5,
+            transform: hover > n * 0.65 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)',
+            padding: '7px 11px', borderRadius: 10, whiteSpace: 'nowrap',
+            background: 'rgba(10,12,26,0.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.07), 0 12px 28px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: 12, color: C.muted }}>{dayLabel(dates[hover])}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.white, fontVariantNumeric: 'tabular-nums' }}>{fmt$(values[hover])}</div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+  if (!axes) return chart
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr)', gap: 8 }}>
+        <div aria-hidden="true" style={{ position: 'relative', height }}>
+          {ticks.map((t, i) => (
+            <span key={i} style={{ position: 'absolute', right: 0, top: Math.min(height - 14, Math.max(0, yAt(t) - 7)), fontSize: 12, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{axisMoney(t)}</span>
+          ))}
+        </div>
+        {chart}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr)', gap: 8, marginTop: 8 }}>
+        <span />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.muted }}>
+          {xi.map((k, i) => <span key={i}>{dayLabel(dates[k])}</span>)}
+        </div>
+      </div>
     </div>
   )
 }
@@ -650,360 +756,110 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
   const leader = comparison[0]
   const multi = comparison.length > 1
   const accent = accentFor(leader.platform)
+  const pill = (color) => ({
+    display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 13px',
+    fontSize: 12.5, fontWeight: 600, color, background: `${color}14`, boxShadow: `inset 0 0 0 1px ${color}38`,
+  })
 
   return (
     <div
       className="pl-pulse"
       style={{
-        position: 'relative',
-        overflow: 'hidden',
-        borderRadius: 28,
-        padding: '40px 42px 34px',
+        position: 'relative', overflow: 'hidden', borderRadius: 28, padding: '38px 42px 34px',
         border: '1px solid rgba(255,255,255,0.065)',
         background: 'linear-gradient(145deg, rgba(16,19,38,0.92), rgba(6,8,18,0.98))',
-        backdropFilter: 'blur(34px)',
-        WebkitBackdropFilter: 'blur(34px)',
-        boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.055), 0 34px 84px rgba(0,0,0,0.42)',
+        backdropFilter: 'blur(34px)', WebkitBackdropFilter: 'blur(34px)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.055), 0 34px 84px rgba(0,0,0,0.42)',
       }}
     >
-      <span
-        aria-hidden
-        className="pl-drift"
-        style={{
-          position: 'absolute',
-          left: -150,
-          top: -155,
-          width: 430,
-          height: 430,
-          borderRadius: '50%',
-          background: 'rgba(35,199,255,0.12)',
-          filter: 'blur(120px)',
-          pointerEvents: 'none',
-        }}
-      />
-      <span
-        aria-hidden
-        className="pl-drift pl-drift-b"
-        style={{
-          position: 'absolute',
-          right: -80,
-          top: -80,
-          width: 390,
-          height: 390,
-          borderRadius: '50%',
-          background: 'rgba(139,92,246,0.12)',
-          filter: 'blur(120px)',
-          pointerEvents: 'none',
-        }}
-      />
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          right: '16%',
-          bottom: -190,
-          width: 320,
-          height: 320,
-          borderRadius: '50%',
-          background: 'rgba(255,61,154,0.055)',
-          filter: 'blur(115px)',
-          pointerEvents: 'none',
-        }}
-      />
+      <span aria-hidden="true" className="pl-drift" style={{ position: 'absolute', left: -150, top: -155, width: 430, height: 430, borderRadius: '50%', background: 'rgba(35,199,255,0.12)', filter: 'blur(120px)', pointerEvents: 'none' }} />
+      <span aria-hidden="true" className="pl-drift pl-drift-b" style={{ position: 'absolute', right: -80, top: -80, width: 390, height: 390, borderRadius: '50%', background: 'rgba(139,92,246,0.12)', filter: 'blur(120px)', pointerEvents: 'none' }} />
+      <span aria-hidden="true" style={{ position: 'absolute', right: '16%', bottom: -190, width: 320, height: 320, borderRadius: '50%', background: `${accent}12`, filter: 'blur(115px)', pointerEvents: 'none' }} />
 
-      <div
-        className="pl-hero-grid"
-        style={{
-          position: 'relative',
-          display: 'grid',
-          gridTemplateColumns: daily
-            ? 'minmax(0,0.82fr) minmax(0,1.18fr)'
-            : 'minmax(0,1fr) 300px',
-          gap: 48,
-          alignItems: 'center',
-        }}
-      >
+      <div className="pl-hero-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: daily ? 'minmax(0,0.86fr) minmax(0,1.14fr)' : 'minmax(0,1fr) 300px', gap: 48, alignItems: 'center' }}>
         <div style={{ minWidth: 0, position: 'relative', zIndex: 2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              className="pl-live"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                background: C.teal,
-                boxShadow: `0 0 12px ${C.teal}`,
-              }}
-            />
+            <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 12px ${C.teal}` }} />
             <span style={eyebrow}>Platform pulse</span>
           </div>
 
-          <div
-            style={{
-              marginTop: 17,
-              fontSize: 24,
-              fontWeight: 500,
-              color: C.white,
-              letterSpacing: '-0.025em',
-              lineHeight: 1.18,
-            }}
-          >
-            {multi ? (
-              <>
-                {leader.platform}{' '}
-                <span style={{ color: C.text }}>is leading your tracked revenue</span>
-              </>
-            ) : (
-              <>
-                Everything currently points to{' '}
-                <span style={{ color: C.text }}>{leader.platform}</span>
-              </>
-            )}
+          <div style={{ marginTop: 16, fontSize: 44, fontWeight: 600, color: C.white, letterSpacing: '-0.04em', lineHeight: 1.06 }}>
+            {multi ? <>{leader.platform} <span style={{ color: C.text }}>is leading</span></> : <>Everything on <span style={{ color: C.text }}>{leader.platform}</span></>}
           </div>
 
-          <div
-            style={{
-              marginTop: 24,
-              fontSize: 52,
-              fontWeight: 700,
-              color: C.white,
-              letterSpacing: '-0.05em',
-              lineHeight: 0.98,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            <Counter value={snapshot.totalEarnings} />
-          </div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
-            tracked earnings
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
+            {multi && <span style={pill(C.indigo)}>{leader.earningsPercent}% of earnings</span>}
+            {newFans?.total > 0 && <span style={pill(C.teal)}>{plural(newFans.total, 'new fan')} this week</span>}
           </div>
 
-          {multi && (
-            <div style={{ marginTop: 28, maxWidth: 490 }}>
-              <ShareBar3 comparison={comparison} />
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 14 }}>
+            <span style={{ color: C.text }}>{plural(snapshot.totalTips, 'tip')}</span> across {plural(comparison.length, 'platform')} · {plural(snapshot.sessions, 'meaningful session')}
+          </div>
+
+          <div style={{ marginTop: 26 }}>
+            <div style={eyebrow}>Total platform earnings</div>
+            <div style={{ marginTop: 10, fontSize: 40, fontWeight: 700, color: C.white, letterSpacing: '-0.045em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              <Counter value={snapshot.totalEarnings} />
             </div>
-          )}
-
-          <div
-            style={{
-              fontSize: 13,
-              color: C.muted,
-              marginTop: 24,
-              display: 'flex',
-              gap: 8,
-              flexWrap: 'wrap',
-            }}
-          >
-            <span>{plural(snapshot.totalTips, 'tip')}</span>
-            <span>·</span>
-            <span>{plural(snapshot.sessions, 'session')}</span>
-            <span>·</span>
-            <span>{plural(comparison.length, 'platform')}</span>
-            {newFans?.total > 0 && (
-              <>
-                <span>·</span>
-                <span style={{ color: C.teal }}>
-                  +{plural(newFans.total, 'new fan')} this week
-                </span>
-              </>
-            )}
           </div>
+
+          {multi && <div style={{ marginTop: 26, maxWidth: 490 }}><ShareBar3 comparison={comparison} /></div>}
 
           {learning.isLearning && (
-            <div
-              style={{
-                fontSize: 13.5,
-                color: C.text,
-                marginTop: 16,
-                lineHeight: 1.65,
-                maxWidth: 510,
-              }}
-            >
-              <span style={{ color: C.white, fontWeight: 600 }}>
-                CamCash is still learning your platforms.
-              </span>{' '}
+            <div style={{ fontSize: 13.5, color: C.text, marginTop: 18, lineHeight: 1.65, maxWidth: 510 }}>
+              <span style={{ color: C.white, fontWeight: 600 }}>CamCash is still learning your platforms.</span>{' '}
               {[
-                learning.sessionsNeeded > 0
-                  ? plural(learning.sessionsNeeded, 'more meaningful session')
-                  : null,
-                learning.hoursNeeded > 0
-                  ? `${learning.hoursNeeded} more streamed hours`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' and ')}{' '}
+                learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
+                learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
+              ].filter(Boolean).join(' and ')}{' '}
               will unlock early patterns.
             </div>
           )}
         </div>
 
         {daily ? (
-          <div
-            style={{
-              minWidth: 0,
-              position: 'relative',
-              padding: '20px 2px 2px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'baseline',
-                gap: 12,
-                flexWrap: 'wrap',
-                marginBottom: 6,
-                position: 'relative',
-                zIndex: 2,
-              }}
-            >
-              <span style={eyebrow}>Daily earnings · last 30 days</span>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: C.text,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {leader.earningsPercent}
-                <span style={{ color: accent }}>%</span> from {leader.platform}
-              </span>
-            </div>
-
-            <div
-              style={{
-                position: 'relative',
-                marginLeft: -8,
-                marginRight: -6,
-                marginTop: 8,
-              }}
-            >
-              <span
-                aria-hidden
-                style={{
-                  position: 'absolute',
-                  inset: '18% 14% 8%',
-                  background:
-                    'radial-gradient(circle, rgba(34,230,209,0.10), transparent 68%)',
-                  filter: 'blur(28px)',
-                  pointerEvents: 'none',
-                }}
-              />
-              <GlowChart values={daily.total} color={C.teal} height={205} />
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 11,
-                color: C.muted,
-                marginTop: 7,
-                letterSpacing: '0.04em',
-              }}
-            >
-              <span>30 days ago</span>
-              <span>{fmtN(daily.activeDays)} earning days</span>
-              <span>Today</span>
-            </div>
-
-            {recap && (
-              <div
-                style={{
-                  marginTop: 14,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  borderRadius: 999,
-                  padding: '7px 11px',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  background: 'rgba(255,255,255,0.025)',
-                  fontSize: 12.5,
-                  color: C.text,
-                }}
-              >
-                <span
-                  className="pl-live"
-                  style={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: 3,
-                    background: C.teal,
-                    boxShadow: `0 0 9px ${C.teal}`,
-                  }}
-                />
-                Latest stream
-                <span
-                  style={{
-                    color: C.teal,
-                    fontWeight: 700,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  +{fmt$(recap.earned)}
-                </span>
-                <span style={{ color: C.white }}>{recap.platform}</span>
+          <div style={{ minWidth: 0, position: 'relative', zIndex: 2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap', marginBottom: 16 }}>
+              <div>
+                <div style={eyebrow}>Daily earnings · last 30 days</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{fmtN(daily.activeDays)} earning days</div>
               </div>
-            )}
+              {recap ? (
+                <div style={{ textAlign: 'right', marginLeft: 'auto' }}>
+                  <div style={eyebrow}>Your latest stream</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: C.teal, letterSpacing: '-0.04em', lineHeight: 1.1, marginTop: 7, fontVariantNumeric: 'tabular-nums' }}>
+                    +<Counter value={recap.earned} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.text, marginTop: 5 }}>
+                    on <span style={{ color: C.white, fontWeight: 600 }}>{recap.platform}</span> · {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
+                  </div>
+                  {recap.tookLead && <div style={{ fontSize: 12.5, color: C.purple, marginTop: 4 }}>{recap.platform} moved into the lead</div>}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'right', marginLeft: 'auto', maxWidth: 270 }}>
+                  <div style={eyebrow}>Since your last stream</div>
+                  <div style={{ fontSize: 13.5, color: C.white, marginTop: 8, lineHeight: 1.55 }}>Stream again and CamCash will start showing what changed between sessions.</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>A stream counts once it runs 30+ minutes with 2+ tips.</div>
+                </div>
+              )}
+            </div>
+            <GlowChart values={daily.total} dates={daily.days} color={C.teal} height={200} />
           </div>
         ) : (
-          <div
-            style={{
-              borderRadius: 18,
-              padding: 20,
-              border: '1px solid rgba(255,255,255,0.05)',
-              background: 'rgba(255,255,255,0.025)',
-              backdropFilter: 'blur(22px)',
-              WebkitBackdropFilter: 'blur(22px)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
-            }}
-          >
+          <div style={{ borderRadius: 18, padding: 22, border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
             {recap ? (
               <>
-                <div style={eyebrow}>Latest stream</div>
-                <div
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 700,
-                    color: C.teal,
-                    letterSpacing: '-0.04em',
-                    lineHeight: 1,
-                    marginTop: 14,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  +<Counter value={recap.earned} />
-                </div>
-                <div style={{ fontSize: 14, color: C.white, marginTop: 10 }}>
-                  {recap.platform}
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                  {plural(recap.tips, 'tip')} · {plural(recap.fans, 'fan')}
-                </div>
-                {recap.tookLead && (
-                  <div style={{ fontSize: 12, color: C.purple, marginTop: 10 }}>
-                    Moved into the lead
-                  </div>
-                )}
+                <div style={eyebrow}>Your latest stream</div>
+                <div style={{ fontSize: 30, fontWeight: 700, color: C.teal, letterSpacing: '-0.04em', lineHeight: 1, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}>+<Counter value={recap.earned} /></div>
+                <div style={{ fontSize: 14, color: C.white, marginTop: 10 }}>{recap.platform}</div>
+                <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>{plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}</div>
+                {recap.tookLead && <div style={{ fontSize: 12.5, color: C.purple, marginTop: 10 }}>{recap.platform} moved into the lead</div>}
               </>
             ) : (
               <>
                 <div style={eyebrow}>Since your last stream</div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    color: C.white,
-                    marginTop: 10,
-                    lineHeight: 1.55,
-                  }}
-                >
-                  Stream again and CamCash will start showing what changed between
-                  sessions.
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
-                  A stream counts once it runs 30+ minutes with 2+ tips.
-                </div>
+                <div style={{ fontSize: 14, color: C.white, marginTop: 10, lineHeight: 1.55 }}>Stream again and CamCash will start showing what changed between sessions.</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>A stream counts once it runs 30+ minutes with 2+ tips.</div>
               </>
             )}
           </div>
@@ -1022,101 +878,46 @@ function LatestStream({ recap, tz, multi }) {
   const dur = recap.durationMinutes
 
   const items = [
-    { value: fmtSigned$(recap.earned), label: 'earned', color: C.teal },
+    { icon: 'dollar', value: fmtSigned$(recap.earned), label: 'earned', sub: `${recap.platform} · ${plural(recap.tips, 'tip')}`, color: C.teal },
     recap.returningFans === null
-      ? { value: 'First stream here', label: '', color: C.text }
-      : { value: plural(recap.returningFans, 'returning fan'), label: '', color: C.white },
+      ? { icon: 'users', value: 'First stream here', label: '', sub: 'returning fans from your next stream', color: C.text }
+      : { icon: 'users', value: plural(recap.returningFans, 'returning fan'), label: '', sub: 'tipped again', color: C.white },
     recap.newSpenders === null
       ? null
-      : {
-          value: recap.newSpenders
-            ? plural(recap.newSpenders, 'new spender')
-            : 'No new spenders',
-          label: '',
-          color: recap.newSpenders ? C.white : C.text,
-        },
+      : { icon: 'sparkle', value: recap.newSpenders ? plural(recap.newSpenders, 'new spender') : 'No new spenders', label: '', sub: 'tipped for the first time', color: recap.newSpenders ? C.white : C.text },
     multi && recap.shareShiftPts
-      ? {
-          value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`,
-          label: 'revenue share',
-          color: recap.shareShiftPts > 0 ? C.green : C.text,
-        }
+      ? { icon: 'pie', value: `${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`, label: 'revenue share', sub: recap.tookLead ? `${recap.platform} took the lead` : recap.platform, color: recap.shareShiftPts > 0 ? C.green : C.text }
       : dur
-        ? {
-            value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`,
-            label: 'streamed',
-            color: C.white,
-          }
+        ? { icon: 'clock', value: `${dur >= 60 ? `${Math.floor(dur / 60)}h ` : ''}${dur % 60}m`, label: 'streamed', sub: `${plural(recap.fans, 'fan')} tipped`, color: C.white }
         : null,
   ].filter(Boolean)
 
   return (
-    <div
-      className="pl-stream-rail"
-      style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: '12px 30px',
-        borderRadius: 16,
-        border: '1px solid rgba(255,255,255,0.04)',
-        background:
-          'linear-gradient(90deg, rgba(34,230,209,0.035), rgba(255,255,255,0.018) 48%, rgba(139,92,246,0.025))',
-        padding: '15px 18px',
-      }}
-    >
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 12.5,
-          fontWeight: 600,
-          color: C.white,
-        }}
-      >
-        <span
-          className="pl-live"
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            background: C.teal,
-            boxShadow: `0 0 10px ${C.teal}`,
-          }}
-        />
-        Since your last stream
-      </span>
-
-      {items.map((it, i) => (
-        <span
-          key={i}
-          style={{
-            fontSize: 13.5,
-            color: it.color,
-            fontWeight: 600,
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {it.value}
-          {it.label && (
-            <span style={{ fontWeight: 400, color: C.muted }}> {it.label}</span>
-          )}
-        </span>
-      ))}
-
-      <span
-        style={{
-          marginLeft: 'auto',
-          fontSize: 11.5,
-          fontWeight: 400,
-          color: C.muted,
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {streamWhen(recap.endTime, tz)}
-      </span>
+    <div className="pl-stream-rail" style={{
+      borderRadius: 18, padding: '18px 22px',
+      border: '1px solid rgba(255,255,255,0.04)',
+      background: 'linear-gradient(90deg, rgba(34,230,209,0.035), rgba(255,255,255,0.015) 48%, rgba(139,92,246,0.025))',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>Since your last stream</span>
+        <span style={{ fontSize: 12, color: C.muted }}>{streamWhen(recap.endTime, tz)}</span>
+      </div>
+      <div className="pl-rail-items" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 0' }}>
+        {items.map((it, i) => (
+          <div key={i} className="pl-rail-item" style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, padding: '0 26px', ...(i ? { borderLeft: '1px solid rgba(255,255,255,0.06)' } : { paddingLeft: 0 }) }}>
+            <span style={{ width: 32, height: 32, borderRadius: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.04)', color: it.color === C.text ? C.muted : it.color }}>
+              <Ico name={it.icon} size={16} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: it.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                {it.value}{it.label && <span style={{ fontWeight: 400, color: C.muted }}> {it.label}</span>}
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{it.sub}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1130,6 +931,7 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark 
   const mounted = useMounted()
   const fresh = badges.includes('fresh')
   const shownBadges = badges.filter(b => b !== 'fresh').slice(0, 1)
+  const hasSpark = Boolean(spark && spark.some(v => v > 0))
 
   return (
     <Glass
@@ -1146,196 +948,60 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark 
       }}
       aria-pressed={selected}
       style={{
-        padding: '23px 24px 22px',
+        padding: '22px 24px 20px',
         background: leading
-          ? `radial-gradient(circle at 4% -8%, ${accent}17, transparent 48%), linear-gradient(150deg, rgba(15,18,36,0.78), rgba(7,9,20,0.92))`
+          ? `radial-gradient(circle at 4% -8%, ${accent}1f, transparent 52%), linear-gradient(150deg, rgba(15,18,36,0.78), rgba(7,9,20,0.92))`
           : 'linear-gradient(150deg, rgba(15,18,36,0.72), rgba(7,9,20,0.90))',
-        ...(selected
-          ? {}
-          : {
-              boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.035), 0 16px 42px rgba(0,0,0,0.23)',
-            }),
+        ...(selected ? {} : { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.035), 0 16px 42px rgba(0,0,0,0.23)' }),
       }}
     >
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          // Glass wraps children in a padded, relative box; offset by the
-          // card's 24px padding so the line sits on the card edge, not on the text.
-          left: -24,
-          top: -1,
-          bottom: 0,
-          width: 1,
-          background: `linear-gradient(180deg, transparent, ${accent}70, transparent)`,
-          boxShadow: `0 0 18px ${accent}45`,
-          pointerEvents: 'none',
-        }}
-      />
+      <span aria-hidden="true" style={{ position: 'absolute', left: -24, top: -1, bottom: 0, width: 1, background: `linear-gradient(180deg, transparent, ${accent}70, transparent)`, boxShadow: `0 0 18px ${accent}45`, pointerEvents: 'none' }} />
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 12,
-        }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <PlatformMark platform={row.platform} />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                background: accent,
-                boxShadow: `0 0 11px ${accent}99`,
-                flexShrink: 0,
-              }}
-            />
-            <span
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                color: C.white,
-                letterSpacing: '-0.012em',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {row.platform}
-            </span>
-            {fresh && (
-              <span
-                title={BADGE_HELP.fresh}
-                className="pl-live"
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: 3,
-                  background: C.teal,
-                  boxShadow: `0 0 8px ${C.teal}`,
-                  flexShrink: 0,
-                }}
-              />
-            )}
+            <span style={{ fontSize: 16, fontWeight: 600, color: C.white, letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+            {fresh && <span title={BADGE_HELP.fresh} className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.teal, boxShadow: `0 0 8px ${C.teal}`, flexShrink: 0 }} />}
           </div>
+          {shownBadges.length > 0 && <div style={{ marginTop: 6 }}>{shownBadges.map(b => <Badge key={b} kind={b} />)}</div>}
+        </div>
+      </div>
 
-          <div style={{ marginTop: 9, minHeight: 21 }}>
-            {shownBadges.map(b => <Badge key={b} kind={b} />)}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14, marginTop: 20 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 34, fontWeight: 700, color: C.white, letterSpacing: '-0.045em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+            <Counter value={row.earnings} />
           </div>
+          <div style={{ fontSize: 13, color: accent, fontWeight: 600, marginTop: 9 }}>{row.earningsPercent}% of earnings</div>
         </div>
-
-        <span
-          style={{
-            fontSize: 11.5,
-            color: selected ? accent : C.muted,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {selected ? 'Viewing ↓' : 'Details →'}
-        </span>
+        {hasSpark && (
+          <div style={{ width: '42%', maxWidth: 150, flexShrink: 0, marginBottom: -2 }}>
+            <GlowChart values={spark} color={accent} height={52} strokeWidth={2} pulse={leading} />
+          </div>
+        )}
       </div>
 
-      <div
-        style={{
-          fontSize: 36,
-          fontWeight: 700,
-          color: C.white,
-          marginTop: 18,
-          letterSpacing: '-0.045em',
-          lineHeight: 1,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <Counter value={row.earnings} />
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginTop: 8,
-        }}
-      >
-        <span style={{ fontSize: 12.5, color: C.text }}>
-          {row.earningsPercent}% of earnings
-        </span>
-        <span style={{ fontSize: 12.5 }}>
-          <TrendCell trend={row.trend} />
-        </span>
-      </div>
-
-      {spark && spark.some(v => v > 0) ? (
-        <div
-          style={{
-            marginTop: 14,
-            marginLeft: -6,
-            marginRight: -6,
-            opacity: 0.95,
-          }}
-        >
-          <GlowChart
-            values={spark}
-            color={accent}
-            height={62}
-            strokeWidth={2}
-            pulse={leading}
-          />
-        </div>
-      ) : (
-        <div
-          style={{
-            height: 3,
-            background: 'rgba(255,255,255,0.05)',
-            borderRadius: 2,
-            overflow: 'hidden',
-            marginTop: 18,
-          }}
-        >
-          <div
-            style={{
-              width: mounted ? `${row.earningsPercent}%` : 0,
-              height: '100%',
-              borderRadius: 2,
-              background: `linear-gradient(90deg, ${accent}88, ${accent})`,
-              boxShadow: `0 0 11px ${accent}55`,
-              transition: 'width 900ms cubic-bezier(.2,.8,.2,1)',
-            }}
-          />
+      {!hasSpark && (
+        <div style={{ height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden', marginTop: 16 }}>
+          <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', borderRadius: 2, background: `linear-gradient(90deg, ${accent}88, ${accent})`, boxShadow: `0 0 11px ${accent}55`, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
         </div>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          gap: 18,
-          flexWrap: 'wrap',
-          marginTop: 15,
-          paddingTop: 14,
-          borderTop: '1px solid rgba(255,255,255,0.04)',
-          fontSize: 12.5,
-          color: C.muted,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        <span>
-          <span style={{ color: C.text }}>{fmtN(row.tips)}</span> tips
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12.5, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+          <span><span style={{ color: C.text }}>{fmtN(row.tips)}</span> tips</span>
+          <span><span style={{ color: C.text }}>{fmtN(extras?.uniqueFans ?? 0)}</span> fans</span>
+          <span><span style={{ color: C.text }}>{row.avgTipSize > 0 ? fmt$(row.avgTipSize) : '—'}</span> avg tip</span>
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: selected ? accent : C.text, whiteSpace: 'nowrap' }}>
+          {selected ? 'Viewing' : 'View details'} <Ico name="arrow" size={12} style={selected ? { transform: 'rotate(90deg)' } : undefined} />
         </span>
-        <span>
-          <span style={{ color: C.text }}>{fmtN(extras?.uniqueFans ?? 0)}</span>{' '}
-          fans
-        </span>
-        <span>
-          <span style={{ color: C.text }}>
-            {row.avgTipSize > 0 ? fmt$(row.avgTipSize) : '—'}
-          </span>{' '}
-          avg
-        </span>
+      </div>
+
+      <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, fontSize: 12.5, color: C.muted }}>
+        <span>30-day momentum</span>
+        <TrendCell trend={row.trend} />
       </div>
     </Glass>
   )
@@ -1364,96 +1030,42 @@ function ExpansionCard({ onImport }) {
 
 // Lightweight, platform-only activity feed. Every item is a dated event from
 // buildPlatformActivity; nothing is shown when nothing happened.
+const ACTIVITY_ICON = { earned24h: 'trend', newFans: 'sparkle', returning: 'repeat', share: 'pie' }
 function ActivityFeed({ items }) {
   if (!items.length) return null
 
   const shown = items.slice(0, 6)
   const scrolls = shown.length >= 3
-  const mask = scrolls
-    ? 'linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)'
-    : undefined
+  const mask = scrolls ? 'linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)' : undefined
 
-  const item = (it, i, dup) => (
-    <span
-      key={`${dup}${i}`}
-      title={it.sub}
-      aria-hidden={dup ? true : undefined}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        flexShrink: 0,
-        fontSize: 12.5,
-        color: C.text,
-        whiteSpace: 'nowrap',
-      }}
-    >
+  const item = (it, i, dup) => {
+    const a = accentFor(it.platform)
+    return (
       <span
+        key={`${dup}${i}`}
+        title={it.sub}
+        aria-hidden={dup ? true : undefined}
         style={{
-          width: 4,
-          height: 4,
-          borderRadius: 2,
-          background: accentFor(it.platform),
-          boxShadow: `0 0 7px ${accentFor(it.platform)}`,
-          flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', gap: 9, flexShrink: 0, borderRadius: 999,
+          padding: '6px 14px 6px 10px', fontSize: 12.5, color: C.text, whiteSpace: 'nowrap',
+          background: 'rgba(255,255,255,0.022)', boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.045), 0 0 20px -12px ${a}`,
         }}
-      />
-      <span style={{ color: C.white }}>{it.text}</span>
-      <span style={{ color: C.muted }}>{it.sub}</span>
-    </span>
-  )
+      >
+        <Ico name={ACTIVITY_ICON[it.kind] || 'sparkle'} size={14} color={a} />
+        <span style={{ color: C.white }}>{it.text}</span>
+        <span style={{ color: C.muted }}>{it.sub}</span>
+      </span>
+    )
+  }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 18,
-        minWidth: 0,
-        padding: '2px 2px 0',
-      }}
-    >
-      <span
-        style={{
-          ...eyebrow,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 7,
-          flexShrink: 0,
-        }}
-      >
-        <span
-          className="pl-live"
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: 3,
-            background: C.cyan,
-            boxShadow: `0 0 8px ${C.cyan}`,
-          }}
-        />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0, padding: '2px 2px 0' }}>
+      <span style={{ ...eyebrow, display: 'inline-flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+        <span className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.cyan, boxShadow: `0 0 8px ${C.cyan}` }} />
         Just updated
       </span>
-
-      <div
-        className="pl-ticker"
-        style={{
-          flex: 1,
-          minWidth: 0,
-          overflow: 'hidden',
-          WebkitMaskImage: mask,
-          maskImage: mask,
-        }}
-      >
-        <div
-          className={scrolls ? 'pl-marquee' : undefined}
-          style={{
-            display: 'flex',
-            gap: 22,
-            width: scrolls ? 'max-content' : undefined,
-            flexWrap: scrolls ? 'nowrap' : 'wrap',
-          }}
-        >
+      <div className="pl-ticker" style={{ flex: 1, minWidth: 0, overflow: 'hidden', WebkitMaskImage: mask, maskImage: mask }}>
+        <div className={scrolls ? 'pl-marquee' : undefined} style={{ display: 'flex', gap: 10, width: scrolls ? 'max-content' : undefined, flexWrap: scrolls ? 'nowrap' : 'wrap' }}>
           {shown.map((it, i) => item(it, i, ''))}
           {scrolls && shown.map((it, i) => item(it, i, 'd'))}
         </div>
@@ -1673,39 +1285,11 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
   const [lead, ...rest] = shown
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        minWidth: 0,
-        borderRadius: 18,
-        padding: '2px 0 2px 26px',
-        borderLeft: '1px solid rgba(139,92,246,0.22)',
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: -80,
-          top: -70,
-          width: 220,
-          height: 220,
-          borderRadius: '50%',
-          background: 'rgba(139,92,246,0.10)',
-          filter: 'blur(85px)',
-          pointerEvents: 'none',
-        }}
-      />
+    <div style={{ position: 'relative', overflow: 'hidden', minWidth: 0, borderRadius: 18, padding: '2px 0 2px 26px', borderLeft: '1px solid rgba(139,92,246,0.22)' }}>
+      <span aria-hidden="true" style={{ position: 'absolute', left: -80, top: -70, width: 220, height: 220, borderRadius: '50%', background: 'rgba(139,92,246,0.10)', filter: 'blur(85px)', pointerEvents: 'none' }} />
 
       <div style={{ position: 'relative' }}>
-        <div
-          style={{
-            ...eyebrow,
-            color: C.text,
-            marginBottom: 17,
-          }}
-        >
+        <div style={{ ...eyebrow, color: C.text, marginBottom: 17 }}>
           <span style={{ color: C.purple }}>✦</span> CamCash noticed
         </div>
 
@@ -1718,103 +1302,36 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
         ) : (
           <>
             {lead && (
-              <div
-                className="pl-chip"
-                style={{
-                  maxWidth: 660,
-                  fontSize: 17,
-                  fontWeight: 500,
-                  lineHeight: 1.65,
-                  color: C.white,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {lead}
+              <div className="pl-chip" style={{
+                display: 'flex', alignItems: 'flex-start', gap: 14, borderRadius: 16, padding: '16px 18px', maxWidth: 680,
+                background: 'linear-gradient(135deg, rgba(139,92,246,0.11), rgba(34,230,209,0.035))',
+                boxShadow: 'inset 0 0 0 1px rgba(139,92,246,0.20)',
+              }}>
+                <span style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(139,92,246,0.16)', color: C.purple }}>
+                  <Ico name="bars" size={16} />
+                </span>
+                <span style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.6, color: C.white, letterSpacing: '-0.01em' }}>{lead}</span>
               </div>
             )}
 
             {rest.slice(0, 3).map((t, i) => (
-              <div
-                key={i}
-                className="pl-chip"
-                style={{
-                  animationDelay: `${(i + 1) * 70}ms`,
-                  marginTop: 13,
-                  maxWidth: 660,
-                  fontSize: 13,
-                  lineHeight: 1.8,
-                  color: C.text,
-                }}
-              >
-                {t}
+              <div key={i} className="pl-chip" style={{
+                animationDelay: `${(i + 1) * 70}ms`, display: 'flex', alignItems: 'flex-start', gap: 12, maxWidth: 680,
+                padding: '12px 4px 0 6px', marginTop: i ? 0 : 6, fontSize: 13.5, lineHeight: 1.7, color: C.text,
+              }}>
+                <span style={{ color: C.purple, fontSize: 12, marginTop: 4 }}>✦</span>
+                <span style={{ minWidth: 0 }}>{t}</span>
               </div>
             ))}
 
             {freeTeasers.slice(0, 2).map((c, i) => (
-              <div
-                key={c.id}
-                style={{
-                  marginTop: lead || i ? 20 : 0,
-                  paddingTop: 18,
-                  borderTop: '1px solid rgba(255,255,255,0.045)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      letterSpacing: '0.16em',
-                      color: C.pink,
-                    }}
-                  >
-                    ✦ PRO INSIGHT
-                  </span>
-                  <span
-                    aria-hidden
-                    style={{
-                      fontSize: 12,
-                      color: C.text,
-                      filter: 'blur(4px)',
-                      userSelect: 'none',
-                    }}
-                  >
-                    ██████████ · ██%
-                  </span>
+              <div key={c.id} style={{ marginTop: lead || i ? 20 : 0, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.045)', maxWidth: 680 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: C.pink }}>✦ PRO INSIGHT</span>
+                  <span aria-hidden="true" style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
                 </div>
-
-                <div
-                  style={{
-                    fontSize: 14,
-                    color: C.white,
-                    marginTop: 7,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {c.teaser}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)}
-                  style={{
-                    marginTop: 7,
-                    padding: 0,
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: C.pink,
-                  }}
-                >
+                <div style={{ fontSize: 14, color: C.white, marginTop: 7, lineHeight: 1.6 }}>{c.teaser}</div>
+                <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 7, padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.pink }}>
                   {c.cta} →
                 </button>
               </div>
@@ -1822,8 +1339,7 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
 
             {freeTeasers.length > 2 && (
               <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>
-                + {plural(freeTeasers.length - 2, 'more finding')} already found
-                in your data
+                + {plural(freeTeasers.length - 2, 'more finding')} already found in your data
               </div>
             )}
           </>
@@ -1838,55 +1354,58 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
 // ============================================
 
 function Comparison({ comparison, extras }) {
-  const rows = [
+  const cols = [
     { label: 'Earnings', get: p => p.earnings, fmt: fmt$ },
-    { label: 'Revenue share', get: p => p.earningsPercent, fmt: v => `${v}%` },
+    { label: 'Share', get: p => p.earningsPercent, fmt: v => `${v}%` },
     { label: 'Tips', get: p => p.tips, fmt: fmtN },
-    { label: 'Unique fans', get: p => extras[p.platform]?.uniqueFans ?? 0, fmt: fmtN },
+    { label: 'Fans', get: p => extras[p.platform]?.uniqueFans ?? 0, fmt: fmtN },
     { label: 'Avg tip', get: p => p.avgTipSize, fmt: fmt$ },
     { label: 'Biggest tip', get: p => extras[p.platform]?.biggestTip ?? 0, fmt: fmt$ },
     { label: 'Sessions', get: p => p.sessions, fmt: fmtN, note: '30+ min, 2+ tips' },
     // $/hr only from sessions with a reliable length (engine rule).
     { label: 'Est. $/hr', get: p => (p.rateHours > 0 && p.usdPerHour > 0 ? p.usdPerHour : null), fmt: fmt$, note: 'timed sessions only' },
-    { label: '30-day momentum', get: p => (p.trend?.pct ?? null), render: p => <TrendCell trend={p.trend} /> },
+    { label: '30-day', get: p => (p.trend?.pct ?? null), render: p => <TrendCell trend={p.trend} /> },
   ]
+  const best = cols.map(c => {
+    const finite = comparison.map(c.get).filter(v => v !== null && Number.isFinite(v))
+    return finite.length > 1 ? Math.max(...finite) : null
+  })
+  const th = { textAlign: 'right', padding: '0 18px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', verticalAlign: 'bottom' }
+
   return (
-    <Glass style={{ padding: 0, overflow: 'hidden' }}>
+    <Glass style={{ padding: '22px 6px 8px', background: 'linear-gradient(145deg, rgba(14,17,34,0.7), rgba(7,9,20,0.9))' }}>
+      <div style={{ ...eyebrow, padding: '0 24px 18px' }}>Platform comparison</div>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 140 + comparison.length * 130, fontVariantNumeric: 'tabular-nums' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760, fontVariantNumeric: 'tabular-nums' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '20px 24px 14px', ...eyebrow }}>Platform comparison</th>
-              {comparison.map(p => (
-                <th key={p.platform} style={{ textAlign: 'right', padding: '20px 24px 14px', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <PlatformCell platform={p.platform} />
+              <th style={{ ...th, textAlign: 'left', paddingLeft: 24 }}>Platform</th>
+              {cols.map(c => (
+                <th key={c.label} style={th}>
+                  {c.label}
+                  {c.note && <div style={{ fontSize: 11, fontWeight: 400, letterSpacing: 0, textTransform: 'none', marginTop: 3 }}>{c.note}</div>}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, ri) => {
-              const vals = comparison.map(r.get)
-              const finite = vals.filter(v => v !== null && Number.isFinite(v))
-              const best = finite.length > 1 ? Math.max(...finite) : null
-              return (
-                <tr key={r.label} style={{ borderTop: '1px solid rgba(255,255,255,0.045)' }}>
-                  <td style={{ padding: '11px 24px', fontSize: 13, color: C.text, whiteSpace: 'nowrap' }}>
-                    {r.label}{r.note && <span style={{ color: C.muted, fontSize: 12, marginLeft: 6 }}>{r.note}</span>}
-                  </td>
-                  {comparison.map((p, i) => {
-                    const v = vals[i]
-                    const isBest = best !== null && v === best && v > 0
-                    return (
-                      <td key={p.platform} style={{ padding: '11px 24px', fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', color: isBest ? C.white : C.cell, fontWeight: isBest ? 600 : 400 }}>
-                        {r.render ? r.render(p) : v === null ? <span style={{ color: C.muted }}>—</span> : r.fmt(v)}
-                        {isBest && !r.render && <span title="Best of your platforms" style={{ display: 'inline-block', width: 4, height: 4, borderRadius: 2, background: C.pink, marginLeft: 7, verticalAlign: 'middle', boxShadow: `0 0 6px ${C.pink}` }} />}
-                      </td>
-                    )
-                  })}
-                </tr>
-              )
-            })}
+            {comparison.map(p => (
+              <tr key={p.platform} style={{ borderTop: '1px solid rgba(255,255,255,0.045)' }}>
+                <td style={{ padding: '14px 18px 14px 24px', fontSize: 13.5, color: C.white, whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <PlatformCell platform={p.platform} />
+                </td>
+                {cols.map((c, ci) => {
+                  const v = c.get(p)
+                  const isBest = best[ci] !== null && v === best[ci] && v > 0
+                  return (
+                    <td key={c.label} style={{ padding: '14px 18px', fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', color: isBest ? C.white : C.cell, fontWeight: isBest ? 600 : 400 }}>
+                      {c.render ? c.render(p) : v === null ? <span style={{ color: C.muted }}>—</span> : c.fmt(v)}
+                      {isBest && !c.render && <span title="Best of your platforms" style={{ display: 'inline-block', width: 4, height: 4, borderRadius: 2, background: C.pink, marginLeft: 7, verticalAlign: 'middle', boxShadow: `0 0 6px ${C.pink}` }} />}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -2045,7 +1564,7 @@ function LearningPanel({ learning, onImport }) {
 // rather than rebuilt here.
 // ============================================
 
-function PlatformDetail({ analytics, platformName, isPro, extras, onNavigate, detailRef }) {
+function PlatformDetail({ analytics, platformName, isPro, extras, onNavigate, detailRef, onClose }) {
   const accent = accentFor(platformName)
   const links = [
     ['whales', 'Fans'],
@@ -2054,22 +1573,25 @@ function PlatformDetail({ analytics, platformName, isPro, extras, onNavigate, de
   ]
   return (
     <div ref={detailRef} style={{ scrollMarginTop: 16 }}>
-      <Glass accent={accent} style={{ padding: 18, marginTop: 4 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span style={{ width: 9, height: 9, borderRadius: 5, background: accent, flexShrink: 0 }} />
-            <span style={{ fontSize: 16, fontWeight: 800, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{platformName} in detail</span>
-            {extras?.biggestTip > 0 && <span style={{ fontSize: 12, color: C.text, whiteSpace: 'nowrap' }}>· biggest tip {fmt$(extras.biggestTip)} · {plural(extras.uniqueFans, 'fan')}</span>}
+      <Glass accent={accent} style={{ padding: '20px 22px 22px', marginTop: 4, background: 'linear-gradient(145deg, rgba(13,16,32,0.82), rgba(7,9,20,0.94))' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <PlatformMark platform={platformName} size={34} />
+            <span style={{ fontSize: 18, fontWeight: 600, color: C.white, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{platformName} in detail</span>
+            {extras?.biggestTip > 0 && <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>· biggest tip {fmt$(extras.biggestTip)} · {plural(extras.uniqueFans, 'fan')}</span>}
           </div>
-          {onNavigate && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {links.map(([tab, label]) => (
-                <button key={tab} type="button" onClick={() => onNavigate(tab)} style={{ fontSize: 13, fontWeight: 600, color: C.white, background: 'rgba(18,21,42,0.9)', border: '1px solid rgba(139,92,246,0.30)', borderRadius: 12, padding: '0 14px', minHeight: 36, cursor: 'pointer' }}>
-                  {label} →
-                </button>
-              ))}
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {onNavigate && links.map(([tab, label]) => (
+              <button key={tab} type="button" onClick={() => onNavigate(tab)} style={{ fontSize: 13, fontWeight: 500, color: C.text, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '0 14px', minHeight: 36, cursor: 'pointer' }}>
+                {label} →
+              </button>
+            ))}
+            {onClose && (
+              <button type="button" onClick={onClose} aria-label={`Close ${platformName} details`} style={{ width: 36, height: 36, borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: C.text, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}>
+                <Ico name="close" size={15} />
+              </button>
+            )}
+          </div>
         </div>
         <SplitView analytics={analytics} platformName={platformName} isPro={isPro} />
       </Glass>
@@ -2311,6 +1833,19 @@ export default function PlatformsIntelligence({
 @media (max-width: 900px) {
   .pl-root .pl-hero-grid {
     grid-template-columns: 1fr !important;
+    gap: 28px !important;
+  }
+
+  .pl-pulse {
+    padding: 28px 22px 24px !important;
+  }
+
+  .pl-rail-item {
+    padding: 0 18px !important;
+  }
+
+  .pl-rail-item:first-child {
+    padding-left: 0 !important;
   }
 
   .pl-platform-grid {
@@ -2335,6 +1870,17 @@ export default function PlatformsIntelligence({
 }
 
 @media (max-width: 600px) {
+  .pl-root .pl-rail-items {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 10px !important;
+  }
+
+  .pl-root .pl-rail-item {
+    border-left: none !important;
+    padding: 0 !important;
+  }
+
   .pl-root .pl-pulse-grid {
     grid-template-columns: 1fr !important;
   }
@@ -2435,7 +1981,7 @@ export default function PlatformsIntelligence({
 
           {active && (
             <div>
-              <PlatformDetail analytics={analytics} platformName={active} isPro={isPro} extras={extras[active]} onNavigate={onNavigate} detailRef={detailRef} />
+              <PlatformDetail analytics={analytics} platformName={active} isPro={isPro} extras={extras[active]} onNavigate={onNavigate} detailRef={detailRef} onClose={() => setSelectedPlatform(null)} />
             </div>
           )}
 
