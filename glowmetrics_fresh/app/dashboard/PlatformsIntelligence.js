@@ -18,6 +18,7 @@ import {
   buildNewFans,
   buildPlatformActivity,
   buildSinceLastVisit,
+  buildDailySeries,
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
@@ -524,10 +525,81 @@ function streamWhen(iso, tz) {
 }
 
 // ============================================
+// GLOW CHART — real daily earnings as a lit line
+// ============================================
+
+// Smooth path through points (monotone-ish Catmull-Rom -> cubic Bezier).
+function smoothPath(pts) {
+  if (pts.length < 2) return ''
+  let d = `M${pts[0][0]},${pts[0][1]}`
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C${c1x},${Math.max(0, c1y)} ${c2x},${Math.max(0, c2y)} ${p2[0]},${p2[1]}`
+  }
+  return d
+}
+
+let chartUid = 0
+function GlowChart({ values, color = C.teal, height = 180, strokeWidth = 2.5, pulse = true, fill = true }) {
+  const [id] = useState(() => `plg${++chartUid}`)
+  const W = 600, H = height, pad = 6
+  const max = Math.max(...values, 0.01)
+  const pts = values.map((v, i) => [values.length === 1 ? W / 2 : (i / (values.length - 1)) * W, H - pad - (v / max) * (H - pad * 2)])
+  const line = smoothPath(pts)
+  const last = pts[pts.length - 1]
+  return (
+    <div style={{ position: 'relative', width: '100%', height }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={height} style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {fill && <path d={`${line} L${W},${H} L0,${H} Z`} fill={`url(#${id}f)`} className="pl-fade" />}
+        <path d={line} fill="none" stroke={color} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" pathLength="1"
+          className="pl-draw" style={{ filter: `drop-shadow(0 0 6px ${color}) drop-shadow(0 0 14px ${color}88)` }} />
+      </svg>
+      {pulse && (
+        <span className="pl-ping" style={{
+          position: 'absolute', left: `calc(${(last[0] / W) * 100}% - 5px)`, top: last[1] - 5,
+          width: 10, height: 10, borderRadius: 5, background: color, boxShadow: `0 0 14px ${color}, 0 0 28px ${color}`,
+        }} />
+      )}
+    </div>
+  )
+}
+
+// One bar, split by platform: where the money comes from at a glance.
+function ShareBar3({ comparison }) {
+  const mounted = useMounted()
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 3, height: 8, borderRadius: 4, overflow: 'hidden' }}>
+        {comparison.filter(p => p.earningsPercent > 0).map(p => {
+          const a = accentFor(p.platform)
+          return <div key={p.platform} title={`${p.platform} ${p.earningsPercent}%`} style={{ width: mounted ? `${p.earningsPercent}%` : '0%', background: `linear-gradient(90deg, ${a}aa, ${a})`, boxShadow: `0 0 14px ${a}88`, borderRadius: 4, transition: 'width 1.1s cubic-bezier(.2,.8,.2,1)' }} />
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 10, fontSize: 12, color: C.muted }}>
+        {comparison.map(p => (
+          <span key={p.platform} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: accentFor(p.platform), boxShadow: `0 0 8px ${accentFor(p.platform)}` }} />
+            <span style={{ color: C.text }}>{p.platform}</span> {p.earningsPercent}%
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
 // 1 · PLATFORM PULSE
 // ============================================
 
-function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
+function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }) {
   const leader = comparison[0]
   const multi = comparison.length > 1
   const accent = accentFor(leader.platform)
@@ -543,7 +615,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
       <span aria-hidden className="pl-drift" style={{ position: 'absolute', left: -112, top: -128, width: 360, height: 360, borderRadius: '50%', background: 'rgba(34,211,238,0.14)', filter: 'blur(110px)', pointerEvents: 'none' }} />
       <span aria-hidden className="pl-drift pl-drift-b" style={{ position: 'absolute', right: 0, bottom: -128, width: 300, height: 300, borderRadius: '50%', background: 'rgba(217,70,239,0.10)', filter: 'blur(100px)', pointerEvents: 'none' }} />
 
-      <div className="pl-hero-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 40, alignItems: 'center' }}>
+      <div className="pl-hero-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: daily ? 'minmax(0,0.9fr) minmax(0,1.1fr)' : 'minmax(0,1fr) 300px', gap: 44, alignItems: 'center' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
@@ -570,7 +642,9 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
             )}
           </div>
 
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 24, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {multi && <div style={{ marginTop: 26 }}><ShareBar3 comparison={comparison} /></div>}
+
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 22, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span>{plural(snapshot.totalTips, 'tip')}</span><span>·</span>
             <span>{plural(snapshot.sessions, 'session')}</span><span>·</span>
             <span>{plural(comparison.length, 'platform')}</span>
@@ -588,7 +662,22 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
           )}
         </div>
 
-        {/* Latest stream: an inner translucent pane, not another card */}
+        {daily ? (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+              <span style={eyebrow}>Daily earnings · last 30 days</span>
+              {recap && (
+                <span style={{ fontSize: 13, color: C.text, whiteSpace: 'nowrap' }}>
+                  Latest stream <span style={{ color: C.teal, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>+{fmt$(recap.earned)}</span> on {recap.platform}
+                </span>
+              )}
+            </div>
+            <GlowChart values={daily.total} color={C.teal} height={190} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.muted, marginTop: 10, letterSpacing: '0.04em' }}>
+              <span>30 days ago</span><span>{fmtN(daily.activeDays)} earning days</span><span>Today</span>
+            </div>
+          </div>
+        ) : (
         <div style={{
           borderRadius: 16, padding: 20, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.035)',
           backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
@@ -613,6 +702,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   )
@@ -655,7 +745,7 @@ function LatestStream({ recap, tz, multi }) {
 // 3 · PLATFORM CARDS
 // ============================================
 
-function PlatformCard({ row, extras, badges, selected, onSelect, leading }) {
+function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark }) {
   const accent = accentFor(row.platform)
   const mounted = useMounted()
   const fresh = badges.includes('fresh')
@@ -683,9 +773,15 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading }) {
         <Counter value={row.earnings} />
       </div>
       <div style={{ fontSize: 13, color: C.text, marginTop: 8 }}>{row.earningsPercent}% of earnings</div>
-      <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 18 }}>
-        <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', borderRadius: 2, background: `linear-gradient(90deg, ${accent}99, ${accent})`, boxShadow: `0 0 12px ${accent}66`, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
-      </div>
+      {spark && spark.some(v => v > 0) ? (
+        <div style={{ marginTop: 16, marginLeft: -4, marginRight: -4 }}>
+          <GlowChart values={spark} color={accent} height={56} strokeWidth={2} pulse={leading} />
+        </div>
+      ) : (
+        <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 18 }}>
+          <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', borderRadius: 2, background: `linear-gradient(90deg, ${accent}99, ${accent})`, boxShadow: `0 0 12px ${accent}66`, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 18, fontSize: 13, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
         <span><span style={{ color: C.text }}>{fmtN(row.tips)}</span> tips</span>
@@ -1187,6 +1283,7 @@ export default function PlatformsIntelligence({
   const history = useMemo(() => (isPro ? buildPlatformMonthlyHistory(analytics, tz) : null), [analytics, isPro, tz])
   const newFans = useMemo(() => buildNewFans(analytics), [analytics])
   const activity = useMemo(() => buildPlatformActivity(analytics, { recap }), [analytics, recap])
+  const daily = useMemo(() => buildDailySeries(analytics, tz), [analytics, tz])
   const previousVisit = usePreviousVisit()
   const visit = useMemo(() => buildSinceLastVisit(analytics, previousVisit), [analytics, previousVisit])
   const freshPlatforms = useMemo(() => new Set((visit?.platforms || []).filter(p => p.usd > 0).map(p => p.platform)), [visit])
@@ -1228,7 +1325,14 @@ export default function PlatformsIntelligence({
         @keyframes plMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         .pl-marquee { animation: plMarquee 38s linear infinite; }
         .pl-ticker:hover .pl-marquee { animation-play-state: paused; }
+        @keyframes plDrawK { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+        .pl-draw { animation: plDrawK 1.6s cubic-bezier(.3,.7,.2,1) both; }
+        @keyframes plFadeK { from { opacity: 0; } to { opacity: 1; } }
+        .pl-fade { animation: plFadeK 1.4s .4s ease-out both; }
+        @keyframes plPingK { 0% { transform: scale(1); opacity: 1; } 70% { transform: scale(1.9); opacity: .35; } 100% { transform: scale(1); opacity: 1; } }
+        .pl-ping { animation: plPingK 2s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
+          .pl-draw, .pl-fade, .pl-ping { animation: none !important; }
           .pl-neon, .pl-bar, .pl-gradtext, .pl-drift, .pl-live, .pl-marquee { animation: none !important; }
           .pl-glow, .pl-chip, .pl-badge, .pl-dot { animation: none !important; }
           .pl-click, .pl-click:hover, .pl-brand, .pl-brand:hover { transition: none; transform: none; }
@@ -1267,7 +1371,7 @@ export default function PlatformsIntelligence({
       ) : (
         <>
           <SinceLastVisit visit={visit} tz={tz} />
-          <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} newFans={newFans} />
+          <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} newFans={newFans} daily={daily} />
           {!isPro && multi && (
             <div style={{ fontSize: 13, color: C.text, marginTop: -8, lineHeight: 1.55 }}>
               {fullHistoryPlatform && names.includes(fullHistoryPlatform)
@@ -1281,7 +1385,7 @@ export default function PlatformsIntelligence({
           <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
             {comparison.map(row => (
               <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
-                selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} />
+                selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} spark={daily?.byPlatform?.[row.platform]} />
             ))}
             {!multi && <ExpansionCard onImport={onImport} />}
           </div>

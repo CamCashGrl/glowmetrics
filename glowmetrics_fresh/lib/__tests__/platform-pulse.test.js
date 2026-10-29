@@ -3,7 +3,7 @@ import {
   buildPlatformComparison, buildPlatformExtras, buildLatestStreamRecap,
   buildPlatformStatuses, buildLearningState, buildCrossPlatformInsights,
   buildShareShift, buildCamCashNoticed,
-  buildPlatformMonthlyHistory, buildNewFans, buildPlatformActivity, buildSinceLastVisit,
+  buildPlatformMonthlyHistory, buildNewFans, buildPlatformActivity, buildSinceLastVisit, buildDailySeries,
 } from '../platformIntelligenceAnalytics'
 
 const TZ = 'America/New_York'
@@ -172,5 +172,20 @@ describe('Platform pulse derivations', () => {
     expect(buildSinceLastVisit(a, NaN, now)).toBeNull()
     expect(buildSinceLastVisit(a, now + 1000, now)).toBeNull()
     expect(buildSinceLastVisit(a, new Date('2026-10-05T00:00:00Z').getTime(), now)).toMatchObject({ totalUSD: 0, tips: 0, newFans: 0, platforms: [] })
+  })
+
+  it('daily series buckets by creator-local day and reconciles to the tips in the window', () => {
+    const tips = [
+      ...stream('Chaturbate', '2026-10-10T02:00:00Z', fans10('c'), 2), // Oct 9 evening in New York
+      ...stream('MyFreeCams', '2026-10-11T20:00:00Z', fans10('m'), 3),
+    ]
+    const a = aggregateRows(tips, TZ)
+    const now = new Date('2026-10-12T12:00:00Z').getTime()
+    const d = buildDailySeries(a, TZ, { days: 5, now })
+    expect(d.days).toEqual(['2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12'])
+    expect(d.total).toEqual([0, 20, 0, 30, 0])
+    expect(d.byPlatform.Chaturbate).toEqual([0, 20, 0, 0, 0])
+    expect(d.activeDays).toBe(2)
+    expect(buildDailySeries(a, TZ, { days: 5, now: new Date('2027-01-01T00:00:00Z').getTime() })).toBeNull()
   })
 })

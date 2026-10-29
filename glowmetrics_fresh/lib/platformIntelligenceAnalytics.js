@@ -647,6 +647,38 @@ export function buildSinceLastVisit(analytics, sinceMs, now = Date.now()) {
   }
 }
 
+// Daily earnings for the last `days` creator-local days, total and per
+// platform, from the engine's session tips. Days are keyed with the engine's
+// toLocalDateStr in the creator's timezone; days with no tips are real zeros.
+// Returns null when the window holds no earnings at all.
+export function buildDailySeries(analytics, tz, { days = 30, now = Date.now() } = {}) {
+  const keys = []
+  for (let i = days - 1; i >= 0; i--) keys.push(toLocalDateStr(new Date(now - i * 86400000).toISOString(), tz))
+  const uniq = [...new Set(keys)]
+  const index = new Map(uniq.map((k, i) => [k, i]))
+  const total = uniq.map(() => 0)
+  const byPlatform = {}
+  let any = false
+  for (const s of analytics?.allValidSessions || []) {
+    for (const t of s.tips || []) {
+      const i = index.get(toLocalDateStr(t.dateRaw || t.date_time, tz))
+      if (i === undefined) continue
+      const usd = t.usd || 0
+      total[i] += usd
+      ;(byPlatform[s.platform] ||= uniq.map(() => 0))[i] += usd
+      if (usd > 0) any = true
+    }
+  }
+  if (!any) return null
+  const r = (arr) => arr.map(round2)
+  return {
+    days: uniq,
+    total: r(total),
+    byPlatform: Object.fromEntries(Object.entries(byPlatform).map(([p, a]) => [p, r(a)])),
+    activeDays: total.filter(v => v > 0).length,
+  }
+}
+
 // =============================================
 // HELPERS
 // =============================================
