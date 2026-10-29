@@ -17,7 +17,7 @@
 //     two platforms stays two people.
 // ============================================
 
-import { calculateConfidence, fanKey } from './analytics'
+import { calculateConfidence, fanKey, toLocalDateStr } from './analytics'
 
 const round2 = (n) => parseFloat((n || 0).toFixed(2))
 const pct = (part, whole) => whole > 0 ? Math.round((part / whole) * 100) : 0
@@ -522,6 +522,95 @@ export function buildShareShift(analytics) {
     .map(r => ({ ...r, lastPct: pct(r.last, lastTotal), priorPct: pct(r.prior, priorTotal) }))
     .map(r => ({ ...r, shiftPts: r.lastPct - r.priorPct }))
     .sort((a, b) => b.lastPct - a.lastPct)
+}
+
+// Platform revenue by calendar month in the creator's timezone, from the
+// engine's own session partition (which holds every tip it was given, so the
+// months sum to the platform rows). Months are bucketed with the engine's
+// toLocalDateStr — never UTC. Returned only when there are 2+ months.
+export function buildPlatformMonthlyHistory(analytics, tz) {
+  const months = {}
+  for (const s of analytics?.allValidSessions || []) {
+    for (const t of s.tips || []) {
+      const key = toLocalDateStr(t.dateRaw || t.date_time, tz).slice(0, 7)
+      ;(months[key] ||= {})[s.platform] = (months[key][s.platform] || 0) + (t.usd || 0)
+    }
+  }
+  const keys = Object.keys(months).sort()
+  if (keys.length < 2) return null
+  return keys.map(month => {
+    const byPlatform = months[month]
+    const total = Object.values(byPlatform).reduce((a, b) => a + b, 0)
+    return {
+      month,
+      total: round2(total),
+      platforms: Object.entries(byPlatform)
+        .map(([platform, usd]) => ({ platform, usd: round2(usd), pct: pct(usd, total) }))
+        .sort((a, b) => b.usd - a.usd),
+    }
+  })
+}
+
+// Fans whose first recorded tip falls in the last `days` days, per platform.
+// Read from the engine's whales list (firstTipDate, platform + username).
+export function buildNewFans(analytics, { now = Date.now(), days = 7 } = {}) {
+  const since = now - days * 86400000
+  const byPlatform = {}
+  let total = 0
+  for (const w of analytics?.whales || []) {
+    const first = new Date(w.firstTipDate).getTime()
+    if (!isNaN(first) && first >= since && first <= now) {
+      byPlatform[w.platform] = (byPlatform[w.platform] || 0) + 1
+      total += 1
+    }
+  }
+  return { total, byPlatform, days }
+}
+
+// Platform activity feed: only real, dated events.
+//   - earnings per platform in the last 24 hours (tip timestamps)
+//   - new fans per platform in the last 7 days (first tip)
+//   - the latest stream's top returning fan, by name
+//   - the latest stream's revenue-share movement
+export function buildPlatformActivity(analytics, { now = Date.now(), recap = buildLatestStreamRecap(analytics) } = {}) {
+  const items = []
+  const dayAgo = now - 86400000
+  const last24 = {}
+  for (const s of analytics?.allValidSessions || []) {
+    for (const t of s.tips || []) {
+      const ts = new Date(t.dateRaw || t.date_time).getTime()
+      if (ts >= dayAgo && ts <= now) last24[s.platform] = (last24[s.platform] || 0) + (t.usd || 0)
+    }
+  }
+  Object.entries(last24).sort((a, b) => b[1] - a[1]).forEach(([platform, usd]) => {
+    if (usd > 0) items.push({ kind: 'earned24h', platform, text: `${platform} +$${usd.toFixed(2)}`, sub: 'last 24 hours' })
+  })
+
+  const fresh = buildNewFans(analytics, { now })
+  Object.entries(fresh.byPlatform).sort((a, b) => b[1] - a[1]).forEach(([platform, n]) => {
+    items.push({ kind: 'newFans', platform, text: `${n} new ${platform} ${n === 1 ? 'spender' : 'spenders'}`, sub: 'first tip this week' })
+  })
+
+  if (recap && recap.returningFans) {
+    const meaningful = analytics?.meaningfulSessions || []
+    const latest = meaningful.find(s => s.endTime === recap.endTime && s.platform === recap.platform)
+    const earlier = new Set()
+    for (const s of analytics?.allValidSessions || []) {
+      if (new Date(s.endTime) < new Date(recap.startTime)) for (const t of s.tips || []) earlier.add(fanKey(s.platform, t.username))
+    }
+    const spend = {}
+    for (const t of latest?.tips || []) {
+      const k = fanKey(recap.platform, t.username)
+      if (earlier.has(k)) spend[t.username] = (spend[t.username] || 0) + (t.usd || 0)
+    }
+    const top = Object.entries(spend).sort((a, b) => b[1] - a[1])[0]
+    if (top) items.push({ kind: 'returning', platform: recap.platform, text: `${top[0]} tipped again`, sub: `$${top[1].toFixed(2)} on ${recap.platform}` })
+  }
+
+  if (recap && recap.shareShiftPts) {
+    items.push({ kind: 'share', platform: recap.platform, text: `${recap.platform} ${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts}% revenue share`, sub: 'after your latest stream' })
+  }
+  return items
 }
 
 // =============================================

@@ -14,6 +14,9 @@ import {
   buildLearningState,
   buildCrossPlatformInsights,
   buildShareShift,
+  buildPlatformMonthlyHistory,
+  buildNewFans,
+  buildPlatformActivity,
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
@@ -507,7 +510,7 @@ function streamWhen(iso, tz) {
 // 1 · PLATFORM PULSE
 // ============================================
 
-function PlatformPulse({ comparison, snapshot, recap, learning }) {
+function PlatformPulse({ comparison, snapshot, recap, learning, newFans }) {
   const leader = comparison[0]
   const multi = comparison.length > 1
   return (
@@ -531,6 +534,11 @@ function PlatformPulse({ comparison, snapshot, recap, learning }) {
             <span style={{ fontSize: 13, color: C.text }}>
               <strong style={{ color: C.white }}>{plural(snapshot.totalTips, 'tip')}</strong> across {plural(comparison.length, 'platform')} · {plural(snapshot.sessions, 'meaningful session')}
             </span>
+            {newFans?.total > 0 && (
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.cyan, background: 'rgba(34,211,238,0.10)', border: '1px solid rgba(34,211,238,0.28)', padding: '5px 12px', borderRadius: 20 }}>
+                {plural(newFans.total, 'new fan')} this week
+              </span>
+            )}
           </div>
           <div style={{ marginTop: 22 }}>
             <div style={eyebrow}>Total platform earnings</div>
@@ -600,7 +608,7 @@ function LatestStream({ recap, tz, multi }) {
         <Chip icon="✨" title="New spenders"
           value={recap.newSpenders === null ? '—' : plural(recap.newSpenders, 'spender')}
           sub={recap.newSpenders === null ? 'Needs an earlier stream' : 'tipped for the first time'} accent={recap.newSpenders ? C.pink : C.muted} />
-        {multi && recap.shareShiftPts !== null ? (
+        {multi && recap.shareShiftPts ? (
           <Chip icon="📊" title="Revenue share" value={`${recap.shareShiftPts > 0 ? '+' : ''}${recap.shareShiftPts} pts`}
             sub={recap.tookLead ? `${recap.platform} moved into the lead` : `${recap.platform} after this stream`} accent={recap.shareShiftPts > 0 ? C.green : C.blue} />
         ) : dur ? (
@@ -678,6 +686,93 @@ function ExpansionCard({ onImport }) {
       {onImport && (
         <div><BrandButton onClick={onImport}>Import another platform →</BrandButton></div>
       )}
+    </Glass>
+  )
+}
+
+// Lightweight, platform-only activity feed. Every item is a dated event from
+// buildPlatformActivity; nothing is shown when nothing happened.
+const ACTIVITY_ICON = { earned24h: '💸', newFans: '✨', returning: '🔁', share: '📊' }
+function ActivityFeed({ items }) {
+  if (!items.length) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ ...eyebrow, color: C.cyan, marginRight: 4 }}>Just updated</span>
+      {items.slice(0, 6).map((it, i) => (
+        <span key={i} className="pl-chip" title={it.sub} style={{
+          animationDelay: `${i * 60}ms`, display: 'inline-flex', alignItems: 'center', gap: 7,
+          fontSize: 13, color: C.white, padding: '7px 12px', borderRadius: 999,
+          background: `${accentFor(it.platform)}12`, border: `1px solid ${accentFor(it.platform)}40`, maxWidth: '100%',
+        }}>
+          <span>{ACTIVITY_ICON[it.kind]}</span>
+          <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{it.text}</span>
+          <span style={{ color: C.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{it.sub}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// Free: the side-by-side comparison is Pro. The anchor column (primary
+// platform, else the top earner) shows its real figures; the rest are locked.
+function ComparisonTeaser({ comparison, anchor, onUpgrade }) {
+  const a = comparison.find(p => p.platform === anchor) || comparison[0]
+  const others = comparison.filter(p => p.platform !== a.platform)
+  return (
+    <Glass>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+          <Label>Cross-platform comparison <ProTag /></Label>
+          <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 15 }}>
+              <span style={{ color: C.white, fontWeight: 700, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><PlatformCell platform={a.platform} /></span>
+              <span style={{ color: C.white, fontWeight: 800, whiteSpace: 'nowrap' }}>{fmt$(a.earnings)}{a.usdPerHour > 0 && a.rateHours > 0 ? <span style={{ color: C.text, fontWeight: 600 }}> · {fmt$(a.usdPerHour)}/hr</span> : null}</span>
+            </div>
+            {others.map(p => (
+              <div key={p.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 15 }}>
+                <span style={{ color: C.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><PlatformCell platform={p.platform} /></span>
+                <span style={{ color: C.gold, fontWeight: 700, whiteSpace: 'nowrap' }}>🔒 Pro</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <div style={{ fontSize: 14, color: C.text, lineHeight: 1.6 }}>
+            See which platform earns you more per hour, attracts higher-value fans, and is gaining momentum, side by side.
+          </div>
+          <div style={{ marginTop: 14 }}><UpgradeLink onUpgrade={onUpgrade} source="platforms_comparison">Unlock platform comparison</UpgradeLink></div>
+        </div>
+      </div>
+    </Glass>
+  )
+}
+
+// Pro, 2+ months: how the platform split moved month by month.
+function MonthlyHistory({ months, platforms }) {
+  const mounted = useMounted()
+  const fmtMonth = (m) => { const [y, mo] = m.split('-'); return new Date(Date.UTC(+y, +mo - 1, 15)).toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }) }
+  const shown = months.slice(-12)
+  return (
+    <Glass>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <Label>Platform history <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>· revenue split by month</span></Label>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {platforms.map(p => <span key={p} style={{ fontSize: 12, color: C.text }}><PlatformCell platform={p} /></span>)}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gap: 9 }}>
+        {shown.map(m => (
+          <div key={m.month} style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) 92px', gap: 12, alignItems: 'center', fontSize: 13 }}>
+            <span style={{ color: C.text }}>{fmtMonth(m.month)}</span>
+            <div style={{ display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+              {[...m.platforms].sort((x, y) => platforms.indexOf(x.platform) - platforms.indexOf(y.platform)).map(p => (
+                <div key={p.platform} title={`${p.platform}: ${fmt$(p.usd)} (${p.pct}%)`} style={{ width: mounted ? `${p.pct}%` : 0, background: accentFor(p.platform), transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
+              ))}
+            </div>
+            <span style={{ color: C.white, fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt$0(m.total)}</span>
+          </div>
+        ))}
+      </div>
     </Glass>
   )
 }
@@ -848,8 +943,8 @@ function HistoryTeaser({ hiddenTipCount, onUpgrade }) {
           </div>
           <div style={{ fontSize: 12, color: C.text, marginTop: 4, lineHeight: 1.5 }}>
             {hiddenTipCount > 0
-              ? `${fmtN(hiddenTipCount)} of your older tips sit outside the free 31-day window. Pro compares each platform's share and momentum across your full history.`
-              : 'Pro compares each platform’s revenue share and momentum month over month, across your full history.'}
+              ? `${fmtN(hiddenTipCount)} of your older tips sit outside the free 31-day window. They're saved, so it's all there when you upgrade: Pro shows each platform's share and momentum across your full history.`
+              : 'Pro shows how your revenue split moves month by month across every platform you stream on, with momentum for each.'}
           </div>
         </div>
         <UpgradeLink onUpgrade={onUpgrade} source="platforms_history">Unlock platform history</UpgradeLink>
@@ -955,6 +1050,9 @@ export default function PlatformsIntelligence({
   const noticed = useMemo(() => buildCamCashNoticed(analytics), [analytics])
   const cross = useMemo(() => buildCrossPlatformInsights(analytics), [analytics])
   const shift = useMemo(() => (isPro ? buildShareShift(analytics) : null), [analytics, isPro])
+  const history = useMemo(() => (isPro ? buildPlatformMonthlyHistory(analytics, tz) : null), [analytics, isPro, tz])
+  const newFans = useMemo(() => buildNewFans(analytics), [analytics])
+  const activity = useMemo(() => buildPlatformActivity(analytics, { recap }), [analytics, recap])
 
   const names = comparison.map(p => p.platform)
   const active = names.includes(selectedPlatform) ? selectedPlatform : null
@@ -985,9 +1083,7 @@ export default function PlatformsIntelligence({
         .pl-dot { animation: plDot 2.4s ease-in-out 3; }
         @media (prefers-reduced-motion: reduce) {
           .pl-glow, .pl-chip, .pl-badge, .pl-dot { animation: none !important; }
-          .pl-click, .pl-brand:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124,92,255,0.45) !important; }
-        .pl-brand { transition: transform .15s, box-shadow .15s; }
-        .pl-click:hover { transition: none; transform: none; }
+          .pl-click, .pl-click:hover, .pl-brand, .pl-brand:hover { transition: none; transform: none; }
         }
         @media (max-width: 1000px) {
           .pl-root .pl-pulse-grid { grid-template-columns: 1fr 1fr !important; }
@@ -1019,15 +1115,16 @@ export default function PlatformsIntelligence({
         <LearningPanel learning={learning} onImport={onImport} />
       ) : (
         <>
-          <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} />
+          <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} newFans={newFans} />
           {!isPro && multi && (
-            <div style={{ fontSize: 12.5, color: C.text, marginTop: -10 }}>
+            <div style={{ fontSize: 13, color: C.text, marginTop: -8, lineHeight: 1.55 }}>
               {fullHistoryPlatform && names.includes(fullHistoryPlatform)
-                ? <>Free plan: <span style={{ color: C.white }}>{fullHistoryPlatform}</span> (your primary) includes its full history; other platforms show their latest 31 days, so shares compare different spans.</>
+                ? <>Free plan: <strong style={{ color: C.white }}>{fullHistoryPlatform}</strong> (your primary) includes its full history; other platforms show their latest 31 days, so shares compare different spans.</>
                 : <>Free plan: each platform shows its latest 31 days of activity.</>}
             </div>
           )}
           <LatestStream recap={recap} tz={tz} multi={multi} />
+          <ActivityFeed items={activity} />
 
           <div className="pl-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
             {comparison.map(row => (
@@ -1050,14 +1147,15 @@ export default function PlatformsIntelligence({
 
           {multi && (
             <div>
-              <Comparison comparison={comparison} extras={extras} />
+              {isPro
+                ? <Comparison comparison={comparison} extras={extras} />
+                : <ComparisonTeaser comparison={comparison} anchor={fullHistoryPlatform} onUpgrade={onUpgrade} />}
             </div>
           )}
 
-          {multi && (isPro
-            ? (shift && <div><ShareShift shift={shift} /></div>)
-            : <div><HistoryTeaser hiddenTipCount={hiddenTipCount} onUpgrade={onUpgrade} /></div>
-          )}
+          {isPro && multi && shift && <div><ShareShift shift={shift} /></div>}
+          {isPro && history && <div><MonthlyHistory months={history} platforms={names} /></div>}
+          {!isPro && (multi || hiddenTipCount > 0) && <div><HistoryTeaser hiddenTipCount={hiddenTipCount} onUpgrade={onUpgrade} /></div>}
 
           <Glass>
             <Label style={{ marginBottom: 14 }}>⚡ Your next best move</Label>

@@ -3,6 +3,7 @@ import {
   buildPlatformComparison, buildPlatformExtras, buildLatestStreamRecap,
   buildPlatformStatuses, buildLearningState, buildCrossPlatformInsights,
   buildShareShift, buildCamCashNoticed,
+  buildPlatformMonthlyHistory, buildNewFans, buildPlatformActivity,
 } from '../platformIntelligenceAnalytics'
 
 const TZ = 'America/New_York'
@@ -97,5 +98,52 @@ describe('Platform pulse derivations', () => {
     const a = aggregateRows(singles, TZ)
     expect(buildPlatformComparison(a)[0].hours).toBe(0)
     expect(buildCamCashNoticed(a).some(n => /0% of your streaming hours/.test(n.text))).toBe(false)
+  })
+
+  it('groups monthly history in the creator timezone and reconciles to platform rows', () => {
+    // 2026-10-01T02:00Z is still September 30 in New York.
+    const tips = [
+      ...stream('Chaturbate', '2026-10-01T02:00:00Z', fans10('c'), 3),
+      ...stream('MyFreeCams', '2026-10-10T20:00:00Z', fans10('m'), 2),
+    ]
+    const a = aggregateRows(tips, TZ)
+    const h = buildPlatformMonthlyHistory(a, TZ)
+    expect(h.map(m => m.month)).toEqual(['2026-09', '2026-10'])
+    expect(h[0].platforms).toEqual([{ platform: 'Chaturbate', usd: 30, pct: 100 }])
+    const sum = h.reduce((s, m) => s + m.total, 0)
+    expect(sum).toBeCloseTo(a.platforms.reduce((s, p) => s + p.totalUSD, 0), 2)
+    // Read on UTC both streams fall in October, so there is only one month.
+    expect(buildPlatformMonthlyHistory(a, 'UTC')).toBeNull()
+  })
+
+  it('returns no monthly history with fewer than two months', () => {
+    const a = aggregateRows(stream('Chaturbate', '2026-10-05T20:00:00Z', fans10('c'), 3), TZ)
+    expect(buildPlatformMonthlyHistory(a, TZ)).toBeNull()
+  })
+
+  it('counts new fans only inside the window, per platform', () => {
+    const now = new Date('2026-10-20T00:00:00Z').getTime()
+    const tips = [
+      ...stream('Chaturbate', '2026-10-01T20:00:00Z', fans10('old'), 2),
+      ...stream('Chaturbate', '2026-10-17T20:00:00Z', ['old0', 'old1', 'n1', 'n2'], 2),
+      ...stream('MyFreeCams', '2026-10-18T20:00:00Z', ['m1', 'm2'], 2),
+    ]
+    const nf = buildNewFans(aggregateRows(tips, TZ), { now })
+    expect(nf.total).toBe(4)
+    expect(nf.byPlatform).toEqual({ Chaturbate: 2, MyFreeCams: 2 })
+  })
+
+  it('activity feed lists only dated events and is empty when nothing happened', () => {
+    const tips = [
+      ...stream('Chaturbate', '2026-10-01T20:00:00Z', fans10('c'), 2),
+      ...stream('Chaturbate', '2026-10-19T20:00:00Z', ['c0', 'c0', 'c1', 'c2', 'c0', 'c1', 'c2', 'c1'], 5), // 35 min: a meaningful stream
+    ]
+    const a = aggregateRows(tips, TZ)
+    const later = new Date('2026-12-30T00:00:00Z').getTime()
+    expect(buildPlatformActivity(a, { now: later }).filter(i => i.kind !== 'returning' && i.kind !== 'share')).toEqual([])
+    const now = new Date('2026-10-20T00:00:00Z').getTime()
+    const items = buildPlatformActivity(a, { now })
+    expect(items.find(i => i.kind === 'earned24h')).toMatchObject({ platform: 'Chaturbate', text: 'Chaturbate +$40.00' })
+    expect(items.find(i => i.kind === 'returning').text).toBe('c0 tipped again')
   })
 })
