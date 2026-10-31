@@ -13,6 +13,7 @@ export default function sitemap() {
     { url: `${base}/tools`,                          priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/cam-model-name-generator`, priority: 0.7, changeFrequency: 'monthly' },
     { url: `${base}/tools/profile-studio`,           priority: 0.7, changeFrequency: 'monthly' },
+    { url: `${base}/shop`,                           priority: 0.6, changeFrequency: 'monthly' },
     { url: `${base}/contact`,                        priority: 0.6, changeFrequency: 'monthly' },
     { url: `${base}/privacy`,                        priority: 0.5, changeFrequency: 'yearly' },
     { url: `${base}/terms`,                          priority: 0.5, changeFrequency: 'yearly' },
@@ -50,6 +51,8 @@ export default function sitemap() {
     'cam-room-dice-game-pack',
     'cam-room-dice-game-ideas',
     'what-to-do-when-cam-room-is-slow',
+    'why-is-my-camera-black-on-chaturbate-obs',
+    'psychology-marketing-cam-101',
     'cam-session-scripts-for-models',
     'chaturbate-earnings-growth-bundle',
     'chaturbate-earnings-tracker',
@@ -82,6 +85,7 @@ export default function sitemap() {
     'how-to-make-money-on-chaturbate',
     'how-to-make-more-money-on-chaturbate',
     'how-to-pick-a-cam-name',
+    'how-to-set-up-chat-bots-on-chaturbate',
     'how-to-re-engage-whales-and-high-tipping-fans',
     'how-to-stay-safe-as-a-cam-model',
     'how-to-track-cam-tips-automatically',
@@ -101,6 +105,18 @@ export default function sitemap() {
     'why-cam-model-data-prevents-overspending',
     'why-cam-streams-arent-making-money',
     'why-youre-not-making-money-on-chaturbate',
+
+    // Lovense / VibeMate feature cluster (Oct 2026)
+    'manage-profitable-lovense-cam-show',
+    'vibemate-for-cam-models',
+    'lovense-co-streaming-cam-models',
+    'lovense-control-me-cam-models',
+    'lovense-traffic-boost-more-views',
+    'lovense-obs-panel-more-tips',
+    'lovense-tip-levels-token-amounts',
+    'vibemate-video-spotlight-previews',
+    'lovense-control-link-give-control',
+    'lovense-vibe-with-me',
   ]
 
   const guideSlugs = [

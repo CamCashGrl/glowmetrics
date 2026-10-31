@@ -8,6 +8,56 @@ export const metadata = {
 
 const posts = [
   {
+    slug: "manage-profitable-lovense-cam-show",
+    title: "How to Manage a Profitable Lovense Cam Show From Start to Finish",
+    description: "A complete Lovense cam-show playbook: pre-show setup, room goals, traffic, co-streaming, Control Me, tip menus, show pacing and post-stream analytics.",
+  },
+  {
+    slug: "vibemate-for-cam-models",
+    title: "VibeMate for Cam Models: How to Turn More Views Into More Money",
+    description: "Learn how cam models can use VibeMate traffic, follows, interactive features and smart show structure to turn extra exposure into tips and repeat fans.",
+  },
+  {
+    slug: "lovense-co-streaming-cam-models",
+    title: "Lovense Co-Streaming for Cam Models: How to Make the Collaboration Profitable",
+    description: "A money-first guide to Lovense Co-Streaming: partner selection, audience exchange, shared goals, fan conversion and the metrics cam models should track.",
+  },
+  {
+    slug: "lovense-control-me-cam-models",
+    title: "Lovense Control Me for Cam Models: Pricing the New Feature for Profit",
+    description: "Learn how Lovense Control Me works and how cam models can price, position and measure timed viewer-toy control without underpricing their attention.",
+  },
+  {
+    slug: "lovense-traffic-boost-more-views",
+    title: "Lovense Traffic Boosts & Promotions: How to Make Extra Views Actually Pay",
+    description: "Getting a Lovense traffic boost is only half the job. Learn how to prepare your room, convert new viewers into tippers and measure whether the promotion made money.",
+  },
+  {
+    slug: "lovense-obs-panel-more-tips",
+    title: "Lovense OBS Panel: Why Clear Tip Rules Can Make a Cam Room More Profitable",
+    description: "Learn how to use the Lovense OBS Panel to make tip triggers, goals and interactive options obvious—and how to test whether that clarity improves earnings.",
+  },
+  {
+    slug: "lovense-tip-levels-token-amounts",
+    title: "Lovense Tip Levels: How to Set Token Amounts for a More Profitable Menu",
+    description: "Build a smarter Lovense tip menu using entry offers, repeatable core actions, premium anchors and real revenue-per-hour data instead of copying random token prices.",
+  },
+  {
+    slug: "vibemate-video-spotlight-previews",
+    title: "VibeMate Video Spotlight & Previews: Get More Clicks Without Attracting Only Freeloaders",
+    description: "Use VibeMate Video Spotlight and previews as conversion tools—not vanity traffic. Learn what to show, what to test and which numbers matter after the click.",
+  },
+  {
+    slug: "lovense-control-link-give-control",
+    title: "Lovense Control Link & Give Control: Turn Viewer Participation Into Premium Revenue",
+    description: "Learn how Control Link and Give Control can turn passive viewers into paying participants—and how to price control sessions without giving away premium attention.",
+  },
+  {
+    slug: "lovense-vibe-with-me",
+    title: "Lovense Vibe With Me: How Models Can Turn Connected Viewers Into Better Customers",
+    description: "Learn how Vibe With Me can increase interaction by letting viewers feel tip-triggered vibrations—and how to use it for retention, upsells and affiliate revenue.",
+  },
+  {
     slug: 'chaturbate-earnings-tracker',
     title: 'Chaturbate Earnings Tracker for Cam Models',
     description: 'Track Chaturbate earnings, tips, hours, and performance patterns with a structured workbook.',

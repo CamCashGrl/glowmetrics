@@ -1,0 +1,17 @@
+# Test and Protected Accounts
+
+NO PASSWORDS IN THIS REPO. Keep passwords in a password manager, or as environment secrets if a session must log in.
+
+## Protected: real streaming data. Never delete, never change tip data
+- polefreaktrial@gmail.com
+- polefreaktrial2@gmail.com
+
+## Test accounts: never count as real signups
+- daphneoncam+test@gmail.com
+- daphneoncam+test678@gmail.com
+- daphneoncam+123@gmail.com
+- every `daphneoncam+test…` variant
+
+## Test CSV files
+Synthetic, anonymized import files for 20 scenarios: `glowmetrics_fresh/test-data/csv-scenarios/` (see its README).
+Never use or copy the protected real files: `bongacams_merged.csv`, `mfc_merged.csv`, `chaturbate_merged.csv`.
