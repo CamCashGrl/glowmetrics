@@ -123,6 +123,18 @@ const nextConfig = {
         destination: '/guides/chaturbate-best-hours',
         statusCode: 301,
       },
+      {
+        // Misspelled URL still indexed by Google (GSC, Oct 2026) — was a 404
+        source: '/blog/bongacams-camscore-exsplained',
+        destination: '/blog/bongacams-camscore-explained',
+        permanent: true,
+      },
+      {
+        // Retired URL still indexed by Google (GSC, Oct 2026) — was a 404
+        source: '/features/cam-earnings-analyzer',
+        destination: '/guides/cam-model-analytics',
+        permanent: true,
+      },
 {
         source: '/blog/how-to-get-veiws-on-chaturbate',
         destination: '/blog/how-to-get-views-on-chaturbate',
