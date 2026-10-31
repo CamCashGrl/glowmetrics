@@ -94,7 +94,7 @@ test('primary success goes to the trial with no secondary-platform step; complet
 
   fireEvent.click(screen.getByRole('button', { name: /^Continue to Options →$/ }))
   expect(await screen.findByTestId('step5-trial')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Download CamCash Extension/ })).toHaveAttribute('href', '/camcash-extension.zip')
+  expect(screen.getByRole('button', { name: 'Start my 7-day Pro trial →' })).toBeEnabled()
   expect(screen.getByRole('button', { name: /Start my 7-day Pro trial/ })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Continue with Free/ })).toBeInTheDocument()
   expect(screen.queryByText(/Whales/)).not.toBeInTheDocument()
