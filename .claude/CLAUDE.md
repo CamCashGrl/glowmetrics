@@ -8,7 +8,7 @@ This file loads the rule files inside it at the start of every session:
 
 ## Times
 - Never report times in UTC alone. Use the owner's local time zone.
-- If the time zone is not known yet, ask once, then record it here.
+- Owner time zone: Pacific (America/Los_Angeles; PST/PDT). Show all times in Pacific.
 
 ## More rule files (loaded automatically)
 @../CLAUDE.md/brand-voice
