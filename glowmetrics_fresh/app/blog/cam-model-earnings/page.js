@@ -478,7 +478,7 @@ export default function CamModelEarnings() {
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
           <a href="/guides/cam-model-income-tracker" style={s.relLink}>→ Cam model income tracker</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/chaturbate-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/blog/why-cam-income-is-inconsistent" style={s.relLink}>→ Why cam income is inconsistent</a>
         </div>
       </div>

@@ -542,7 +542,7 @@ export default function ChaturbateEarningsTrackerPage() {
             </p>
             <div style={{ padding: "16px 20px", borderRadius: 12, background: "rgba(124,92,255,0.07)", border: "1px solid rgba(124,92,255,0.2)", marginBottom: 16 }}>
               <p style={{ ...s.p, marginBottom: 0, fontSize: 14 }}>
-                📖 For a full breakdown of platform peak hours, day-of-week patterns, and how to find your personal best times, see the complete guide: <a href="/guides/chaturbate-best-hours" style={{ color: "#a78bfa", fontWeight: 600 }}>Best Time to Stream on Chaturbate</a>
+                📖 For a full breakdown of platform peak hours, day-of-week patterns, and how to find your personal best times, see the complete guide: <a href="/guides/chaturbate-hours" style={{ color: "#a78bfa", fontWeight: 600 }}>Best Time to Stream on Chaturbate</a>
               </p>
             </div>
           </section>
@@ -678,7 +678,7 @@ export default function ChaturbateEarningsTrackerPage() {
                 { href: "/guides/cam-model-analytics",               label: "Cam Model Analytics Dashboard" },
                 { href: "/guides/how-to-increase-cam-tips",          label: "How to Increase Cam Tips" },
                 { href: "/guides/bongacams-analytics",               label: "BongaCams Analytics" },
-                { href: "/guides/chaturbate-best-hours", label: "Best Time to Stream on Chaturbate" },
+                { href: "/guides/chaturbate-hours", label: "Best Time to Stream on Chaturbate" },
                 { href: "/guides/chaturbate-token-calculator",       label: "Token Calculator" },
                 { href: "/guides/cam-model-income-tracker",          label: "Cam Model Income Tracker" },
                 { href: "/blog/how-much-do-chaturbate-models-make",  label: "How Much Do Chaturbate Models Make?" },

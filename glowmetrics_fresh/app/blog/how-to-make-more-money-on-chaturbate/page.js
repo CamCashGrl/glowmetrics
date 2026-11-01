@@ -487,7 +487,7 @@ export default function MakeMoreOnChaturbate() {
             <a href="/blog/why-cam-streams-arent-making-money" style={s.relatedLink}>
               Why Streams Underperform
             </a>
-            <a href="/guides/chaturbate-best-hours" style={s.relatedLink}>
+            <a href="/guides/chaturbate-hours" style={s.relatedLink}>
               Best Hours to Stream
             </a>
           </div>

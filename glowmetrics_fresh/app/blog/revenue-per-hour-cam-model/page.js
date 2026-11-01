@@ -361,7 +361,7 @@ export default function RevenuePerHourPage() {
         One creator may earn best on Friday nights. Another may earn best on Tuesday afternoons because her biggest tipper logs on during lunch. That is why your own earnings history is more valuable than any generic advice.
       </p>
       <p style={s.p}>
-        See the full breakdown: <a href="/guides/chaturbate-best-hours" style={s.iLink}>Best Time to Stream on Chaturbate →</a>
+        See the full breakdown: <a href="/guides/chaturbate-hours" style={s.iLink}>Best Time to Stream on Chaturbate →</a>
       </p>
 
       {/* ── WHALE FANS ─────────────────────────────────── */}
@@ -489,7 +489,7 @@ export default function RevenuePerHourPage() {
         <div style={s.relGrid}>
           {[
             { href: '/guides/cam-model-token-calculator', label: 'Cam Model Token Calculator', desc: 'Convert tokens to USD across platforms' },
-            { href: '/guides/chaturbate-best-hours', label: 'Best Time to Stream on Chaturbate', desc: 'Find your personal peak earning hours' },
+            { href: '/guides/chaturbate-hours', label: 'Best Time to Stream on Chaturbate', desc: 'Find your personal peak earning hours' },
             { href: '/guides/chaturbate-earnings-tracker',    label: 'Chaturbate Earnings Tracker',       desc: 'Full history analysis from your CSV' },
             { href: '/guides/cam-model-top-tippers',          label: 'Top Tipper Tracker',                desc: 'Whale detection and fan analytics' },
             { href: '/guides/cam-model-session-breakdown',    label: 'Session Breakdown',                 desc: 'Per-session revenue deep dive' },

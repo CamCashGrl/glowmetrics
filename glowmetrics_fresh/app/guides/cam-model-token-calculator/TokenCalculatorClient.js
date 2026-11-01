@@ -305,7 +305,7 @@ export default function TokenCalculatorClient() {
       <SectionLabel color={C.cyan}>Helpful Guides</SectionLabel>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
         {[
-          { icon: '📈', title: 'Best Times to Cam', desc: 'Find your highest earning hours based on data.', href: '/guides/chaturbate-best-hours' },
+          { icon: '📈', title: 'Best Times to Cam', desc: 'Find your highest earning hours based on data.', href: '/guides/chaturbate-hours' },
           { icon: '🎮', title: 'Live Mode Coaching', desc: 'Get real-time coaching alerts while you stream.', href: '/dashboard?tab=live' },
           { icon: '🪙', title: "Why Streams Aren't Making Money", desc: 'Fix the most common income leaks.', href: '/blog/why-youre-not-making-money-on-chaturbate' },
         ].map(g => (

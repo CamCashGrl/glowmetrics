@@ -1406,7 +1406,7 @@ export default function LandingPage() {
               {[
                 ["BongaCams Analytics", "/guides/bongacams-analytics"],
                 ["MyFreeCams Analytics", "/guides/myfreecams-analytics"],
-                ["Best Time to Stream", "/guides/chaturbate-best-hours"],
+                ["Best Time to Stream", "/guides/chaturbate-hours"],
                 ["All Guides →", "/guides"],
               ].map(([label, href]) => (
                 <a key={href} href={href} style={{ display: "block", fontSize: 13, lineHeight: 1.6, marginBottom: 6, color: T.textMuted, textDecoration: "none" }}

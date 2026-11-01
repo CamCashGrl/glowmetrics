@@ -194,7 +194,7 @@ export default function HowToIncreaseCamEarnings() {
             <div style={s.toolN}>Earnings Tracker</div>
             <div style={s.toolD}>Session breakdowns and real $/hr per platform</div>
           </a>
-          <a href="/guides/chaturbate-best-hours" style={s.toolCard}>
+          <a href="/guides/chaturbate-hours" style={s.toolCard}>
             <div style={s.toolN}>Peak Hours Calculator</div>
             <div style={s.toolD}>Find your personal best streaming times</div>
           </a>
