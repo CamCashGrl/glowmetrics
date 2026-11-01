@@ -66,6 +66,15 @@ step "recovery script (keeps security fix)"; run $DB "$REC"; run $DB "$HERE/30_a
 step "re-apply migration after recovery"; run $DB "$MIG"
 check "$(q "SELECT md5(prosrc) FROM pg_proc WHERE oid='public.insert_tips_dedup(jsonb,uuid)'::regprocedure")" 697af8bff40087433588302799d1d03e "re-apply: hardened tips body restored"
 
+step "import links: ON DELETE SET NULL"
+SETNULL="$ROOT/migrations/20261102_import_links_on_delete_set_null.sql"
+run $DB "$SETNULL"; run $DB "$HERE/40_after_set_null.sql"
+run $DB "$SETNULL"   # idempotent re-run
+check "$(q "SELECT count(*) FROM pg_constraint WHERE conname IN ('tips_upload_id_fkey','paid_sessions_upload_id_fkey') AND confdeltype='n'")" 2 "set-null: re-run leaves exactly the two SET NULL constraints"
+run $DB "$ROOT/rollbacks/20261102_import_links_on_delete_set_null.rollback.sql"
+check "$(q "SELECT count(*) FROM pg_constraint WHERE confrelid='public.csv_uploads'::regclass AND confdeltype='c'")" 0 "set-null recovery: no CASCADE from imports to earnings is restored"
+run $DB "$SETNULL"
+
 step "preflight refuses a function changed by other work (e.g. money precision)"
 run $PF "$HERE/00_mirror.sql"
 "${PSQL[@]}" -d $PF -c "CREATE OR REPLACE FUNCTION public.insert_tips_dedup(tips jsonb, p_upload_id uuid DEFAULT NULL::uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS \$\$ BEGIN RETURN '{}'::jsonb; END \$\$;"
