@@ -1,26 +1,62 @@
--- Phase 0 (import traceability prerequisite): sync the live dedup RPCs into the
--- repo and close an anonymous write path. Forward-only; no applied migration
--- is edited. Rollback: supabase/rollbacks/20261101_harden_dedup_rpc_grants.rollback.sql
+-- Phase 0 (import traceability prerequisite): harden the two import RPCs.
+-- Forward-only; no applied migration is edited.
+-- Routine recovery (keeps every security fix):
+--   supabase/rollbacks/20261101_harden_dedup_rpc_grants.rollback.sql
+-- Rehearsal (isolated local Postgres only):
+--   supabase/tests/import_rpc_hardening/run.sh
 --
 -- Findings (read-only inspection of production, 2026-11-01):
---  * insert_tips_dedup — the live body has an auth.uid() ownership check that
---    the repo's latest migration (20260710_fix_insert_tips_dedup_token_rate.sql)
---    does not. Re-applying the repo version would let one user write tips into
---    another account. The body below is the LIVE body, verbatim, so the repo
---    matches production. No behaviour change. Live ACL already excluded anon
---    and PUBLIC; the REVOKE/GRANT below only makes that explicit.
---  * insert_paid_sessions_dedup — live ACL granted EXECUTE to anon. Its guard
---    `(rec->>'user_id')::uuid != auth.uid()` is NULL (not true) when auth.uid()
---    is NULL, so an anonymous caller could insert private-earnings rows into
---    ANY account (SECURITY DEFINER bypasses RLS). The only callers
---    (/api/upload, /api/upload-paid-sessions) use the creator's own JWT
---    (role 'authenticated'), so revoking anon breaks no legitimate caller.
---    The guard now uses IS DISTINCT FROM and allows service_role only.
---    Insert columns, ON CONFLICT DO NOTHING, dedup key
---    (paid_sessions_dedup_unique) and counts are unchanged.
---  * Triggers trg_enforce_platform_limit_* (Free/Pro gate) are not touched.
+--  * insert_paid_sessions_dedup was EXECUTE-able by anon. Its guard
+--    `(rec->>'user_id')::uuid != auth.uid()` is NULL (not true) when
+--    auth.uid() is NULL, so an anonymous caller could insert private-earnings
+--    rows into ANY account (SECURITY DEFINER bypasses RLS). Fixed: anon
+--    revoked, guard uses IS DISTINCT FROM, only service_role may write for a
+--    user_id it supplies.
+--  * Both functions accepted an upload_id without checking that the import
+--    (csv_uploads row) belongs to the earnings owner. Fixed: the linked import
+--    must exist and be owned by the row's user_id (all roles, incl. service_role).
+--  * insert_tips_dedup's live body has an auth.uid() ownership check that the
+--    repo's 20260710 migration lacks. The body below is the live body with
+--    ONLY the import-ownership block added.
+--
+-- Unchanged on purpose: rounding (tips: round(...,2) exactly as live — see
+-- MONEY PRECISION below), insert columns, ON CONFLICT targets / dedup keys,
+-- tip_seq handling, inserted/skipped/total counts, the exception handler in
+-- insert_tips_dedup, and the Free/Pro platform-limit triggers.
+--
+-- MONEY PRECISION: PR #712 (20261029d) widens tips.usd to numeric(12,4) but
+-- does not redefine this function, so CSV imports would still round to 2dp
+-- here (and in app/api/upload/route.js). To stop either change silently
+-- overwriting the other, the preflight below refuses to run unless both
+-- functions are byte-identical (md5 of prosrc) to the live bodies captured on
+-- 2026-11-01, or already equal this migration's result (safe re-run). Any
+-- precision change to insert_tips_dedup must be rebased onto this body and
+-- update these fingerprints.
 
 BEGIN;
+SET LOCAL lock_timeout = '5s';
+
+DO $preflight$
+DECLARE
+  v_tips text;
+  v_paid text;
+BEGIN
+  SELECT md5(prosrc) INTO v_tips FROM pg_proc WHERE oid = 'public.insert_tips_dedup(jsonb, uuid)'::regprocedure;
+  SELECT md5(prosrc) INTO v_paid FROM pg_proc WHERE oid = 'public.insert_paid_sessions_dedup(jsonb)'::regprocedure;
+  IF v_tips IS DISTINCT FROM '17eb475cd6ba94dba9bc46f5a3a119ab'   -- live 2026-11-01
+     AND v_tips IS DISTINCT FROM '697af8bff40087433588302799d1d03e' -- this migration
+     -- (the recovery script restores the live tips body, so it matches line 1)
+  THEN
+    RAISE EXCEPTION 'Preflight failed: insert_tips_dedup body (md5 %) is not the 2026-11-01 live body. Another migration (e.g. money precision) changed it; rebase this migration first.', v_tips;
+  END IF;
+  IF v_paid IS DISTINCT FROM '89a624f9e63b001e2571110c06544734'
+     AND v_paid IS DISTINCT FROM '3ec5ef2097af41a421f49026182e78f7' -- this migration
+     AND v_paid IS DISTINCT FROM '86f0d23545b9fedcd2b2dea908ae942f' -- after the recovery script
+  THEN
+    RAISE EXCEPTION 'Preflight failed: insert_paid_sessions_dedup body (md5 %) is not the 2026-11-01 live body; rebase this migration first.', v_paid;
+  END IF;
+END
+$preflight$;
 
 CREATE OR REPLACE FUNCTION public.insert_tips_dedup(tips jsonb, p_upload_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -39,6 +75,17 @@ BEGIN
     WHERE (row_data->>'user_id')::uuid IS DISTINCT FROM auth.uid()
   ) THEN
     RAISE EXCEPTION 'RLS violation: user_id mismatch' USING errcode = '28000';
+  END IF;
+
+  -- Import ownership: a tip may only be linked to an import record owned by
+  -- the same creator as the tip. A missing import (owner NULL) is rejected too.
+  -- Applies to every role, including service_role.
+  IF p_upload_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(tips) AS row_data
+    WHERE (row_data->>'user_id')::uuid IS DISTINCT FROM
+          (SELECT u.user_id FROM public.csv_uploads u WHERE u.id = p_upload_id)
+  ) THEN
+    RAISE EXCEPTION 'Import ownership violation: upload_id does not belong to the earnings owner' USING errcode = '28000';
   END IF;
 
   WITH incoming AS (
@@ -124,9 +171,6 @@ EXCEPTION WHEN others THEN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.insert_tips_dedup(jsonb, uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.insert_tips_dedup(jsonb, uuid) TO authenticated, service_role;
-
 CREATE OR REPLACE FUNCTION public.insert_paid_sessions_dedup(sessions jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -150,6 +194,13 @@ BEGIN
     IF auth.role() IS DISTINCT FROM 'service_role'
        AND (rec->>'user_id')::uuid IS DISTINCT FROM auth.uid() THEN
       RAISE EXCEPTION 'RLS violation: user_id mismatch on row %', total_count;
+    END IF;
+
+    -- Import ownership: the linked import must belong to this row's owner.
+    IF NULLIF(rec->>'upload_id', '') IS NOT NULL
+       AND (SELECT u.user_id FROM public.csv_uploads u WHERE u.id = (rec->>'upload_id')::uuid)
+           IS DISTINCT FROM (rec->>'user_id')::uuid THEN
+      RAISE EXCEPTION 'Import ownership violation: upload_id does not belong to the earnings owner (row %)', total_count;
     END IF;
 
     INSERT INTO public.paid_sessions (
@@ -191,15 +242,9 @@ BEGIN
 END;
 $function$;
 
+REVOKE ALL ON FUNCTION public.insert_tips_dedup(jsonb, uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.insert_tips_dedup(jsonb, uuid) TO authenticated, service_role;
 REVOKE ALL ON FUNCTION public.insert_paid_sessions_dedup(jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.insert_paid_sessions_dedup(jsonb) TO authenticated, service_role;
 
 COMMIT;
-
--- ── VERIFY (run on a Supabase branch before production) ─────────────────────
--- 1. ACLs: anon must be absent from both.
---    SELECT proname, proacl FROM pg_proc WHERE proname IN ('insert_tips_dedup','insert_paid_sessions_dedup');
--- 2. As anon (anon key, no JWT): rpc('insert_paid_sessions_dedup', …) → permission denied.
--- 3. As user A: rpc with user_id = B → 'RLS violation'; nothing inserted.
--- 4. As user A: rpc with user_id = A → inserted; re-run → skipped (dedup unchanged).
--- 5. Counts unchanged: SELECT count(*), sum(usd) FROM paid_sessions; / tips — before = after.

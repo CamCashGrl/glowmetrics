@@ -107,17 +107,30 @@ Revision 3:
   - "N tips saved" appears only when confirmed rows exist.
   - The UI never says "Your earnings were saved" without that confirmation.
 
-### 6. Interrupted-import recovery
-- A closed browser or a request timeout does not prove processing stopped.
-- Mechanism:
-  - Each processing request updates `csv_uploads.heartbeat_at` after every batch.
-  - A reconciler (`reconcile_import(upload_id)`, SECURITY DEFINER, owner-checked) runs on history load and from the existing cron (`app/api/cron/*`).
-  - It marks an import `interrupted` only when `status='processing'` **and** `heartbeat_at` is older than 2 × `maxDuration` (120s). Past that point the serverless function is provably dead.
-- Recompute uses `import_rows`:
-  - A `pending` row whose transaction exists in `tips` with this `upload_id` becomes `added`.
-  - A `pending` row whose dedup key matches a tip from another import becomes `duplicate`.
-  - Otherwise the row becomes `failed`.
-- Counters are then re-derived. This is idempotent.
+### 6. Interrupted-import recovery (revised after review of PR #729)
+Elapsed time alone proves nothing: a function past its `maxDuration` may still have a database statement running, and a BongaCams import has a second, linked request. So "interrupted" is decided by the **database**, not by a clock:
+
+- **Write lock.** Every batch RPC (`*_dedup_v2`) first takes `SELECT … FROM csv_uploads WHERE id = p_upload_id FOR SHARE` and refuses to write unless `status = 'processing'`. Batches from both parts of one import can run together, because shared locks don't block each other.
+- **Closing an import.** The reconciler (`reconcile_import(upload_id)`, owner-checked) takes `FOR UPDATE NOWAIT` on the same row.
+  - If any batch transaction is still open, the lock is held, the reconciler skips the import, and it stays `processing`.
+  - Once the reconciler holds the lock, no write for this import is in flight.
+  - Setting a terminal status in the same transaction means no write can land afterwards, because later batches see the status and refuse.
+- **When the reconciler may close an import.** All of these must hold:
+  1. `status = 'processing'`.
+  2. Every declared part (`parts` jsonb: tips, private) has reported a final status, **or** its `heartbeat_at` (written inside each batch transaction) is older than the staleness window. The window is a configurable trigger to *try*, not proof of anything.
+  3. The `NOWAIT` lock is acquired.
+- **Recount.** Results are recomputed from what actually committed, under that lock:
+  - `import_rows` that are `pending` become `added` (the transaction exists with this `upload_id`), `duplicate` (the dedup key matches another import's row) or `failed`.
+  - Counters are re-derived from those rows. The same recount gives the same result every time.
+- **Labels.** The final status is `interrupted` when some rows committed, and `failed` when none did. A late request whose batch is refused gets "This import was closed — retry; duplicates are skipped safely".
+- **To verify on a branch:**
+  - kill a client mid-import
+  - a long-running batch must keep the import open
+  - a late batch after closure is refused
+  - the BongaCams parent stays `processing` while either part holds its lock
+  - the recount is idempotent
+
+**Phase 1a prerequisite found in this pass:** `tips.upload_id` references `csv_uploads(id)` **ON DELETE CASCADE**, and users have DELETE on their own `csv_uploads` rows. Once tips are linked, deleting an import record would silently delete its earnings. Change the constraint to `ON DELETE SET NULL` (or RESTRICT) before any tip is linked. Pending your approval.
 
 ### Kept requirements
 - Reuse `csv_uploads` as the parent import and `tips.id`/`paid_sessions.id` as permanent references (`TIP-`, `PVT-`).
