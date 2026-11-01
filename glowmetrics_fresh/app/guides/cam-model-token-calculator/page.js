@@ -469,7 +469,7 @@ export default function TokenCalculatorPage() {
               {[
                 { href: '/guides/chaturbate-token-tracker', label: 'Chaturbate Token Tracker', desc: 'Log and track tokens earned across sessions' },
                 { href: '/guides/cam-model-income-tracker', label: 'Income Tracker', desc: 'Track $/hr, top fans, and session breakdowns' },
-                { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
+                { href: '/guides/chaturbate-hours', label: 'Best Hours to Stream', desc: 'Find your personal peak streaming times' },
                 { href: '/blog/cam-model-earnings', label: 'Cam Model Earnings Guide', desc: 'How much models make and why it changes' },
                 { href: '/tools/profile-studio', label: 'Creator Profile Studio', desc: 'Free AI bio and tip menu generator, no sign-up required' },
               ].map(({ href, label, desc }) => (
@@ -488,7 +488,7 @@ export default function TokenCalculatorPage() {
               <a href="/guides/cam-model-token-calculator" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam model token calculator</a>
               <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
               <a href="/guides/chaturbate-token-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Chaturbate token tracker</a>
-              <a href="/guides/chaturbate-best-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
+              <a href="/guides/chaturbate-hours" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
               <a href="/guides/cam-model-income-tracker" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Cam model income tracker</a>
               <a href="/tools/profile-studio" style={{ fontSize: 14, color: S.accent, textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
             </div>

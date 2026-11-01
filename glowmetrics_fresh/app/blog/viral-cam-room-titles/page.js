@@ -52,7 +52,7 @@ export default function Page() {
 
   const relatedTools = [
     { icon: '\u2728', name: 'Room Title Generator', description: 'Build scroll-stopping titles from the viral formula', href: '/guides/cam-model-room-title-generator' },
-    { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'A great title works best at the right hour', href: '/guides/chaturbate-best-hours' },
+    { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'A great title works best at the right hour', href: '/guides/chaturbate-hours' },
   ];
 
   const relatedBlogs = [

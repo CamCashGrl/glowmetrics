@@ -422,7 +422,7 @@ export default function ChaturbatePayoutExplained() {
           <a href="/blog/how-much-do-chaturbate-models-make" style={s.relLink}>→ How much Chaturbate models make per hour</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Cam model token calculator</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/chaturbate-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings</a>
           <a href="/tools/profile-studio" style={s.relLink}>→ Free cam bio and tip-menu generator</a>
         </div>

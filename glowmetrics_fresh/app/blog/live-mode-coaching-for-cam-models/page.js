@@ -52,7 +52,7 @@ export default function Page() {
 
   const relatedTools = [
     { icon: '\uD83D\uDCCA', name: 'Analytics Dashboard', description: 'See what your room activity is doing to your earnings', href: '/guides/cam-model-analytics' },
-    { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'Start every stream with momentum on your side', href: '/guides/chaturbate-best-hours' },
+    { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'Start every stream with momentum on your side', href: '/guides/chaturbate-hours' },
   ];
 
   const relatedBlogs = [

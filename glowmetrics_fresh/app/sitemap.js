@@ -112,7 +112,7 @@ export default function sitemap() {
     'cam-model-session-breakdown',
     'cam-model-token-calculator',
     'cam-model-top-tippers',
-    'chaturbate-best-hours',
+    'chaturbate-hours',
     'chaturbate-earnings-tracker',
     'chaturbate-token-tracker',
     'how-to-increase-cam-tips',

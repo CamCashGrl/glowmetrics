@@ -403,7 +403,7 @@ export default function ChaturbateEarningsPost() {
       </div>
 
       <h3 style={s.h3}>When they stream</h3>
-      <p style={s.p}>Peak earning hours are determined by when your specific audience is online — not Chaturbate's overall traffic peaks. Models with European fans tend to see different peak windows than those with US-based audiences. Many creators find that streaming during their off-peak hours meaningfully reduces $/hr, even with identical effort. See <a href="/guides/chaturbate-best-hours" style={s.iLink}>Chaturbate best hours</a> for platform-wide patterns, but your own CSV data will be more accurate for your audience.</p>
+      <p style={s.p}>Peak earning hours are determined by when your specific audience is online — not Chaturbate's overall traffic peaks. Models with European fans tend to see different peak windows than those with US-based audiences. Many creators find that streaming during their off-peak hours meaningfully reduces $/hr, even with identical effort. See <a href="/guides/chaturbate-hours" style={s.iLink}>Chaturbate best hours</a> for platform-wide patterns, but your own CSV data will be more accurate for your audience.</p>
 
       <h3 style={s.h3}>Who their top fans are</h3>
       <p style={s.p}>In many Chaturbate earning histories, a small share of tippers accounts for a disproportionate share of revenue — a pattern often described as a "whale" effect. One regular who tips 200–500 tokens in a session can outweigh dozens of smaller tips combined. Losing an active high-value regular can meaningfully affect monthly income, which is why tracking who's tipping — not just how much came in — matters.</p>
@@ -419,7 +419,7 @@ export default function ChaturbateEarningsPost() {
         Adding more streaming hours is the instinctive way to earn more — but it's often the least efficient. A model streaming 30 hours a week at $10/hr earns the same as one streaming 10 hours at $30/hr, while working three times as much.
       </p>
       <p style={s.p}>
-        The higher-earning model isn't necessarily working harder — they're often streaming during their personal peak window, when their highest-value regulars are online. Use the <a href="/guides/chaturbate-best-hours" style={s.iLink}>Chaturbate best hours guide</a> as a starting point, but your own tip history will show your real peak more accurately than any platform average.
+        The higher-earning model isn't necessarily working harder — they're often streaming during their personal peak window, when their highest-value regulars are online. Use the <a href="/guides/chaturbate-hours" style={s.iLink}>Chaturbate best hours guide</a> as a starting point, but your own tip history will show your real peak more accurately than any platform average.
       </p>
       <ul style={s.ul}>
         <li style={s.li}><strong style={{ color: '#f1f5f9' }}>Stream during your personal peak hours</strong> — find these from your tip history, not generic advice</li>
@@ -566,7 +566,7 @@ export default function ChaturbateEarningsPost() {
           <a href="/guides/chaturbate-token-calculator" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Free Chaturbate token calculator</a>
           <a href="/guides/chaturbate-earnings-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Chaturbate earnings tracker</a>
           <a href="/guides/chaturbate-token-tracker" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Chaturbate token tracker</a>
-          <a href="/guides/chaturbate-best-hours" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/chaturbate-hours" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Best hours to stream on Chaturbate</a>
           <a href="/blog/chaturbate-payout-explained" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Chaturbate payout explained</a>
           <a href="/tools/profile-studio" style={{ fontSize: '14px', color: '#6366f1', textDecoration: 'none' }}>→ Free cam bio & tip menu generator</a>
         </div>
@@ -603,7 +603,7 @@ export default function ChaturbateEarningsPost() {
             <div style={s.toolN}>Token Tracker</div>
             <div style={s.toolD}>Log and track tokens earned across sessions</div>
           </a>
-          <a href="/guides/chaturbate-best-hours" style={s.toolCard}>
+          <a href="/guides/chaturbate-hours" style={s.toolCard}>
             <div style={s.toolN}>Best Hours Guide</div>
             <div style={s.toolD}>Your personal peak hours from your data</div>
           </a>

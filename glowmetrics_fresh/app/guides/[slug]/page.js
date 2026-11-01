@@ -5,7 +5,7 @@
 // Note: several slugs that used to live here (chaturbate-earnings-tracker,
 // cam-model-analytics, best-time-to-stream-chaturbate, cam-model-top-tippers,
 // cam-model-income-tracker, chaturbate-token-tracker, cam-model-session-breakdown,
-// chaturbate-best-hours) now have their own dedicated app/guides/<slug>/page.js
+// chaturbate-hours) now have their own dedicated app/guides/<slug>/page.js
 // route, which Next.js resolves ahead of this dynamic [slug] route. Their
 // entries here were unreachable dead code and have been removed — the
 // dedicated pages are the live, edited content for those URLs.
