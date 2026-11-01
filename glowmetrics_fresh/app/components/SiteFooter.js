@@ -178,7 +178,7 @@ export default function SiteFooter({ sidebarOffset = 0, variant = 'full' }) {
           <FooterLink href="/guides/chaturbate-token-tracker">Chaturbate Token Tracker</FooterLink>
           <FooterLink href="/guides/cam-model-revenue-dashboard">Cam Model Revenue Dashboard</FooterLink>
           <FooterLink href="/guides/cam-model-session-breakdown">Cam Model Session Breakdown</FooterLink>
-          <FooterLink href="/guides/chaturbate-best-hours">Chaturbate Best Hours to Stream</FooterLink>
+          <FooterLink href="/guides/chaturbate-hours">Chaturbate Best Hours to Stream</FooterLink>
         </div>
 
         {/* Main Pages */}

@@ -163,7 +163,7 @@ export default function BlogPostChaturbateViewers() {
           <p style={s.p}>Timing matters more than most models realize. US evenings into late night (Eastern Time) and weekends are commonly cited as the busiest periods, but that is a general starting pattern, not an official figure. But don't rely on general advice — your best hours depend on your specific audience.</p>
           <div style={s.tip}>
             <div style={s.tipLbl}>Data tip</div>
-            <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/chaturbate-best-hours" style={s.iLink}>Find your personal peak hours</a> from your actual tip history — not platform averages.</p>
+            <p style={{ ...s.p, marginBottom: 0 }}><a href="/guides/chaturbate-hours" style={s.iLink}>Find your personal peak hours</a> from your actual tip history — not platform averages.</p>
           </div>
         </div>
       </div>
@@ -221,7 +221,7 @@ export default function BlogPostChaturbateViewers() {
             <div style={s.toolN}>Room Title Generator</div>
             <div style={s.toolD}>High-converting titles in seconds</div>
           </a>
-          <a href="/guides/chaturbate-best-hours" style={s.toolCard}>
+          <a href="/guides/chaturbate-hours" style={s.toolCard}>
             <div style={s.toolN}>Best Time Calculator</div>
             <div style={s.toolD}>Your personal peak hours from your data</div>
           </a>

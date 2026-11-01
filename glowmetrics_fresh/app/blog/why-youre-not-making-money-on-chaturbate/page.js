@@ -218,7 +218,7 @@ export default function Page() {
               { href: '/blog/how-to-make-more-money-on-chaturbate', label: 'How to Make More Money on Chaturbate' },
               { href: '/blog/how-much-do-chaturbate-models-make', label: 'Chaturbate Model Earnings' },
               { href: '/guides/cam-model-token-calculator', label: 'Token Calculator' },
-              { href: '/guides/chaturbate-best-hours', label: 'Best Hours to Stream' },
+              { href: '/guides/chaturbate-hours', label: 'Best Hours to Stream' },
               { href: '/blog/why-cam-streams-arent-making-money', label: 'Why Streams Underperform' },
               { href: '/guides/chaturbate-earnings-tracker', label: 'Chaturbate Earnings Tracker' },
             ].map(link => (

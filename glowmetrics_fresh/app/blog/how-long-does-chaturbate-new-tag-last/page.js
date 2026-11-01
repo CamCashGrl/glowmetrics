@@ -160,7 +160,7 @@ export default function Page() {
       <div style={s.related}>
         <div style={s.relatedTitle}>Related reading</div>
         <p style={{ ...s.p, marginBottom: 6 }}><a href="/blog/how-to-get-views-on-chaturbate" style={s.link}>&rarr; How to get more views on Chaturbate</a></p>
-        <p style={{ ...s.p, marginBottom: 6 }}><a href="/guides/chaturbate-best-hours" style={s.link}>&rarr; Best hours to stream on Chaturbate</a></p>
+        <p style={{ ...s.p, marginBottom: 6 }}><a href="/guides/chaturbate-hours" style={s.link}>&rarr; Best hours to stream on Chaturbate</a></p>
         <p style={{ ...s.p, marginBottom: 0 }}><a href="/blog/chaturbate-first-30-days-real-earnings" style={s.link}>&rarr; What I actually made my first 30 days</a></p>
       </div>
     <ChaturbateAffiliateCTA />

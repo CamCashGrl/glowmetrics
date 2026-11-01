@@ -261,7 +261,7 @@ export default function CamModelIncomeTracker() {
       ))}
 
       <p style={{ ...s.p, marginTop: '16px' }}>
-        For the hour-of-day piece specifically, see <a href="/guides/chaturbate-best-hours" style={s.iLink}>best hours to stream on Chaturbate</a>. For converting tokens to USD across platforms, see the <a href="/guides/cam-model-token-calculator" style={s.iLink}>cam model token calculator</a>.
+        For the hour-of-day piece specifically, see <a href="/guides/chaturbate-hours" style={s.iLink}>best hours to stream on Chaturbate</a>. For converting tokens to USD across platforms, see the <a href="/guides/cam-model-token-calculator" style={s.iLink}>cam model token calculator</a>.
       </p>
 
       <h2 style={s.h2}>Spreadsheet vs. Automated Cam Income Tracker</h2>
@@ -342,7 +342,7 @@ export default function CamModelIncomeTracker() {
       <div style={s.related}>
         <div style={s.relT}>Related guides</div>
         <div style={s.relLinks}>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
+          <a href="/guides/chaturbate-hours" style={s.relLink}>→ Best hours to stream on Chaturbate</a>
           <a href="/guides/cam-model-token-calculator" style={s.relLink}>→ Free cam model token calculator</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tipper tracker</a>
