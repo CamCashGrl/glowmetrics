@@ -21,7 +21,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'Chaturbate', username: 'u2', date_time: '2026-09-13T10:05:00Z', usd: 5, tokens: 100, durationMinutes: 5 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Platform row should show ALL tips
       const chaturbate = result.platforms.find(p => p.platform === 'Chaturbate')
@@ -38,7 +38,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'Chaturbate', username: 'u3', date_time: '2026-09-13T14:00:00Z', usd: 5, tokens: 100, durationMinutes: 5 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
       const platformSum = result.platforms.reduce((sum, p) => sum + p.totalUSD, 0)
 
       expect(result.totalUSD).toBeCloseTo(185, 1)
@@ -58,7 +58,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'MyFreeCams', username: 'u2', date_time: '2026-09-13T12:00:00Z', usd: 5, tokens: 100, durationMinutes: 2 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Sessions array should contain meaningful sessions (result.sessions is meaningfulSessions)
       expect(result.sessions.length).toBeGreaterThan(0)
@@ -87,7 +87,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'MyFreeCams', username: 'u2', date_time: '2026-09-13T12:01:00Z', usd: 0, tokens: 0, durationMinutes: 1 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Hourly rate should prioritize meaningful sessions
       // It should not be distorted by low-signal sessions
@@ -127,7 +127,7 @@ describe('Daily Brief Regression Tests', () => {
         })),
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Both should have values (not null when there's enough data)
       if (result.bestHour) {
@@ -149,7 +149,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'Chaturbate', username: 'u1', date_time: '2026-09-13T10:00:00Z', usd: 20, tokens: 400, durationMinutes: 30 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // 3 AM should be best hour (100 + 100 + 5 total > 20)
       if (result.bestHour) {
@@ -170,7 +170,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'MyFreeCams', username: 'u2', date_time: '2026-09-11T10:00:00Z', usd: 50, tokens: 1000, durationMinutes: 30 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Chaturbate should be top platform ($200 > $50)
       const topPlat = result.platforms
@@ -201,7 +201,7 @@ describe('Daily Brief Regression Tests', () => {
         })),
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Platform A should rank higher ($200 > $150)
       const topPlat = result.platforms
@@ -234,7 +234,7 @@ describe('Daily Brief Regression Tests', () => {
         })),
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Should have clear best hour and valid forecast
       if (result.bestHour) {
@@ -267,7 +267,7 @@ describe('Daily Brief Regression Tests', () => {
         })),
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Best hour should exist
       // Forecast should use consistent metric, not cascade through incompatible ones
@@ -296,7 +296,7 @@ describe('Daily Brief Regression Tests', () => {
         })),
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // bestHour should have meaningful data
       if (result.bestHour) {
@@ -315,7 +315,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'Chaturbate', username: 'u1', date_time: '2026-09-12T14:00:00Z', usd: 100, tokens: 2000, durationMinutes: 30 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Should have meaningful sessions
       expect(result.sessions.length).toBeGreaterThan(0)
@@ -337,7 +337,7 @@ describe('Daily Brief Regression Tests', () => {
         { platform: 'BongaCams', username: 'u4', date_time: '2026-09-10T08:00:00Z', usd: 20, tokens: 400, durationMinutes: 30 },
       ]
 
-      const result = aggregateRows(tips)
+      const result = aggregateRows(tips, 'UTC') // creator timezone stated explicitly (fixtures are written in UTC)
 
       // Total should be exact sum
       expect(result.totalUSD).toBe(200)

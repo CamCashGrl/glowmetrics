@@ -51,7 +51,13 @@ const FIXED_NOW = new Date('2026-10-10T00:00:00Z')
 beforeEach(() => { jest.useFakeTimers({ now: FIXED_NOW, doNotFake: ['setTimeout', 'setInterval', 'setImmediate', 'nextTick'] }) })
 afterEach(() => { jest.useRealTimers() })
 
-// Fingerprints recorded from the previous implementation on this exact dataset.
+// Fingerprints of aggregateRows on this exact dataset. Re-recorded once, in the
+// Batch 1 dashboard correction, after reviewing every changed field against
+// independently computed creator-local expectations: new fields
+// (platformDayActivity, *.localDates); fan typical hours, the tonight forecast
+// and the peak-missed alert now on the creator's clock (New York, Kolkata);
+// Kolkata weekday best hours that had < 3 distinct local dates no longer
+// qualify. UTC: no pre-existing field changed.
 const EXPECTED = require('./fixtures/aggregate-rows-fingerprints.json')
 for (const tz of Object.keys(EXPECTED)) {
   test(`aggregateRows output unchanged for ${tz}`, () => {

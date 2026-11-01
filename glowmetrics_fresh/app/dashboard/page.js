@@ -33,7 +33,7 @@ import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
-import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD } from '../../lib/creatorTimezone'
+import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD, zonedMonthKey } from '../../lib/creatorTimezone'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -2518,7 +2518,8 @@ const stopImportMessageRotation = () => {
   // start/end times, so this is inferred from the gap between a session's first
   // and last recorded tip. analytics.estimatedHourlyRate is the single source of
   // truth (lib/analytics.js) — a weighted total across hourly-rate-eligible
-  // sessions only (>=2 tips, known duration, >=15 observed minutes). Both the
+  // sessions only (valid sessions — >=30 min AND >=2 tips — with a known
+  // duration and revenue). Both the
   // sticky command bar and the Money Snapshot KPI card read this same value;
   // neither computes it independently.
   const avgPerHour = analytics?.estimatedHourlyRate ?? 0
@@ -2812,11 +2813,10 @@ const stopImportMessageRotation = () => {
     const hoursUntilPeak = bh !== null ? (bh - utcHour + 24) % 24 : null
     const atPeak = hoursUntilPeak === 0 || hoursUntilPeak === 1
 
-    // BEST PLATFORM: Use the platform with highest lifetime revenue (ALL tips)
-    // This is the true platform comparison metric
-    const platTotalUSD = {}
-    tips.forEach(t => { const p = t.platform || 'Chaturbate'; platTotalUSD[p] = (platTotalUSD[p] || 0) + (t.usd || 0) })
-    const topEarningPlat = Object.entries(platTotalUSD).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Chaturbate'
+    // BEST PLATFORM: highest revenue across ALL tips in the engine's dataset —
+    // read from analytics.platforms (same plan-gated tips and platform keys as
+    // every other platform figure), never re-summed from raw history here.
+    const topEarningPlat = [...(analytics?.platforms || [])].sort((a, b) => (b.totalUSD || 0) - (a.totalUSD || 0))[0]?.platform || null
     const displayPlat = topEarningPlat
 
     // Peak hour average for this platform (for context/forecast only)
@@ -3078,18 +3078,17 @@ const stopImportMessageRotation = () => {
   const realTimeAlerts = memoOn(derivedCacheRef.current, 'realTimeAlerts', [tips, whales, minuteTick], buildRealTimeAlerts)
   void minuteTick // ensures re-render when minute changes
 
-  // ── MONTH-OVER-MONTH GROWTH ── used by Momentum indicator and KPI cards
-  const _momNow = new Date()
-  const _momMonthKey = `${_momNow.getUTCFullYear()}-${_momNow.getUTCMonth()}`
-  const { momThisRev: _momThisRev, momPrevRev: _momPrevRev, growthPct } = memoOn(
-    derivedCacheRef.current, 'momentum', [tips, _momMonthKey], () => {
-      const momThisStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth(), 1))
-      const momPrevStart = new Date(Date.UTC(_momNow.getUTCFullYear(), _momNow.getUTCMonth() - 1, 1))
-      const momThisRev = tips.reduce((s, t) => new Date(t.date_time || t.dateRaw) >= momThisStart ? s + (t.usd || 0) : s, 0)
-      const momPrevRev = tips.reduce((s, t) => { const d = new Date(t.date_time || t.dateRaw); return d >= momPrevStart && d < momThisStart ? s + (t.usd || 0) : s }, 0)
-      const growthPct = (momPrevRev > 0 && momThisRev > 0) ? Math.round(((momThisRev - momPrevRev) / momPrevRev) * 100) : null
-      return { momThisRev, momPrevRev, growthPct }
-    })
+  // ── MONTH-OVER-MONTH ── this vs previous calendar month on the creator's
+  // clock, read from the engine's monthlyData (creator-local months, same
+  // plan-gated tips as every other figure). No local re-aggregation.
+  const _momThisKey = zonedMonthKey(new Date(), creatorTz)
+  const _momPrevKey = (() => {
+    const [y, m] = _momThisKey.split('-').map(Number)
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
+  })()
+  const _momUsdByMonth = Object.fromEntries((analytics?.monthlyData || []).map(m => [m.month, m.usd || 0]))
+  const momThisMonthUSD = _momUsdByMonth[_momThisKey] || 0
+  const momPrevMonthUSD = _momUsdByMonth[_momPrevKey] || 0
 
   // ── DASHBOARD READINESS — always renders real dashboard, module-level locking ─
   const {
@@ -3447,11 +3446,8 @@ const stopImportMessageRotation = () => {
               // ── empty state — show null; DashboardProgressCard above covers zero-data ──
               if (tips.length === 0) return null
 
-              const now = new Date()
-              const thisMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-              const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-              const thisMonthRev = tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).reduce((s, t) => s + (t.usd || 0), 0)
-              const prevMonthRev = tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).reduce((s, t) => s + (t.usd || 0), 0)
+              const thisMonthRev = momThisMonthUSD
+              const prevMonthRev = momPrevMonthUSD
               const growthPct = (prevMonthRev > 0 && thisMonthRev > 0) ? Math.round(((thisMonthRev - prevMonthRev) / prevMonthRev) * 100) : null
               const safeThisMonthRev = (!isNaN(thisMonthRev) && isFinite(thisMonthRev)) ? thisMonthRev : 0
               // First-party comparison only (the creator's own previous month).
@@ -3750,23 +3746,15 @@ const stopImportMessageRotation = () => {
               {/* Platform day heatmap */}
               {(() => {
                 const UTC_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-                const platDayUSD = {}; const platDayDates = {}
-                tips.forEach(t => {
-                  const p = t.platform; const dt = new Date(t.date_time || t.dateRaw)
-                  const shortDay = UTC_DAYS[zonedDay(dt, creatorTz)]; const dateKey = zonedYMD(dt, creatorTz) // creator-local day + date
-                  if (!platDayUSD[p]) platDayUSD[p] = {}
-                  if (!platDayDates[p]) platDayDates[p] = {}
-                  platDayUSD[p][shortDay] = (platDayUSD[p][shortDay] || 0) + (t.usd || 0)
-                  if (!platDayDates[p][shortDay]) platDayDates[p][shortDay] = new Set()
-                  platDayDates[p][shortDay].add(dateKey)
-                })
+                const LONG_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+                // Values come from the engine (analytics.platformDayActivity):
+                // creator-local weekdays/dates over the same plan-gated tips as
+                // the platform totals beside it. Nothing is re-aggregated here.
+                const activity = analytics?.platformDayActivity || {}
                 const platDayAvg = {}
-                Object.keys(platDayUSD).forEach(p => {
+                Object.keys(activity).forEach(p => {
                   platDayAvg[p] = {}
-                  UTC_DAYS.forEach(d => {
-                    const total = platDayUSD[p][d] || 0; const activeDays = platDayDates[p]?.[d]?.size || 1
-                    platDayAvg[p][d] = total > 0 ? parseFloat((total / activeDays).toFixed(2)) : 0
-                  })
+                  UTC_DAYS.forEach((d, i) => { platDayAvg[p][d] = activity[p]?.[LONG_DAYS[i]]?.avgPerActiveDay || 0 })
                 })
                 const platList = Object.keys(platDayAvg)
                 if (platList.length < 1) return null
@@ -3827,7 +3815,9 @@ const stopImportMessageRotation = () => {
               const likelyOnline = whales
                 .filter(w => w.tipCount >= 3)
                 .map(w => {
-                  const fanTips = (w.tips && w.tips.length > 0) ? w.tips : tips.filter(t => t.username.toLowerCase() === w.username.toLowerCase())
+                  // w.tips is the fan's tips from the engine's plan-gated input —
+                  // no fallback to raw (ungated) history.
+                  const fanTips = w.tips || []
                   const hourCounts = {}
                   fanTips.forEach(t => { const h = zonedHour(t.date_time || t.dateRaw, creatorTz); hourCounts[h] = (hourCounts[h] || 0) + 1 })
                   const sorted = Object.entries(hourCounts).sort((a,b) => b[1]-a[1])
