@@ -348,7 +348,16 @@ Pro-gated tabs: never bypass in any path, including API routes
 
 ## TIMEZONE
 
-All timezone math must use user-local timezone via `Intl.DateTimeFormat`. Never assume UTC for display.
+The creator's selected IANA timezone, `profiles.timezone`, is authoritative for
+all creator-local business logic and display.
+
+- `Intl.DateTimeFormat` may be used to format or convert times, but only with
+  that creator timezone passed explicitly (`{ timeZone: profiles.timezone }`).
+- Browser, device, server and CI timezones must never substitute for
+  `profiles.timezone`.
+- UTC is not a fallback. Use UTC only when the creator actually selected UTC.
+
+See "CREATOR TIMEZONE vs MACHINE / CI TIMEZONE" below.
 
 ---
 
@@ -463,9 +472,11 @@ const hour = toLocalHour(tip.date_time, userTz)
 const dow  = toLocalDow(tip.date_time, userTz)
 ```
 
-In a client component the browser clock is already the creator's, so plain
-`.getHours()` / `.getDay()` is correct there — but never mix the two bases in
-one feature.
+This applies in client components too. The browser clock is the viewer's
+device clock, not `profiles.timezone`, so plain `.getHours()` / `.getDay()` /
+`.getDate()` must not be used for creator-local days or hours. Pass the
+creator's saved timezone (`userTz` from `profiles.timezone`) to the helpers
+above. Never mix two clocks in one feature.
 
 `getUTCFullYear/Month/Date` are acceptable for duration arithmetic. They are
 not acceptable as a **date key** sitting beside a locally-bucketed hour: that
