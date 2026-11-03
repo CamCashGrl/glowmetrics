@@ -40,13 +40,13 @@ const nextConfig = {
       {
         source: '/guides/best-time-to-stream-on-chaturbate',
         has: [{ type: 'host', value: 'camcashgrl.com' }],
-        destination: 'https://www.camcashgrl.com/guides/chaturbate-best-hours',
-        permanent: true,
+        destination: 'https://www.camcashgrl.com/guides/chaturbate-hours',
+        statusCode: 301,
       },
       {
         source: '/guides/best-time-to-stream-chaturbate',
         has: [{ type: 'host', value: 'camcashgrl.com' }],
-        destination: 'https://www.camcashgrl.com/guides/chaturbate-best-hours',
+        destination: 'https://www.camcashgrl.com/guides/chaturbate-hours',
         statusCode: 301,
       },
       {
@@ -72,6 +72,12 @@ const nextConfig = {
         has: [{ type: 'host', value: 'camcashgrl.com' }],
         destination: 'https://www.camcashgrl.com/tools/cam-model-name-generator',
         permanent: true,
+      },
+      {
+        source: '/guides/chaturbate-best-hours',
+        has: [{ type: 'host', value: 'camcashgrl.com' }],
+        destination: 'https://www.camcashgrl.com/guides/chaturbate-hours',
+        statusCode: 301,
       },
       // Catch-all www redirect (must come after the specific non-www rules above)
       {
@@ -111,16 +117,19 @@ const nextConfig = {
         permanent: true,
       },
       {
-        source: '/guides/best-time-to-stream-on-chaturbate',
-        destination: '/guides/chaturbate-best-hours',
-        permanent: true,
+        source: '/guides/chaturbate-best-hours',
+        destination: '/guides/chaturbate-hours',
+        statusCode: 301,
       },
       {
-        // Merged duplicate — same search intent as /guides/chaturbate-best-hours
-        // (the URL with the stronger GSC visibility), which now contains the
-        // combined content of both pages.
+        source: '/guides/best-time-to-stream-on-chaturbate',
+        destination: '/guides/chaturbate-hours',
+        statusCode: 301,
+      },
+      {
+        // Legacy timing article — consolidate on the ranking URL.
         source: '/guides/best-time-to-stream-chaturbate',
-        destination: '/guides/chaturbate-best-hours',
+        destination: '/guides/chaturbate-hours',
         statusCode: 301,
       },
 {

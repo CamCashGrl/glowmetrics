@@ -52,7 +52,7 @@ export default function Page() {
 
   const relatedTools = [
     { icon: '\uD83D\uDCCA', name: 'Analytics Dashboard', description: 'See your tips, top fans, and peak hours in one place', href: '/guides/cam-model-analytics' },
-    { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'Find the hours that actually earn for you', href: '/guides/chaturbate-best-hours' },
+    { icon: '\uD83D\uDD52', name: 'Best Time to Stream', description: 'Find the hours that actually earn for you', href: '/guides/chaturbate-hours' },
     { icon: '\uD83E\uDDEE', name: 'Token Calculator', description: 'Convert tokens to USD across platforms', href: '/guides/cam-model-token-calculator' },
   ];
 
@@ -215,7 +215,7 @@ export default function Page() {
         </ul>
         <p>
           Once you can see your best hours, the natural next move is to stream into them on purpose. Our{' '}
-          <a href="/guides/chaturbate-best-hours">best time to stream guide</a> walks through how to use that data.
+          <a href="/guides/chaturbate-hours">best time to stream guide</a> walks through how to use that data.
         </p>
 
         <h2>Is it safe?</h2>

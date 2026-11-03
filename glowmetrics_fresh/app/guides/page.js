@@ -58,7 +58,7 @@ const guides = [
     description: 'See exactly what happened in each of your streams.',
   },
   {
-    slug: 'chaturbate-best-hours',
+    slug: 'chaturbate-hours',
     title: 'Best Time to Stream on Chaturbate',
     description: 'Peak hours, best days, and how to find your own highest-earning hours.',
   },

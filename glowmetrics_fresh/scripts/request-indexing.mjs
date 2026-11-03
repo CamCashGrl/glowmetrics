@@ -55,7 +55,7 @@ const URLS = [
   'https://www.camcashgrl.com/guides/chaturbate-token-tracker',
   'https://www.camcashgrl.com/guides/cam-model-revenue-dashboard',
   'https://www.camcashgrl.com/guides/cam-model-session-breakdown',
-  'https://www.camcashgrl.com/guides/chaturbate-best-hours',
+  'https://www.camcashgrl.com/guides/chaturbate-hours',
 
   // Tools
   'https://www.camcashgrl.com/tools/cam-model-name-generator',

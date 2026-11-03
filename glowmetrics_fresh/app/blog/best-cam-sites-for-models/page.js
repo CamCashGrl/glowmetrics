@@ -304,7 +304,7 @@ export default function BestCamSitesForModels() {
         <div style={s.profileTitle}>Profile 1: The Public Room Performer</div>
         <p style={{ ...s.p, marginBottom: 0 }}>
           You are expressive, enjoy crowd energy, and are good at reading public chat momentum to trigger tips. You can sustain energy in a free room long enough for viewers to convert into tippers. <strong style={{ color: '#e2e8f0' }}>Best fit: large freemium platforms</strong> like Chaturbate or Stripchat where discoverability is highest and token goals, countdowns, and tip menus drive the room. Track your{' '}
-          <a href="/guides/chaturbate-best-hours" style={s.iLink}>best streaming hours</a> from day one because session timing has an outsized effect on results here.
+          <a href="/guides/chaturbate-hours" style={s.iLink}>best streaming hours</a> from day one because session timing has an outsized effect on results here.
         </p>
       </div>
 
@@ -451,7 +451,7 @@ export default function BestCamSitesForModels() {
           <a href="/blog/how-to-increase-cam-earnings" style={s.relLink}>→ How to increase cam earnings</a>
           <a href="/guides/cam-model-analytics" style={s.relLink}>→ Cam model analytics guide</a>
           <a href="/guides/chaturbate-earnings-tracker" style={s.relLink}>→ Chaturbate earnings tracker</a>
-          <a href="/guides/chaturbate-best-hours" style={s.relLink}>→ Best time to stream on Chaturbate</a>
+          <a href="/guides/chaturbate-hours" style={s.relLink}>→ Best time to stream on Chaturbate</a>
           <a href="/guides/cam-model-top-tippers" style={s.relLink}>→ Cam model top tippers guide</a>
           <a href="/blog/cam-model-fan-crm" style={s.relLink}>→ Whale Watch — Protect your highest-value fans</a>
         </div>

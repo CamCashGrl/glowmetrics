@@ -85,6 +85,14 @@ function tryParseDate(str){
   if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,+mon,+day,+hr,+min)}
   const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,months[mon.toLowerCase()]+1,+day,h,+min)}
+  // The generic fallback below must only ever see a FULL date. new Date() reads
+  // a bare number as a year ("393" -> year 393, "17298" -> year 17298, "7" ->
+  // July 2001) and a year-less string as 2000/2001, which silently stored
+  // tips on invented dates. Require a 4-digit year plus a month name or a
+  // d-m-y style date; anything else is not a date and the row is skipped.
+  const hasYear=/\b\d{4}\b/.test(s)
+  const hasMonthOrParts=/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i.test(s)||/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}/.test(s)
+  if(!hasYear||!hasMonthOrParts)return null
   const d=new Date(s);if(isNaN(d.getTime()))return null
   const naive=s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?$/)
   if(naive)d.wall=`${naive[1]} ${naive[2]}:${naive[3]||'00'}`
@@ -350,8 +358,11 @@ export function parseRows(rawText,platformId){
         // matched neither branch above once tokens was already found —
         // silently dropping a real trusted payout in favor of a token-rate
         // estimate. Once tokens is known and usd isn't, treat the next
-        // positive number as the real payout regardless of its integer-ness.
-        else if(tokens!==null&&usd===null)usd=n
+        // positive number as the real payout regardless of its integer-ness —
+        // but only if the cell is written as money ("$20.00" / "9.00"). A bare
+        // integer ("7886") in an unlabeled column is a running token BALANCE,
+        // never a tip amount; it is ignored and usd falls back to tokens x rate.
+        else if(tokens!==null&&usd===null&&/[$.]/.test(col))usd=n
       }else if(col.length>0&&isNaN(parseFloat(col))){
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
@@ -1031,9 +1042,6 @@ export default function OnboardingPage(){
   // Existing subscription state from profiles (no local trial state).
   const[billing,setBilling]=useState({isPro:false,trialEndsAt:null,subscriptionStatus:null})
   const[trialBusy,setTrialBusy]=useState(false)
-  // Extension connected = at least one tip the extension has sent (the same
-  // signal the Live page uses). Null while checking.
-  const[extConnected,setExtConnected]=useState(null)
   const csvRef=useRef()
 
   function enterDashboard(){
@@ -1133,7 +1141,7 @@ export default function OnboardingPage(){
   useEffect(()=>{
     if(!user||step!=='trial')return
     track('pro_preview_viewed',{source:'onboarding',plan:'free',trial_length:7})
-    track('onboarding_trial_screen_viewed',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
+    track('onboarding_trial_screen_viewed',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length,variant:'pro_trial_card_v2'})
   },[step,user])
 
   // onboarding_complete is set only once the user picks Trial or Free on the
@@ -1432,18 +1440,11 @@ export default function OnboardingPage(){
 
   async function handleChooseFree(){
     track('onboarding_trial_skipped')
-    track('onboarding_free_selected',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
+    track('onboarding_free_selected',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length,trial_status:trialStatus})
     setTrialChoice('free')
     await markDone()
     setStep('freeReady')
   }
-
-  useEffect(()=>{
-    if(step!=='trial'||!user||extConnected!==null)return
-    let live=true
-    supabase.from('tips').select('id').eq('source','extension').limit(1).then(({data})=>{if(live)setExtConnected(!!(data&&data.length))},()=>{if(live)setExtConnected(false)})
-    return()=>{live=false}
-  },[step,user,extConnected])
 
   // Step 5 state from existing subscription data only.
   const trialStatus=(()=>{
@@ -1455,10 +1456,13 @@ export default function OnboardingPage(){
     return 'eligible'
   })()
 
+  function tipsDisplayedNow(){return importResult?.inserted>0?importResult.inserted:(preview?.tipsDetected||0)}
+
   async function handleStartTrial(){
     if(!user||trialBusy)return
     setTrialBusy(true)
     track('onboarding_trial_started',{primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length})
+    track('onboarding_trial_cta_clicked',{trial_status:trialStatus,primary_platform:primaryPlatformId,platforms_selected:selectedPlatforms.length,tips_analyzed:tipsDisplayedNow()})
     setTrialChoice('trial')
     // Mark complete before leaving for Stripe: both success_url and
     // cancel_url return to /dashboard.
@@ -1478,11 +1482,12 @@ export default function OnboardingPage(){
         body:JSON.stringify({plan_type:'standard_monthly'})
       })
       const json=await res.json()
-      if(json.url)window.location.href=json.url
+      if(json.url){track('onboarding_trial_checkout_redirected',{trial_status:trialStatus});window.location.href=json.url}
       else throw new Error(json.error||'No checkout URL returned')
     }catch(e){
       console.error('Trial checkout failed:',e)
       trackCheckoutEvent('failed',{source:'onboarding'})
+      track('onboarding_trial_checkout_failed',{trial_status:trialStatus})
       setTrialBusy(false)
       alert(e.message||'Failed to start trial. Please try again.')
     }
@@ -1565,7 +1570,7 @@ export default function OnboardingPage(){
 
           {!['loading','done'].includes(step)&&(
             <button
-              onClick={handleCloseClick}
+              onClick={()=>{if(step==='trial')track('onboarding_trial_dismissed',{trial_status:trialStatus});handleCloseClick()}}
               aria-label="Close onboarding"
               style={{position:'absolute',top:16,right:16,width:28,height:28,borderRadius:'50%',border:'1px solid rgba(255,255,255,0.12)',background:'rgba(255,255,255,0.04)',color:'rgba(148,163,184,0.7)',fontSize:13,lineHeight:1,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:5,transition:'all 0.18s'}}
               onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,0.25)'}}
@@ -2012,88 +2017,63 @@ export default function OnboardingPage(){
 
           {/* ══ TRIAL UPSELL ══ */}
           {step==='trial'&&(()=>{
-            // Free column: each bullet is enforced by the code today (see lib/planLimits.js,
-            // applyFreeAnalysisWindow, platformIntelligenceAnalytics visibleSpenders, and the
-            // live tips route, which is not plan-gated).
-            const freeBullets=[
-              '1 platform with full history',
-              'Other platforms: 31-day view',
-              'Top 3 fans visible',
-              'Live Mode included',
-            ]
-            const proBullets=['Live tip tracking','No more manual imports','Accurate earnings & fan data','Works while streaming']
-            // Decorative browser window with live-tip cards (no third-party logos).
-            const tipCard=(c,label,tokens,i)=>(
-              <div key={i} className="ob-ext-tip" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 8px',borderRadius:7,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',animationDelay:`${i*0.6}s`}}>
-                <span style={{width:20,height:20,borderRadius:'50%',flexShrink:0,background:c,boxShadow:`0 0 8px ${c}`}}/>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:9,color:'#e2e8f0',fontWeight:700,whiteSpace:'nowrap'}}>{label}</div>
-                  <div style={{fontSize:8.5,color:c,fontWeight:800}}>{tokens}</div>
-                </div>
-                <svg aria-hidden="true" width="12" height="11" viewBox="0 0 24 22" style={{marginLeft:'auto',flexShrink:0}}><path d="M12 21 3 12.2C0.3 9.6 0.2 5.5 2.8 2.9c2.4-2.4 6.3-2.3 8.6.2L12 4l.6-.9c2.3-2.5 6.2-2.6 8.6-.2 2.6 2.6 2.5 6.7-.2 9.3z" fill="#ff2fae"/></svg>
-              </div>)
+            // Pro trial upsell. Every benefit listed has real Pro gating in code
+            // (see TRIAL_COPY). The tip count is the real count from this import.
+            const card={borderRadius:14,border:'1px solid rgba(34,211,238,0.22)',background:'rgba(4,10,24,0.6)'}
             return(
-            <div data-testid="step5-trial" style={{animation:'fadeUp 0.3s ease both',display:'flex',flexDirection:'column',gap:8,padding:'0 4px'}}>
-              {/* Hero: animated extension promo */}
-              <div className="ob-ext-card" style={{position:'relative',borderRadius:14,padding:'12px 14px',background:'linear-gradient(135deg,rgba(34,211,238,0.07),rgba(168,85,247,0.12) 55%,rgba(255,47,174,0.10))',border:'1px solid rgba(168,85,247,0.35)',boxShadow:'0 0 28px rgba(168,85,247,0.15)'}}>
-                <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',gap:14,alignItems:'center'}}>
-                  <div aria-hidden="true" style={{position:'relative',height:150,borderRadius:12,background:'linear-gradient(160deg,rgba(14,20,44,0.9),rgba(40,16,70,0.9))',border:'1px solid rgba(168,85,247,0.35)',boxShadow:'0 0 30px rgba(236,72,153,0.25)',overflow:'hidden',padding:'9px'}}>
-                    <div style={{height:14,display:'flex',alignItems:'center',gap:4,marginBottom:7}}>
-                      {['#ff5f57','#febc2e','#28c840'].map(c=>(<span key={c} style={{width:6,height:6,borderRadius:'50%',background:c,opacity:0.8}}/>))}
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                      {tipCard('#22d3ee','new tip!','100 tokens',0)}
-                      {tipCard('#a78bfa','new tip!','25 tokens',1)}
-                      {tipCard('#ff2fae','new tip!','50 tokens',2)}
-                    </div>
-                  </div>
-                  <div style={{textAlign:'left'}}>
-                    <div style={{display:'inline-block',fontSize:9,fontWeight:900,letterSpacing:'0.12em',textTransform:'uppercase',color:'#fff',background:'linear-gradient(90deg,#ff2fae,#a855f7)',borderRadius:999,padding:'3px 10px',marginBottom:8}}>Recommended</div>
-                    <h1 style={{fontSize:'clamp(18px,2.6dvh,22px)',fontWeight:900,color:'#fff',lineHeight:1.15,marginBottom:8}}>Track tips automatically while you stream</h1>
-                    {proBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'center',gap:8,fontSize:11.5,color:'rgba(226,232,240,0.92)',marginBottom:4}}><span style={{color:CYAN,fontWeight:900}}>✓</span>{t}</div>))}
-                  </div>
+            <div data-testid="step5-trial" style={{animation:'fadeUp 0.3s ease both',display:'flex',flexDirection:'column',gap:10,padding:'0 4px',textAlign:'center'}}>
+              <div aria-hidden="true" style={{margin:'0 auto',width:44,height:44,borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,background:'linear-gradient(135deg,#6C5CFF,#FF2FAE)',boxShadow:'0 0 24px rgba(255,47,174,0.35)'}}>👑</div>
+              <h1 style={{fontSize:'clamp(18px,2.6dvh,22px)',fontWeight:900,color:'#fff',lineHeight:1.2}}>{TRIAL_COPY.headline}</h1>
+              <p style={{fontSize:12,color:'rgba(203,213,225,0.85)',lineHeight:1.45,margin:0}}>{TRIAL_COPY.sub}</p>
+              {tipsDisplayed>0&&(
+                <div data-testid="trial-tips-analyzed" style={{alignSelf:'center',display:'flex',alignItems:'center',gap:8,padding:'7px 14px',borderRadius:10,border:'1px solid rgba(108,92,255,0.35)',background:'rgba(108,92,255,0.08)',fontSize:11.5,color:'rgba(226,232,240,0.92)'}}>
+                  <span aria-hidden="true" style={{color:'#a78bfa'}}>▮▮▮</span>
+                  <span>CamCash already analyzed <b style={{color:CYAN}}>{tipsDisplayed.toLocaleString('en-US')} tips</b> from your first import.</span>
                 </div>
-                <div style={{display:'flex',flexDirection:'column',alignItems:'center',marginTop:10}}>
-                  {extConnected?(
-                    <div data-testid="ext-connected" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:38,width:'min(440px,100%)',borderRadius:10,border:'1px solid rgba(74,222,128,0.45)',background:'rgba(74,222,128,0.08)',color:'#86efac',fontSize:13,fontWeight:900}}>✓ Extension connected</div>
-                  ):(<>
-                    <a href="/camcash-extension.zip" download="camcash-extension.zip" data-testid="ext-download" onClick={()=>track('extension_download_clicked',{source_page:'onboarding'})} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,height:38,width:'min(440px,100%)',borderRadius:10,background:'linear-gradient(90deg,#22d3ee,#a855f7,#ff2fae)',color:'#fff',fontSize:13,fontWeight:900,textDecoration:'none',boxShadow:'0 0 20px rgba(236,72,153,0.3)'}}>⬇ Download CamCash Extension</a>
-                    <div style={{fontSize:9.5,color:'rgba(148,163,184,0.85)',marginTop:6,textAlign:'center',lineHeight:1.4}}>Unzip it, open chrome://extensions, turn on Developer mode, then Load unpacked. Optional — you can add it later.</div>
-                  </>)}
+              )}
+
+              <div data-testid="trial-benefits" style={{...card,padding:'12px 14px',textAlign:'left'}}>
+                <div style={{fontSize:9.5,fontWeight:900,letterSpacing:'0.16em',textTransform:'uppercase',color:CYAN,marginBottom:8}}>With CamCash Pro</div>
+                <div className="ob-s5-bottom" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px 14px'}}>
+                  {TRIAL_COPY.benefits.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:11.5,color:'rgba(226,232,240,0.92)',lineHeight:1.35}}><span style={{color:CYAN,fontWeight:900}}>✓</span>{t}</div>))}
                 </div>
               </div>
 
-              {/* Bottom: trial (left) and Free (right) */}
               {trialStatus==='pro'?(
-                <div data-testid="trial-pro" style={{borderRadius:14,border:'1px solid rgba(74,222,128,0.35)',background:'rgba(74,222,128,0.06)',padding:'12px',textAlign:'center'}}>
+                <div data-testid="trial-pro" style={{borderRadius:14,border:'1px solid rgba(74,222,128,0.35)',background:'rgba(74,222,128,0.06)',padding:'12px'}}>
                   <div style={{fontSize:15,fontWeight:900,color:'#fff',marginBottom:4}}>You’re on CamCash Pro</div>
                   <div style={{fontSize:11,color:'rgba(203,213,225,0.85)',marginBottom:10}}>Full history and every insight are unlocked.</div>
-                  <OBBtn onClick={enterDashboard} style={{height:40,fontSize:13}}>Enter CamCash →</OBBtn>
+                  <OBBtn onClick={()=>{track('onboarding_trial_enter_dashboard_clicked',{trial_status:'pro'});enterDashboard()}} style={{height:40,fontSize:13}}>Enter CamCash →</OBBtn>
                 </div>
               ):(
-              <div className="ob-s5-bottom" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,alignItems:'stretch'}}>
-                <div data-testid="trial-card" style={{borderRadius:14,border:'1px solid rgba(34,211,238,0.22)',background:'rgba(4,10,24,0.6)',padding:'12px',textAlign:'center',display:'flex',flexDirection:'column',justifyContent:'center'}}>
-                  {trialStatus==='trialing'?(<>
+              <div data-testid="trial-card" style={{display:'flex',flexDirection:'column',gap:10}}>
+                {trialStatus==='trialing'?(<>
+                  <div style={{...card,padding:'12px'}}>
                     <div style={{fontSize:15,fontWeight:900,color:'#fff'}}>Your Pro trial is active</div>
-                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>Ends {new Date(billing.trialEndsAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · then ${PRO_MONTHLY_PRICE}/month</div>
-                    <OBBtn onClick={enterDashboard} style={{height:40,fontSize:13}}>Enter CamCash →</OBBtn>
-                  </>):trialStatus==='eligible'?(<>
-                    <div style={{fontSize:24,fontWeight:900,color:'#fff',lineHeight:1.1}}><span style={{color:CYAN}}>$0</span> today</div>
-                    <div style={{fontSize:18,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginTop:2}}>{TRIAL_DAYS} days free</div>
-                    <div style={{fontSize:10,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>Then ${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
-                    <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:40,fontSize:13}}>{`Start my ${TRIAL_DAYS}-day Pro trial →`}</OBBtn>
-                  </>):(<>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',marginTop:4}}>Ends {new Date(billing.trialEndsAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · then ${PRO_MONTHLY_PRICE}/month</div>
+                  </div>
+                  <OBBtn onClick={()=>{track('onboarding_trial_enter_dashboard_clicked',{trial_status:'trialing'});enterDashboard()}} style={{height:44,fontSize:14}}>Enter CamCash →</OBBtn>
+                </>):trialStatus==='eligible'?(<>
+                  <div style={{...card,border:'1px solid rgba(255,47,174,0.30)',padding:'12px'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:14,flexWrap:'wrap'}}>
+                      <div style={{fontSize:26,fontWeight:900,color:'#fff',lineHeight:1.1}}><span style={{color:CYAN}}>$0</span> today</div>
+                      <span aria-hidden="true" style={{width:1,height:26,background:'rgba(255,255,255,0.15)'}}/>
+                      <div style={{fontSize:22,fontWeight:900,background:GRAD,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>{TRIAL_DAYS} days free</div>
+                    </div>
+                    <div style={{fontSize:10,color:'rgba(148,163,184,0.85)',marginTop:6}}>Then ${PRO_MONTHLY_PRICE}/month • Cancel anytime before your trial ends.</div>
+                  </div>
+                  <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:46,fontSize:14}}>{TRIAL_COPY.cta}</OBBtn>
+                </>):(<>
+                  <div style={{...card,padding:'12px'}}>
                     <div style={{fontSize:15,fontWeight:900,color:'#fff'}}>Upgrade to Pro</div>
-                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',margin:'4px 0 10px'}}>${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
-                    <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:40,fontSize:13}}>Upgrade to Pro →</OBBtn>
-                  </>)}
-                </div>
-
-                <div data-testid="free-column" style={{borderRadius:14,border:'1px solid rgba(255,255,255,0.1)',background:'rgba(4,10,24,0.6)',padding:'12px',textAlign:'left',display:'flex',flexDirection:'column'}}>
-                  <div style={{fontSize:12.5,fontWeight:900,color:'#fff',marginBottom:6,textAlign:'center'}}>Continue with Free</div>
-                  {freeBullets.map(t=>(<div key={t} style={{display:'flex',alignItems:'flex-start',gap:6,fontSize:10.5,color:'rgba(203,213,225,0.88)',marginBottom:3,lineHeight:1.35}}><span style={{color:'#4ade80',fontWeight:900}}>✓</span>{t}</div>))}
-                  <button onClick={handleChooseFree} style={{marginTop:'auto',width:'100%',height:32,borderRadius:9,border:'1px solid rgba(148,163,184,0.35)',background:'transparent',color:'rgba(226,232,240,0.9)',fontSize:11.5,fontWeight:800,cursor:'pointer'}}>Continue with Free</button>
-                </div>
+                    <div style={{fontSize:10.5,color:'rgba(148,163,184,0.85)',marginTop:4}}>${PRO_MONTHLY_PRICE}/month • Cancel anytime</div>
+                  </div>
+                  <OBBtn onClick={handleStartTrial} disabled={trialBusy} style={{height:44,fontSize:14}}>Upgrade to Pro →</OBBtn>
+                </>)}
+                {trialStatus!=='trialing'&&(<>
+                  <div aria-hidden="true" style={{fontSize:10,color:'rgba(148,163,184,0.6)'}}>or</div>
+                  <button data-testid="free-choice" onClick={handleChooseFree} style={{background:'none',border:'none',color:'rgba(226,232,240,0.9)',fontSize:12,fontWeight:800,cursor:'pointer',padding:4}}>Continue with Free</button>
+                </>)}
               </div>
               )}
             </div>

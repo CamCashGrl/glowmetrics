@@ -13,6 +13,13 @@ import { detectSessions, SESSION_GAP_MS, isValidSession } from './analytics/sess
 // TIMEZONE HELPERS
 // ===============================
 
+// A tip with no platform is grouped as 'Unknown' — never assigned to a real
+// platform (it used to default to 'Chaturbate', silently adding unattributed
+// revenue to that platform's totals, times and rates). Same label the rest of
+// the engine and the importer use for an undetermined platform.
+export const MISSING_PLATFORM = 'Unknown'
+const platformKey = (p) => p || MISSING_PLATFORM
+
 function calcMedian(arr) {
   if (!arr || arr.length === 0) return 0
   const sorted = [...arr].sort((a, b) => a - b)
@@ -72,6 +79,14 @@ export function toLocalDow(dateStr, tz) {
     return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
       .indexOf(dayName)
   } catch { return new Date(dateStr).getUTCDay() }
+}
+
+// Creator-local calendar date in the same M/D/YYYY form toLocaleDateString()
+// produced for en-US, but on the creator's clock instead of the device's.
+function toLocalDisplayDate(dateStr, tz) {
+  try {
+    return localTimeFormatter('mdy', tz, 'en-US', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(new Date(dateStr))
+  } catch { return new Date(dateStr).toISOString().slice(0, 10) }
 }
 
 function toLocalDateStr(dateStr, tz) {
@@ -1000,9 +1015,15 @@ export function identifyWhales(tips, meaningfulSessions = [], userTz = 'UTC') {
       lastTipDate: lastTipDate.toISOString(), firstTipDate: firstTipDate.toISOString(),
       daysSinceLastTip,
       // Field NAME kept as avgDaysBetweenTips for compatibility (per spec),
-      // but its MEANING is now avg days between distinct visits, and it is
-      // null (not a fabricated number) below FAN_MIN_OBSERVATIONS_FOR_BASELINE
-      // worth of visits.
+      // but its MEANING is now avg days between distinct visits.
+      // ACTUAL GATE (documented as-is; product decision pending): it is set
+      // from 2 visits (observationCount >= 2) and null below that — NOT from
+      // FAN_MIN_OBSERVATIONS_FOR_BASELINE (3) as an earlier comment claimed.
+      // The 3-visit baseline gates expectedNextTip, tipProbability,
+      // lifetimeValue and behavioralState only. So Top Earners
+      // (page.js "every ~Nd", shown when tipCount > 1) and the fan profile can
+      // show a cadence from 2 visits, while "Who deserves your attention"
+      // (CommandCenter, needs expectedNextTip) only does so from 3.
       avgDaysBetweenTips: avgDaysBetweenVisits !== null ? parseFloat(avgDaysBetweenVisits.toFixed(1)) : null,
       daysBetweenTipsArr: daysBetweenVisitsArr,
       observationCount, baselineEstablished,
@@ -1164,7 +1185,11 @@ export function generateWhaleAlerts(whales) {
   return alerts.sort((a, b) => order[a.severity] - order[b.severity])
 }
 
-export function predictRevenue(tips, sessions) {
+// tz: the creator's selected IANA timezone. "Tonight" means the creator's
+// local weekday, so both today and each session's weekday are read on that
+// clock. Defaults to 'UTC' only for callers outside aggregateRows that have
+// not passed one (their previous behaviour).
+export function predictRevenue(tips, sessions, tz = 'UTC') {
   if (!sessions.length) return null
   const predictions = {}
   const now = Date.now()
@@ -1176,8 +1201,8 @@ export function predictRevenue(tips, sessions) {
   const prev30Rev = prev30.reduce((s, t) => s + t.usd, 0)
   const weeklyTrend = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : null
   predictions.next30Days = { amount: parseFloat(last30Rev.toFixed(2)), confidence: last30.length > 50 ? 'High' : last30.length > 25 ? 'Medium' : 'Low', trend: weeklyTrend !== null ? parseFloat(weeklyTrend.toFixed(1)) : null }
-  const todayDow = new Date().getUTCDay()
-  const sameDaySessions = sessions.filter(s => new Date(s.startTime).getUTCDay() === todayDow)
+  const todayDow = toLocalDow(new Date(), tz)
+  const sameDaySessions = sessions.filter(s => toLocalDow(s.startTime, tz) === todayDow)
   if (sameDaySessions.length >= 3) {
     const amounts = sameDaySessions.map(s => s.totalUSD).sort((a, b) => a - b)
     const avg = amounts.reduce((s, x) => s + x, 0) / amounts.length
@@ -1191,13 +1216,15 @@ export function predictRevenue(tips, sessions) {
   return predictions
 }
 
-export function generateLossAlerts(tips, sessions, whales, bestHour) {
+// tz: creator timezone — bestHour.hour is a creator-local hour, so session
+// start hours must be read on the same clock.
+export function generateLossAlerts(tips, sessions, whales, bestHour, tz = 'UTC') {
   const alerts = []
   const now = Date.now()
   if (bestHour) {
     const bh = parseInt(bestHour.hour)
     const recentSessions = sessions.filter(s => (now - new Date(s.startTime)) / 86400000 <= 3)
-    const recentAtPeak = recentSessions.filter(s => Math.abs(new Date(s.startTime).getUTCHours() - bh) <= 1)
+    const recentAtPeak = recentSessions.filter(s => Math.abs(toLocalHour(s.startTime, tz) - bh) <= 1)
     if (recentSessions.length > 0 && recentAtPeak.length === 0) {
       const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
       alerts.push({ type: 'peak_missed', severity: 'warning', icon: '🚨', message: `You haven't streamed during your peak window (${label}) in 3 days — estimated loss: $${(bestHour.avg * 3).toFixed(2)}`, action: `Go live at ${label} to recover this` })
@@ -1225,7 +1252,8 @@ export function generateLossAlerts(tips, sessions, whales, bestHour) {
   return alerts
 }
 
-export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, precomputedWhales = null) {
+// tz: creator timezone — bestDay.day is a creator-local weekday.
+export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, precomputedWhales = null, tz = 'UTC') {
   const insights = []
   if (!tips.length || !sessions.length) return insights
   const now = Date.now()
@@ -1233,7 +1261,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   if (bestDay && worstDay && bestDay.day !== worstDay.day) {
     const daySessionMap = {}
     sessions.forEach(s => {
-      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(s.startTime).getUTCDay()]
+      const d = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][toLocalDow(s.startTime, tz)]
       if (!daySessionMap[d]) daySessionMap[d] = []
       daySessionMap[d].push(s.totalUSD)
     })
@@ -1255,7 +1283,7 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
     insights.push({ icon: '⏰', text: `Go live at ${label} — your avg session earnings are ${multiplier ? `${multiplier}x higher` : 'at their peak'} at this hour ($${bestHour.avg.toFixed(0)} avg). Missing this window costs you real money every session`, type: 'time', priority: 1 })
   }
 
-  const whales = precomputedWhales || identifyWhales(tips, sessions)
+  const whales = precomputedWhales || identifyWhales(tips, sessions, tz)
   const trueWhales = whales.filter(w => w.tier === 'Whale')
   const topWhales = (trueWhales.length > 0 ? trueWhales : whales.filter(w => w.tier === 'Shark')).slice(0, 5)
   const wE = topWhales.reduce((s, w) => s + w.totalUSD, 0)
@@ -1310,7 +1338,9 @@ export function generateInsights(tips, sessions, bestDay, worstDay, bestHour, pr
   return insights.sort((a, b) => a.priority - b.priority)
 }
 
-export function generateNextMoves(tips, sessions, whales, predictions, bestHour, hourAvgs = []) {
+// tz: creator timezone — best hours are creator-local, so "hours until peak"
+// is measured on the creator's clock, not UTC.
+export function generateNextMoves(tips, sessions, whales, predictions, bestHour, hourAvgs = [], tz = 'UTC') {
   const moves = []
   const now = Date.now()
 
@@ -1320,7 +1350,7 @@ export function generateNextMoves(tips, sessions, whales, predictions, bestHour,
 
   if (hourToUse) {
     const bh = parseInt(hourToUse.hour)
-    const currentHour = new Date().getUTCHours()
+    const currentHour = toLocalHour(new Date(), tz)
     const hoursUntil = (bh - currentHour + 24) % 24
     const label = bh === 0 ? '12 AM' : bh < 12 ? `${bh} AM` : bh === 12 ? '12 PM' : `${bh - 12} PM`
 
@@ -1369,7 +1399,7 @@ export function aggregateRows(tips, tz = null) {
       totalUSD: 0, totalTokens: 0, totalTips: 0, avgTipSize: 0,
       topTippers: [], platforms: [], sessions: [], insights: [],
       predictions: null, whaleAlerts: [], lossAlerts: [], nextMoves: [],
-      bestDay: null, bestHour: null, platformBestTimes: {}, canonicalBestTimes: { bestWindow: null, earlySignal: null, grid: [] },
+      bestDay: null, bestHour: null, platformBestTimes: {}, platformDayActivity: {}, canonicalBestTimes: { bestWindow: null, earlySignal: null, grid: [] },
       monthlyData: [], bestMonth: null, tipTypeBreakdown: [], platformTipTypes: {},
       privateShowFans: [], spyShowFans: [], earningsVelocity: null, totalStreamMinutes: 0,
       estimatedHourlyRate: 0, hourlyRateSessionCount: 0, hourlyRateTotalMinutes: 0,
@@ -1411,17 +1441,28 @@ export function aggregateRows(tips, tz = null) {
   // an unknown duration has no denominator. Counting such a session's revenue
   // against only the timed sessions' hours inflates the rate, which is exactly
   // what this rule exists to prevent.
+  //
+  // Applied ONLY to meaningfulSessions, which already satisfy the canonical
+  // isValidSession rule (duration >= 30 min AND tips >= 2). On top of that a
+  // rate needs a known duration and some revenue. (A former
+  // `durationMinutes >= 15` clause here could never exclude anything — every
+  // meaningful session is >= 30 min — and was removed so the code states the
+  // rule that actually applies.)
   const isHourlyRateEligible = (s) =>
     s.tipCount >= 2 &&
     !s.durationUnknown &&
     Number.isFinite(s.durationMinutes) &&
-    s.durationMinutes >= 15 &&
     s.totalUSD > 0
 
   const hourlyRateSessions = meaningfulSessions.filter(isHourlyRateEligible)
 
   const dayTipsUSD = {}, dayActiveDates = {}, hourTipsUSD = {}, hourBucketSets = {}
   const dayDateAmts = {}, hourBucketAmts = {}
+  // Distinct creator-local dates seen at each local hour. The best-time
+  // eligibility rule is "a pattern across at least three separate days";
+  // UTC hour buckets only equal local dates in whole-hour offset zones (in
+  // +5:30, one local hour spans two UTC buckets), so dates are counted here.
+  const hourDateSets = {}
   const UTC_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
 
   tips.forEach(t => {
@@ -1436,9 +1477,10 @@ export function aggregateRows(tips, tz = null) {
     dayTipsUSD[dow] += usd
     dayActiveDates[dow].add(dateKey)
     dayDateAmts[dow][dateKey] = (dayDateAmts[dow][dateKey] || 0) + usd
-    if (!hourTipsUSD[h]) { hourTipsUSD[h] = 0; hourBucketSets[h] = new Set(); hourBucketAmts[h] = {} }
+    if (!hourTipsUSD[h]) { hourTipsUSD[h] = 0; hourBucketSets[h] = new Set(); hourBucketAmts[h] = {}; hourDateSets[h] = new Set() }
     hourTipsUSD[h] += usd
     hourBucketSets[h].add(hBucket)
+    hourDateSets[h].add(dateKey)
     hourBucketAmts[h][hBucket] = (hourBucketAmts[h][hBucket] || 0) + usd
   })
 
@@ -1446,19 +1488,19 @@ export function aggregateRows(tips, tz = null) {
     .filter(d => dayActiveDates[d].size >= 3)
     .map(d => ({ day: d, avg: parseFloat(calcMedian(Object.values(dayDateAmts[d])).toFixed(2)), total: dayTipsUSD[d], count: dayActiveDates[d].size }))
   const hourAvgs = Object.keys(hourTipsUSD)
-    .filter(h => hourBucketSets[h].size >= 3)
-    .map(h => ({ hour: h, avg: parseFloat(calcMedian(Object.values(hourBucketAmts[h])).toFixed(2)), total: hourTipsUSD[h], count: hourBucketSets[h].size }))
+    .filter(h => hourDateSets[h].size >= 3)
+    .map(h => ({ hour: h, avg: parseFloat(calcMedian(Object.values(hourBucketAmts[h])).toFixed(2)), total: hourTipsUSD[h], count: hourBucketSets[h].size, localDates: hourDateSets[h].size }))
   const bestDay  = [...dayAvgs].sort((a, b) => b.avg - a.avg)[0] || null
   const worstDay = [...dayAvgs].sort((a, b) => a.avg - b.avg)[0] || null
   const bestHour = [...hourAvgs].sort((a, b) => b.avg - a.avg)[0] || null
 
-  const whales      = identifyWhales(tips, meaningfulSessions)
+  const whales      = identifyWhales(tips, meaningfulSessions, userTz)
   const platformRiskContext = getPlatformRiskContext(tips, meaningfulSessions)
-  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales)
-  const predictions = predictRevenue(tips, meaningfulSessions)
+  const insights    = generateInsights(tips, meaningfulSessions, bestDay, worstDay, bestHour, whales, userTz)
+  const predictions = predictRevenue(tips, meaningfulSessions, userTz)
   const whaleAlerts = generateWhaleAlerts(whales)
-  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour)
-  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour, hourAvgs)
+  const lossAlerts  = generateLossAlerts(tips, meaningfulSessions, whales, bestHour, userTz)
+  const nextMoves   = generateNextMoves(tips, meaningfulSessions, whales, predictions, bestHour, hourAvgs, userTz)
 
   let totalUSD = 0, totalTokens = 0
   for (const t of tips) { totalUSD += t.usd || 0; totalTokens += t.tokens || 0 }
@@ -1471,7 +1513,7 @@ export function aggregateRows(tips, tz = null) {
 
   // Sum all tips by platform
   tips.forEach(t => {
-    const p = t.platform || 'Chaturbate'
+    const p = platformKey(t.platform)
     if (!platformMap[p]) { platformMap[p] = { platform: p, totalUSD: 0, totalTokens: 0, sessions: 0, hours: 0, tips: 0 } }
     platformMap[p].totalUSD += t.usd || 0
     platformMap[p].totalTokens += t.tokens || 0
@@ -1480,9 +1522,10 @@ export function aggregateRows(tips, tz = null) {
 
   // Add session and hours data from meaningful sessions (for context, but revenue is from all tips)
   meaningfulSessions.forEach(s => {
-    if (!platformSessionMap[s.platform]) platformSessionMap[s.platform] = { sessions: 0, hours: 0 }
-    platformSessionMap[s.platform].sessions += 1
-    if (!s.durationUnknown) platformSessionMap[s.platform].hours += s.durationHours
+    const sp = platformKey(s.platform)
+    if (!platformSessionMap[sp]) platformSessionMap[sp] = { sessions: 0, hours: 0 }
+    platformSessionMap[sp].sessions += 1
+    if (!s.durationUnknown) platformSessionMap[sp].hours += s.durationHours
   })
 
   // Merge session/hours data into platform map
@@ -1497,10 +1540,11 @@ export function aggregateRows(tips, tz = null) {
   // so summing these across platforms reproduces estimatedHourlyRate exactly.
   const platformRate = {}
   hourlyRateSessions.forEach(s => {
-    if (!platformRate[s.platform]) platformRate[s.platform] = { usd: 0, minutes: 0, sessions: 0 }
-    platformRate[s.platform].usd     += s.totalUSD
-    platformRate[s.platform].minutes += s.durationMinutes
-    platformRate[s.platform].sessions += 1
+    const sp = platformKey(s.platform)
+    if (!platformRate[sp]) platformRate[sp] = { usd: 0, minutes: 0, sessions: 0 }
+    platformRate[sp].usd     += s.totalUSD
+    platformRate[sp].minutes += s.durationMinutes
+    platformRate[sp].sessions += 1
   })
 
   const platforms = Object.values(platformMap).map(p => {
@@ -1522,18 +1566,21 @@ export function aggregateRows(tips, tz = null) {
   const topTippers = whales.map((w, i) => ({
     rank: i + 1, username: w.username, usd: w.totalUSD, tokens: w.totalTokens, count: w.tipCount,
     status: w.tier === 'Whale' ? '🐳 WHALE' : w.tier === 'Shark' ? '🦈 SHARK' : w.tier === 'Dormant' ? '💤 DORMANT' : '🐟 REGULAR',
-    last: new Date(w.lastTipDate).toLocaleDateString(), first: new Date(w.firstTipDate).toLocaleDateString(),
+    last: toLocalDisplayDate(w.lastTipDate, userTz), first: toLocalDisplayDate(w.firstTipDate, userTz),
     daysSince: w.daysSinceLastTip, tipProbability: w.tipProbability, churnRisk: w.churnRisk
   }))
 
   // ── PER-PLATFORM BEST TIMES ───────────────────────────────────────────
   const UTC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
   const platHourUSD = {}, platHourBuckets = {}, platDayUSD = {}, platDayDates = {}
+  // Distinct creator-local dates per platform hour / platform weekday-hour —
+  // the ">= 3 separate days" rule, counted in local dates (see hourDateSets).
+  const platHourDates = {}, platDayHourDates = {}
   const platDayHourUSD = {}, platDayHourBuckets = {}
   const platHourBucketAmts = {}, platDayDateAmts = {}, platDayHourBucketAmts = {}
 
   tips.forEach(t => {
-    const p = t.platform || 'Chaturbate'
+    const p = platformKey(t.platform)
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
     const h = toLocalHour(t.dateRaw || t.date_time, userTz)
@@ -1542,9 +1589,9 @@ export function aggregateRows(tips, tz = null) {
     const hBucket = Math.floor(dt.getTime() / 3600000)
     const usd = t.usd || 0
 
-    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {}; platHourBucketAmts[p] = {} }
-    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set(); platHourBucketAmts[p][h] = {} }
-    platHourUSD[p][h] += usd; platHourBuckets[p][h].add(hBucket)
+    if (!platHourUSD[p]) { platHourUSD[p] = {}; platHourBuckets[p] = {}; platHourBucketAmts[p] = {}; platHourDates[p] = {} }
+    if (!platHourUSD[p][h]) { platHourUSD[p][h] = 0; platHourBuckets[p][h] = new Set(); platHourBucketAmts[p][h] = {}; platHourDates[p][h] = new Set() }
+    platHourUSD[p][h] += usd; platHourBuckets[p][h].add(hBucket); platHourDates[p][h].add(dateKey)
     platHourBucketAmts[p][h][hBucket] = (platHourBucketAmts[p][h][hBucket] || 0) + usd
 
     if (!platDayUSD[p]) { platDayUSD[p] = {}; platDayDates[p] = {}; platDayDateAmts[p] = {} }
@@ -1553,20 +1600,20 @@ export function aggregateRows(tips, tz = null) {
     platDayDateAmts[p][dow][dateKey] = (platDayDateAmts[p][dow][dateKey] || 0) + usd
 
     const dayHourKey = `${dow}__${h}`
-    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {}; platDayHourBucketAmts[p] = {} }
-    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set(); platDayHourBucketAmts[p][dayHourKey] = {} }
-    platDayHourUSD[p][dayHourKey] += usd; platDayHourBuckets[p][dayHourKey].add(hBucket)
+    if (!platDayHourUSD[p]) { platDayHourUSD[p] = {}; platDayHourBuckets[p] = {}; platDayHourBucketAmts[p] = {}; platDayHourDates[p] = {} }
+    if (!platDayHourUSD[p][dayHourKey]) { platDayHourUSD[p][dayHourKey] = 0; platDayHourBuckets[p][dayHourKey] = new Set(); platDayHourBucketAmts[p][dayHourKey] = {}; platDayHourDates[p][dayHourKey] = new Set() }
+    platDayHourUSD[p][dayHourKey] += usd; platDayHourBuckets[p][dayHourKey].add(hBucket); platDayHourDates[p][dayHourKey].add(dateKey)
     platDayHourBucketAmts[p][dayHourKey][hBucket] = (platDayHourBucketAmts[p][dayHourKey][hBucket] || 0) + usd
   })
 
   const platformBestTimes = {}
   Object.keys(platHourUSD).forEach(p => {
     const hourEntries = Object.keys(platHourUSD[p])
-      .filter(h => platHourBuckets[p][h].size >= 3)
+      .filter(h => platHourDates[p][h].size >= 3)
       .map(h => ({
         hour: parseInt(h),
         avg: parseFloat(calcMedian(Object.values(platHourBucketAmts[p][h])).toFixed(2)),
-        sessionCount: platHourBuckets[p][h].size, total: platHourUSD[p][h]
+        sessionCount: platHourBuckets[p][h].size, localDates: platHourDates[p][h].size, total: platHourUSD[p][h]
       }))
       .sort((a, b) => b.avg - a.avg)
     const dayEntries = Object.keys(platDayUSD[p])
@@ -1580,15 +1627,35 @@ export function aggregateRows(tips, tz = null) {
     const bestHourByDay = {}
     UTC_DAYS.forEach(dow => {
       const dayHourEntries = Object.keys(platDayHourUSD[p] || {})
-        .filter(k => k.startsWith(dow + '__') && platDayHourBuckets[p][k].size >= 3)
+        .filter(k => k.startsWith(dow + '__') && platDayHourDates[p][k].size >= 3)
         .map(k => {
           const h = parseInt(k.split('__')[1])
-          return { hour: h, avg: parseFloat(calcMedian(Object.values(platDayHourBucketAmts[p][k])).toFixed(2)), sessionCount: platDayHourBuckets[p][k].size }
+          return { hour: h, avg: parseFloat(calcMedian(Object.values(platDayHourBucketAmts[p][k])).toFixed(2)), sessionCount: platDayHourBuckets[p][k].size, localDates: platDayHourDates[p][k].size }
         })
         .sort((a, b) => b.avg - a.avg)
       if (dayHourEntries.length > 0) bestHourByDay[dow] = dayHourEntries[0]
     })
     platformBestTimes[p] = { hour: hourEntries[0] || null, bestDay: dayEntries[0] || null, bestHourByDay, allHours: hourEntries, allDays: dayEntries }
+  })
+
+  // ── PLATFORM × CREATOR-LOCAL WEEKDAY ACTIVITY (dashboard heatmap) ─────
+  // Every weekday for every platform in the engine's (plan-gated) input:
+  // total $ and distinct creator-local active dates, from the same pass that
+  // builds platformBestTimes. avgPerActiveDay = totalUSD / activeDays is the
+  // heatmap's existing "avg $/active day" measure, now computed once here so
+  // the dashboard no longer re-aggregates raw (ungated) tips. No minimum-date
+  // filter: the heatmap shows every observed cell.
+  const platformDayActivity = {}
+  Object.keys(platDayUSD).forEach(p => {
+    platformDayActivity[p] = {}
+    Object.keys(platDayUSD[p]).forEach(d => {
+      const activeDays = platDayDates[p][d].size
+      platformDayActivity[p][d] = {
+        totalUSD: parseFloat(platDayUSD[p][d].toFixed(2)),
+        activeDays,
+        avgPerActiveDay: activeDays > 0 ? parseFloat((platDayUSD[p][d] / activeDays).toFixed(2)) : 0,
+      }
+    })
   })
 
   // ── EARNINGS VELOCITY (legacy field, kept for existing callers) ───────
@@ -1632,7 +1699,7 @@ export function aggregateRows(tips, tz = null) {
   Object.keys(platformBestTimes).forEach(p => {
     const bestHourData = platformBestTimes[p].hour
     if (!bestHourData) return
-    const platSessions = timedSessions.filter(s => s.platform === p)
+    const platSessions = timedSessions.filter(s => platformKey(s.platform) === p)
     if (platSessions.length < 3) return
     const overallAvg = platSessions.reduce((s, x) => s + x.totalUSD, 0) / platSessions.length
     const bestHourAvg = bestHourData.avg
@@ -1683,15 +1750,16 @@ export function aggregateRows(tips, tz = null) {
   tips.forEach(t => {
     const dt = new Date(t.dateRaw || t.date_time)
     if (isNaN(dt.getTime())) return
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    // Creator-local month (YYYY-MM): a tip at 11:30 PM on the 31st belongs to
+    // that month on the creator's calendar, not the next UTC month.
+    const key = toLocalDateStr(t.dateRaw || t.date_time, userTz).slice(0, 7)
     if (!monthMap[key]) monthMap[key] = { usd: 0, tips: 0, fans: new Set(), sessions: 0 }
     monthMap[key].usd += t.usd || 0
     monthMap[key].tips += 1
     monthMap[key].fans.add(t.username.toLowerCase())
   })
   allValidSessions.forEach(s => {
-    const dt = new Date(s.startTime)
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    const key = toLocalDateStr(s.startTime, userTz).slice(0, 7)
     if (monthMap[key]) monthMap[key].sessions += 1
   })
   const monthlyData = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
@@ -1723,7 +1791,7 @@ export function aggregateRows(tips, tz = null) {
   // reads as a share of the whole business on a single-platform view.
   const platformTipTypeMap = {}
   tips.forEach(t => {
-    const plat = t.platform || 'Chaturbate'
+    const plat = platformKey(t.platform)
     const type = t.tip_type || 'Tip'
     if (!platformTipTypeMap[plat]) platformTipTypeMap[plat] = { total: 0, types: {} }
     if (!platformTipTypeMap[plat].types[type]) platformTipTypeMap[plat].types[type] = { usd: 0, count: 0, fans: new Set() }
@@ -1897,7 +1965,7 @@ export function aggregateRows(tips, tz = null) {
     let last = 0, prior = 0, priorTips = 0
     // FINANCIAL TRUTH: Use ALL tips by platform (matching overall momentum calculation)
     tips.forEach(t => {
-      const tipPlatform = t.platform || 'Chaturbate'
+      const tipPlatform = platformKey(t.platform)
       if (tipPlatform !== p) return
       const d = new Date(t.dateRaw || t.date_time)
       if (isNaN(d.getTime())) return
@@ -1932,7 +2000,7 @@ export function aggregateRows(tips, tz = null) {
     topTippers, platforms, sessions: meaningfulSessions,
     insights: validateInsights(insights),
     predictions, whaleAlerts, lossAlerts, nextMoves, whales,
-    bestDay, bestHour, platformBestTimes, canonicalBestTimes, bestWindowFanOverlap,
+    bestDay, bestHour, platformBestTimes, platformDayActivity, canonicalBestTimes, bestWindowFanOverlap,
     monthlyData, bestMonth,
     tipTypeBreakdown, platformTipTypes, privateShowFans, spyShowFans,
     earningsVelocity, totalStreamMinutes, platformVelocity,
