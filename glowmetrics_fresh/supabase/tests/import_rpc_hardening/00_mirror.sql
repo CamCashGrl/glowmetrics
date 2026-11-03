@@ -91,11 +91,20 @@ CREATE UNIQUE INDEX idx_paid_sessions_session_ref ON public.paid_sessions (user_
 ALTER TABLE public.tips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.paid_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.csv_uploads ENABLE ROW LEVEL SECURITY;
+-- RLS policies as in production (read 2026-11-01): own-row select/insert/delete
+-- on tips and paid_sessions (no UPDATE policy); csv_uploads own-row ALL.
 CREATE POLICY tips_own_select ON public.tips FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY tips_own_insert ON public.tips FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY tips_own_delete ON public.tips FOR DELETE USING (auth.uid() = user_id);
 CREATE POLICY paid_sessions_own_select ON public.paid_sessions FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY paid_sessions_own_insert ON public.paid_sessions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY paid_sessions_own_delete ON public.paid_sessions FOR DELETE USING (auth.uid() = user_id);
 CREATE POLICY csv_uploads_own ON public.csv_uploads FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-GRANT SELECT ON public.tips, public.paid_sessions TO authenticated;
-GRANT ALL ON public.csv_uploads TO authenticated;
+-- Table grants as in production (read 2026-11-01): anon, authenticated and
+-- service_role all hold DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE,
+-- UPDATE on these three tables. RLS limits rows; TRUNCATE ignores RLS.
+GRANT ALL ON public.tips, public.paid_sessions, public.csv_uploads TO anon, authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 
 -- Platform-limit trigger function: production body, verbatim.
 CREATE OR REPLACE FUNCTION public.enforce_free_tier_platform_limit()
