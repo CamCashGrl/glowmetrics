@@ -75,9 +75,14 @@ const C = {
   green: "#10B981", red: "#F87171", orange: "#FB923C", white: "#F1F5F9", text: "#94A3B8", muted: "#475569"
 }
 
+// Every tier the engine assigns (lib/analytics.js identifyWhales). Occasional
+// and New/Developing were added there later; leaving them out here hid those
+// fans from every tier filter and left "Regular" reading 0.
 const TIER_COLORS = {
-  "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Dormant": C.orange
+  "Whale": C.gold, "Shark": C.blue, "Regular": C.cyan, "Occasional": C.indigo,
+  "New/Developing": C.green, "Dormant": C.orange
 }
+const FAN_TIER_FILTERS = ["ALL", "Whale", "Shark", "Regular", "Occasional", "New/Developing", "Dormant"]
 
 // Rotating microcopy shown on the CSV importer button/progress bar while a
 // real upload request is in flight — purely cosmetic (doesn't imply we know
@@ -4183,6 +4188,11 @@ const stopImportMessageRotation = () => {
             tips={accessible.tips}
             isPro={isPro}
             onOpenPlanner={() => handleTabChange('planner')}
+            onNavigate={handleTabChange}
+            onUpgrade={(src) => openUpgradeModal(src)}
+            tz={creatorTz}
+            hiddenTipCount={isPro ? 0 : windowSummary.excludedCount}
+            fullHistoryPlatform={freeUnlimitedPlatform}
           />
         )}
 
@@ -4220,7 +4230,7 @@ const stopImportMessageRotation = () => {
                 narrow screens instead of clipping options past the viewport edge */}
             <div style={{ display: "flex", gap: 10, marginTop: 14, marginBottom: 16, flexWrap: "wrap", maxWidth: "100%" }}>
               <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.03)", padding: 3, borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", overflowX: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
-                {["ALL","Whale","Shark","Regular","Dormant"].map(t => {
+                {FAN_TIER_FILTERS.map(t => {
                   const count = t === "ALL" ? whales.length : whales.filter(w => w.tier === t).length
                   const active = whaleFilter === t
                   return (
@@ -6537,7 +6547,7 @@ const stopImportMessageRotation = () => {
         // guarded below rather than assumed to exist.
         const daysSinceLastTip = w.lastTipDate ? Math.floor((Date.now() - new Date(w.lastTipDate)) / 86400000) : null
         const tierColor = TIER_COLORS[w.tier] || C.cyan
-        const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : '💤'
+        const tierIcon = w.tier === 'Whale' ? '💎' : w.tier === 'Shark' ? '🦈' : w.tier === 'Regular' ? '⭐' : w.tier === 'Occasional' ? '🌙' : w.tier === 'New/Developing' ? '🌱' : '💤'
         // Reuse the shared churn-risk formula (w.churnRisk) from analytics.js —
         // same fix as the card grid — instead of a second local calculation.
         const churnRisk = w.churnRisk?.level && w.churnRisk.level !== "Unknown" ? w.churnRisk.level : null

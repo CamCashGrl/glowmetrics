@@ -74,7 +74,7 @@ export function toLocalDow(dateStr, tz) {
   } catch { return new Date(dateStr).getUTCDay() }
 }
 
-function toLocalDateStr(dateStr, tz) {
+export function toLocalDateStr(dateStr, tz) {
   try {
     return localTimeFormatter('date', tz, 'en-CA', {}).format(new Date(dateStr)) // returns YYYY-MM-DD
   } catch { return new Date(dateStr).toISOString().slice(0, 10) }
@@ -675,7 +675,7 @@ function parseHeaderless(lines, platform, delimiter = ',') {
 // ── FAN IDENTITY ─────────────────────────────────────────────────────────
 // "Never merge fans across platforms by username alone" (formula-requirments
 // skill). A username is only unique within one platform.
-function fanKey(platform, username) {
+export function fanKey(platform, username) {
   const normalized = (username || '')
     .trim()
     .toLowerCase()

@@ -22,7 +22,7 @@ import {
 } from "../../lib/sessions/normalize"
 import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
-import { PlatformCell } from "./PlatformsIntelligence"
+import { PlatformCell, Ico } from "./PlatformsIntelligence"
 import { Pill, PlatChip } from "./StreamPlanner"
 import { PrimaryPlatformControl } from "./PrimaryPlatformPrompt"
 
@@ -101,9 +101,9 @@ function Badge({ text, color, testId }) {
 
 function Cell({ icon, value, label, testId, accent, sub, strong }) {
   return (
-    <div style={{ ...inset, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", minWidth: 0, ...(strong ? { border: `1px solid ${C.violet}88`, boxShadow: `0 0 22px ${C.violet}33, inset 0 0 18px ${C.violet}14` } : {}) }}>
-      {icon && <span aria-hidden="true" style={{ fontSize: 20, width: 26, textAlign: "center", flexShrink: 0 }}>{icon}</span>}
-      <div style={{ minWidth: 0 }}>
+    <div style={{ ...inset, padding: "12px 14px", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", minWidth: 0, ...(strong ? { border: `1px solid ${C.violet}88`, boxShadow: `0 0 22px ${C.violet}33, inset 0 0 18px ${C.violet}14` } : {}) }}>
+      {icon && <span aria-hidden="true" style={{ width: 26, display: "grid", placeItems: "center", flexShrink: 0, color: accent || C.cyan }}><Ico name={icon} size={20} /></span>}
+      <div style={{ minWidth: 0, flex: strong ? "1 1 100px" : "1 1 76px" }}>
         <div data-testid={testId} style={{ fontSize: String(value).length >= 9 ? 15 : String(value).length >= 7 || strong ? 18 : 21, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, ...(/^[$\d.,\s~↑↓%-]+$/.test(String(value)) ? { whiteSpace: "nowrap" } : { overflowWrap: "break-word" }) }}>{value}</div>
         <div style={{ fontSize: 11.5, color: C.text, marginTop: 2 }}>{label}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
@@ -117,7 +117,7 @@ function Cell({ icon, value, label, testId, accent, sub, strong }) {
 function HintCell({ icon, text, testId, action }) {
   return (
     <div data-testid={testId} data-hint="1" style={{ ...inset, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center", minWidth: 0, borderStyle: "dashed" }}>
-      {icon && <span aria-hidden="true" style={{ fontSize: 18, width: 26, textAlign: "center", flexShrink: 0, opacity: 0.6 }}>{icon}</span>}
+      {icon && <span aria-hidden="true" style={{ width: 26, display: "grid", placeItems: "center", flexShrink: 0, opacity: 0.6, color: C.text }}><Ico name={icon} size={18} /></span>}
       <div style={{ minWidth: 0, fontSize: 12.5, color: C.text, lineHeight: 1.35 }}>
         {text}
         {action && <div style={{ marginTop: 4 }}><button onClick={action.onClick} style={{ background: "transparent", border: "none", padding: 0, color: C.cyan, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>{action.label} →</button></div>}
@@ -175,19 +175,19 @@ function Hero({ stats, range, comparison, trend, live, now, noData = false, ligh
         </div>
       </div>
       <div className="sx-cells" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
-        <Cell icon="👥" value={fmtUsd(stats.publicUSD)} label="Public Earnings" testId="today-public" />
-        {light && stats.privateUSD === 0 ? <HintCell icon="🔒" text="No private earnings yet" testId="today-private" />
-          : <Cell icon="🔒" value={fmtUsd(stats.privateUSD)} label="Private Earnings" testId="today-private" accent="#c4b5fd" />}
-        <Cell icon="💗" value={stats.tipCount} label="Tips" testId="today-tips" />
-        <Cell icon="🧑‍🤝‍🧑" value={stats.uniqueTippers} label="Unique Tippers" testId="today-unique" />
-        {light && stats.streamedMinutes === 0 && !(stats.activitySpanMinutes > 0) ? <HintCell icon="⏱" text="Stream time is tracked in Live Mode" testId="today-streamed" action={onStartLive ? { label: "Start Live Mode", onClick: onStartLive } : null} />
-          : <Cell icon="⏱" value={fmtMinutes(stats.streamedMinutes)} label="Streamed Time (Live)" testId="today-streamed"
+        <Cell icon="dollar" value={fmtUsd(stats.publicUSD)} label="Public Earnings" testId="today-public" />
+        {light && stats.privateUSD === 0 ? <HintCell icon="lock" text="No private earnings yet" testId="today-private" />
+          : <Cell icon="lock" value={fmtUsd(stats.privateUSD)} label="Private Earnings" testId="today-private" accent="#c4b5fd" />}
+        <Cell icon="heart" value={stats.tipCount} label="Tips" testId="today-tips" />
+        <Cell icon="users" value={stats.uniqueTippers} label="Unique Tippers" testId="today-unique" />
+        {light && stats.streamedMinutes === 0 && !(stats.activitySpanMinutes > 0) ? <HintCell icon="clock" text="Stream time is tracked in Live Mode" testId="today-streamed" action={onStartLive ? { label: "Start Live Mode", onClick: onStartLive } : null} />
+          : <Cell icon="clock" value={fmtMinutes(stats.streamedMinutes)} label="Streamed Time (Live)" testId="today-streamed"
             sub={stats.activitySpanMinutes > 0 ? `+ ${fmtMinutes(stats.activitySpanMinutes, true)} est. tip activity (not stream time)` : null} />}
-        {light && !(stats.privateMinutes > 0) ? <HintCell icon="🎥" text="Private time is tracked in Live Mode" testId="today-private-time" />
-          : <Cell icon="🎥" value={fmtMinutes(stats.privateMinutes)} label="Private Time (Live)" testId="today-private-time" />}
-        {light && stats.completedSessions === 0 ? <HintCell icon="✅" text="A session counts once it lasts 30+ min with 2+ tips" testId="today-completed" />
-          : <Cell icon="✅" value={stats.completedSessions} label="Completed Sessions" testId="today-completed" />}
-        <Cell icon="🏆" strong value={stats.bestPlatform ? pName(stats.bestPlatform) : "Not enough data yet"} label="Best Platform" testId="today-best-platform" accent={stats.bestPlatform ? C.pink : C.muted}
+        {light && !(stats.privateMinutes > 0) ? <HintCell icon="video" text="Private time is tracked in Live Mode" testId="today-private-time" />
+          : <Cell icon="video" value={fmtMinutes(stats.privateMinutes)} label="Private Time (Live)" testId="today-private-time" />}
+        {light && stats.completedSessions === 0 ? <HintCell icon="check" text="A session counts once it lasts 30+ min with 2+ tips" testId="today-completed" />
+          : <Cell icon="check" value={stats.completedSessions} label="Completed Sessions" testId="today-completed" />}
+        <Cell icon="trophy" strong value={stats.bestPlatform ? pName(stats.bestPlatform) : "Not enough data yet"} label="Best Platform" testId="today-best-platform" accent={stats.bestPlatform ? C.pink : C.muted}
           sub={stats.bestPlatform ? `${(stats.platforms.find((p) => p.platform === stats.bestPlatform) || {}).share || 0}% of ${range === 1 ? "today's" : "these"} earnings` : null} />
       </div>
     </div>
@@ -256,16 +256,16 @@ function OverallHero({ o, sourceLabel, historyNote, tz, light = false }) {
         {historyNote && <div data-testid="overall-history-note" style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{historyNote}</div>}
       </div>
       <div className="sx-cells" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
-        <Cell icon="👥" value={fmtUsd(o.publicUSD)} label="Public Earnings" testId="overall-public" />
-        {light && o.privateUSD === 0 ? <HintCell icon="🔒" text="No private earnings yet" testId="overall-private" />
-          : <Cell icon="🔒" value={fmtUsd(o.privateUSD)} label="Private Earnings" testId="overall-private" accent="#c4b5fd" />}
-        <Cell icon="💗" value={o.tipCount} label="Tips" testId="overall-tips" />
-        <Cell icon="🧑‍🤝‍🧑" value={o.uniqueTippers} label="Unique Tippers" testId="overall-unique" />
-        <Cell icon="✅" value={o.meaningfulSessions} label="Meaningful Sessions" sub="30+ min and 2+ tips" testId="overall-meaningful" />
-        {o.medianSessionUSD == null ? <HintCell icon="📊" text="Median Session appears after your first meaningful session" testId="overall-median" />
-          : <Cell icon="📊" value={fmtUsd(o.medianSessionUSD)} label="Median Session" sub={o.avgSessionUSD == null ? null : `avg ${fmtUsd(o.avgSessionUSD)}`} testId="overall-median" />}
-        <Cell icon="👑" value={o.topTipper ? o.topTipper.username : "—"} label="Top Tipper" sub={o.topTipper ? `${fmtUsd(o.topTipper.usd)} · ${pName(o.topTipper.platform)}` : null} testId="overall-top-tipper" />
-        <Cell icon="🏆" strong value={o.largestTip ? fmtUsd(o.largestTip.usd) : "—"} label="Largest Tip" sub={o.largestTip ? `${o.largestTip.username} · ${pName(o.largestTip.platform)}` : null} testId="overall-largest" accent={C.pink} />
+        <Cell icon="dollar" value={fmtUsd(o.publicUSD)} label="Public Earnings" testId="overall-public" />
+        {light && o.privateUSD === 0 ? <HintCell icon="lock" text="No private earnings yet" testId="overall-private" />
+          : <Cell icon="lock" value={fmtUsd(o.privateUSD)} label="Private Earnings" testId="overall-private" accent="#c4b5fd" />}
+        <Cell icon="heart" value={o.tipCount} label="Tips" testId="overall-tips" />
+        <Cell icon="users" value={o.uniqueTippers} label="Unique Tippers" testId="overall-unique" />
+        <Cell icon="check" value={o.meaningfulSessions} label="Meaningful Sessions" sub="30+ min and 2+ tips" testId="overall-meaningful" />
+        {o.medianSessionUSD == null ? <HintCell icon="bars" text="Median Session appears after your first meaningful session" testId="overall-median" />
+          : <Cell icon="bars" value={fmtUsd(o.medianSessionUSD)} label="Median Session" sub={o.avgSessionUSD == null ? null : `avg ${fmtUsd(o.avgSessionUSD)}`} testId="overall-median" />}
+        <Cell icon="crown" value={o.topTipper ? o.topTipper.username : "—"} label="Top Tipper" sub={o.topTipper ? `${fmtUsd(o.topTipper.usd)} · ${pName(o.topTipper.platform)}` : null} testId="overall-top-tipper" />
+        <Cell icon="trophy" strong value={o.largestTip ? fmtUsd(o.largestTip.usd) : "—"} label="Largest Tip" sub={o.largestTip ? `${o.largestTip.username} · ${pName(o.largestTip.platform)}` : null} testId="overall-largest" accent={C.pink} />
       </div>
     </div>
   )
@@ -329,10 +329,10 @@ function SessionPerformanceCards({ perf, onImport }) {
 
 // ── No data yet: activation instead of a grid of zeros ───────────────────────
 const PREVIEW = [
-  ["💰", "Session earnings", "Every session's public and private earnings, compared with your typical session."],
-  ["🧑‍🤝‍🧑", "Fan behavior", "Who tips, how often they come back, and which fans drive each session."],
-  ["🔒", "Private earnings", "Private, group and spy revenue kept separate from tips."],
-  ["🗂", "Recent sessions", "A timeline of each session with its peak period and top contributors."],
+  ["dollar", "Session earnings", "Every session's public and private earnings, compared with your typical session."],
+  ["users", "Fan behavior", "Who tips, how often they come back, and which fans drive each session."],
+  ["lock", "Private earnings", "Private, group and spy revenue kept separate from tips."],
+  ["folder", "Recent sessions", "A timeline of each session with its peak period and top contributors."],
 ]
 function Activation({ onImport, onStartLive }) {
   const btn = (primary) => ({ border: primary ? "none" : `1px solid ${C.line}`, background: primary ? `linear-gradient(135deg, ${C.cyan}, #38D5E8)` : "rgba(255,255,255,0.04)", color: primary ? "#0b0e1a" : C.white, boxShadow: primary ? `0 0 18px ${C.cyan}55` : "none", fontWeight: 800, fontSize: 14, padding: "10px 18px", borderRadius: 10, cursor: "pointer" })
@@ -349,7 +349,7 @@ function Activation({ onImport, onStartLive }) {
       <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14 }}>
         {PREVIEW.map(([icon, title, text]) => (
           <div key={title} data-testid="activation-preview" style={{ ...inset, padding: "16px 18px", borderStyle: "dashed" }}>
-            <div style={{ fontSize: 20 }} aria-hidden="true">{icon}</div>
+            <div aria-hidden="true" style={{ color: C.cyan }}><Ico name={icon} size={20} /></div>
             <div style={{ fontWeight: 900, color: C.white, fontSize: 15, marginTop: 6 }}>{title}</div>
             <div style={{ color: C.text, fontSize: 12.5, marginTop: 4, lineHeight: 1.4 }}>{text}</div>
           </div>
@@ -383,7 +383,7 @@ function SessionRow({ e, tz, selected, onSelect, vs }) {
       gridTemplateColumns: "32px minmax(0,1fr) 72px 50px 44px 10px", gap: 8, alignItems: "center", color: C.white,
       ...(selected ? { border: `1px solid ${C.pink}`, boxShadow: `0 0 0 1px ${C.indigo}55, 0 0 22px ${C.pink}40`, background: "rgba(30,18,52,0.75)" } : {}),
     }}>
-      <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.05)", color: e.type === "imported" ? C.text : C.cyan, fontSize: 14 }}>{e.type === "imported" ? "▤" : e.type === "private" ? "🔒" : "▶"}</span>
+      <span aria-hidden="true" style={{ width: 36, height: 36, borderRadius: 9, display: "grid", placeItems: "center", background: "rgba(255,255,255,0.05)", color: e.type === "imported" ? C.text : C.cyan, fontSize: 14 }}>{e.type === "imported" ? "▤" : e.type === "private" ? <Ico name="lock" size={14} /> : "▶"}</span>
       <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
           <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis" }}>{sessionTitle(e, tz)}</span>
@@ -622,7 +622,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
       </div>
       {signal && (
         <div data-testid="today-signal" style={{ ...inset, border: `1px solid ${C.cyan}55`, padding: "10px 14px", display: "flex", gap: 10, alignItems: "flex-start" }}>
-          <span aria-hidden="true">💡</span>
+          <span aria-hidden="true" style={{ color: C.cyan, display: "grid", placeItems: "center" }}><Ico name="sparkle" size={16} /></span>
           <div>
             <div style={{ color: C.cyan, fontWeight: 800, fontSize: 13 }}>Strongest signal: {signal}</div>
             {leader && <div style={{ color: C.text, fontSize: 12, marginTop: 2 }}>{fmtUsd(leader.totalUSD)} of {today.days === 1 ? "today's" : "this range's"} {fmtUsd(today.totalUSD)} came from {pName(leader.platform)}.</div>}
@@ -696,7 +696,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
       {/* Row 1 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.white, margin: 0, letterSpacing: "-0.01em" }}>📊 Sessions</h1>
+          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.white, margin: 0, letterSpacing: "-0.01em" }}>Sessions</h1>
           <div style={{ fontSize: 14, color: C.text, marginTop: 2 }}>Track your shows, earnings and audience across all platforms</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
