@@ -53,7 +53,17 @@ async function handleUpload(req) {
 
   const fd = await req.formData()
   const file = fd.get('file')
-  const replace = fd.get('replace') === 'true'
+
+  // `replace=true` used to delete EVERY tip the creator had (all platforms)
+  // before anything was inserted, so a failed import lost their history. No
+  // CamCash client sends it. It is rejected here, before any read of the file
+  // or any write (parse log, delete, insert), so it can never change data.
+  if (fd.get('replace') !== null && fd.get('replace') !== undefined && fd.get('replace') !== 'false') {
+    return NextResponse.json(
+      { error: 'Replacing all of your earnings during an import is not supported. Upload the file normally — tips you already have are skipped as duplicates.', code: 'replace_not_supported' },
+      { status: 400 }
+    )
+  }
 
   // Export times carry no timezone; they are the creator's wall clock. Read
   // them in the creator's saved zone (or the zone the client resolved when
@@ -188,17 +198,6 @@ async function handleUpload(req) {
       { error: 'No valid rows found. Check CSV format.' },
       { status: 400 }
     )
-  }
-
-  // ── OPTIONAL FULL REPLACE ──────────────────────────────────────────────
-  if (replace) {
-    const { error } = await supabase
-      .from('tips')
-      .delete()
-      .eq('user_id', user.id)
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
   }
 
   // ── DETECT PLATFORM ─────────────────────────────────────────────────────
