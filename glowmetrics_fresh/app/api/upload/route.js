@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { parseCSV, detectPlatform, detectDateOrder, computeSnapshotStats } from '../../../lib/analytics'
 import { platformLimitMessage } from '../../../lib/planLimits'
 import { canonicalPlatform, PLATFORM_TOKEN_RATES } from '../../../lib/constants'
-import { importTimeZone, toStoredInstant } from '../../../lib/creatorTimezone'
+import { importTimeZone, toStoredInstant, zonedMonthKey } from '../../../lib/creatorTimezone'
 
 const KNOWN_PLATFORMS = Object.keys(PLATFORM_TOKEN_RATES)
 import { analyzeFormat } from '../../../lib/parseTracking'
@@ -276,7 +276,8 @@ async function handleUpload(req) {
     try {
       // Build sorted array of unique "YYYY-MM" strings covered
       const monthsSet = new Set(
-        summaryDates.map(d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+        // Months on the import timezone (the creator's calendar), not UTC.
+        summaryDates.map(d => zonedMonthKey(d, timeZone))
       )
       const monthsCovered = [...monthsSet].sort()
 
