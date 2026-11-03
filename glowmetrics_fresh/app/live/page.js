@@ -15,6 +15,7 @@ import PlatformBreakdown from './components/PlatformBreakdown';
 import Button from '../../components/ui/Button';
 import { useLiveSessionEngine } from './useLiveSessionEngine';
 import PrivateShowControl from './PrivateShowControl';
+import LiveModeAllowanceBar from './LiveModeAllowanceBar';
 import { TRIGGER_LEVEL, TRIGGER_ICON } from '../../lib/coaching/triggers';
 
 const C = {
@@ -1028,7 +1029,7 @@ export default function LivePage() {
                   </>
                 )}
                 {engine.serverSession?.status === 'live' && (
-                  <PrivateShowControl engine={engine} platform={engine.serverSession?.stream_platform} />
+                  <PrivateShowControl engine={engine} />
                 )}
                 {engine.serverSession?.status === 'live' && (
                   <button disabled={engine.actionPending} onClick={() => {
@@ -1109,6 +1110,8 @@ export default function LivePage() {
           </div>
 
         </div>
+
+        <LiveModeAllowanceBar engine={engine} />
 
         {/* ── NOT STARTED ───────────────────────────────────────────── */}
         {!liveActive && !liveEvents.length && (
@@ -1688,10 +1691,10 @@ export default function LivePage() {
             <div style={{ fontSize: 28, marginBottom: 10 }}>📊</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: C.white, marginBottom: 6 }}>Full Dashboard Access</div>
             <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.65, marginBottom: 16 }}>
-              CamCash is completely free during beta. Create an account to unlock your full earnings history, session breakdowns, top tipper reports, and the complete AI command center.
+              Create a free account to unlock your earnings history, session breakdowns, top tipper reports, and the AI command center.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {['Historical session breakdowns', 'Top tipper + whale tracking', 'Earnings by day / hour / platform', 'AI coach with 6 strategy modes', '100% free during beta'].map(f => (
+              {['Historical session breakdowns', 'Top tipper + whale tracking', 'Earnings by day / hour / platform', 'AI coach with 6 strategy modes', '2 free Live Mode streams every week'].map(f => (
                 <div key={f} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ color: C.pink, fontSize: 12 }}>✓</span>
                   <span style={{ fontSize: 12, color: C.muted }}>{f}</span>

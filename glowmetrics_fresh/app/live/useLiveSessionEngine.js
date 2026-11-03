@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { shapeLiveSession } from '../../lib/liveSession/shape'
+import { detectBrowserTimeZone } from '../../lib/creatorTimezone'
 
 const HEARTBEAT_INTERVAL_MS = 20000
 const STOP_SUMMARY_DISPLAY_MS = 5000
@@ -32,12 +33,27 @@ export function useLiveSessionEngine() {
   const [lastResolution, setLastResolution] = useState(null)
   // Open private interval of the running session, if any.
   const [privateInterval, setPrivateInterval] = useState(null)
+  // Plan allowance from GET /api/live/usage ({ unlimited } or the Free
+  // weekly numbers). Display only — every limit is enforced server-side.
+  const [allowance, setAllowance] = useState(null)
+  // The stream the Free 35-active-minute limit just ended (any surface).
+  const [limitEnded, setLimitEnded] = useState(null)
   // Summary of the show this page just stopped (rebuilt server-side from
   // persisted data), and a counter bumped whenever any show finishes —
   // stopped here, resolved, or ended elsewhere — so dashboards refetch.
   const [lastCompletedShow, setLastCompletedShow] = useState(null)
   const [completedShowsVersion, setCompletedShowsVersion] = useState(0)
   const markShowCompleted = useCallback(() => setCompletedShowsVersion((v) => v + 1), [])
+  const refreshAllowance = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/live/usage?timezone=${encodeURIComponent(detectBrowserTimeZone())}`, { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      setAllowance(data.allowance || null)
+    } catch (_) {
+      // the bar simply keeps its last value; the next refresh retries
+    }
+  }, [])
   const [, setTick] = useState(0) // drives re-render only; the live timer is recomputed from serverSession each tick, never written to the DB
 
   const heartbeatIntervalRef = useRef(null)
@@ -116,6 +132,7 @@ export function useLiveSessionEngine() {
 
   useEffect(() => {
     restore()
+    refreshAllowance()
     return () => {
       stopHeartbeat()
       clearTimeout(stopSummaryTimeoutRef.current)
@@ -148,6 +165,8 @@ export function useLiveSessionEngine() {
         // A session this page knew about ended elsewhere (extension, other
         // tab, inactivity sweep): its finalized show is new data.
         if (phaseRef.current !== 'idle') markShowCompleted()
+        if (data.limitEnded) setLimitEnded(data.limitEnded)
+        if (phaseRef.current !== 'idle') refreshAllowance()
         setServerSession(null)
         setPrivateInterval(null)
         setPhase('idle')
@@ -156,7 +175,7 @@ export function useLiveSessionEngine() {
     } catch (_) {
       // a failed poll is never surfaced — the next tick retries
     }
-  }, [startHeartbeat, stopHeartbeat, markShowCompleted])
+  }, [startHeartbeat, stopHeartbeat, markShowCompleted, refreshAllowance])
 
   useEffect(() => {
     const id = setInterval(poll, POLL_INTERVAL_MS)
@@ -173,21 +192,24 @@ export function useLiveSessionEngine() {
     try {
       const res = await fetch('/api/live/session/start', {
         method: 'POST',
-        body: JSON.stringify({ platform }),
+        body: JSON.stringify({ platform, timezone: detectBrowserTimeZone() }),
       })
       const data = await res.json()
       if (!res.ok) {
         setActionError(data.error)
+        refreshAllowance()
         return
       }
+      setLimitEnded(null)
       setServerSession(data.session)
       setPhase(phaseForStatus(data.session.status))
       startHeartbeat()
+      refreshAllowance()
       return data.session
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, startHeartbeat])
+  }, [actionPending, startHeartbeat, refreshAllowance])
 
   const pause = useCallback(async () => {
     if (actionPending || serverSession?.status !== 'live' || serverSession?.live_substate !== 'active') return
@@ -212,11 +234,22 @@ export function useLiveSessionEngine() {
       const res = await fetch('/api/live/session/resume', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) { setActionError(data.error); return }
+      if (data.limitEnded) {
+        // The Free limit was already reached: the stream is over, not resumed.
+        stopHeartbeat()
+        setLimitEnded(data.limitEnded)
+        setPrivateInterval(null)
+        setServerSession(null)
+        setPhase('idle')
+        markShowCompleted()
+        refreshAllowance()
+        return
+      }
       if (data.session) setServerSession(data.session)
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, serverSession])
+  }, [actionPending, serverSession, stopHeartbeat, markShowCompleted, refreshAllowance])
 
   const stop = useCallback(async () => {
     if (actionPending) return
@@ -325,7 +358,8 @@ export function useLiveSessionEngine() {
     clearTimeout(stopSummaryTimeoutRef.current)
   }, [stopHeartbeat])
 
-  const startPrivate = useCallback(async (ratePerMinute, platform) => {
+  // The platform is always the running session's own; the server records it.
+  const startPrivate = useCallback(async (ratePerMinute, username) => {
     if (actionPending) return
     setActionPending(true)
     setActionError(null)
@@ -333,15 +367,27 @@ export function useLiveSessionEngine() {
       const res = await fetch('/api/live/session/private/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ratePerMinute, platform }),
+        body: JSON.stringify({ ratePerMinute, username }),
       })
       const data = await res.json()
-      if (!res.ok) { setActionError(data.error); return }
+      if (!res.ok) {
+        setActionError(data.error)
+        if (data.limitEnded) {
+          stopHeartbeat()
+          setLimitEnded(data.limitEnded)
+          setServerSession(null)
+          setPhase('idle')
+          markShowCompleted()
+          refreshAllowance()
+        }
+        return false
+      }
       setPrivateInterval(data.privateInterval || null)
+      return true
     } finally {
       setActionPending(false)
     }
-  }, [actionPending])
+  }, [actionPending, stopHeartbeat, markShowCompleted, refreshAllowance])
 
   const endPrivate = useCallback(async () => {
     if (actionPending) return
@@ -378,5 +424,8 @@ export function useLiveSessionEngine() {
     endPrivate,
     lastCompletedShow,
     completedShowsVersion,
+    allowance,
+    limitEnded,
+    dismissLimitEnded: () => setLimitEnded(null),
   }
 }

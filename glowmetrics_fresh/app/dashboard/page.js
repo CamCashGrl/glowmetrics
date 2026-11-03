@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../lib/supabase"
 import { readUploadJson } from "../../lib/readUploadJson"
@@ -25,6 +25,8 @@ import SubscriptionManager from './SubscriptionManager'
 import { platformLimitMessage, FREE_PLATFORM_LIMIT, resolvePlatformRoles as resolvePlanPlatformRoles } from '../../lib/planLimits'
 import Button from '../../components/ui/Button'
 import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
+import PrivateShowControl from '../live/PrivateShowControl'
+import LiveModeAllowanceBar from '../live/LiveModeAllowanceBar'
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
 import PlannedStreams from './PlannedStreams'
@@ -1484,19 +1486,15 @@ export default function Dashboard() {
     }
   }, [selectedWhale])
   // ── LIVE MODE STATE ───────────────────────────────────────
-  const [liveActive, setLiveActive] = useState(false)
-  const [liveStartTime, setLiveStartTime] = useState(null)
-  // Real session engine (live_sessions table) — same hook /app/live/page.js
-  // uses. Mirrors its status into the legacy liveActive/liveStartTime state
-  // below so a session started from the extension (or any other surface)
-  // shows up here too, instead of only after a tip arrives. Same rule as
-  // app/live/page.js.
+  // The canonical server session (live_sessions) via the same engine
+  // /app/live/page.js uses. Go Live / End / Pause / Resume call the server;
+  // "live" here is only ever the server session's status — never set from
+  // the UI or inferred from tips — so a session started or ended on any
+  // surface (extension, another tab, the server's limits) shows the same.
   const liveEngine = useLiveSessionEngine()
-  useEffect(() => {
-    const status = liveEngine.serverSession?.status
-    setLiveActive(status === 'live' || status === 'starting')
-    setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
-  }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  const liveActive = liveEngine.serverSession?.status === 'live' || liveEngine.serverSession?.status === 'starting'
+  const liveStartedAtIso = liveActive ? liveEngine.serverSession?.started_at || null : null
+  const liveStartTime = useMemo(() => (liveStartedAtIso ? new Date(liveStartedAtIso) : null), [liveStartedAtIso])
   // Finalized shows from persisted data; refetched whenever a show finishes.
   const recentShows = useRecentShows(liveEngine.completedShowsVersion, { enabled: !!user })
   // Closed private intervals of finalized Live shows — the Live term of
@@ -1623,6 +1621,15 @@ export default function Dashboard() {
   const isHydratingHistory = useRef(false)
   const processedTipIds    = useRef(new Set())
   const coachingCooldowns  = useRef({})
+  // Go Live creates (or reattaches to) the real server session; the feed and
+  // coaching reset only once the server has confirmed a session.
+  const handleDashboardGoLive = async () => {
+    const session = await liveEngine.goLive(livePlatform)
+    if (!session) return
+    setLiveEvents([])
+    processedTipIds.current = new Set()
+    coachingCooldowns.current = {}
+  }
   const firedAlertsLog     = useRef([])
   const phaseChangeLog     = useRef([])
   const streamHealthCacheRef = useRef({ value: null, deps: null })
@@ -1791,11 +1798,6 @@ export default function Dashboard() {
         if (prev.some(e => e._id === normalized._id)) return prev
         return [...prev, normalized]
       })
-      // Auto-activate live mode on first real tip
-      setLiveActive(active => {
-        if (!active) setLiveStartTime(prev => prev || new Date())
-        return true
-      })
     }
     window.addEventListener('message', handleExtensionMessage)
     return () => window.removeEventListener('message', handleExtensionMessage)
@@ -1882,10 +1884,6 @@ export default function Dashboard() {
           source:           'extension',
         }
         setLiveEvents(prev => [...prev, normalized])
-        setLiveActive(prev => {
-          if (!prev) setLiveStartTime(st => st || new Date())
-          return true
-        })
         // Flash animation: highlight the new tip row for 2.5s
         setFlashTipId(normalized._id)
         setTimeout(() => setFlashTipId(null), 2500)
@@ -2148,9 +2146,6 @@ export default function Dashboard() {
       }))
 
       setLiveEvents(normalized)
-      setLiveActive(true)
-      // Use earliest tip as session start so pace/coaching calculations are accurate
-      setLiveStartTime(prev => prev || new Date(data[0].received_at))
     }
 
     loadRecentLiveTips()
@@ -5050,11 +5045,11 @@ const stopImportMessageRotation = () => {
                     </div>
                     <span style={{ color: C.muted }}>|</span>
                     <span style={{ fontSize: 12, color: C.muted }}>
-                      {livePlatform}
+                      {liveEngine.serverSession?.stream_platform || livePlatform}
                     </span>
                     <span style={{ color: C.muted }}>|</span>
                     <span style={{ fontSize: 12, fontFamily: 'monospace', color: C.cyan, fontWeight: 600 }}>
-                      {liveActive && state ? `${Math.floor(state.elapsedMins)}m ${Math.round((state.elapsedMins % 1) * 60)}s` : '00m 00s'}
+                      {liveActive && liveEngine.duration ? `${String(Math.floor(liveEngine.duration.active_duration_seconds / 60)).padStart(2, '0')}m ${String(liveEngine.duration.active_duration_seconds % 60).padStart(2, '0')}s` : '00m 00s'}
                     </span>
                     <span style={{ color: C.muted }}>|</span>
                     {[
@@ -5070,7 +5065,7 @@ const stopImportMessageRotation = () => {
 
                   {/* Right: Controls */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <select value={livePlatform} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 11 }}>
+                    <select value={liveEngine.serverSession?.stream_platform || livePlatform} disabled={!!liveEngine.serverSession} title={liveEngine.serverSession ? 'Platform of the running stream' : 'Platform to go live on'} onChange={e => setLivePlatform(e.target.value)} style={{ ...inp2, width: 'auto', padding: '5px 10px', fontSize: 11 }}>
                       {['Chaturbate','BongaCams','MyFreeCams'].map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                     <input type="number" value={liveGoalTokens || ''} onChange={e => setLiveGoalTokens(Number(e.target.value)||0)} placeholder="Goal" style={{ ...inp2, width: 100, padding: '5px 10px', fontSize: 11 }} />
@@ -5082,20 +5077,45 @@ const stopImportMessageRotation = () => {
                       <option value="whale">🐋</option>
                       <option value="goal">🎯</option>
                     </select>
-                    {!liveActive ? (
-                      <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
-                        style={{ padding: '6px 14px', borderRadius: 6, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        Go Live
+                    {!liveEngine.serverSession ? (
+                      <button onClick={handleDashboardGoLive} disabled={liveEngine.actionPending || liveEngine.phase === 'loading'}
+                        style={{ padding: '6px 14px', borderRadius: 6, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 700, fontSize: 11, cursor: liveEngine.actionPending ? 'default' : 'pointer', opacity: liveEngine.actionPending ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+                        {liveEngine.actionPending ? 'Starting…' : 'Go Live'}
                       </button>
                     ) : (
-                      <button onClick={() => setLiveActive(false)}
-                        style={{ padding: '6px 14px', borderRadius: 6, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.5)', color: C.red, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        End
-                      </button>
+                      <>
+                        {liveEngine.serverSession.status === 'live' && liveEngine.serverSession.live_substate === 'active' && (
+                          <button onClick={liveEngine.pause} disabled={liveEngine.actionPending}
+                            style={{ padding: '6px 14px', borderRadius: 6, background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', color: '#FBBF24', fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Pause
+                          </button>
+                        )}
+                        {liveEngine.serverSession.status === 'live' && liveEngine.serverSession.live_substate === 'paused' && (
+                          <button onClick={liveEngine.resume} disabled={liveEngine.actionPending}
+                            style={{ padding: '6px 14px', borderRadius: 6, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: C.green, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Resume
+                          </button>
+                        )}
+                        <button onClick={liveEngine.stop} disabled={liveEngine.actionPending || liveEngine.phase === 'justEnded'}
+                          style={{ padding: '6px 14px', borderRadius: 6, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.5)', color: C.red, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          End
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
               </div>
+
+              {/* ── PLAN ALLOWANCE + PRIVATE MODE (server session) ───────── */}
+              <LiveModeAllowanceBar engine={liveEngine} />
+              {liveEngine.actionError && (
+                <div data-testid="dashboard-live-error" style={{ fontSize: 12, color: C.red, marginBottom: 12 }}>{liveEngine.actionError}</div>
+              )}
+              {liveEngine.serverSession?.status === 'live' && (
+                <div style={{ marginBottom: 16 }}>
+                  <PrivateShowControl engine={liveEngine} />
+                </div>
+              )}
 
               {/* ── KPI STRIP (Revenue | Tips | Tippers | Top Tip) ─────────────────────────────── */}
               {liveActive && state && (
@@ -5123,7 +5143,7 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
                     Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
-                  <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                  <button onClick={handleDashboardGoLive} disabled={liveEngine.actionPending || liveEngine.phase === 'loading'}
                     style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
                     ▶ Start Streaming
                   </button>
