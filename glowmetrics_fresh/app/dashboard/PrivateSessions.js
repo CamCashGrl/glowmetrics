@@ -75,7 +75,10 @@ function RevenueTotalsRow({ tipsTotalUSD, privateTotalUSD, liveTotalUSD }) {
 // omit either to hide that column rather than show a misleading $0.
 // onViewFan(username, platform): optional callback to open the fan profile
 // (Whale Profile Modal) for a row/client, matched by platform+username.
-export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null, liveTotalUSD = null, onViewFan }) {
+// tz: the creator's selected IANA timezone. When given, session timing and the
+// monthly trend are on the creator's clock; without it they stay UTC (and the
+// timing label says so).
+export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null, liveTotalUSD = null, onViewFan, tz = null }) {
   const [platformFilter, setPlatformFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
   const [clientFilter, setClientFilter] = useState("")
@@ -96,7 +99,7 @@ export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null
     })
   }, [paidSessions, platformFilter, typeFilter, clientFilter, dateFrom, dateTo])
 
-  const stats = useMemo(() => computePaidSessionAnalytics(filtered), [filtered])
+  const stats = useMemo(() => computePaidSessionAnalytics(filtered, tz || 'UTC'), [filtered, tz])
 
   if (!paidSessions.length) {
     return (
@@ -212,7 +215,7 @@ export default function PrivateSessions({ paidSessions = [], tipsTotalUSD = null
 
       {/* ── PEAK-HOUR TIMELINE (heatmap-style row) ───────────── */}
       <div style={{ ...cardStyle, marginBottom: 20 }}>
-        <div style={chartTitleStyle}>Session Timing (by hour, UTC)</div>
+        <div style={chartTitleStyle}>Session Timing (by hour, {tz ? 'your time' : 'UTC'})</div>
         <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
           {Array.from({ length: 24 }, (_, h) => {
             const hourData = stats.peakHours.find(p => p.hour === h)

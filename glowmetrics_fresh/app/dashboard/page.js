@@ -33,7 +33,7 @@ import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
 import FeedbackButton from '../../components/FeedbackButton'
 import ContextualFeedbackPopup from '../../components/ContextualFeedbackPopup'
-import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD, zonedMonthKey } from '../../lib/creatorTimezone'
+import { resolveCreatorTimeZone, isValidTimeZone, zonedHour, zonedDay, zonedYMD, zonedMonthKey, zonedParts } from '../../lib/creatorTimezone'
 
 // Tab-only components loaded on demand instead of in the initial dashboard
 // bundle — each is only ever rendered behind an `activeTab === '...'` check,
@@ -6115,13 +6115,14 @@ const stopImportMessageRotation = () => {
           const spyFans = analytics?.spyShowFans || []
           const bestMo = analytics?.bestMonth
           const totalUSD = analytics?.totalUSD || 0
-          const now = new Date()
-          const thisMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}`
+          // The creator's calendar (profiles.timezone), matching the engine's monthlyData.
+          const nowParts = zonedParts(new Date(), creatorTz)
+          const thisMonthKey = zonedMonthKey(new Date(), creatorTz)
           const thisMonth = monthly.find(m => m.month === thisMonthKey)
           const thisMonthUSD = thisMonth?.usd || 0
           const goalPct = monthlyGoal > 0 ? Math.min(100, Math.round((thisMonthUSD / monthlyGoal) * 100)) : null
-          const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth()+1, 0).getDate()
-          const dayOfMonth = now.getUTCDate()
+          const daysInMonth = new Date(Date.UTC(nowParts.year, nowParts.month, 0)).getUTCDate() // month is 1-based: day 0 of the next month
+          const dayOfMonth = nowParts.day
           const daysLeft = daysInMonth - dayOfMonth
           const projectedEnd = thisMonthUSD > 0 ? Math.round(thisMonthUSD / dayOfMonth * daysInMonth) : null
           const maxBarUSD = Math.max(...monthly.map(m => m.usd), 1)
@@ -6145,7 +6146,7 @@ const stopImportMessageRotation = () => {
                     <div style={{ width:36, height:36, borderRadius:10, background:"linear-gradient(135deg,#10B981,#22D3EE)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🎯</div>
                     <div>
                       <div style={{ fontSize:16, fontWeight:800, color:C.white }}>Monthly Goal</div>
-                      <div style={{ fontSize:12, color:C.muted }}>{now.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+                      <div style={{ fontSize:12, color:C.muted }}>{new Date().toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:creatorTz})}</div>
                     </div>
                   </div>
                   <button onClick={() => setShowGoalEditor(v => !v)} style={{ padding:"6px 14px", borderRadius:8, background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.35)", color:C.green, fontSize:12, fontWeight:700, cursor:"pointer" }}>

@@ -2022,7 +2022,10 @@ export function aggregateRows(tips, tz = null) {
 // Completely separate from tip analytics — never mixed.
 // ============================================================
 
-export function computePaidSessionAnalytics(sessions) {
+// tz: the creator's selected IANA timezone — peak hours and the monthly trend
+// are bucketed on the creator's clock. Defaults to 'UTC' for callers that have
+// not passed one (their previous behaviour).
+export function computePaidSessionAnalytics(sessions, tz = 'UTC') {
   if (!sessions || sessions.length === 0) return null
 
   const totalUSD     = sessions.reduce((s, r) => s + (parseFloat(r.usd) || 0), 0)
@@ -2121,7 +2124,7 @@ export function computePaidSessionAnalytics(sessions) {
   // ── PEAK HOURS FOR PAID SESSIONS ───────────────────────────
   const hourMap = {}
   sessions.forEach(s => {
-    const h = new Date(s.date_time).getUTCHours()
+    const h = toLocalHour(s.date_time, tz)
     if (!hourMap[h]) hourMap[h] = { usd: 0, count: 0 }
     hourMap[h].usd   += parseFloat(s.usd) || 0
     hourMap[h].count += 1
@@ -2140,8 +2143,7 @@ export function computePaidSessionAnalytics(sessions) {
   // ── MONTHLY TREND ──────────────────────────────────────────
   const monthMap = {}
   sessions.forEach(s => {
-    const dt  = new Date(s.date_time)
-    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+    const key = toLocalDateStr(s.date_time, tz).slice(0, 7) // creator-local YYYY-MM
     if (!monthMap[key]) monthMap[key] = { usd: 0, count: 0, clients: new Set() }
     monthMap[key].usd     += parseFloat(s.usd) || 0
     monthMap[key].count   += 1
