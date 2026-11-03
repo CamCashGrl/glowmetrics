@@ -1,0 +1,67 @@
+name: PR 729 isolated PostgREST verification
+
+on:
+  push:
+    branches: [codex/verify-pr729-postgrest]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  import-api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 54331:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '54331'
+      PGUSER: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 519a5fdde07e395a6ffababfaad911306c83c365
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare isolated test dependencies
+        run: |
+          set -euo pipefail
+          command -v psql || { sudo apt-get update; sudo apt-get install -y postgresql-client; }
+          mkdir -p "$RUNNER_TEMP/pr729-bin"
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/postgrest.tar.xz" https://github.com/PostgREST/postgrest/releases/download/v12.2.12/postgrest-v12.2.12-linux-static-x86-64.tar.xz
+          echo "5de4092f1719da3353c40bf96c8dec6913f2254a7cd0b61cc05f233153b557d5  $RUNNER_TEMP/postgrest.tar.xz" | sha256sum --check
+          tar --no-same-owner -xJf "$RUNNER_TEMP/postgrest.tar.xz" -C "$RUNNER_TEMP/pr729-bin"
+          echo "POSTGREST_BIN=$RUNNER_TEMP/pr729-bin/postgrest" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/pr729-bin/postgrest" --version
+          psql -X -d postgres -c "SELECT version();"
+          test "$(psql -X -tA -d postgres -c 'SHOW server_version_num')" -ge 170000
+          test "$(psql -X -tA -d postgres -c 'SHOW server_version_num')" -lt 180000
+          test "$(git rev-parse HEAD)" = 519a5fdde07e395a6ffababfaad911306c83c365
+      - name: Run database migration and concurrency rehearsal
+        run: |
+          set -euo pipefail
+          bash glowmetrics_fresh/supabase/tests/import_rpc_hardening/run.sh 2>&1 | tee "$RUNNER_TEMP/pr729-sql.log"
+      - name: Run real PostgREST API rehearsal
+        run: |
+          set -euo pipefail
+          bash glowmetrics_fresh/supabase/tests/import_rpc_hardening/api/run_api.sh 2>&1 | tee "$RUNNER_TEMP/pr729-api.log"
+      - name: Retain verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr729-postgres17-postgrest12-results
+          path: ${{ runner.temp }}/pr729-*.log
+          if-no-files-found: warn
+          retention-days: 14
