@@ -1,4 +1,4 @@
--- Scratch replica of the production objects the 20261028 migration touches.
+-- Scratch replica of the production objects the 20261103 migration touches.
 -- Function bodies copied from production pg_get_functiondef (2026-10-28).
 DO $r$ BEGIN CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role; EXCEPTION WHEN duplicate_object THEN NULL; END $r$;
 CREATE SCHEMA auth;

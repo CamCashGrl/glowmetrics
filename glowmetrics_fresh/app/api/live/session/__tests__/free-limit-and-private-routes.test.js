@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 // Free Live Mode allowance + Private Mode, at the route layer. The rules
-// themselves live in SQL (20261028 migration); these tests pin down that every
+// themselves live in SQL (20261103 migration); these tests pin down that every
 // route asks the database, in the right order, and answers with fixed copy.
 jest.mock('next/server', () => ({
   NextResponse: { json: (body, init) => ({ status: init?.status ?? 200, json: async () => body }) },
