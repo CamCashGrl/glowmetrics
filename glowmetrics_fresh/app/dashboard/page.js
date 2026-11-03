@@ -28,6 +28,7 @@ import { useLiveSessionEngine } from '../live/useLiveSessionEngine'
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
 import PlannedStreams from './PlannedStreams'
+import PlatformConfirmModal, { CONFIRMABLE_PLATFORMS } from './PlatformConfirmModal'
 import { PrimaryPlatformBanner } from './PrimaryPlatformPrompt'
 import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
@@ -1442,6 +1443,10 @@ export default function Dashboard() {
   const uploading = importStage === 'processing'
   const [uploadPlatform, setUploadPlatform] = useState("")
   const [lastUploadResult, setLastUploadResult] = useState(null)
+  // Set when /api/upload could not identify a file's platform
+  // (code 'platform_required'): holds the file so the creator can confirm the
+  // platform in PlatformConfirmModal and the same file is re-sent with it.
+  const [platformConfirm, setPlatformConfirm] = useState(null) // { file, dateOrder } | null
   // Platform-limit soft paywall: preview of what's in a blocked import, shown
   // instead of a hard block (see denyWithPlatformPreview / handleCSV below)
   const [lockedPreview, setLockedPreview] = useState(null)
@@ -2374,6 +2379,15 @@ const stopImportMessageRotation = () => {
       if (!res.ok || result.error) {
         if (result.code === 'platform_limit_reached') {
           await denyWithPlatformPreview(file, forcePlatform || uploadPlatform || result.platform || null)
+        } else if (result.code === 'platform_required' && !forcePlatform) {
+          // Nothing was saved: the server refuses to store tips as 'Unknown'.
+          // Ask which platform the file is from instead of showing an error;
+          // confirming re-sends this same file with that platform. Only when
+          // no platform was sent — a refused explicit choice falls through to
+          // the normal error so this can never loop.
+          setImportStage('idle')
+          setPlatformConfirm({ file, dateOrder })
+          gtmTrack('platform_confirm_shown', { source: 'dashboard_upload' })
         } else {
           showToast("❌ " + (result.error || 'Upload failed'))
           // date_order_required: the file's dates fit both MM/DD and DD/MM —
@@ -6879,6 +6893,25 @@ const stopImportMessageRotation = () => {
           </div>
         )
       })()}
+
+      {/* PLATFORM CONFIRM — upload's platform could not be identified.
+          Locked platforms mirror the Platform menu; picking one goes through
+          handleCSV's existing Free-plan preview + upgrade path. */}
+      <PlatformConfirmModal
+        open={!!platformConfirm}
+        fileName={platformConfirm?.file?.name || null}
+        lockedPlatforms={CONFIRMABLE_PLATFORMS.map(p => p.id).filter(p => freePlatformLimitReached && !allPlatforms.includes(p))}
+        onConfirm={(platform) => {
+          const pending = platformConfirm
+          setPlatformConfirm(null)
+          if (!pending?.file) return
+          gtmTrack('platform_confirmed', { platform, source: 'dashboard_upload' })
+          // Applies to this file only — the Platform menu is left as it was so
+          // the next file is detected on its own, not forced to this platform.
+          handleCSV(pending.file, platform, pending.dateOrder || null)
+        }}
+        onCancel={() => { setPlatformConfirm(null); resetImport() }}
+      />
 
       {/* UPGRADE MODAL */}
       {showUpgradeModal && (
