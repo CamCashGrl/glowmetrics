@@ -85,6 +85,14 @@ function tryParseDate(str){
   if(bcMatch){const[,day,mon,year,hr,min]=bcMatch;const d=new Date(parseInt(year),parseInt(mon)-1,parseInt(day),parseInt(hr),parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,+mon,+day,+hr,+min)}
   const mfcMatch=s.match(/^([A-Za-z]{3})\s+(\d{1,2})(?:st|nd|rd|th),\s+(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)$/i)
   if(mfcMatch){const[,mon,day,year,hr,min,ampm]=mfcMatch;const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};let h=parseInt(hr,10);if(ampm.toUpperCase()==='PM'&&h!==12)h+=12;if(ampm.toUpperCase()==='AM'&&h===12)h=0;const d=new Date(parseInt(year),months[mon.toLowerCase()],parseInt(day),h,parseInt(min));if(!isNaN(d.getTime()))return withWall(d,+year,months[mon.toLowerCase()]+1,+day,h,+min)}
+  // The generic fallback below must only ever see a FULL date. new Date() reads
+  // a bare number as a year ("393" -> year 393, "17298" -> year 17298, "7" ->
+  // July 2001) and a year-less string as 2000/2001, which silently stored
+  // tips on invented dates. Require a 4-digit year plus a month name or a
+  // d-m-y style date; anything else is not a date and the row is skipped.
+  const hasYear=/\b\d{4}\b/.test(s)
+  const hasMonthOrParts=/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i.test(s)||/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{1,4}/.test(s)
+  if(!hasYear||!hasMonthOrParts)return null
   const d=new Date(s);if(isNaN(d.getTime()))return null
   const naive=s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?$/)
   if(naive)d.wall=`${naive[1]} ${naive[2]}:${naive[3]||'00'}`
@@ -350,8 +358,11 @@ export function parseRows(rawText,platformId){
         // matched neither branch above once tokens was already found —
         // silently dropping a real trusted payout in favor of a token-rate
         // estimate. Once tokens is known and usd isn't, treat the next
-        // positive number as the real payout regardless of its integer-ness.
-        else if(tokens!==null&&usd===null)usd=n
+        // positive number as the real payout regardless of its integer-ness —
+        // but only if the cell is written as money ("$20.00" / "9.00"). A bare
+        // integer ("7886") in an unlabeled column is a running token BALANCE,
+        // never a tip amount; it is ignored and usd falls back to tokens x rate.
+        else if(tokens!==null&&usd===null&&/[$.]/.test(col))usd=n
       }else if(col.length>0&&isNaN(parseFloat(col))){
         if(username===null&&col.length<=50&&col.length>1)username=col
         else if(note===''&&col.length>0)note=col
