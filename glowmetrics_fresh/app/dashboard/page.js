@@ -1497,6 +1497,18 @@ export default function Dashboard() {
     setLiveActive(status === 'live' || status === 'starting')
     setLiveStartTime(liveEngine.serverSession?.started_at ? new Date(liveEngine.serverSession.started_at) : null)
   }, [liveEngine.serverSession?.status, liveEngine.serverSession?.started_at])
+  // Go Live / Start Streaming / End on this tab drive the real session
+  // engine (same calls as app/live/page.js). liveActive/liveStartTime then
+  // follow the server session through the mirror effect above — they are
+  // never flipped locally, which the mirror would immediately undo.
+  const startLiveFromDashboard = async () => {
+    const session = await liveEngine.goLive(livePlatform)
+    if (!session) return // liveEngine.actionError explains why
+    setLiveEvents([])
+    processedTipIds.current = new Set()
+    coachingCooldowns.current = {}
+  }
+  const endLiveFromDashboard = () => liveEngine.stop()
   // Finalized shows from persisted data; refetched whenever a show finishes.
   const recentShows = useRecentShows(liveEngine.completedShowsVersion, { enabled: !!user })
   // Closed private intervals of finalized Live shows — the Live term of
@@ -5083,18 +5095,21 @@ const stopImportMessageRotation = () => {
                       <option value="goal">🎯</option>
                     </select>
                     {!liveActive ? (
-                      <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                      <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending}
                         style={{ padding: '6px 14px', borderRadius: 6, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        Go Live
+                        {liveEngine.actionPending ? 'Starting…' : 'Go Live'}
                       </button>
                     ) : (
-                      <button onClick={() => setLiveActive(false)}
+                      <button onClick={endLiveFromDashboard} disabled={liveEngine.actionPending}
                         style={{ padding: '6px 14px', borderRadius: 6, background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.5)', color: C.red, fontWeight: 700, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                         End
                       </button>
                     )}
                   </div>
                 </div>
+                {liveEngine.actionError && (
+                  <div role="alert" style={{ marginTop: 8, fontSize: 12, color: C.red }}>{liveEngine.actionError}</div>
+                )}
               </div>
 
               {/* ── KPI STRIP (Revenue | Tips | Tippers | Top Tip) ─────────────────────────────── */}
@@ -5123,10 +5138,13 @@ const stopImportMessageRotation = () => {
                   <div style={{ fontSize: 14, color: C.muted, maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.75 }}>
                     Your AI coach watches the room in real time — tracking momentum, spotting opportunities, and telling you exactly what to do next to make more money.
                   </div>
-                  <button onClick={() => { setLiveActive(true); setLiveStartTime(new Date()); setLiveEvents([]); processedTipIds.current = new Set(); coachingCooldowns.current = {} }}
+                  <button onClick={startLiveFromDashboard} disabled={liveEngine.actionPending}
                     style={{ padding: '13px 36px', borderRadius: 12, background: 'linear-gradient(135deg, #10B981, #22D3EE)', border: 'none', color: C.white, fontWeight: 800, fontSize: 16, cursor: 'pointer', boxShadow: '0 0 32px rgba(16,185,129,0.4)' }}>
-                    ▶ Start Streaming
+                    {liveEngine.actionPending ? 'Starting…' : '▶ Start Streaming'}
                   </button>
+                  {liveEngine.actionError && (
+                    <div role="alert" style={{ marginTop: 12, fontSize: 13, color: C.red }}>{liveEngine.actionError}</div>
+                  )}
                 </div>
               )}
 

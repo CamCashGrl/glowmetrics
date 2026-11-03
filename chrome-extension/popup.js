@@ -344,9 +344,25 @@ function liveButton(label, cls, onClick) {
   return btn;
 }
 
+// Shown under the session buttons whenever a live action fails (signed out,
+// Pro required, network) — before this, a failed Start just did nothing.
+let liveActionError = null;
+function showLiveActionError(message) {
+  if (!liveActionError) {
+    liveActionError = document.createElement('div');
+    liveActionError.id = 'live-action-error';
+    liveActionError.setAttribute('role', 'alert');
+    liveActionError.style.cssText = 'margin-top:6px;font-size:11px;color:#f87171;';
+    sessionBtnRow.insertAdjacentElement('afterend', liveActionError);
+  }
+  liveActionError.textContent = message || '';
+  liveActionError.style.display = message ? 'block' : 'none';
+}
+
 function callLiveAction(action, extra, btn) {
   if (_liveActionPending) return;
   _liveActionPending = true;
+  showLiveActionError(null);
   if (btn) btn.disabled = true;
   // If the background script's reply never arrives — the message port can
   // close early on a dropped connection, a stale/reloading service worker,
@@ -361,6 +377,7 @@ function callLiveAction(action, extra, btn) {
     settled = true;
     _liveActionPending = false;
     renderLiveSession();
+    showLiveActionError('No response from CamCash. Please try again.');
   }, 5000);
   chrome.runtime.sendMessage({ action, ...extra }, (res) => {
     if (settled) return;
@@ -368,6 +385,7 @@ function callLiveAction(action, extra, btn) {
     clearTimeout(failSafe);
     _liveActionPending = false;
     updateLiveSession(res?.session ?? null);
+    if (res?.error) showLiveActionError(res.error);
   });
 }
 

@@ -38,5 +38,14 @@ export function sanitizedErrorResponse(error) {
   if (error?.code === '28000') {
     return { status: 401, body: { error: 'Unauthorized' } }
   }
+  // The Pro start gate (check_live_mode_pro_entitlement) raises P0001 with
+  // this prefix. Surface it so the user sees why Start did nothing; the gate
+  // itself is unchanged.
+  if (error?.code === 'P0001' && String(error?.message || '').startsWith('LIVE_MODE_REQUIRES_PRO')) {
+    return {
+      status: 403,
+      body: { error: 'Live Mode is a Pro feature. Upgrade to Pro to start a live session.', code: 'LIVE_MODE_REQUIRES_PRO' },
+    }
+  }
   return { status: 500, body: { error: 'Something went wrong. Please try again.' } }
 }
