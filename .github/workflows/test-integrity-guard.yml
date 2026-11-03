@@ -64,6 +64,12 @@ jobs:
           fi
           echo "✅ No weakened assertions detected"
 
+      # The test-count step runs `npm test` (jest). Without this install, jest
+      # is not found and that step fails on every run, regardless of the PR.
+      - name: Install dependencies
+        working-directory: glowmetrics_fresh
+        run: npm ci
+
       - name: Verify test count integrity
         run: |
           cd glowmetrics_fresh
