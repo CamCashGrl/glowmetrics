@@ -58,6 +58,9 @@ afterEach(() => { jest.useRealTimers() })
 // and the peak-missed alert now on the creator's clock (New York, Kolkata);
 // Kolkata weekday best hours that had < 3 distinct local dates no longer
 // qualify. UTC: no pre-existing field changed.
+// Hero batch: re-recorded again for the single new output field
+// bestTimeWindows ($ per streamed hour); verified that every pre-existing field
+// is byte-identical in all three zones.
 const EXPECTED = require('./fixtures/aggregate-rows-fingerprints.json')
 for (const tz of Object.keys(EXPECTED)) {
   test(`aggregateRows output unchanged for ${tz}`, () => {
