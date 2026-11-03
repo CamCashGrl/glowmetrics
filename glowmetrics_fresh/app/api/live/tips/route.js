@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { tokenRate } from '../../../../lib/constants';
+import { tokensToUsd } from '../../../../lib/constants';
 import { platformLimitMessage } from '../../../../lib/planLimits';
 import { legacyDeduplicationKey, uuidV5, isUuid } from '../../../../lib/liveTips/legacyEventId';
 
@@ -140,7 +140,9 @@ export async function POST(req) {
       : null;
     const eventId = isLegacyPayload ? uuidV5(deduplicationKey) : clientEventId;
 
-    const usd = parseFloat((tokens * tokenRate(platform)).toFixed(2));
+    // Exact per-tip USD (1 BongaCams token = 0.025). Rounding each tip to
+    // cents here inflated BongaCams totals; totals round only for display.
+    const usd = tokensToUsd(tokens, platform);
 
     // Phase 2: Call persist_extension_tip() RPC to atomically persist both
     // canonical tips + live_tips, with session attribution and delayed-tip

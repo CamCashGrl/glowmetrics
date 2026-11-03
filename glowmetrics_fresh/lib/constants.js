@@ -40,6 +40,16 @@ export function tokenRate(platform) {
   return PLATFORM_TOKEN_RATES_LOWER[canonicalPlatform(platform).toLowerCase()] ?? DEFAULT_TOKEN_RATE
 }
 
+// Exact USD for a token amount, at the 4-decimal precision tips.usd and
+// live_tips.usd store. Never rounds a single tip to cents: 1 BongaCams token
+// is 0.025, not 0.03. Round to 2 decimals only when displaying a total.
+export const USD_STORAGE_DECIMALS = 4
+
+export function tokensToUsd(tokens, platform) {
+  const scale = 10 ** USD_STORAGE_DECIMALS
+  return Math.round(tokens * tokenRate(platform) * scale) / scale
+}
+
 // What viewers pay per token to buy it (not what the model receives).
 // Source: per-platform token calculators (e.g. camcalcs.com), checked July 2026.
 export const PLATFORM_VIEWER_RATES = {
