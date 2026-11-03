@@ -177,8 +177,8 @@ function WindowProof({ windowRate, baselineRate, sessions, tierLabel, dayLabel, 
   return (
     <div>
       <div style={{ ...label, fontSize: 12, marginBottom: 16 }}>Why this window</div>
-      <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} qualifying session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
-      <Bar v={baselineRate} title="Your typical hour" sub="median across every qualifying session" />
+      <Bar v={windowRate} gradient title={`${dayLabel}s ${hourLabel}`} sub={`${sessions} valid session${sessions === 1 ? "" : "s"} · ${tierLabel}`} />
+      <Bar v={baselineRate} title="Your typical streamed hour" sub="all your valid sessions · estimated" />
     </div>
   )
 }
@@ -216,18 +216,8 @@ export default function CommandCenter({
   const sessionCount = analytics?.meaningfulSessionCount ?? 0
   const streamHours  = (analytics?.totalStreamMinutes ?? 0) / 60
   const momentum     = analytics?.momentum || null
-  const missedByPlat = analytics?.missedRevenue?.cumulative_by_platform || {}
   const whales       = analytics?.whales || []
   const platforms    = analytics?.platforms || []
-
-  // Platform with the largest measured best-window rate gap — same ranking
-  // the Missed Revenue card uses.
-  const topGap = useMemo(() => {
-    const e = Object.entries(missedByPlat)
-    if (!e.length) return null
-    const [platform, m] = e.sort((a, b) => b[1].rateGapUsdPerHour - a[1].rateGapUsdPerHour)[0]
-    return { platform, ...m }
-  }, [missedByPlat])
 
   const topPlatform = useMemo(
     () => [...platforms].sort((a, b) => (b.usdPerHour || 0) - (a.usdPerHour || 0))[0] || null,
@@ -244,16 +234,13 @@ export default function CommandCenter({
     [whales]
   )
 
-  const baseline = topGap?.overallMedianUsdPerHour ?? null
+  // Comparison baseline: the engine's estimatedHourlyRate — USD / streamed
+  // hours over all valid sessions (>= 30 min AND >= 2 tips, known duration),
+  // the same units and session rule as the window rate. Read, not computed.
+  // null/0 until there is a valid session, in which case no comparison is drawn.
+  const baseline = hourlyRate > 0 ? hourlyRate : null
   const pctAbove = (todayBest && baseline > 0)
     ? Math.round(((todayBest.usdPerStreamedHour - baseline) / baseline) * 100) : null
-  // Opportunity is quoted for the WINDOW WE RECOMMEND (a 1-hour bucket, the
-  // same span fmtWindow renders), not the account's average session length.
-  // Quoting a 1.1-hour basis under a "go live 8-10 AM" headline understated
-  // the very thing the CTA asks for.
-  const WINDOW_HOURS = 1
-  const oppLow  = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS : null
-  const oppHigh = topGap ? topGap.rateGapUsdPerHour * WINDOW_HOURS * 1.5 : null
 
   const hasWindow = !!todayBest
   const nowHour = tz ? zonedHour(new Date(), tz) : new Date().getHours()
@@ -326,22 +313,13 @@ export default function CommandCenter({
             </div>
           </div>
 
-          {/* RIGHT: opportunity + the chart that proves it. The reference
-              puts the earnings-per-hour distribution here; leaving this half
-              empty was the single largest visual defect in the first pass. */}
+          {/* RIGHT: the proof beside the recommendation — today's window rate
+              against your typical streamed hour, both from the engine. (The
+              former "estimated opportunity" range was removed: it multiplied
+              by an unsupported 1.5 and read an engine field that never
+              existed, so this half rendered empty.) */}
           {hasWindow && (
             <div style={{ flex: "1 1 340px", minWidth: 280 }}>
-              {topGap && (
-                <div style={{ textAlign: "right", marginBottom: 16 }}>
-                  <div style={{ ...label, color: C.muted }}>Estimated opportunity</div>
-                  <div style={{ fontSize: 30, fontWeight: 800, color: C.green, letterSpacing: "-0.03em", marginTop: 6 }}>
-                    +{fmtUsd0(oppLow)} – {fmtUsd0(oppHigh)}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
-                    if you stream the full 1-hour window, at the {fmtUsd(topGap.rateGapUsdPerHour)}/hr gap
-                  </div>
-                </div>
-              )}
               {baseline != null && (
                 <WindowProof
                   windowRate={todayBest.usdPerStreamedHour}
@@ -478,12 +456,12 @@ export default function CommandCenter({
             </div>
             <div style={{ fontSize: 14, color: C.text, marginTop: 8, lineHeight: 1.65 }}>
               You already know <strong style={{ color: C.cyan }}>{todayName}s {fmtWindow(todayBest.hour)}</strong> on {todayBest.platform} earns about {fmtRate(todayBest.usdPerStreamedHour)} streamed
-              {topGap ? <> and that the gap there is worth <strong style={{ color: C.green }}>{fmtUsd(topGap.rateGapUsdPerHour)}/hr</strong></> : null}.
+              {pctAbove != null && pctAbove > 0 ? <> — <strong style={{ color: C.green }}>{pctAbove}% above</strong> your typical streamed hour</> : null}.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 13 }}>
               {[
                 `Every ranked window for the week, not just the top one`,
-                topGap ? `Which platform to run in each window — ${topGap.platform} is only your biggest gap today` : `Which platform to run in each window`,
+                `Which platform to run in each window, not just today's`,
                 overlap?.count ? `Alerts when your ${overlap.count} high-value fan${overlap.count === 1 ? "" : "s"} in this window go quiet` : `Alerts when a high-value supporter goes quiet`,
                 `A forecast you can hold next week's schedule against`,
               ].map((line, i) => (

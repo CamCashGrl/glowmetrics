@@ -84,6 +84,30 @@ describe('hero: today\'s best platform and 1-hour window', () => {
   })
 })
 
+describe('hero evidence area (proof bars) uses supported engine output', () => {
+  test("compares today's window rate with the engine's estimatedHourlyRate, in the same per-streamed-hour units", () => {
+    renderHero(baseAnalytics({ Saturday: cell() })) // window $7.50/hr, engine estimatedHourlyRate $7.50
+    expect(screen.getByText('Why this window')).toBeInTheDocument()
+    expect(screen.getByText('Your typical streamed hour')).toBeInTheDocument()
+    expect(screen.getByText('all your valid sessions · estimated')).toBeInTheDocument()
+    expect(screen.getByText('4 valid sessions · Early signal')).toBeInTheDocument()
+  })
+
+  test('"% higher" is arithmetic on the two engine rates, shown only when the window beats the typical hour', () => {
+    renderHero({ ...baseAnalytics({ Saturday: cell({ usdPerStreamedHour: 9 }) }), estimatedHourlyRate: 6 })
+    expect(document.body.textContent).toMatch(/50% higher/)
+    renderHero({ ...baseAnalytics({ Saturday: cell({ usdPerStreamedHour: 6 }) }), estimatedHourlyRate: 9 })
+    expect(document.body.textContent.match(/% higher/g)).toHaveLength(1) // second render adds none
+  })
+
+  test('no comparison is drawn without a typical rate, and no unsupported "opportunity" range exists', () => {
+    renderHero({ ...baseAnalytics({ Saturday: cell() }), estimatedHourlyRate: 0 })
+    expect(screen.queryByText('Why this window')).not.toBeInTheDocument()
+    const src = fs.readFileSync(path.join(__dirname, '..', 'CommandCenter.js'), 'utf8')
+    expect(src).not.toMatch(/missedRevenue|topGap|Estimated opportunity|\* 1\.5/)
+  })
+})
+
 describe('hero reads engine output only', () => {
   test('no local aggregation or UTC-concatenated hour maths remains in CommandCenter', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'CommandCenter.js'), 'utf8')
