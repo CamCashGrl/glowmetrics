@@ -8,6 +8,12 @@ jest.mock('next/server', () => ({
   NextResponse: { json: (body, init) => ({ status: init?.status ?? 200, json: async () => body }) },
 }))
 
+// The route calls the global crypto.randomUUID() for the audit row's upload_ref.
+// Node 18's jest sandbox does not expose a global `crypto` (Node 20+ does), which
+// made the audit insert silently skip in CI. Provide it so the test runs the
+// same way on every Node version.
+if (!globalThis.crypto || !globalThis.crypto.randomUUID) globalThis.crypto = require('crypto').webcrypto
+
 let inserts // { table, row }[]
 let mockSavedTz
 function mockSupabase() {
