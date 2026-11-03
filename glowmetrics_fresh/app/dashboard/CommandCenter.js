@@ -208,7 +208,14 @@ export default function CommandCenter({
   // Stream Planner, which reads the same function.
   const bestTimes    = analytics?.bestTimeWindows || null
   const todayName    = DAY_NAMES[tz ? zonedDay(new Date(), tz) : new Date().getDay()]
-  const todayBest    = bestTimes?.bestByDay?.[todayName] || null
+  const nowHour      = tz ? zonedHour(new Date(), tz) : new Date().getHours()
+  // Every recommended window for today, best first. Only windows that have
+  // not ended are recommended: the current hour (still in progress) and later
+  // ones. If today's windows have all passed, say so rather than recommend a
+  // past hour.
+  const todayWindows = bestTimes?.recommendedByDay?.[todayName] || []
+  const todayBest    = todayWindows.find(w => w.hour >= nowHour) || null
+  const passedBest   = !todayBest && todayWindows.length > 0 ? todayWindows[0] : null
   const overlap      = todayBest?.fanOverlap || null
   const hourlyRate   = analytics?.estimatedHourlyRate ?? 0
   const totalUSD     = analytics?.totalUSD ?? 0
@@ -243,7 +250,6 @@ export default function CommandCenter({
     ? Math.round(((todayBest.usdPerStreamedHour - baseline) / baseline) * 100) : null
 
   const hasWindow = !!todayBest
-  const nowHour = tz ? zonedHour(new Date(), tz) : new Date().getHours()
   const greeting = `Good ${nowHour < 12 ? "morning" : nowHour < 18 ? "afternoon" : "evening"}, ${firstName || "there"}`
 
   // Hourly distribution for the evidence bar chart — read straight off the
@@ -291,7 +297,7 @@ export default function CommandCenter({
                 <div style={{ fontSize: 16, color: C.text, marginTop: 16, lineHeight: 1.62, maxWidth: 520 }}>
                   On {todayName}s this hour on {todayBest.platform} earns about{" "}
                   <strong style={{ color: C.cyan }}>{fmtRate(todayBest.usdPerStreamedHour)} streamed</strong>
-                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical hour</>}.
+                  {pctAbove != null && pctAbove > 0 && <> — <strong style={{ color: C.cyan }}>{pctAbove}% higher</strong> than your typical streamed hour</>}.
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
                     Estimated: imported tips don't include stream start and end times, so streamed time is measured from your first to last tip in each session.
                   </div>
@@ -300,10 +306,12 @@ export default function CommandCenter({
             ) : (
               <>
                 <div data-testid="hero-headline" style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: "-0.02em", lineHeight: 1.25 }}>
-                  Not enough data yet for today's best window
+                  {passedBest ? "Today's best window has already passed" : "Not enough data yet for today's best window"}
                 </div>
                 <div style={{ fontSize: 13.5, color: C.text, marginTop: 11, lineHeight: 1.6, maxWidth: 500 }}>
-                  CamCash names a {todayName} window only after you've streamed it on at least {bestTimes?.minLocalDates || 3} separate {todayName}s with enough streamed time to be more than one good night. Your streaming plan shows every day of the week.
+                  {passedBest
+                    ? <>Your best {todayName} window was {fmtWindow(passedBest.hour)} on {passedBest.platform}, and no later {todayName} window has enough history to recommend. Your streaming plan shows the rest of the week.</>
+                    : <>CamCash names a {todayName} window only after you've streamed it on at least {bestTimes?.minLocalDates || 3} separate {todayName}s with enough streamed time to be more than one good night. Your streaming plan shows every day of the week.</>}
                 </div>
               </>
             )}

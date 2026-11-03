@@ -13,7 +13,7 @@ import {
 // (confidence in ONE hour-of-day/day-of-week bucket, not in the dataset as a
 // whole) and are left as-is; flagged in the report as a parallel formula
 // worth reconciling in a dedicated follow-up rather than blindly merged here.
-import { calculateConfidence, calculateBestTimeWindows } from "../../lib/analytics"
+import { calculateBestTimeWindows } from "../../lib/analytics"
 import PlannedStreams from "./PlannedStreams"
 import { resolveCreatorTimeZone, zonedHour, zonedDay, zonedMonthKey, zonedParts } from "../../lib/creatorTimezone"
 
@@ -129,8 +129,10 @@ function platformEfficiency(tips, tz) {
 // counted as a pattern only on >= 3 separate local dates. This planner no
 // longer groups sessions or computes rates itself — that parallel formula
 // (4-hour session gap, 0.5 h duration floor, start-hour bucketing) is gone.
+// One window per PLATFORM x weekday x hour — the same cells the hero reads, so
+// the planner can never name a platform (or a blended rate) the hero would not.
 // Returns [{ day, hour, avgUsdPerHr, totalUsd, sessionCount, localDates, eligible,
-//            confidence, confidenceLevel, topPlatform, newTipperRate }]
+//            recommended, confidence, confidenceLevel, confidenceLabel, topPlatform, newTipperRate }]
 const CONF_LEVEL_TO_TIER = { High: "high", Medium: "medium", Low: "low", "Very Low": "needs-testing" }
 function bestWindows(tips, tz) {
   const shared = calculateBestTimeWindows(tips, tz)
@@ -147,7 +149,7 @@ function bestWindows(tips, tz) {
     tipStats[k].all++
     if (firstSeen[t.username || "unknown"] === dt.getTime()) tipStats[k].fresh++
   })
-  return shared.combinedCells
+  return shared.platformCells
     .filter((c) => c.usdPerStreamedHour != null)
     .map((c) => {
       const st = tipStats[`${c.dayIndex}-${c.hour}`]
@@ -158,10 +160,12 @@ function bestWindows(tips, tz) {
         sessionCount: c.validSessionCount,
         localDates: c.localDates,
         eligible: c.eligible,
+        recommended: c.recommended,
         // "needs-testing" until the window has >= 3 separate local dates.
         confidence: c.eligible ? (CONF_LEVEL_TO_TIER[c.confidence.level] || "needs-testing") : "needs-testing",
         confidenceLevel: c.confidence.level,
-        topPlatform: c.topPlatform,
+        confidenceLabel: c.confidence.label,
+        topPlatform: c.platform,
         newTipperRate: st && st.all > 0 ? st.fresh / st.all : 0,
       }
     })
@@ -409,7 +413,7 @@ function PlanTab({ tips, windows, whales, prefs, savePrefs, tz }) {
     return Array.from({ length: 7 }, (_, day) => {
       const dayName = localDay(day)
       if (!prefs.days[dayName]) return { day, dayName, off: true, isToday: dayName === today }
-      let cands = windows.filter((w) => w.day === day && blockEnabled(w.hour) && (mode === "Testing Mode" || w.eligible))
+      let cands = windows.filter((w) => w.day === day && blockEnabled(w.hour) && (mode === "Testing Mode" || w.recommended))
       if (mode === "Growth Mode")        cands = [...cands].sort((a, b) => b.newTipperRate - a.newTipperRate || b.avgUsdPerHr - a.avgUsdPerHr)
       else if (mode === "Whale Watch")   cands = [...cands].sort((a, b) => (whaleKeys.has(`${b.day}-${b.hour}`) ? 1 : 0) - (whaleKeys.has(`${a.day}-${a.hour}`) ? 1 : 0) || b.avgUsdPerHr - a.avgUsdPerHr)
       else if (mode === "Testing Mode") {
@@ -981,16 +985,14 @@ function StreamPlannerContent({ tips, isPro, tz }) {
   // Overall confidence in the dataset as a whole (spec Step 3) — drives
   // whether a personalized Peak Earning Window claim is shown at all, using
   // the planner's own valid-session-count/streamed-hours inputs against the
-  // single calculateConfidence() source of truth.
-  // Valid sessions only (>= 30 min AND >= 2 tips), tip-span time labelled
-  // estimated — the same inputs the best-time windows use.
-  const { level: confidenceLevel, label: confidenceLabel } = useMemo(
-    () => calculateBestTimeWindows(tips, tz).overall.confidence,
-    [tips, tz]
-  )
-
-  // The headline window must be a real pattern: >= 3 separate local dates.
-  const bestWindow = windows.find((w) => w.eligible) || null
+  // calculateConfidence via the shared best-time windows (each window carries its own).
+  // The headline window is the best RECOMMENDED window: a real pattern
+  // (>= 3 separate local dates) whose OWN confidence is above "Very Low".
+  // Its confidence is that window's — not the whole account's history — so an
+  // established account cannot get a confident headline for a weak window.
+  const bestWindow = windows.find((w) => w.recommended) || null
+  const confidenceLevel = bestWindow ? bestWindow.confidenceLevel : 'Very Low'
+  const confidenceLabel = bestWindow ? bestWindow.confidenceLabel : 'Not enough data yet'
   const showPersonalizedPeak = (confidenceLevel === 'Medium' || confidenceLevel === 'High') && !!bestWindow
   const showProTeaser = confidenceLevel === 'Medium' && !isPro
 

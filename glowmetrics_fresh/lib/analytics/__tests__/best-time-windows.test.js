@@ -72,13 +72,51 @@ describe('formula', () => {
     expect(r.platformCells.find(c => c.day === 'Saturday' && c.hour === 14)).toBeDefined()
   })
 
-  test('per-platform buckets stay separate; the combined slot reports the best platform', () => {
+  test('per-platform cells stay separate; only a platform whose own cell is a pattern is recommended', () => {
     // Different Wednesdays per platform (the session rule splits when platforms interleave).
     const CB_WEDNESDAYS = ['2026-09-09', '2026-09-16', '2026-09-23', '2026-09-30']
-    const rows = [...sessionsOn(tz, WEDNESDAYS, '10:00', '10:50', 5, 'BongaCams'), ...sessionsOn(tz, CB_WEDNESDAYS, '10:00', '10:50', 1, 'Chaturbate')]
+    const rows = [...sessionsOn(tz, WEDNESDAYS, '10:00', '10:59', 5, 'BongaCams'), ...sessionsOn(tz, CB_WEDNESDAYS.slice(0, 1), '10:00', '10:59', 50, 'Chaturbate')]
     const r = calculateBestTimeWindows(rows, tz)
-    expect(r.platformCells.filter(c => c.day === 'Wednesday' && c.hour === 10).map(c => c.platform).sort()).toEqual(['BongaCams', 'Chaturbate'])
-    expect(r.combinedCells.find(c => c.day === 'Wednesday' && c.hour === 10).topPlatform).toBe('BongaCams')
+    const wed10 = r.platformCells.filter(c => c.day === 'Wednesday' && c.hour === 10)
+    expect(wed10.map(c => c.platform).sort()).toEqual(['BongaCams', 'Chaturbate'])
+    expect(wed10.find(c => c.platform === 'Chaturbate').usdPerStreamedHour).toBeGreaterThan(wed10.find(c => c.platform === 'BongaCams').usdPerStreamedHour)
+    expect(r.bestByDay.Wednesday.platform).toBe('BongaCams') // the higher raw rate on ONE date is not a pattern
+    expect(r.recommendedByDay.Wednesday.map(c => c.platform)).toEqual(['BongaCams'])
+    expect(r.combinedCells).toBeUndefined() // one definition of a window: platform x weekday x hour
+  })
+
+  test('recommendedByDay lists every recommended cell for the weekday, best rate first', () => {
+    const rows = [...sessionsOn(tz, WEDNESDAYS, '10:00', '10:59', 5), ...sessionsOn(tz, WEDNESDAYS, '15:00', '15:59', 2)]
+    const list = calculateBestTimeWindows(rows, tz).recommendedByDay.Wednesday
+    expect(list.map(c => c.hour)).toEqual([10, 15])
+    expect(list[0].usdPerStreamedHour).toBeGreaterThan(list[1].usdPerStreamedHour)
+    expect(list.every(c => c.recommended)).toBe(true)
+  })
+
+  test('boundary allocation: USD goes to the hour a tip was received in (not pro-rated); minutes by overlap', () => {
+    // 2:30-3:20 PM: tips $4 at 2:30, $6 at 3:20. Hour 14 gets 30 min and the 2:30 tip; hour 15 gets 20 min and the 3:20 tip.
+    const rows = ['2026-10-07', '2026-10-14', '2026-10-21'].flatMap((d, i) => [tip(tz, d, '14:30', 'a' + i, 4), tip(tz, d, '15:20', 'b' + i, 6)])
+    const r = calculateBestTimeWindows(rows, tz)
+    const h14 = r.platformCells.find(c => c.hour === 14), h15 = r.platformCells.find(c => c.hour === 15)
+    expect(h14).toMatchObject({ streamedMinutes: 90, totalUSD: 12, usdPerStreamedHour: 8 })
+    expect(h15).toMatchObject({ streamedMinutes: 60, totalUSD: 18, usdPerStreamedHour: 18 })
+  })
+
+  test('a tip stamped exactly at the session end is allocated to the last streamed hour — no zero-minute cell, no phantom session or date', () => {
+    // 2:30-3:00 PM sharp, $5 at each end, on 3 dates.
+    const rows = WEDNESDAYS.slice(0, 3).flatMap((d, i) => [tip(tz, d, '14:30', 'a' + i, 5), tip(tz, d, '15:00', 'b' + i, 5)])
+    const r = calculateBestTimeWindows(rows, tz)
+    expect(r.platformCells.map(c => c.hour)).toEqual([14]) // no hour-15 cell at all
+    expect(r.platformCells[0]).toMatchObject({ streamedMinutes: 90, totalUSD: 30, validSessionCount: 3, localDates: 3, usdPerStreamedHour: 20 })
+    expect(r.platformCells.every(c => c.streamedMinutes > 0)).toBe(true)
+  })
+
+  test('total USD in cells equals total USD of the valid sessions (nothing lost or double counted at boundaries)', () => {
+    // Saturday sessions have a middle tip so no gap exceeds the 60-minute session rule.
+    const sat = SATURDAYS.flatMap((d, i) => [tip(tz, d, '13:30', 'a' + i, 3), tip(tz, d, '14:15', 'm' + i, 3), tip(tz, d, '15:00', 'b' + i, 3)])
+    const rows = [...sessionsOn(tz, WEDNESDAYS, '10:00', '11:00'), ...sat]
+    const r = calculateBestTimeWindows(rows, tz)
+    expect(r.platformCells.reduce((n, c) => n + c.totalUSD, 0)).toBeCloseTo(rows.reduce((n, t) => n + t.usd, 0), 2)
   })
 })
 

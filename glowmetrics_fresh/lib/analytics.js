@@ -1452,8 +1452,14 @@ export function calculateBestTimeWindows(tips, tz = 'UTC', { sessions = null } =
       c.sessions.add(i); c.dates.add(lp.dateKey)
       t = segEnd
     }
+    // USD is allocated by each tip's own timestamp (NOT pro-rated across the
+    // session), so a tip belongs to the hour it was received in. A tip stamped
+    // exactly at the session's end has no streamed minutes after it, so it is
+    // allocated to the last streamed instant (end - 1 ms): otherwise it would
+    // open a zero-minute cell and add a phantom session and date to it.
     for (const tip of s.tips || []) {
-      const lp = localClockParts(new Date(tip.dateRaw || tip.date_time || tip.timestamp), tz)
+      const tipMs = Math.min(new Date(tip.dateRaw || tip.date_time || tip.timestamp).getTime(), endMs - 1)
+      const lp = localClockParts(new Date(tipMs), tz)
       const c = cellFor(platform, lp.dayIndex, lp.hour)
       c.usd += tip.usd || 0
       c.sessions.add(i); c.dates.add(lp.dateKey)
@@ -1463,7 +1469,7 @@ export function calculateBestTimeWindows(tips, tz = 'UTC', { sessions = null } =
     const streamedHours = c.minutes / 60
     const validSessionCount = c.sessions.size
     const localDates = c.dates.size
-    return {
+    const out = {
       platform: c.platform, day: c.day, dayIndex: c.dayIndex, hour: c.hour,
       totalUSD: parseFloat(c.usd.toFixed(2)),
       streamedMinutes: parseFloat(c.minutes.toFixed(1)),
@@ -1474,31 +1480,22 @@ export function calculateBestTimeWindows(tips, tz = 'UTC', { sessions = null } =
       confidence: calculateConfidence(validSessionCount, streamedHours),
       durationBasis: 'tip_span_estimate',
     }
+    // A window is recommended only when it is a pattern (>= 3 separate local
+    // dates) AND its own confidence is above "Very Low" ("Not enough data yet").
+    out.recommended = out.eligible && out.usdPerStreamedHour != null && out.confidence.level !== 'Very Low'
+    return out
   }
   const byRate = (a, b) => (b.usdPerStreamedHour ?? -1) - (a.usdPerStreamedHour ?? -1)
   const platformCells = Object.values(cells).map(finish).sort(byRate)
 
-  // Same buckets across all platforms (Stream Planner grid): one cell per
-  // weekday x hour; topPlatform = the platform with the best rate there.
-  const slots = {}
-  Object.values(cells).forEach(c => {
-    const k = `${c.dayIndex}|${c.hour}`
-    if (!slots[k]) slots[k] = { platform: null, dayIndex: c.dayIndex, day: c.day, hour: c.hour, usd: 0, minutes: 0, sessions: new Set(), dates: new Set() }
-    const m = slots[k]
-    m.usd += c.usd; m.minutes += c.minutes
-    c.sessions.forEach(x => m.sessions.add(x)); c.dates.forEach(x => m.dates.add(x))
+  // Per weekday: every recommended platform cell, best rate first. Callers
+  // pick from this list (e.g. the best one that has not ended yet today);
+  // bestByDay is its first entry.
+  const recommendedByDay = {}, bestByDay = {}
+  LONG_DAY_NAMES.forEach((d, i) => {
+    recommendedByDay[d] = platformCells.filter(c => c.dayIndex === i && c.recommended)
+    bestByDay[d] = recommendedByDay[d][0] || null
   })
-  const combinedCells = Object.values(slots).map(m => {
-    const out = finish(m)
-    const top = platformCells.find(p => p.dayIndex === m.dayIndex && p.hour === m.hour && p.usdPerStreamedHour != null)
-    return { ...out, platform: null, topPlatform: top ? top.platform : null }
-  }).sort(byRate)
-
-  // A window is recommended only when it is eligible (>= 3 local dates) AND
-  // its confidence is above "Very Low" — otherwise "Not enough data yet".
-  const qualifies = (c) => c.eligible && c.usdPerStreamedHour != null && c.confidence.level !== 'Very Low'
-  const bestByDay = {}
-  LONG_DAY_NAMES.forEach((d, i) => { bestByDay[d] = platformCells.find(c => c.dayIndex === i && qualifies(c)) || null })
 
   return {
     durationBasis: 'tip_span_estimate',
@@ -1508,7 +1505,7 @@ export function calculateBestTimeWindows(tips, tz = 'UTC', { sessions = null } =
       streamedHours: parseFloat((overallMinutes / 60).toFixed(2)),
       confidence: calculateConfidence(valid.length, overallMinutes / 60),
     },
-    platformCells, combinedCells, bestByDay,
+    platformCells, recommendedByDay, bestByDay,
   }
 }
 
@@ -2031,8 +2028,7 @@ export function aggregateRows(tips, tz = null) {
   // High-value fans around each day's recommended window — the existing
   // bestWindowFanOverlap rule (whales with >= $20 lifetime who tipped on that
   // weekday within +/-1 local hour), applied to the window actually shown.
-  Object.values(bestTimeWindows.bestByDay).forEach(w => {
-    if (!w) return
+  Object.values(bestTimeWindows.recommendedByDay).flat().forEach(w => {
     const tipped = new Set()
     tips.forEach(t => {
       if (platformKey(t.platform) !== w.platform) return
