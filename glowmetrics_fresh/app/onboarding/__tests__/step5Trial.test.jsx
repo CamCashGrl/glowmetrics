@@ -125,33 +125,25 @@ describe('Step 5 · trial state comes from existing subscription data', () => {
     expect(checkoutCalls).toBe(0)
   }, 30000)
 
-  test('Free column lists only the limits the product enforces', async () => {
+  test('closing the trial screen is tracked', async () => {
+    const { track } = require('../../../lib/track')
     await toStep5()
-    const col = screen.getByTestId('free-column')
-    expect(col).toHaveTextContent('1 platform with full history')
-    expect(col).toHaveTextContent('Other platforms: 31-day view')
-    expect(col).toHaveTextContent('Top 3 fans visible')
-    expect(col).toHaveTextContent('Live Mode included')
+    fireEvent.click(screen.getByRole('button', { name: 'Close onboarding' }))
+    expect(track).toHaveBeenCalledWith('onboarding_trial_dismissed', { trial_status: 'eligible' })
   }, 30000)
 })
 
-describe('Step 5 · extension state', () => {
-  test('not installed: download link + manual steps, no Edge or store claims', async () => {
+describe('Step 5 · Pro trial card (no extension download)', () => {
+  test('shows Pro benefits, $9.99 price, real tip count, and no extension download', async () => {
     await toStep5()
-    const link = screen.getByRole('link', { name: /Download CamCash Extension/ })
-    expect(link).toHaveAttribute('href', '/camcash-extension.zip')
-    expect(screen.getByText('Load unpacked', { exact: false })).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/Edge|Chrome Web Store|one-click/i)
-  }, 30000)
-
-  test('installed (extension tips exist): shows connected, not the install CTA', async () => {
-    mockExtensionRows = [{ id: 1 }]
-    await toStep5()
-    expect(await screen.findByTestId('ext-connected')).toHaveTextContent('Extension connected')
+    expect(screen.getByTestId('trial-benefits')).toHaveTextContent('Stream Planner')
+    expect(screen.getByTestId('trial-card')).toHaveTextContent('Then $9.99/month')
+    expect(document.body.textContent).not.toMatch(/19\.99/)
+    expect(screen.getByTestId('trial-tips-analyzed')).toHaveTextContent(/analyzed \d+ tips/)
     expect(screen.queryByRole('link', { name: /Download CamCash Extension/ })).not.toBeInTheDocument()
   }, 30000)
 
-  test('skipping the extension does not block the trial or Free choice', async () => {
+  test('trial and Free choices are both available', async () => {
     await toStep5()
     expect(screen.getByRole('button', { name: 'Start my 7-day Pro trial →' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Continue with Free' })).toBeEnabled()
@@ -159,11 +151,19 @@ describe('Step 5 · extension state', () => {
 })
 
 describe('Step 5 · tracking and Stripe trial wiring', () => {
-  test('download click is tracked with the existing extension event', async () => {
+  test('trial click is tracked', async () => {
     const { track } = require('../../../lib/track')
     await toStep5()
-    fireEvent.click(screen.getByRole('link', { name: /Download CamCash Extension/ }))
-    expect(track).toHaveBeenCalledWith('extension_download_clicked', { source_page: 'onboarding' })
+    fireEvent.click(screen.getByRole('button', { name: 'Start my 7-day Pro trial →' }))
+    await waitFor(() => expect(track).toHaveBeenCalledWith('onboarding_trial_cta_clicked', expect.objectContaining({ trial_status: 'eligible' })))
+    expect(track).toHaveBeenCalledWith('onboarding_trial_started', expect.any(Object))
+  }, 30000)
+
+  test('Free click is tracked', async () => {
+    const { track } = require('../../../lib/track')
+    await toStep5()
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Free' }))
+    await waitFor(() => expect(track).toHaveBeenCalledWith('onboarding_free_selected', expect.objectContaining({ trial_status: 'eligible' })))
   }, 30000)
 
   test('trial click posts to the Stripe checkout route with the standard monthly plan', async () => {
