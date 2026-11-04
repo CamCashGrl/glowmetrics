@@ -2,17 +2,11 @@
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import Script from 'next/script'
-import { Inter } from 'next/font/google'
+import { interClassName } from './fonts/inter'
 import FeedbackWidgetGate from './components/FeedbackWidgetGate'
 
-// Weights confirmed via `grep -roh "fontWeight: ..."` across app/lib/components:
-// 400, 500, 600, 700, 800, 900 are all in active use (dashboard/landing/onboarding/blog).
-// This matches the weight set the previous manual Google Fonts <link> already requested.
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  display: 'swap',
-})
+// Inter is self-hosted in ./fonts/inter.js: the same files, weights (400–900),
+// unicode ranges, display: swap and Latin preload that next/font/google produced.
 
 const SITE_URL = 'https://www.camcashgrl.com'
 const TITLE = 'CamCash — Cam Model Analytics That Makes You More Money'
@@ -91,7 +85,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={inter.className}>
+    <html lang="en" className={interClassName}>
       <head>
         <meta name="copyright" content="© 2026 CamCash™ / CamCashGrl. All rights reserved." />
         <script

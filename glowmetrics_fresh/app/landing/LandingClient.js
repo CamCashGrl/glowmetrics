@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, Fragment } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
-import { DM_Sans } from "next/font/google"
+import { dmSansClassName } from "../fonts/dm-sans"
 import { T as TrackEvents, captureAttribution } from "../../lib/tracking"
 import { track } from "../../lib/track"
 import { PRODUCTS, getAbsoluteImageUrl } from "../../lib/shop-products"
@@ -21,13 +21,8 @@ function getSupabase() {
   return supabasePromise
 }
 
-// Self-hosted (was a render-blocking `@import url(fonts.googleapis.com/...)`
-// in the <style jsx> block below — same weights that @import requested).
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
-  display: 'swap',
-})
+// DM Sans is self-hosted in ../fonts/dm-sans.js (same files, weights, ranges and
+// preload as the former next/font/google call; used on /landing only).
 
 // Only needed once a visitor scrolls this far — deferred so its JS isn't
 // downloaded/parsed on every /landing visit.
@@ -993,7 +988,7 @@ export default function LandingClient() {
   ]
 
   return (
-    <div className={dmSans.className} style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, overflowX: "hidden" }}>
+    <div className={dmSansClassName} style={{ minHeight: "100vh", background: T.bgMain, color: T.textMuted, overflowX: "hidden" }}>
 
       {/* ── SCHEMA MARKUP ── */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
