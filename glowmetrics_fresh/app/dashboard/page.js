@@ -30,6 +30,9 @@ import LiveModeAllowanceBar from '../live/LiveModeAllowanceBar'
 import { LatestShowDelta } from './LatestShows'
 import SessionsOverview from './SessionsOverview'
 import PlannedStreams from './PlannedStreams'
+import LoadWarningBanner from './LoadWarningBanner'
+import { loadUserHistory, failureState } from '../../lib/dataLoad/resolveLoad'
+import { tipsPageFetcher, paidSessionsPageFetcher, toAscending } from '../../lib/dataLoad/queries'
 import { PrimaryPlatformBanner } from './PrimaryPlatformPrompt'
 import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
@@ -1597,6 +1600,12 @@ export default function Dashboard() {
   const [newAlertKey, setNewAlertKey] = useState(0)
   const [lastRefreshed, setLastRefreshed] = useState(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  // Did the tips / private-session history on screen come from a COMPLETE load?
+  // loadIssues drives the persistent warning; dataComplete is passed to Sessions
+  // as tipsLoadComplete (covers tips AND private sessions). See lib/dataLoad.
+  const [loadIssues, setLoadIssues] = useState([])
+  const [dataComplete, setDataComplete] = useState(true)
+  const loadStateRef = useRef({ tips: false, paid: false })
   const [newTipCount, setNewTipCount] = useState(0)
   const [flashTipId, setFlashTipId] = useState(null)   // for new-tip highlight animation
   const prevTipCountRef = useRef(0)
@@ -2108,7 +2117,8 @@ export default function Dashboard() {
       } else if (hiddenAt && Date.now() - hiddenAt > 15 * 60 * 1000) {
         // Tab was hidden for 15+ min — reload fresh data
         try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-        loadData(user.id, true, { silent: true }).then(() => setLastRefreshed(new Date()))
+        // loadData sets "Updated" itself, and only after a fully fresh load (a failed refresh must not look fresh)
+        loadData(user.id, true, { silent: true })
         hiddenAt = null
       } else {
         hiddenAt = null
@@ -2186,16 +2196,16 @@ export default function Dashboard() {
     else setLoading(true)
     try {
       const userTz = await ensureCreatorTz(uid)
-      let allData = []
-      let from = 0
-      const PAGE = 1000
-      while (true) {
-        const { data, error } = await supabase.from("tips").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(from, from + PAGE - 1)
-        if (error) break
-        if (data?.length) allData = [...allData, ...data]
-        if (!data || data.length < PAGE) break
-        from += PAGE
-      }
+      // Tips and private sessions are loaded together and the load says, explicitly,
+      // whether it is complete. A failed or partial load never replaces data that
+      // came from a complete load (lib/dataLoad/resolveLoad.js).
+      const history = await loadUserHistory({
+        fetchTips: tipsPageFetcher(supabase, uid),
+        fetchPaid: paidSessionsPageFetcher(supabase, uid),
+        previous: () => loadStateRef.current, // read when the fetches finish, not when they start
+      })
+      if (history.issues.length) console.error('[loadData] history load incomplete', history.issues.map((i) => ({ table: i.table, reason: i.reason, stale: i.stale, error: i.error, expected: i.expected, received: i.received })))
+      let allData = history.tips.apply ? toAscending(history.tips.rows) : []
       // One name per platform ('BC' → 'BongaCams') before any analytics run.
       allData.forEach(t => { t.platform = canonicalPlatform(t.platform) })
       // CHECKPOINT 1: Immediately after Supabase tips fetch
@@ -2245,30 +2255,35 @@ export default function Dashboard() {
         } catch (engineErr) {
           console.error('[loadData] runEngine failed:', engineErr)
         }
-        // Save to cache
+        // Save to cache (complete loads only: a partial list is never cached as if complete)
         try {
-          sessionStorage.setItem(`camcash_tips_${uid}`, JSON.stringify(allData))
-          sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
+          if (history.tips.complete) sessionStorage.setItem(`camcash_tips_${uid}`, JSON.stringify(allData))
+          if (history.tips.complete) sessionStorage.setItem(`camcash_tips_time_${uid}`, Date.now().toString())
         } catch(e) {} // quota exceeded — fine, skip cache
       }
       // paid_sessions (BongaCams Private/Full-Private/Group/Spy) — separate
       // table, separate state, never merged into `tips`/`analytics`. Same
       // pagination pattern as the tips fetch above.
-      let allPaidSessions = []
-      let paidFrom = 0
-      while (true) {
-        const { data, error } = await supabase.from("paid_sessions").select("*").eq("user_id", uid).order("date_time", { ascending: true }).range(paidFrom, paidFrom + PAGE - 1)
-        if (error) break
-        if (data?.length) allPaidSessions = [...allPaidSessions, ...data]
-        if (!data || data.length < PAGE) break
-        paidFrom += PAGE
+      if (history.paid.apply) {
+        const allPaidSessions = toAscending(history.paid.rows)
+        allPaidSessions.forEach(p => { p.platform = canonicalPlatform(p.platform) })
+        setPaidSessions(allPaidSessions)
       }
-      allPaidSessions.forEach(p => { p.platform = canonicalPlatform(p.platform) })
-      setPaidSessions(allPaidSessions)
 
-      const { data: engineData } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
-      setEngineInsights(engineData)
-      setLastRefreshed(new Date())
+      const { data: engineData, error: engineError } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
+      if (engineError) console.error('[loadData] get_user_insights failed:', { code: engineError.code, message: engineError.message })
+      else setEngineInsights(engineData) // a failed call never overwrites insights already on screen
+      loadStateRef.current = { tips: history.tips.complete, paid: history.paid.complete }
+      setDataComplete(history.complete)
+      setLoadIssues(history.issues)
+      if (history.fullyFresh) setLastRefreshed(new Date())
+    } catch (err) {
+      // Anything thrown (network, timezone lookup, engine): never claim completeness we cannot prove.
+      console.error('[loadData] failed:', { message: err?.message })
+      const f = failureState(loadStateRef.current)
+      loadStateRef.current = { tips: f.tipsComplete, paid: f.paidComplete }
+      setDataComplete(f.tipsComplete && f.paidComplete)
+      setLoadIssues(f.issues)
     } finally {
       if (silent) setIsRefreshing(false)
       else setLoading(false)
@@ -3404,6 +3419,9 @@ const stopImportMessageRotation = () => {
             </div>
           )}
         </div>
+
+        {/* Persistent warning + Retry whenever the history on screen is incomplete or stale (issue #747). */}
+        <LoadWarningBanner issues={loadIssues} onRetry={() => user && loadData(user.id, true, { silent: true })} retrying={isRefreshing} />
 
         {/* ── DASHBOARD PROGRESS CARD — Command Center only, so it doesn't
              compete with tab-specific content (e.g. the Fans tab) ── */}
@@ -5389,9 +5407,7 @@ const stopImportMessageRotation = () => {
             allTips={tips}
             allPaidSessions={paidSessions}
             windowStarts={accessible.windowStarts}
-            // tipsLoadComplete is intentionally NOT passed yet: tip / paid-session
-            // load-failure detection is tracked in issue #747. Until it is wired,
-            // an incomplete load is not detected by the Sessions completeness check.
+            tipsLoadComplete={dataComplete}
             tz={creatorTz}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}
