@@ -76,3 +76,45 @@ export function buildAccount({ now = Date.now(), plan = 'pro', uid = 'u1' } = {}
     },
   }
 }
+
+// Sparse account built so the Free entitlement is observable INSIDE the 5 listed
+// Sessions rows. Primary platform = Chaturbate (full history for Free);
+// BongaCams is windowed to 31 days anchored on its latest row (T).
+//   - BongaCams latest session (visible to both plans)
+//   - BongaCams session STRADDLING the Free window start: one early tip
+//     (straddle_hidden_fan, $10) is outside Free's window; two tips ($5 + $3)
+//     are inside. Free sees a $8.00 session; Pro sees the full $18.00 session.
+//   - BongaCams session 40 days old (restricted_only_fan): Pro only.
+//   - Two old Chaturbate sessions (primary platform, visible to both).
+export function buildEntitlementAccount({ now = Date.now(), plan = 'free', uid = 'u1' } = {}) {
+  const T = Math.floor(now / MIN) * MIN - 60 * MIN // latest BongaCams tip
+  const WS = T - 30 * DAY // Free window start for BongaCams
+  let n = 0
+  const tip = (platform, at, username, tokens) => ({
+    id: `ent-${String(n++).padStart(4, '0')}`, user_id: uid, platform, username, tokens,
+    usd: tokens * RATE[platform], date_time: iso(at), source: 'upload', live_session_id: null,
+  })
+  const tips = [
+    tip('BongaCams', T - 40 * MIN, 'vis_c', 160), tip('BongaCams', T, 'vis_d', 80),
+    tip('BongaCams', WS - 20 * MIN, 'straddle_hidden_fan', 400),
+    tip('BongaCams', WS + 10 * MIN, 'vis_a', 200), tip('BongaCams', WS + 40 * MIN, 'vis_b', 120),
+    tip('BongaCams', T - 40 * DAY, 'restricted_only_fan', 800), tip('BongaCams', T - 40 * DAY + 35 * MIN, 'restricted_only_fan', 800),
+    tip('Chaturbate', T - 200 * DAY, 'cb_a', 100), tip('Chaturbate', T - 200 * DAY + 40 * MIN, 'cb_b', 100),
+    tip('Chaturbate', T - 210 * DAY, 'cb_a', 60), tip('Chaturbate', T - 210 * DAY + 40 * MIN, 'cb_b', 60),
+  ]
+  const sid = (ms) => `history-tips:session_${ms}:bongacams`
+  return {
+    user: { id: uid, email: 'creator@example.com' },
+    shows: [],
+    expected: {
+      latestId: sid(T - 40 * MIN),
+      straddleFreeId: sid(WS + 10 * MIN), straddleProId: sid(WS - 20 * MIN),
+      restrictedId: sid(T - 40 * DAY),
+    },
+    tables: {
+      tips, paid_sessions: [],
+      profiles: [{ id: uid, plan, primary_pro_platform: 'Chaturbate', streaming_platforms: ['Chaturbate', 'BongaCams'], timezone: 'America/New_York' }],
+      beta_users: [{ user_id: uid, onboarding_complete: true }],
+    },
+  }
+}

@@ -10,7 +10,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { fakeSupabase } from '../../../lib/dataLoad/__tests__/fakeSupabase'
-import { buildAccount } from './dashboardFixtures'
+import { buildAccount, buildEntitlementAccount } from './dashboardFixtures'
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), prefetch: jest.fn() }
 jest.mock('next/navigation', () => ({
@@ -46,8 +46,8 @@ const installBrowserStubs = () => {
   })
 }
 
-const mount = async ({ plan = 'pro', tab = 'overview', dbOpts = {} } = {}) => {
-  account = buildAccount({ plan })
+const mount = async ({ plan = 'pro', tab = 'overview', dbOpts = {}, build = buildAccount } = {}) => {
+  account = build({ plan })
   mockDb = fakeSupabase(account.tables, { user: account.user, ...dbOpts })
   localStorage.setItem('camcash_tab', tab)
   let utils
@@ -194,5 +194,62 @@ describe('failure → retry → recovery, and stale data after a failed refresh'
       delete document.hidden
       jest.useRealTimers()
     }
+  })
+})
+
+describe('Free Sessions entitlement: visible history, selected-session details, buckets and contributors', () => {
+  const click = (el) => act(async () => { fireEvent.click(el.querySelector('button') || el) })
+  const money = (t) => Number(String(t).replace(/[^0-9.\-]/g, ''))
+  const rowIds = () => screen.getAllByTestId(/^history-/).map((e) => e.getAttribute('data-testid'))
+  const openSessions = async (plan) => {
+    await mount({ plan, tab: 'sessions', build: buildEntitlementAccount })
+    await waitFor(() => expect(screen.getAllByTestId(/^history-/).length).toBeGreaterThan(0), { timeout: 30000 })
+    notCrashed()
+    return account.expected
+  }
+  const select = async (id) => { await click(screen.getByTestId(id)) }
+  const bucketTotals = () => screen.getAllByTestId('bucket-row').reduce((a, r) => {
+    const td = r.querySelectorAll('td'); return { usd: a.usd + money(td[1].textContent), tips: a.tips + Number(td[3].textContent) }
+  }, { usd: 0, tips: 0 })
+  const fanNames = () => screen.getAllByTestId('fan-driver').map((f) => f.querySelector('span[style*="font-weight: 900"]')?.textContent || f.textContent).sort()
+
+  test('Free: restricted sessions are not listed; the straddling session shows only in-window tips in details, buckets and contributors', async () => {
+    const x = await openSessions('free')
+    const ids = rowIds()
+    expect(ids).toContain(x.latestId)
+    expect(ids).toContain(x.straddleFreeId)
+    expect(ids).not.toContain(x.restrictedId) // 40-day-old BongaCams session: outside Free's window
+    expect(ids).not.toContain(x.straddleProId) // the full (unwindowed) session must not exist for Free
+
+    await select(x.straddleFreeId)
+    expect(screen.getByTestId('details-total').textContent).toBe('$8.00') // $5 + $3, not the hidden $10
+    expect(screen.getByTestId('details-vs-partial').textContent).toMatch(/started before your Free history window/)
+
+    await click(screen.getByTestId('details-tab-timeline'))
+    const b = bucketTotals()
+    expect(b.usd).toBeCloseTo(8, 2)
+    expect(b.tips).toBe(2)
+
+    await click(screen.getByTestId('details-tab-fans'))
+    expect(fanNames()).toEqual(['vis_a', 'vis_b'])
+
+    for (const name of ['straddle_hidden_fan', 'restricted_only_fan']) expect(document.body.innerHTML).not.toContain(name)
+  })
+
+  test('Pro (same account): full history is listed and the same session includes the earlier tip', async () => {
+    const x = await openSessions('pro')
+    const ids = rowIds()
+    expect(ids).toContain(x.restrictedId)
+    expect(ids).toContain(x.straddleProId)
+    expect(ids).not.toContain(x.straddleFreeId)
+
+    await select(x.straddleProId)
+    expect(screen.getByTestId('details-total').textContent).toBe('$18.00')
+    await click(screen.getByTestId('details-tab-timeline'))
+    const b = bucketTotals()
+    expect(b.usd).toBeCloseTo(18, 2)
+    expect(b.tips).toBe(3)
+    await click(screen.getByTestId('details-tab-fans'))
+    expect(fanNames()).toEqual(['straddle_hidden_fan', 'vis_a', 'vis_b'])
   })
 })
