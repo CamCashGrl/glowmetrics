@@ -120,3 +120,79 @@ describe('loading failures (#747)', () => {
     notCrashed()
   })
 })
+
+describe('Free / Pro restrictions in the real dashboard', () => {
+  // dashboardFixtures adds `ancient_bc_fan`: BongaCams-only, 95 days ago. Primary platform = Chaturbate,
+  // so Free's 31-day window hides this fan; Pro sees full history.
+  test('Pro: the old fan appears in Top Fans (full history)', async () => {
+    await mount({ plan: 'pro', tab: 'whales' })
+    await waitFor(() => expect(document.body.innerHTML).toContain('ancient_bc_fan'), { timeout: 30000 })
+    notCrashed()
+  })
+
+  test.each(['whales', 'overview', 'sessions'])('Free: restricted older history never reaches the %s tab', async (tab) => {
+    await mount({ plan: 'free', tab })
+    await waitFor(() => expect(screen.queryByText('Loading...')).toBeNull(), { timeout: 30000 })
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    notCrashed()
+    expect(document.body.innerHTML).not.toContain('ancient_bc_fan')
+  })
+})
+
+describe('failure → retry → recovery, and stale data after a failed refresh', () => {
+  const failing = { tips: false, paid: false }
+  const failIf = ({ table, from }) => (from !== null && failing[table === 'paid_sessions' ? 'paid' : 'tips'] ? 'error' : null)
+  beforeEach(() => { failing.tips = false; failing.paid = false })
+
+  test('Free + failed tips load: warning, no verdicts, no restricted rows', async () => {
+    failing.tips = true
+    await mount({ plan: 'free', tab: 'sessions', dbOpts: { fail: failIf } })
+    await screen.findByTestId('load-warning-banner', {}, { timeout: 30000 })
+    notCrashed()
+    expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
+    expect(document.body.innerHTML).not.toContain('ancient_bc_fan')
+  })
+
+  test('a failed TIPS load recovers on Retry: warning clears, data and verdicts appear', async () => {
+    failing.tips = true
+    await mount({ plan: 'pro', tab: 'sessions', dbOpts: { fail: failIf } })
+    await screen.findByTestId('load-warning-banner', {}, { timeout: 30000 })
+    expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
+    failing.tips = false
+    await act(async () => { fireEvent.click(screen.getByTestId('load-warning-retry')) })
+    await waitFor(() => expect(screen.queryByTestId('load-warning-banner')).toBeNull(), { timeout: 30000 })
+    await waitFor(() => expect(screen.queryAllByTestId(/^row-vs-/).length).toBeGreaterThan(0), { timeout: 30000 })
+    notCrashed()
+  })
+
+  test('complete load, then a refresh FAILS: data is kept, the warning says "last complete update", and "Updated" does not advance', async () => {
+    // Fake only Date (timers stay real) so a wrongly-advanced "Updated" time would be visible.
+    const T0 = new Date('2026-11-04T15:00:00Z').getTime()
+    jest.useFakeTimers({ now: T0, doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'queueMicrotask', 'nextTick', 'requestAnimationFrame', 'cancelAnimationFrame', 'hrtime', 'performance'] })
+    try {
+      await mount({ plan: 'pro', tab: 'sessions', dbOpts: { fail: failIf } })
+      await waitFor(() => expect(screen.queryAllByTestId(/^row-vs-/).length).toBeGreaterThan(0), { timeout: 30000 })
+      const updatedBefore = document.querySelector('.recently-updated').textContent
+      const rowsBefore = screen.getAllByTestId(/^history-/).length
+
+      let hidden = true
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+      await act(async () => { document.dispatchEvent(new Event('visibilitychange')) }) // hidden at T0
+      jest.setSystemTime(T0 + 16 * 60 * 1000) // back 16 minutes later → the dashboard refreshes
+      failing.tips = true
+      hidden = false
+      await act(async () => { document.dispatchEvent(new Event('visibilitychange')) })
+
+      const banner = await screen.findByTestId('load-warning-banner', {}, { timeout: 30000 })
+      expect(banner.getAttribute('data-kind')).toBe('stale')
+      expect(screen.getByTestId('load-warning-message').textContent).toMatch(/last complete update/)
+      expect(screen.getAllByTestId(/^history-/).length).toBe(rowsBefore) // complete data was NOT replaced
+      expect(screen.queryAllByTestId(/^row-vs-/).length).toBeGreaterThan(0) // the snapshot on screen is complete
+      expect(document.querySelector('.recently-updated').textContent).toBe(updatedBefore) // a failed refresh must not look fresh
+      notCrashed()
+    } finally {
+      delete document.hidden
+      jest.useRealTimers()
+    }
+  })
+})

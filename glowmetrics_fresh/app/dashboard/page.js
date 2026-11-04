@@ -2117,7 +2117,8 @@ export default function Dashboard() {
       } else if (hiddenAt && Date.now() - hiddenAt > 15 * 60 * 1000) {
         // Tab was hidden for 15+ min — reload fresh data
         try { sessionStorage.removeItem(`camcash_tips_${user.id}`) } catch(e) {}
-        loadData(user.id, true, { silent: true }).then(() => setLastRefreshed(new Date()))
+        // loadData sets "Updated" itself, and only after a fully fresh load (a failed refresh must not look fresh)
+        loadData(user.id, true, { silent: true })
         hiddenAt = null
       } else {
         hiddenAt = null

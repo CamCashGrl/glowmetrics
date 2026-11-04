@@ -35,6 +35,11 @@ export function buildAccount({ now = Date.now(), plan = 'pro', uid = 'u1' } = {}
       for (let i = 0; i < count; i++) addTip(platform, start + i * gapMin * MIN, d < 20 && platform === 'Chaturbate' ? { source: 'extension' } : {})
     }
   }
+  // A BongaCams fan seen ONLY 95 days ago: outside Free's 31-day window for a
+  // non-primary platform (primary = Chaturbate). Free must never show this fan.
+  for (const [k, tokens] of [[0, 30000], [12, 26000], [25, 31000]]) {
+    tips.push({ id: `tip-ancient-${k}`, user_id: uid, platform: 'BongaCams', username: 'ancient_bc_fan', tokens, usd: tokens * RATE.BongaCams, date_time: iso(base - 95 * DAY + k * MIN), source: 'upload', live_session_id: null })
+  }
   // Finalized Live shows on Chaturbate with their own linked tips (persisted-summary shape)
   const shows = []
   for (const [i, daysAgo] of [[0, 3], [1, 9]]) {
