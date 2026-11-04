@@ -60,11 +60,11 @@ export function buildAccount({ now = Date.now(), plan = 'pro', uid = 'u1' } = {}
     const group = Math.floor(c / 6)
     const at = base - (1 + group % 100) * DAY - (c % 6) * 2 * MIN
     paid.push({
-      id: `00000000-0000-4000-8000-${String(c + 1).padStart(12, '0')}`, user_id: uid, platform: 'BongaCams', username: `vip${group % 9}`, username_lower: `vip${group % 9}`,
+      id: 3000000 + c + 1, user_id: uid, platform: 'BongaCams', username: `vip${group % 9}`, username_lower: `vip${group % 9}`,
       session_type: ['private', 'group', 'spy'][group % 3], usd: 7.575, date_time: iso(at),
     })
   }
-  paid.push({ id: '00000000-0000-4000-8000-999999999999', user_id: uid, platform: 'BongaCams', username: null, username_lower: null, session_type: 'group', usd: 4.4, date_time: iso(base - 2 * DAY) })
+  paid.push({ id: 3999999, user_id: uid, platform: 'BongaCams', username: null, username_lower: null, session_type: 'group', usd: 4.4, date_time: iso(base - 2 * DAY) })
 
   return {
     user: { id: uid, email: 'creator@example.com' },

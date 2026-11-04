@@ -13,13 +13,22 @@
 // Cursor values are never round-tripped through JavaScript numbers or Dates:
 //   - the database returns exact text copies (`cursor_id:id::text`,
 //     `cursor_ts:date_time::text`), validated against strict patterns;
-//   - tips.id is BIGINT (above 2^53 a JS number would lose precision);
-//     paid_sessions.id is UUID (verified against the staging API's type errors);
+//   - tips.id and paid_sessions.id are both BIGINT in PRODUCTION (verified
+//     read-only against the production schema, 2026-11-04). Above 2^53 a JS
+//     number would lose precision. Production is the source of truth: the
+//     staging project's paid_sessions.id is UUID (schema drift); a UUID id
+//     fails the BIGINT check below, so such a load is reported as not
+//     provable (coverage 'none'), never as complete;
 //   - date_time keeps Postgres microseconds (a JS Date would truncate them);
 //   - values inside the PostgREST logic filter are double-quoted and escaped.
 // Rows whose date_time is NULL cannot be ordered by a timestamp cursor, so they
 // are loaded by a separate id-keyed query (the previous offset loader included
-// them; the loaded dataset stays the same).
+// them; the loaded dataset stays the same). Production declares date_time
+// NOT NULL on both tables today; the query is kept as a defence (one extra,
+// empty request per table per load).
+//
+// The 'uuid' id kind is not used by any table; it is kept so that a UUID id
+// would be quoted correctly in a filter rather than misread.
 
 export const PAGE_SELECT = '*,cursor_ts:date_time::text,cursor_id:id::text'
 export const CURSOR_FIELDS = ['cursor_ts', 'cursor_id']
@@ -89,7 +98,7 @@ function tableSource(supabase, table, uid, idKind) {
 }
 
 export const tipsSource = (supabase, uid) => tableSource(supabase, 'tips', uid, 'bigint')
-export const paidSessionsSource = (supabase, uid) => tableSource(supabase, 'paid_sessions', uid, 'uuid')
+export const paidSessionsSource = (supabase, uid) => tableSource(supabase, 'paid_sessions', uid, 'bigint')
 
 // Rows come back newest-first; the rest of the app expects ascending.
 export const toAscending = (rows) => [...rows].reverse()

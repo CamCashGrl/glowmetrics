@@ -13,7 +13,7 @@ describe('cursor value formatting and escaping', () => {
     expect(idLiteral('42', 'bigint')).toBe('42')
   })
 
-  test('private sessions (UUID): the id is quoted', () => {
+  test('the unused uuid id kind would be quoted (kept only for safety; no table uses it)', () => {
     expect(keysetFilter({ ts: '2026-06-01 00:00:00+00', id: uuidFor(7) }, 'uuid'))
       .toBe(`date_time.lt."2026-06-01 00:00:00+00",and(date_time.eq."2026-06-01 00:00:00+00",id.lt."${uuidFor(7)}")`)
   })
@@ -69,10 +69,25 @@ describe('query shape', () => {
     expect(u2.filters).toContainEqual(['lt', 'id', '9'])
   })
 
-  test('private sessions use the same shape on paid_sessions', async () => {
+  test('private sessions use the same shape on paid_sessions, with a BIGINT (unquoted) id like production', async () => {
     const db = fakeSupabase({ paid_sessions: mkPaid(3) })
-    await paidSessionsSource(db, 'u1').dated.fetchPage(null, 1000, { wantCount: true })
-    expect(db.calls[0]).toMatchObject({ table: 'paid_sessions', orders: [['date_time', false], ['id', false]] })
+    const src = paidSessionsSource(db, 'u1')
+    expect(src.idKind).toBe('bigint')
+    await src.dated.fetchPage(null, 1000, { wantCount: true })
+    await src.dated.fetchPage({ ts: '2026-06-01 00:00:00+00', id: '9007199254740993' }, 1000, { wantCount: false })
+    await src.undated.fetchPage({ ts: null, id: '9007199254740993' }, 1000, { wantCount: false })
+    expect(db.calls[0]).toMatchObject({ table: 'paid_sessions', orders: [['date_time', false], ['id', false]], select: PAGE_SELECT })
+    expect(db.calls[0].filters).toEqual([['eq', 'user_id', 'u1'], ['notnull', 'date_time']])
+    expect(db.calls[1].logic).toEqual(['date_time.lt."2026-06-01 00:00:00+00",and(date_time.eq."2026-06-01 00:00:00+00",id.lt.9007199254740993)'])
+    expect(db.calls[2].filters).toContainEqual(['lt', 'id', '9007199254740993'])
+    expect(db.calls.every((c) => !c.error)).toBe(true)
+  })
+
+  test('paid_sessions cursor validation is BIGINT: exact digits accepted, uuid text rejected', () => {
+    const src = paidSessionsSource(fakeSupabase({}), 'u1')
+    expect(src.dated.cursorOf({ cursor_ts: '2026-06-01 00:00:00+00', cursor_id: '9223372036854775807' })).toEqual({ ts: '2026-06-01 00:00:00+00', id: '9223372036854775807' })
+    expect(src.dated.cursorOf({ cursor_ts: '2026-06-01 00:00:00+00', cursor_id: uuidFor(1) })).toBeNull()
+    expect(src.undated.cursorOf({ cursor_ts: null, cursor_id: '9007199254740993' })).toEqual({ ts: null, id: '9007199254740993' })
   })
 
   test('toAscending restores (date_time asc, id asc), including equal timestamps', async () => {

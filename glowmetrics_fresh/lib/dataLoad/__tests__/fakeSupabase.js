@@ -218,15 +218,16 @@ export function fakeSupabase(tables, { fail = () => null, onQuery = () => {}, ma
   }
 }
 
-// Realistic fixtures: BIGINT tip ids, UUID private-session ids.
+// Realistic fixtures matching the PRODUCTION schema: BIGINT ids on tips AND
+// paid_sessions. uuidFor builds staging-style UUID ids for drift tests only.
 export const uuidFor = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 export const mkTips = (n, { uid = 'u1', sameTime = false, platform = 'chaturbate', idBase = 1 } = {}) =>
   Array.from({ length: n }, (_, i) => ({
     id: idBase + i, user_id: uid, platform, username: `fan${i % 40}`, usd: 0.025 * ((i % 9) + 1), tokens: (i % 9) + 1,
     date_time: sameTime ? '2026-10-01T00:00:00.000Z' : new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString(),
   }))
-export const mkPaid = (n, { uid = 'u1' } = {}) =>
+export const mkPaid = (n, { uid = 'u1', idBase = 1 } = {}) =>
   Array.from({ length: n }, (_, i) => ({
-    id: uuidFor(i + 1), user_id: uid, platform: 'bongacams', username: `vip${i % 5}`, session_type: 'private', usd: 7.575,
+    id: idBase + i, user_id: uid, platform: 'bongacams', username: `vip${i % 5}`, session_type: 'private', usd: 7.575,
     date_time: new Date(Date.UTC(2026, 5, 1) + i * 60000).toISOString(),
   }))

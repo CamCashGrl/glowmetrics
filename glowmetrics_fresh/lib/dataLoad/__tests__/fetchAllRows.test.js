@@ -74,13 +74,43 @@ describe('keyset pagination boundaries (page size 1000)', () => {
     expect(dated(db)[1].logic[0]).toContain(`id.lt.${base + 500n}`) // exact digits of the 1000th row (DESC order)
   })
 
-  test('private sessions (UUID ids): the cursor quotes the uuid, and paging is exact across equal timestamps', async () => {
-    const paid = Array.from({ length: 1500 }, (_, i) => ({ id: uuidFor(i + 1), user_id: 'u1', platform: 'bongacams', username: 'v', session_type: 'private', usd: 7.575, date_time: '2026-06-01T00:00:00.000Z' }))
+  test('private sessions (BIGINT ids above 2^53, production schema): exact unquoted cursor, every row once across equal timestamps', async () => {
+    const base = BigInt(Number.MAX_SAFE_INTEGER) + 1n
+    const paid = Array.from({ length: 2500 }, (_, i) => ({ id: base + BigInt(i), user_id: 'u1', platform: 'bongacams', username: `v${i}`, session_type: 'private', usd: 7.575, date_time: i < 1500 ? '2026-06-01T00:00:00.000Z' : `2026-05-01T00:00:00.${String(i).padStart(6, '0')}Z` }))
     const db = fakeSupabase({ paid_sessions: paid })
     const r = await fetchAllRows(paidSessionsSource(db, 'u1'), noSleep)
     expect(r.complete).toBe(true)
-    expect(new Set(r.rows.map((x) => x.id)).size).toBe(1500)
-    expect(dated(db)[1].logic[0]).toBe(`date_time.lt."2026-06-01 00:00:00+00",and(date_time.eq."2026-06-01 00:00:00+00",id.lt."${uuidFor(501)}")`)
+    expect(r.coverage).toEqual({ kind: 'all' })
+    expect(r.rows).toHaveLength(2500)
+    const order = dbOrder(paid)
+    // the 1000th row in (date_time DESC, id DESC) order is inside the tied group; its id is exact, unquoted digits
+    expect(dated(db)[1].logic[0]).toBe(`date_time.lt."2026-06-01 00:00:00+00",and(date_time.eq."2026-06-01 00:00:00+00",id.lt.${order[999].id})`)
+    expect(String(order[999].id)).toBe(String(base + 500n))
+    // every seeded row arrives exactly once (unique marker per row: the plain JS ids above 2^53 collide, so they cannot prove it)
+    expect(new Set(r.rows.map((x) => x.username)).size).toBe(2500)
+    expect(new Set(r.rows.map((x) => x.id)).size).toBeLessThan(2500)
+    expect(r.rows.reduce((s, x) => s + x.usd, 0)).toBeCloseTo(2500 * 7.575, 6) // private-earnings values untouched by paging
+  })
+
+  test('private sessions: a staging-style UUID id fails safely (coverage none, never complete)', async () => {
+    const db = fakeSupabase({ paid_sessions: [{ id: uuidFor(1), user_id: 'u1', platform: 'bongacams', username: 'v', session_type: 'private', usd: 7.575, date_time: '2026-06-01T00:00:00.000Z' }] })
+    const r = await fetchAllRows(paidSessionsSource(db, 'u1'), noSleep)
+    expect(r.complete).toBe(false)
+    expect(r.reason).toBe('cursor_invalid')
+    expect(r.coverage).toEqual({ kind: 'none' })
+  })
+
+  test('private sessions: defensive NULL-dated rows (BIGINT) still load, after the dated rows in ascending order', async () => {
+    const base = BigInt(Number.MAX_SAFE_INTEGER) + 10n
+    const paid = [...mkPaid(1200), ...Array.from({ length: 1100 }, (_, i) => ({ id: base + BigInt(i), user_id: 'u1', platform: 'bongacams', username: 'n', session_type: 'group', usd: 1, date_time: null }))]
+    const db = fakeSupabase({ paid_sessions: paid })
+    const r = await fetchAllRows(paidSessionsSource(db, 'u1'), noSleep)
+    expect(r.complete).toBe(true)
+    expect(r.rows).toHaveLength(2300)
+    const asc = toAscending(r.rows)
+    expect(asc.slice(-1100).every((x) => x.date_time === null)).toBe(true)
+    const undatedCalls = db.calls.filter((c) => c.filters.some(([op]) => op === 'isnull'))
+    expect(undatedCalls[1].filters).toContainEqual(['lt', 'id', String(base + 100n)]) // exact digits, 1000th NULL-dated row in id DESC
   })
 
   test('a server row cap below the page size cannot be mistaken for the end of the data', async () => {
@@ -326,5 +356,6 @@ test('paid sessions load end to end with the same guarantees', async () => {
   const r = await fetchAllRows(paidSessionsSource(db, 'u1'), noSleep)
   expect(r.complete).toBe(true)
   expect(r.rows).toHaveLength(2100)
-  expect(keysetFilter({ ts: '2026-06-01 00:00:00+00', id: uuidFor(3) }, 'uuid')).toContain(`id.lt."${uuidFor(3)}"`)
+  expect(new Set(r.rows.map((x) => x.id)).size).toBe(2100)
+  expect(keysetFilter({ ts: '2026-06-01 00:00:00+00', id: '3' }, 'bigint')).toContain('id.lt.3)')
 })
