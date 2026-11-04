@@ -924,24 +924,61 @@ export function sessionFanDrivers(entry, { tips = [], paidSessions = [] } = {}) 
 //     partial/unknown session gets no verdict and does not skew the baseline.
 //     When omitted (no entitlement window, e.g. Pro) all sessions count.
 //
-// perHour (Live only, additive): total show earnings per hour over the show's
-// exact recorded duration, against the median of >= 5 other verified Live
-// shows on the same platform. Verified = Live entry (exact start/end, never an
-// estimated span) lasting >= MIN_VALID_SESSION_MINUTES. Imported sessions and
-// private charges never get $/hr: they have no verified duration.
+// perHour (Live only, additive): the show's PERSISTED $/hr
+// (live_sessions.final_usd_per_hour = (public + private) / active seconds, set
+// by _finalize_live_session_metrics; no second formula here), against the
+// median of the persisted $/hr of >= 5 other verified Live shows on the same
+// platform. A show's duration is verified only when ALL hold (liveVerifiedHourly):
+//   - the record is usable (below);
+//   - it ended at a system-verified instant (normal_stop / free_active_limit;
+//     heartbeat / inactivity / chosen end times are inferred or user-entered);
+//   - 0 < active duration <= the start→end span (paused time only shortens it)
+//     and >= MIN_VALID_SESSION_MINUTES;
+//   - the persisted $/hr agrees with persisted total ÷ persisted duration
+//     (a contradictory record is not trusted).
+// Imported sessions and private charges never get $/hr: no verified duration.
+//
+// A Live record is usable for ANY verdict only when it is finalized, has valid
+// ordered start/end instants and was not marked invalid. Unfinalized shows
+// carry zeroed final_* totals and must not be judged or used as a baseline.
 export const VS_TYPICAL_MIN = 5
-const isVerifiedLive = (e) => e.type === 'live' && !e.durationEstimated && !e.running
-  && (Number(e.durationMinutes) || 0) >= MIN_VALID_SESSION_MINUTES
+const toMs = (v) => { const ms = new Date(v).getTime(); return isNaN(ms) ? null : ms }
+const VERIFIED_END_TYPES = new Set(['normal_stop', 'free_active_limit'])
+export function liveRecordUsable(e) {
+  if (!e || e.type !== 'live' || !e.show) return false
+  const sh = e.show
+  if (!sh.finalizedAt || sh.endedHow === 'marked_invalid') return false
+  const a = toMs(sh.startedAt), b = toMs(sh.endedAt)
+  return a != null && b != null && b > a
+}
+export function liveVerifiedHourly(e) {
+  if (!liveRecordUsable(e) || e.running || e.durationEstimated) return null
+  const sh = e.show
+  if (!VERIFIED_END_TYPES.has(sh.endedHow)) return null
+  const dur = Number(sh.durationSeconds)
+  if (!Number.isFinite(dur) || dur <= 0) return null
+  const spanSeconds = (toMs(sh.endedAt) - toMs(sh.startedAt)) / 1000
+  if (dur > spanSeconds + 2) return null // active time cannot exceed the span (+2 s integer truncation)
+  if (dur / 60 < MIN_VALID_SESSION_MINUTES) return null
+  if (sh.usdPerHour === null || sh.usdPerHour === undefined || sh.usdPerHour === '') return null
+  const rate = Number(sh.usdPerHour)
+  if (!Number.isFinite(rate)) return null
+  const recomputed = (Number(sh.totalUsd) || 0) / (dur / 3600)
+  if (Math.abs(recomputed - rate) > 0.02) return null // cents rounding only; anything larger is contradictory
+  return money(rate)
+}
 export function sessionVsTypical(entry, history = [], { completeness = null } = {}) {
   if (!entry || !isMeaningfulSession(entry) || (entry.platforms || []).length !== 1) return null
   const complete = (e) => !completeness || completeness.get(e.id)?.status === 'complete'
-  if (!complete(entry)) return null
+  const usable = (e) => e.type !== 'live' || liveRecordUsable(e)
+  if (!complete(entry) || !usable(entry)) return null
   const pool = history.filter((e) => e.id !== entry.id
     && isMeaningfulSession(e)
     && (e.platforms || []).length === 1
     && e.type === entry.type
     && e.platforms[0] === entry.platforms[0]
-    && complete(e))
+    && complete(e)
+    && usable(e))
   if (pool.length < VS_TYPICAL_MIN) return null
   const med = median(pool.map((e) => e.totalUSD))
   if (!(med > 0)) return null
@@ -955,16 +992,15 @@ export function sessionVsTypical(entry, history = [], { completeness = null } = 
     outcome: outcomeOf(entry.totalUSD, med),
     perHour: null,
   }
-  if (isVerifiedLive(entry)) {
-    const perHour = (e) => e.totalUSD / (e.durationMinutes / 60)
-    const livePool = pool.filter(isVerifiedLive)
-    if (livePool.length >= VS_TYPICAL_MIN) {
-      const medRate = median(livePool.map(perHour))
+  const rate = liveVerifiedHourly(entry)
+  if (rate != null) {
+    const rates = pool.map(liveVerifiedHourly).filter((r) => r != null)
+    if (rates.length >= VS_TYPICAL_MIN) {
+      const medRate = median(rates)
       if (medRate > 0) {
-        const rate = perHour(entry)
         result.perHour = {
-          sessions: livePool.length,
-          usdPerHour: money(rate),
+          sessions: rates.length,
+          usdPerHour: rate,
           medianUSDPerHour: money(medRate),
           deltaPct: Math.round(((rate - medRate) / medRate) * 100),
           outcome: outcomeOf(rate, medRate),
@@ -977,36 +1013,34 @@ export function sessionVsTypical(entry, history = [], { completeness = null } = 
 
 // ── SESSION COMPLETENESS (Free history window) ──────────────────────────
 // Free history is cut per platform (lib/analytics.js accessibleDataset), and
-// session grouping then runs on the cut data. A visible session can therefore
-// be missing earlier activity, or be grouped differently than it would be on
-// the full history. This answers, per visible session, using the EXISTING
-// grouping functions (detectSessions / groupPaidSessions, same 60-minute gap
-// and platform rules) on the full unwindowed rows:
-//   complete         the same session exists, identically, in the full history
-//   partial_verified the full history has the same session starting EARLIER
-//                    (hidden activity is proven)
-//   unknown          completeness cannot be established (tip load incomplete,
-//                    a multi-platform Live show partly outside the window,
-//                    or the grouping differs from the full history)
-// Only a status and a reason code are returned: no hidden usernames, amounts
-// or transactions leave this function. Pro (or no window) is always complete.
-// A session with 'partial_verified' or 'unknown' receives no performance
-// verdict (sessionVsTypical).
+// session grouping then runs on the cut data. This answers, per visible
+// session, whether the Free view could be missing part of it. Only a status and
+// a reason code are returned: no hidden usernames, amounts or transactions.
+//   complete         nothing relevant is hidden and totals reconcile
+//   partial_verified hidden activity is PROVEN (a hidden tip linked to the
+//                    show, or the full history has the same session earlier)
+//   unknown          completeness cannot be established
+// Tip / private sessions: the EXISTING grouping (detectSessions /
+// groupPaidSessions, same 60-minute gap and platform rule) is re-run on the
+// full unwindowed rows and compared.
+// Live shows: start times prove nothing, so this compares the show's linked
+// tips in the FULL history with the visible ones (hidden linked tips →
+// partial_verified) and with the show's persisted summary (final_tip_count and
+// final_public_usd; a disagreement → unknown).
+// A session that is partial_verified or unknown receives no verdict.
+//
+// LIMITATION (tracked in issue #747): `loadComplete` defaults to true and the
+// dashboard does not yet pass the real tip / paid-session load status. Until
+// that is wired, an INCOMPLETE LOAD IS NOT DETECTED here. Do not describe
+// incomplete histories as protected.
 export function sessionCompletenessMap(history = [], {
-  allTips = [], allPaidSessions = [], windowStarts = null, unlimitedPlatform = null,
+  allTips = [], visibleTips = null, allPaidSessions = [], windowStarts = null,
   isPro = false, loadComplete = true,
 } = {}) {
   const out = new Map()
   const set = (e, status, reason = null) => out.set(e.id, { status, reason })
   if (!loadComplete) { for (const e of history) set(e, 'unknown', 'tips_load_incomplete'); return out }
   if (isPro || !windowStarts) { for (const e of history) set(e, 'complete'); return out }
-
-  const unlimited = unlimitedPlatform ? norm(unlimitedPlatform) : null
-  const startMsOf = (platform) => {
-    const d = windowStarts[norm(platform)]
-    const ms = d ? new Date(d).getTime() : NaN
-    return isNaN(ms) ? null : ms
-  }
 
   // Full-history groupings, built once with the shared grouping rules.
   const fullTipByPlatform = new Map()
@@ -1015,18 +1049,28 @@ export function sessionCompletenessMap(history = [], {
     if (!fullTipByPlatform.has(k)) fullTipByPlatform.set(k, [])
     fullTipByPlatform.get(k).push({ startMs: new Date(s.startTime).getTime(), endMs: new Date(s.endTime).getTime(), tipCount: s.tipCount })
   }
+  const tipKey = (t) => (t.id != null ? `id:${t.id}` : `k:${norm(t.platform)}|${t.date_time || t.dateRaw}|${norm(t.username)}|${t.usd}`)
+  const group = (rows) => {
+    const m = new Map()
+    for (const t of rows || []) if (t?.live_session_id) { if (!m.has(t.live_session_id)) m.set(t.live_session_id, []); m.get(t.live_session_id).push(t) }
+    return m
+  }
+  const fullLinked = group(allTips)
+  const visibleLinked = new Map([...group(visibleTips || [])].map(([id, rows]) => [id, new Set(rows.map(tipKey))]))
   const fullPrivateByRow = new Map()
   for (const g of groupPaidSessions(allPaidSessions)) for (const r of g.rows) fullPrivateByRow.set(r.id, g)
 
   for (const e of history) {
     const visStart = new Date(e.startTime).getTime()
     if (e.type === 'live') {
-      const cut = (e.platforms || []).some((p) => {
-        if (unlimited && norm(p) === unlimited) return false
-        const ws = startMsOf(p)
-        return ws != null && visStart < ws
-      })
-      if (cut) set(e, 'unknown', 'live_platform_partly_outside_window'); else set(e, 'complete')
+      if (!visibleTips) { set(e, 'unknown', 'visible_tips_not_supplied'); continue }
+      const full = fullLinked.get(e.sourceId) || []
+      const seen = visibleLinked.get(e.sourceId)
+      const hidden = full.filter((t) => !(seen && seen.has(tipKey(t)))).length
+      const fullUSD = full.reduce((a, t) => a + (Number(t.usd) || 0), 0)
+      if (hidden > 0) set(e, 'partial_verified', 'hidden_live_tips')
+      else if (full.length !== e.tipCount || Math.abs(fullUSD - e.publicUSD) > 0.011) set(e, 'unknown', 'live_summary_mismatch')
+      else set(e, 'complete')
     } else if (e.type === 'private') {
       const g = fullPrivateByRow.get(e.sourceId)
       if (!g) set(e, 'unknown', 'no_full_history_match')

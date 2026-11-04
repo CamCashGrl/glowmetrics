@@ -11,11 +11,12 @@
  */
 import {
   buildSessionHistory, sessionBuckets, sessionVsTypical, sessionCompletenessMap, VS_TYPICAL_MIN,
+  liveRecordUsable, liveVerifiedHourly,
 } from '../normalize'
 import { accessibleDataset } from '../../analytics'
 import { SESSION_GAP_MS } from '../../analytics/sessions'
 import {
-  lowDataFixture, highDataFixture, tipRow, resetIds, HIGH_CB_WINDOW_START,
+  lowDataFixture, highDataFixture, tipRow, resetIds, liveShow, HIGH_CB_WINDOW_START,
 } from '../__fixtures__/batch1-fixtures'
 import before from '../__fixtures__/batch1-before.json'
 
@@ -190,40 +191,126 @@ describe('sessionVsTypical: comparable sessions only', () => {
   })
 })
 
-describe('sessionVsTypical: $/hr only for verified Live with a comparable baseline', () => {
-  const live = (i, minutes, usd, platform = 'Chaturbate') => ({
-    id: `s${i}`, platform, startedAt: iso(Date.parse('2026-09-01T19:00:00Z') + i * DAY), endedAt: iso(Date.parse('2026-09-01T19:00:00Z') + i * DAY + minutes * MIN),
-    durationSeconds: minutes * 60, publicUsd: usd, privateUsd: 0, totalUsd: usd, platformRevenue: [{ platform, usd, tips: 3 }], tipCount: 3, uniqueTippers: 2,
+describe('sessionVsTypical: $/hr only for VERIFIED Live durations with a comparable baseline', () => {
+  const T0 = Date.parse('2026-09-01T19:00:00Z')
+  // n consistent, finalized, normal_stop 60-minute shows ($50..$50+10(n-1)/hr)
+  const shows = (n, over = {}) => Array.from({ length: n }, (_, i) => liveShow({
+    id: `s${i}`, platform: 'Chaturbate', startedAt: iso(T0 + i * DAY), minutes: 60, publicUsd: 50 + i * 10, tipCount: 3, uniqueTippers: 2, ...(over[i] || {}),
+  }))
+  const hist = (list) => buildSessionHistory({ shows: list })
+  const last = (h, id) => h.find((e) => e.sourceId === id)
+
+  test('uses the persisted $/hr; baseline is the median of >= 5 other verified Live shows; total earnings stays the primary verdict', () => {
+    const h = hist(shows(6))
+    const vs = sessionVsTypical(last(h, 's5'), h)
+    expect(vs).toMatchObject({ basis: 'same', sessions: 5, outcome: 'above' })
+    expect(vs.perHour).toEqual({ sessions: 5, usdPerHour: 100, medianUSDPerHour: 70, deltaPct: 43, outcome: 'above' })
   })
 
-  test('median $/hr baseline over >= 5 other verified Live shows; total earnings stays the primary verdict', () => {
-    const fx = highDataFixture()
-    const h = buildSessionHistory(fx)
-    const e = h.find((x) => x.id === 'live:show-bc-6')
-    const vs = sessionVsTypical(e, h)
-    expect(vs.basis).toBe('same')
+  test('realistic high-data Live shows (paused-free) reach a verified comparison', () => {
+    const fx = highDataFixture(); const h = buildSessionHistory(fx)
+    const vs = sessionVsTypical(h.find((x) => x.id === 'live:show-bc-6'), h)
     expect(vs.perHour.sessions).toBe(6)
-    const rates = fx.shows.filter((s) => s.id.startsWith('show-bc') && s.id !== 'show-bc-6')
-      .map((s) => Math.round(s.totalUsd * 100) / 100 / (s.durationSeconds / 3600)).sort((a, b) => a - b)
-    const med = (rates[2] + rates[3]) / 2
-    expect(vs.perHour.medianUSDPerHour).toBeCloseTo(med, 2)
-    expect(vs.perHour.usdPerHour).toBeCloseTo(e.totalUSD / (e.durationMinutes / 60), 2)
+    expect(vs.perHour.usdPerHour).toBe(fx.shows.find((x) => x.id === 'show-bc-6').usdPerHour)
   })
 
-  test('fewer than 5 verified comparable Live shows: total verdict may exist, $/hr does not', () => {
-    // 6 shows; two others are only 20 minutes long (below the 30-minute valid-session floor)
-    const shows = [live(0, 60, 60), live(1, 60, 70), live(2, 60, 80), live(3, 20, 30), live(4, 20, 25), live(5, 60, 90)]
-    const h = buildSessionHistory({ shows })
-    const vs = sessionVsTypical(h.find((e) => e.sourceId === 's5'), h)
+  test('only 4 verified comparable shows: the total verdict can exist, $/hr does not', () => {
+    const h = hist(shows(6, { 1: { minutes: 29 }, 2: { minutes: 20 } })) // two others below the 30-minute floor
+    const vs = sessionVsTypical(last(h, 's5'), h)
     expect(vs).not.toBeNull()
     expect(vs.sessions).toBe(5)
     expect(vs.perHour).toBeNull()
   })
 
-  test('a Live show shorter than the valid-session floor never gets $/hr', () => {
-    const shows = [live(0, 60, 60), live(1, 60, 70), live(2, 60, 80), live(3, 60, 50), live(4, 60, 55), live(5, 20, 90)]
-    const h = buildSessionHistory({ shows })
-    expect(sessionVsTypical(h.find((e) => e.sourceId === 's5'), h).perHour).toBeNull()
+  test('30-minute floor is inclusive: 30 min qualifies, 29 min does not', () => {
+    const ok = hist(shows(6, { 5: { minutes: 30 } }))
+    expect(sessionVsTypical(last(ok, 's5'), ok).perHour).not.toBeNull()
+    const short = hist(shows(6, { 5: { minutes: 29 } }))
+    expect(sessionVsTypical(last(short, 's5'), short).perHour).toBeNull()
+  })
+
+  test('paused time is fine (active duration < span); a duration longer than the span is contradictory', () => {
+    const paused = hist(shows(6, { 5: { pausedSeconds: 900 } }))
+    expect(sessionVsTypical(last(paused, 's5'), paused).perHour).not.toBeNull()
+    const base = shows(6)
+    base[5] = { ...base[5], durationSeconds: 3600 + 600 } // active time longer than the start→end span
+    const bad = hist(base)
+    expect(liveVerifiedHourly(last(bad, 's5'))).toBeNull()
+    expect(sessionVsTypical(last(bad, 's5'), bad).perHour).toBeNull() // total verdict stays
+    expect(sessionVsTypical(last(bad, 's5'), bad)).not.toBeNull()
+  })
+
+  test.each([[0], [-5], [NaN], [null], [undefined], ['abc']])('invalid duration %p never supports $/hr', (dur) => {
+    const base = shows(6); base[5] = { ...base[5], durationSeconds: dur }
+    const h = hist(base)
+    expect(liveVerifiedHourly(last(h, 's5'))).toBeNull()
+    expect(sessionVsTypical(last(h, 's5'), h).perHour).toBeNull()
+  })
+
+  test('the persisted $/hr must agree with persisted total ÷ persisted duration; missing or contradictory is not trusted', () => {
+    for (const bad of [undefined, null, '', NaN, 999, 1]) {
+      const base = shows(6); base[5] = { ...base[5], usdPerHour: bad }
+      const h = hist(base)
+      expect(liveVerifiedHourly(last(h, 's5'))).toBeNull()
+    }
+    const base = shows(6); base[5] = { ...base[5], usdPerHour: base[5].usdPerHour + 0.01 } // within cents rounding
+    expect(liveVerifiedHourly(last(hist(base), 's5'))).not.toBeNull()
+  })
+
+  test.each(['end_at_last_heartbeat', 'auto_ended_inactivity', 'chosen_end_time', 'still_live', null, undefined])(
+    'an end that is inferred or unknown (%p) never supports $/hr, but the total verdict is still allowed', (endedHow) => {
+      const list = shows(6); list[5] = { ...list[5], endedHow } // patched after building so undefined/null really are missing
+      const h = hist(list)
+      const vs = sessionVsTypical(last(h, 's5'), h)
+      expect(vs).not.toBeNull()
+      expect(vs.perHour).toBeNull()
+    })
+
+  test('system-verified ends (normal_stop, free_active_limit) support $/hr', () => {
+    for (const endedHow of ['normal_stop', 'free_active_limit']) {
+      const h = hist(shows(6, { 5: { endedHow } }))
+      expect(sessionVsTypical(last(h, 's5'), h).perHour).not.toBeNull()
+    }
+  })
+
+  test('unverified shows are removed from the $/hr baseline', () => {
+    const h = hist(shows(6, { 0: { endedHow: 'auto_ended_inactivity' } })) // one of the 5 others is not verified
+    const vs = sessionVsTypical(last(h, 's5'), h)
+    expect(vs.sessions).toBe(5) // total baseline still has 5
+    expect(vs.perHour).toBeNull() // verified baseline has only 4
+  })
+
+  test('missing or invalid start/end timestamps: no verdict, no $/hr, and not used as a baseline', () => {
+    const noEnd = buildSessionHistory({ shows: [{ ...shows(1)[0], endedAt: null }] })
+    expect(noEnd).toHaveLength(0) // existing rule: a show with no end is not a finished show
+    for (const patch of [{ startedAt: 'not-a-date' }, { startedAt: undefined }, { endedAt: 'garbage' }]) {
+      const base = shows(7); base[5] = { ...base[5], ...patch }
+      const h = hist(base)
+      const e = h.find((x) => x.sourceId === 's5')
+      expect(liveRecordUsable(e)).toBe(false)
+      expect(liveVerifiedHourly(e)).toBeNull()
+      expect(sessionVsTypical(e, h)).toBeNull()
+      expect(sessionVsTypical(last(h, 's6'), h).sessions).toBe(5) // the 6 others minus the unusable one
+    }
+    const base = shows(7); base[5] = { ...base[5], endedAt: iso(T0 + 5 * DAY - 60000) } // ends before it starts
+    const h = hist(base)
+    expect(liveRecordUsable(h.find((x) => x.sourceId === 's5'))).toBe(false)
+    expect(sessionVsTypical(h.find((x) => x.sourceId === 's5'), h)).toBeNull()
+  })
+
+  test('incomplete shows (not finalized, or marked invalid) get no verdict and are excluded from baselines', () => {
+    for (const patch of [{ finalized: false }, { endedHow: 'marked_invalid' }]) {
+      const h = hist(shows(7, { 5: patch }))
+      const e = h.find((x) => x.sourceId === 's5')
+      expect(sessionVsTypical(e, h)).toBeNull()
+      expect(sessionVsTypical(last(h, 's6'), h).sessions).toBe(5)
+    }
+  })
+
+  test('a running entry never supports $/hr', () => {
+    const e = buildSessionHistory({ shows: shows(1) })[0]
+    expect(liveVerifiedHourly({ ...e, running: true })).toBeNull()
+    expect(liveVerifiedHourly({ ...e, durationEstimated: true })).toBeNull()
   })
 
   test('imported sessions and private charges never get $/hr', () => {
@@ -242,8 +329,8 @@ const run = (fx, opts = {}) => {
   const g = gate(fx, opts)
   const history = buildSessionHistory({ tips: g.tips, shows: g.shows, paidSessions: g.paidSessions })
   const map = sessionCompletenessMap(history, {
-    allTips: fx.tips, allPaidSessions: fx.paidSessions || [], windowStarts: g.windowStarts,
-    unlimitedPlatform: g.unlimitedPlatform, isPro: !!opts.isPro, loadComplete: opts.loadComplete,
+    allTips: fx.tips, visibleTips: g.tips, allPaidSessions: fx.paidSessions || [], windowStarts: g.windowStarts,
+    isPro: !!opts.isPro, loadComplete: opts.loadComplete,
   })
   return { g, history, map }
 }
@@ -334,15 +421,72 @@ describe('sessionCompletenessMap (Free history window)', () => {
     expect(b.map.get(pe2.id).status).toBe('complete')
   })
 
-  test('a multi-platform Live show partly outside a platform window is unknown; unlimited platform makes it complete', () => {
-    const show = { id: 'm', platform: 'Chaturbate', startedAt: '2026-10-10T18:00:00.000Z', endedAt: '2026-10-10T19:30:00.000Z', durationSeconds: 5400, publicUsd: 5, privateUsd: 0, totalUsd: 5, tipCount: 2, uniqueTippers: 2,
-      platformRevenue: [{ platform: 'Chaturbate', usd: 3, tips: 1 }, { platform: 'MyFreeCams', usd: 2, tips: 1 }] }
-    const history = buildSessionHistory({ shows: [show] })
-    const windowStarts = { chaturbate: new Date('2026-09-01T00:00:00Z'), myfreecams: new Date('2026-10-12T00:00:00Z') }
-    const a = sessionCompletenessMap(history, { windowStarts, isPro: false })
-    expect(a.get(history[0].id)).toEqual({ status: 'unknown', reason: 'live_platform_partly_outside_window' })
-    const b = sessionCompletenessMap(history, { windowStarts, isPro: false, unlimitedPlatform: 'MyFreeCams' })
-    expect(b.get(history[0].id).status).toBe('complete')
+  describe('Live shows: completeness is proven from the show\'s tips, not from start times', () => {
+    const SHOW = Date.parse('2026-10-01T20:00:00Z')
+    // show tips on Chaturbate (visible) and MyFreeCams; MFC's own window starts AFTER the show, so its tip is hidden for Free.
+    const multiFixture = (over = {}) => {
+      resetIds()
+      const id = 'live-multi'
+      const cb = tipRow(iso(SHOW + 10 * MIN), 'chaturbate', 'sam', 100, { live_session_id: id, source: 'extension' })
+      const mfc = tipRow(iso(SHOW + 40 * MIN), 'myfreecams', 'kit', 400, { live_session_id: id, source: 'extension' })
+      const show = liveShow({
+        id, platform: 'Chaturbate', startedAt: iso(SHOW), minutes: 90, publicUsd: cb.usd + mfc.usd, tipCount: 2, uniqueTippers: 2,
+        platformRevenue: [{ platform: 'MyFreeCams', usd: mfc.usd, tips: 1 }, { platform: 'Chaturbate', usd: cb.usd, tips: 1 }], ...over,
+      })
+      return { tips: [cb, mfc, tipRow(iso(SHOW + 5 * DAY), 'chaturbate', 'late', 10), tipRow(iso(SHOW + 40 * DAY), 'myfreecams', 'late', 10)], shows: [show], paidSessions: [] }
+    }
+
+    test('multi-platform: a hidden linked tip on a windowed platform proves the show partial (and the show total still includes it)', () => {
+      const { history, map, g } = run(multiFixture())
+      expect(g.shows).toHaveLength(1) // kept: Chaturbate is inside its window
+      const live = history.find((e) => e.type === 'live')
+      expect(map.get(live.id)).toEqual({ status: 'partial_verified', reason: 'hidden_live_tips' })
+      expect(live.totalUSD).toBeGreaterThan(g.tips.filter((t) => t.live_session_id === 'live-multi').reduce((a, t) => a + t.usd, 0)) // visible tips < persisted total
+      expect(sessionVsTypical(live, history, { completeness: map })).toBeNull()
+    })
+
+    test('single-platform: every linked tip visible and matching the saved summary → complete', () => {
+      resetIds()
+      const id = 'live-single'
+      const tips = [10, 30, 50].map((m) => tipRow(iso(SHOW + m * MIN), 'bongacams', `f${m}`, 40, { live_session_id: id, source: 'extension' }))
+      const show = liveShow({ id, platform: 'BongaCams', startedAt: iso(SHOW), minutes: 90, publicUsd: tips.reduce((a, t) => a + t.usd, 0), tipCount: 3, uniqueTippers: 3 })
+      const { history, map } = run({ tips: [...tips, tipRow(iso(SHOW + 3 * DAY), 'bongacams', 'late', 5)], shows: [show], paidSessions: [] })
+      expect(map.get(history.find((e) => e.type === 'live').id)).toEqual({ status: 'complete', reason: null })
+    })
+
+    test('the saved summary disagrees with the tip records (count or USD) → unknown, even when nothing is hidden', () => {
+      for (const over of [{ tipCount: 3 }, { publicUsd: 999 }]) {
+        const fx = multiFixture(over)
+        const { history, map } = run(fx, { unlimitedPlatform: 'MyFreeCams' }) // MFC unwindowed: nothing hidden
+        expect(map.get(history.find((e) => e.type === 'live').id)).toEqual({ status: 'unknown', reason: 'live_summary_mismatch' })
+      }
+    })
+
+    test('nothing hidden and the summary reconciles → complete (unlimited platform)', () => {
+      const { history, map } = run(multiFixture(), { unlimitedPlatform: 'MyFreeCams' })
+      expect(map.get(history.find((e) => e.type === 'live').id).status).toBe('complete')
+    })
+
+    test('without the visible tips the check cannot prove anything → unknown (fails closed); Pro stays complete', () => {
+      const fx = multiFixture(); const g = gate(fx)
+      const history = buildSessionHistory({ tips: g.tips, shows: g.shows })
+      const m = sessionCompletenessMap(history, { allTips: fx.tips, windowStarts: g.windowStarts, isPro: false })
+      expect(m.get(history.find((e) => e.type === 'live').id)).toEqual({ status: 'unknown', reason: 'visible_tips_not_supplied' })
+      expect(run(fx, { isPro: true }).map.get(history.find((e) => e.type === 'live').id).status).toBe('complete')
+    })
+
+    test('a Live show with no linked tips (private-only) and a consistent summary is complete', () => {
+      const show = liveShow({ id: 'priv', platform: 'Chaturbate', startedAt: iso(SHOW), minutes: 60, publicUsd: 0, privateUsd: 12, tipCount: 0 })
+      const { history, map } = run({ tips: [tipRow(iso(SHOW + 3 * DAY), 'chaturbate', 'late', 5)], shows: [show], paidSessions: [] })
+      expect(map.get(history.find((e) => e.type === 'live').id).status).toBe('complete')
+    })
+
+    test('high-data Free fixture: the visible single-platform Live shows reconcile and are complete', () => {
+      const { history, map } = run(highDataFixture())
+      const lives = history.filter((e) => e.type === 'live')
+      expect(lives.length).toBeGreaterThan(0)
+      expect(lives.every((e) => map.get(e.id).status === 'complete')).toBe(true)
+    })
   })
 
   test('an incomplete tip load makes every session unknown (even Pro): completeness cannot be established', () => {
@@ -366,5 +510,86 @@ describe('sessionCompletenessMap (Free history window)', () => {
     const blob = JSON.stringify([...map.entries()].map(([, v]) => v))
     for (const t of fx.tips.slice(0, 200)) { expect(blob).not.toContain(`"${t.username}"`) }
     expect(blob).not.toMatch(/\d{4}-\d{2}-\d{2}T/)
+  })
+})
+
+describe('regression: comparison pools, fractional cents, and restricted Free data', () => {
+  test('the comparison pool excludes every incomplete session (verified against an independent count and median)', () => {
+    const fx = highDataFixture()
+    const { history, map } = run(fx)
+    const latestCb = history.find((e) => e.platforms[0] === 'chaturbate' && e.type === 'imported' && e.isValid && map.get(e.id).status === 'complete')
+    const sameKind = (e) => e.id !== latestCb.id && e.type === latestCb.type && e.platforms.length === 1 && e.platforms[0] === 'chaturbate'
+    const meaningful = history.filter((e) => sameKind(e) && e.isValid)
+    const completeOnly = meaningful.filter((e) => map.get(e.id).status === 'complete')
+    expect(completeOnly.length).toBeLessThan(meaningful.length) // the straddling partial session really is in the raw pool
+    const vs = sessionVsTypical(latestCb, history, { completeness: map })
+    expect(vs.sessions).toBe(completeOnly.length)
+    const sorted = completeOnly.map((e) => e.totalUSD).sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    const med = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    expect(vs.medianUSD).toBe(Math.round(med * 100) / 100)
+    expect(sessionVsTypical(latestCb, history)?.sessions).toBe(meaningful.length) // without completeness the partial one would count
+  })
+
+  test('verdict objects carry only aggregate fields (no usernames, tips or timestamps)', () => {
+    const fx = highDataFixture(); const { history, map } = run(fx)
+    const allowed = ['basis', 'deltaPct', 'medianUSD', 'outcome', 'perHour', 'sessions']
+    for (const e of history) {
+      const v = sessionVsTypical(e, history, { completeness: map })
+      if (v) { expect(Object.keys(v).sort()).toEqual(allowed); if (v.perHour) expect(Object.keys(v.perHour).sort()).toEqual(['deltaPct', 'medianUSDPerHour', 'outcome', 'sessions', 'usdPerHour']) }
+    }
+  })
+
+  test('fractional cents are preserved end to end in the contributor list and reconcile exactly', () => {
+    resetIds()
+    // 1 + 3 + 7 BongaCams tokens = $0.275 in one bucket: not representable in cents
+    const tips = [[20, 1], [24, 3], [29, 7]].map(([m, tk]) => tipRow(`2026-10-01T20:${m}:00.000Z`, 'bongacams', 'kit', tk))
+    const b = sessionBuckets(buildSessionHistory({ tips })[0], { tips }).buckets[0]
+    expect(b.fans[0].usd).toBeCloseTo(0.275, 9)
+    expect(b.fans[0].usd).not.toBe(Math.round(b.fans[0].usd * 100) / 100)
+    expect(b.fans[0].usd + b.unattributedPublicUSD + b.unattributedPrivateUSD).toBeCloseTo(tips.reduce((a, t) => a + t.usd, 0), 9)
+    // high-data: many contributor values are sub-cent, and every session still reconciles to 1e-9
+    const fx = highDataFixture(); let subCent = 0
+    for (const e of buildSessionHistory(fx)) {
+      const bb = sessionBuckets(e, { tips: fx.tips }).buckets
+      const sum = bb.reduce((a, k) => a + k.fans.reduce((x, f) => x + f.usd, 0) + k.unattributedPublicUSD + k.unattributedPrivateUSD, 0)
+      const raw = e.type === 'live'
+        ? fx.tips.filter((t) => t.live_session_id === e.sourceId).reduce((a, t) => a + t.usd, 0) + e.privateIntervals.reduce((a, iv) => a + iv.earningsUsd, 0)
+        : e.type === 'private' ? e.charges.reduce((a, c) => a + c.usd, 0) : e.session.tips.reduce((a, t) => a + t.usd, 0)
+      expect(Math.abs(sum - raw)).toBeLessThan(1e-9)
+      for (const k of bb) for (const f of k.fans) if (Math.abs(f.usd * 100 - Math.round(f.usd * 100)) > 1e-6) subCent++
+    }
+    expect(subCent).toBeGreaterThan(20)
+  })
+
+  test('existing bucket outputs are unchanged for every session in both fixtures (snapshot from the original engine)', () => {
+    for (const [name, fx] of [['low', lowDataFixture()], ['high', highDataFixture()]]) {
+      const history = buildSessionHistory(fx)
+      expect(history.length).toBe(Object.keys(before[name]).length)
+      for (const e of history) {
+        expect(JSON.parse(JSON.stringify(stripNew(sessionBuckets(e, { tips: fx.tips }))))).toEqual(before[name][e.id].buckets)
+      }
+    }
+  })
+
+  test('restricted Free rows never appear in any engine output (completeness, verdicts, buckets of visible sessions)', () => {
+    const fx = highDataFixture()
+    const { g, history, map } = run(fx)
+    const visibleIds = new Set(g.tips.map((t) => t.id))
+    const hidden = fx.tips.filter((t) => !visibleIds.has(t.id))
+    expect(hidden.length).toBeGreaterThan(100)
+    // usernames that exist ONLY in hidden rows
+    const visibleNames = new Set(g.tips.map((t) => t.username))
+    const hiddenOnly = new Set(hidden.map((t) => t.username).filter((u) => !visibleNames.has(u)))
+    const blob = JSON.stringify({
+      map: [...map.entries()],
+      vs: history.map((e) => sessionVsTypical(e, history, { completeness: map })),
+      buckets: history.map((e) => sessionBuckets(e, { tips: g.tips })),
+    })
+    for (const u of hiddenOnly) expect(blob).not.toContain(`"${u}"`)
+    // the straddling session's visible buckets contain only visible tippers and amounts
+    const straddle = history.find((e) => e.platforms[0] === 'chaturbate' && Date.parse(e.startTime) === HIGH_CB_WINDOW_START + 10 * MIN)
+    const bk = sessionBuckets(straddle, { tips: g.tips })
+    expect(bk.buckets.reduce((a, k) => a + k.fans.reduce((x, f) => x + f.usd, 0), 0)).toBeCloseTo(straddle.session.tips.reduce((a, t) => a + t.usd, 0), 9)
   })
 })

@@ -5387,7 +5387,9 @@ const stopImportMessageRotation = () => {
             allTips={tips}
             allPaidSessions={paidSessions}
             windowStarts={accessible.windowStarts}
-            unlimitedPlatform={accessible.unlimitedPlatform}
+            // tipsLoadComplete is intentionally NOT passed yet: tip / paid-session
+            // load-failure detection is tracked in issue #747. Until it is wired,
+            // an incomplete load is not detected by the Sessions completeness check.
             tz={creatorTz}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}

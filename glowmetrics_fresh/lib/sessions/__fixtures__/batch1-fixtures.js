@@ -37,6 +37,29 @@ const iso = (ms) => new Date(ms).toISOString()
 const MIN = 60000
 const DAY = 86400000
 
+const round2 = (v) => Math.round(v * 100) / 100
+
+// A finalized Live show in the persisted shape (lib/liveSession/postShow.js
+// toShowSummary over _finalize_live_session_metrics): final_duration_seconds =
+// span − paused; final_usd_per_hour = (public + private) / duration × 3600;
+// final_platform_breakdown / tip count are PUBLIC canonical tips only.
+export function liveShow({
+  id, platform = 'Chaturbate', startedAt, minutes, publicUsd, privateUsd = 0, tipCount = 0, uniqueTippers = 0,
+  endedHow = 'normal_stop', finalized = true, pausedSeconds = 0, platformRevenue = null, privateIntervals = [],
+}) {
+  const startMs = Date.parse(startedAt)
+  const endedAt = iso(startMs + minutes * MIN)
+  const durationSeconds = minutes * 60 - pausedSeconds
+  return {
+    id, platform, startedAt, endedAt, finalizedAt: finalized ? endedAt : null, endedHow,
+    durationSeconds, publicUsd: round2(publicUsd), privateUsd: round2(privateUsd), totalUsd: round2(publicUsd + privateUsd),
+    usdPerHour: durationSeconds > 0 ? round2(((publicUsd + privateUsd) / durationSeconds) * 3600) : null,
+    privateSeconds: privateIntervals.length ? 600 : 0, tipCount, uniqueTippers, topTipper: null, isNew: false,
+    platformRevenue: platformRevenue || [{ platform, usd: round2(publicUsd), tips: tipCount }],
+    privateIntervals,
+  }
+}
+
 // ── LOW DATA ─────────────────────────────────────────────────────────────
 export function lowDataFixture() {
   resetIds()
@@ -106,14 +129,11 @@ export function highDataFixture() {
     const publicUsd = linked.reduce((s, t) => s + t.usd, 0)
     const privateUsd = 6 + i
     live.push(...linked)
-    shows.push({
-      id, platform: 'BongaCams', startedAt: iso(startMs), endedAt: iso(startMs + durMin * MIN),
-      durationSeconds: durMin * 60, publicUsd, privateUsd, totalUsd: publicUsd + privateUsd,
-      privateSeconds: 600, tipCount: linked.length, uniqueTippers: new Set(linked.map((t) => t.username)).size,
-      topTipper: null, isNew: false,
-      platformRevenue: [{ platform: 'BongaCams', usd: publicUsd + privateUsd, tips: linked.length }],
+    shows.push(liveShow({
+      id, platform: 'BongaCams', startedAt: iso(startMs), minutes: durMin, publicUsd, privateUsd,
+      tipCount: linked.length, uniqueTippers: new Set(linked.map((t) => t.username)).size,
       privateIntervals: [{ id: `iv-${i}`, platform: 'BongaCams', startedAt: iso(startMs + 30 * MIN), endedAt: iso(startMs + 40 * MIN), earningsUsd: privateUsd }],
-    })
+    }))
   }
   // A multi-platform Live show (Chaturbate + MyFreeCams).
   {
@@ -126,12 +146,10 @@ export function highDataFixture() {
     ]
     const publicUsd = linked.reduce((s, t) => s + t.usd, 0)
     live.push(...linked)
-    shows.push({
-      id, platform: 'Chaturbate', startedAt: iso(startMs), endedAt: iso(startMs + 90 * MIN), durationSeconds: 5400,
-      publicUsd, privateUsd: 0, totalUsd: publicUsd, privateSeconds: 0, tipCount: 3, uniqueTippers: 3, topTipper: null, isNew: false,
-      platformRevenue: [{ platform: 'Chaturbate', usd: linked[0].usd + linked[2].usd, tips: 2 }, { platform: 'MyFreeCams', usd: linked[1].usd, tips: 1 }],
-      privateIntervals: [],
-    })
+    shows.push(liveShow({
+      id, platform: 'Chaturbate', startedAt: iso(startMs), minutes: 90, publicUsd, tipCount: 3, uniqueTippers: 3,
+      platformRevenue: [{ platform: 'Chaturbate', usd: round2(linked[0].usd + linked[2].usd), tips: 2 }, { platform: 'MyFreeCams', usd: round2(linked[1].usd), tips: 1 }],
+    }))
   }
   const paidSessions = []
   for (let c = 0; c < 4; c++) {

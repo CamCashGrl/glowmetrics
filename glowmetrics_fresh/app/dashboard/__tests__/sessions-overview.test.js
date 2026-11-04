@@ -6,6 +6,7 @@
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import SessionsOverview from '../SessionsOverview'
+import { liveShow } from '../../../lib/sessions/__fixtures__/batch1-fixtures'
 
 const NOW = new Date('2026-10-07T20:00:00Z')
 const TZ = 'UTC'
@@ -399,14 +400,58 @@ describe('completeness, $/hr and timezone', () => {
     expect(screen.getByTestId('session-details-body').textContent).not.toMatch(/\/hr/)
   })
 
-  test('Live: $/hr shown only with >= 5 comparable verified Live shows', () => {
-    const live = (i, minutes, usd) => ({ id: `s${i}`, platform: 'chaturbate', startedAt: at(Date.parse('2026-10-01T19:00:00Z') + i * DAY), endedAt: at(Date.parse('2026-10-01T19:00:00Z') + i * DAY + minutes * MIN), finalizedAt: at(NOW), durationSeconds: minutes * 60, publicUsd: usd, privateUsd: 0, totalUsd: usd, privateSeconds: 0, privateIntervals: [], platformRevenue: [{ platform: 'chaturbate', usd, tips: 3 }], tipCount: 3, uniqueTippers: 2, isNew: false })
-    const six = [0, 1, 2, 3, 4, 5].map((i) => live(i, 60, 50 + i * 10))
+  test('Live: the persisted $/hr is shown only with >= 5 comparable verified Live shows', () => {
+    const live = (i) => liveShow({ id: `s${i}`, platform: 'chaturbate', startedAt: at(Date.parse('2026-10-01T19:00:00Z') + i * DAY), minutes: 60, publicUsd: 50 + i * 10, tipCount: 3, uniqueTippers: 2 })
+    const six = [0, 1, 2, 3, 4, 5].map(live)
     const { unmount } = renderTab({ shows: six, isPro: true })
     expect(val('details-vs-hourly')).toMatch(/\$100\.00\/hr over the recorded show vs a typical \$70\.00\/hr \(\+43%, median of 5 of your Chaturbate Live shows\)/)
     unmount()
     renderTab({ shows: six.slice(0, 5), isPro: true }) // only 4 others
     expect(screen.queryByTestId('details-vs-hourly')).toBeNull()
+  })
+
+  test('Live: an unverified duration (inferred end) shows the earnings verdict but no $/hr', () => {
+    const live = (i, over = {}) => ({ ...liveShow({ id: `s${i}`, platform: 'chaturbate', startedAt: at(Date.parse('2026-10-01T19:00:00Z') + i * DAY), minutes: 60, publicUsd: 50 + i * 10, tipCount: 3 }), ...over })
+    renderTab({ shows: [0, 1, 2, 3, 4].map((i) => live(i)).concat(live(5, { endedHow: 'auto_ended_inactivity' })), isPro: true })
+    expect(screen.getByTestId('details-vs').textContent).toMatch(/vs typical/)
+    expect(screen.queryByTestId('details-vs-hourly')).toBeNull()
+  })
+
+  test('tipsLoadComplete={false} (the plumbing #747 will use): no verdicts, "cannot be confirmed" label', () => {
+    renderTab({ tips: history, isPro: true, tipsLoadComplete: false })
+    expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
+    expect(screen.getByTestId('details-vs-unknown').textContent).toMatch(/can.t be confirmed/)
+  })
+
+  test('KNOWN LIMITATION (issue #747): the dashboard does not pass the load status yet, so the default does NOT flag an incomplete load', () => {
+    renderTab({ tips: history, isPro: true }) // same data, flag omitted exactly as page.js calls it today
+    expect(screen.getAllByTestId(/^row-vs-/).length).toBeGreaterThan(0)
+    expect(screen.queryByTestId('details-vs-unknown')).toBeNull()
+  })
+
+  test('Free: restricted rows never reach the DOM, on any tab (imported straddle and a partly-hidden Live show)', () => {
+    const hiddenImported = [csvTip(8001, at(WS - 25 * MIN), 'chaturbate', 'HiddenWhale', 4321.09), csvTip(8002, at(WS - 10 * MIN), 'chaturbate', 'HiddenPal', 1234.56)]
+    const visible = [csvTip(8003, at(WS + 10 * MIN), 'chaturbate', 'Ann', 9), csvTip(8004, at(WS + 25 * MIN), 'chaturbate', 'Ben', 9), csvTip(8005, at(WS + 50 * MIN), 'chaturbate', 'Cy', 9), csvTip(8006, at(T), 'chaturbate', 'Late', 9)]
+    // imported straddle
+    let r = renderTab({ tips: visible, allTips: [...hiddenImported, ...visible], allPaidSessions: [], windowStarts: { chaturbate: new Date(WS) }, isPro: false })
+    for (const tab of ['overview', 'timeline', 'schedule', 'fans']) {
+      click(`details-tab-${tab}`)
+      for (const x of ['HiddenWhale', 'HiddenPal', '4321', '1234.56']) expect(r.container.innerHTML).not.toContain(x)
+    }
+    click('details-tab-overview')
+    expect(screen.getByTestId('details-vs-partial').textContent).toMatch(/started before your Free history window/)
+    r.unmount()
+    // partly-hidden Live show
+    const SHOW = Date.parse('2026-10-01T20:00:00Z')
+    const cbTip = { ...csvTip(9001, at(SHOW + 10 * MIN), 'chaturbate', 'VisibleFan', 25), live_session_id: 'lm', source: 'extension' }
+    const mfcTip = { ...csvTip(9002, at(SHOW + 40 * MIN), 'myfreecams', 'HiddenLiveFan', 777.77), live_session_id: 'lm', source: 'extension' }
+    const show = liveShow({ id: 'lm', platform: 'chaturbate', startedAt: at(SHOW), minutes: 90, publicUsd: 25 + 777.77, tipCount: 2, uniqueTippers: 2, platformRevenue: [{ platform: 'chaturbate', usd: 25, tips: 1 }, { platform: 'myfreecams', usd: 777.77, tips: 1 }] })
+    r = renderTab({ tips: [cbTip], shows: [show], allTips: [cbTip, mfcTip], allPaidSessions: [], windowStarts: { chaturbate: new Date(SHOW - DAY), myfreecams: new Date(SHOW + 10 * DAY) }, isPro: false })
+    expect(screen.getByTestId('details-vs-partial').textContent).toMatch(/Some of this show's tips are outside your Free history window/)
+    for (const tab of ['overview', 'timeline', 'schedule', 'fans']) {
+      click(`details-tab-${tab}`)
+      expect(r.container.innerHTML).not.toContain('HiddenLiveFan')
+    }
   })
 
   test('times use the creator timezone, including across a DST change (America/New_York) and a :30 offset (Asia/Kolkata)', () => {

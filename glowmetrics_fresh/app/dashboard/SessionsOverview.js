@@ -605,7 +605,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
             {fmtUsd(vs.perHour.usdPerHour)}/hr over the recorded show vs a typical {fmtUsd(vs.perHour.medianUSDPerHour)}/hr ({vs.perHour.deltaPct > 0 ? "+" : ""}{vs.perHour.deltaPct}%, median of {vs.perHour.sessions} of your {pName(e.platforms[0])} Live shows)
           </span>}
         </div>
-        : completeness?.status === "partial_verified" ? <div data-testid="details-vs-partial" style={{ fontSize: 12, color: C.muted }}>This session started before your Free history window, so it is not compared with your typical sessions.</div>
+        : completeness?.status === "partial_verified" ? <div data-testid="details-vs-partial" style={{ fontSize: 12, color: C.muted }}>{completeness.reason === "hidden_live_tips" ? "Some of this show's tips are outside your Free history window" : "This session started before your Free history window"}, so it is not compared with your typical sessions.</div>
         : completeness?.status === "unknown" ? <div data-testid="details-vs-unknown" style={{ fontSize: 12, color: C.muted }}>This session&apos;s completeness can&apos;t be confirmed with the history available, so it is not compared with your typical sessions.</div>
         : (e.type === "free_chat" || e.type === "imported" || e.type === "live") && e.isValid ? <div data-testid="details-vs-empty" style={{ fontSize: 12, color: C.muted }}>Comparison with your typical session needs 5 other comparable sessions on the same platform and type.</div> : null}
       <div className="sx-dgrid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
@@ -641,7 +641,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
   )
 }
 
-export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null, plannedStreams = [], onOpenPlanner = null, allTips = null, allPaidSessions = null, windowStarts = null, unlimitedPlatform = null, tipsLoadComplete = true }) {
+export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null, plannedStreams = [], onOpenPlanner = null, allTips = null, allPaidSessions = null, windowStarts = null, tipsLoadComplete = true }) {
   const historyNote = isPro ? "Full history on every platform" : primaryPlatform
     ? `Free: full history on ${pName(primaryPlatform)}, last 31 days on other platforms`
     : "Free: last 31 days on every platform until you choose a primary platform"
@@ -679,10 +679,12 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   // Free-window completeness uses the full (unwindowed) rows only to decide
   // whether a visible session is complete; they are never rendered. If a Free
   // caller does not supply them, every session is 'unknown' (no verdicts).
+  // NOTE: tipsLoadComplete defaults to true and the dashboard does not pass the
+  // real load status yet (issue #747), so an incomplete load is NOT detected.
   const completeness = useMemo(() => sessionCompletenessMap(history, {
-    allTips: allTips || [], allPaidSessions: allPaidSessions || [],
-    windowStarts: isPro ? null : (windowStarts || {}), unlimitedPlatform, isPro, loadComplete: tipsLoadComplete,
-  }), [history, allTips, allPaidSessions, windowStarts, unlimitedPlatform, isPro, tipsLoadComplete])
+    allTips: allTips || [], visibleTips: T0, allPaidSessions: allPaidSessions || [],
+    windowStarts: isPro ? null : (windowStarts || {}), isPro, loadComplete: tipsLoadComplete,
+  }), [history, allTips, tips, allPaidSessions, windowStarts, isPro, tipsLoadComplete])
   const vsById = useMemo(() => new Map(history.map((e) => [e.id, sessionVsTypical(e, history, { completeness })]).filter(([, v]) => v)), [history, completeness])
   const noData = mode.kind === "none" && !runningEntry && !showsLoading
   const light = mode.kind !== "none" && perf.meaningfulSessions < 3
