@@ -839,7 +839,7 @@ function buildGameTitles(game, { mood = 'none', tokenGoal = 0, toy = '' }) {
   return results.slice(0, 5)
 }
 
-function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
+function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, creatorTz }) {
   const [innerTab,  setInnerTab]  = useState("quick")
 
   // Quick tab state
@@ -6402,7 +6402,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={accessible.tips} sessions={sessions} whales={whales} />
+            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={accessible.tips} sessions={sessions} whales={whales} creatorTz={creatorTz} />
           </div>
         )}
 
