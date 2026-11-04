@@ -23,6 +23,7 @@ export async function GET(request) {
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const supabase = getSupabase();
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
   if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
