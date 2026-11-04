@@ -1,0 +1,9 @@
+/* Fallback faces: exact metric overrides next/font/google generated (Arial-based),
+   so text keeps the same size/line metrics before the web font loads. Names are
+   deliberately NOT 'Inter' / 'DM Sans' (pages that reference those literal names
+   keep their existing behavior). */
+@font-face { font-family: 'Inter Fallback'; src: local("Arial"); ascent-override: 90.49%; descent-override: 22.56%; line-gap-override: 0.00%; size-adjust: 107.06%; }
+
+/* Same priority as the single Google family (later-declared ranges win on overlap):
+   latin, latin-ext, vietnamese, greek, greek-ext, cyrillic, cyrillic-ext. */
+.font-inter { font-family: var(--font-inter-latin), var(--font-inter-latin-ext), var(--font-inter-vietnamese), var(--font-inter-greek), var(--font-inter-greek-ext), var(--font-inter-cyrillic), var(--font-inter-cyrillic-ext), 'Inter Fallback'; font-style: normal; }
