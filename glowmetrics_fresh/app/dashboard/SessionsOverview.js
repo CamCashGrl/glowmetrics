@@ -18,7 +18,7 @@ import { platformDisplayName, platformColor } from "../../lib/constants"
 import {
   SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, dailySessionStats,
   liveSessionSnapshot, withTodayDerived, todaySignal, vsYesterdayByNow, todayCumulative,
-  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, matchPlannedStream, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
+  sessionTimeline, timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, sessionCompletenessMap, matchPlannedStream, sessionsMode, overallSessionStats, sessionPerformance, overallSignal,
 } from "../../lib/sessions/normalize"
 import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
@@ -365,7 +365,7 @@ function VsTypical({ vs, testId, long = false, e }) {
   const color = vs.outcome === "above" ? C.green : vs.outcome === "below" ? "#F87171" : C.text
   const arrow = vs.outcome === "above" ? "▲" : vs.outcome === "below" ? "▼" : "="
   const pct = vs.outcome === "par" ? "On par" : `${vs.deltaPct > 0 ? "+" : ""}${vs.deltaPct}%`
-  const scope = vs.basis === "same" && e ? `your ${pName(e.platforms[0])} ${e.type === "live" ? "Live" : e.type === "free_chat" ? "free-chat" : "imported"} sessions` : "all your meaningful sessions"
+  const scope = e ? `your ${pName(e.platforms[0])} ${e.type === "live" ? "Live" : e.type === "free_chat" ? "free-chat" : "imported"} sessions` : "your comparable sessions"
   return (
     <span data-testid={testId} data-outcome={vs.outcome} title={`Median of ${vs.sessions} of ${scope}: ${fmtUsd(vs.medianUSD)}`} style={{ display: long ? "inline" : "block", color, fontWeight: 800, fontSize: long ? 12.5 : 10.5, whiteSpace: "nowrap", lineHeight: 1.25 }}>
       {arrow} {pct}{long ? ` vs typical (median ${fmtUsd(vs.medianUSD)} of ${vs.sessions} of ${scope})` : <span style={{ display: "block", color: C.text, fontWeight: 600 }}>vs typical</span>}
@@ -565,7 +565,7 @@ function ScheduleView({ e, plans, tz, onOpenPlanner }) {
 
 const DETAIL_TABS = [["overview", "Overview"], ["timeline", "Timeline"], ["fans", "Fans"], ["schedule", "Schedule"]]
 
-function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null, vs = null, plans = [], onOpenPlanner = null }) {
+function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null, vs = null, plans = [], onOpenPlanner = null, completeness = null }) {
   const [tab, setTab] = useState("overview")
   if (!e) return <div style={{ color: C.text, fontSize: 13 }}>Select a session to see its details.</div>
   const t = TYPE[e.type]
@@ -599,8 +599,15 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
       {tab === "schedule" && <ScheduleView e={e} plans={plans} tz={tz} onOpenPlanner={onOpenPlanner} />}
       {tab === "fans" && <FanDriversView e={e} tips={tips} paidSessions={paidSessions} isPro={isPro} primaryPlatform={primaryPlatform} />}
       {tab === "overview" && <>
-      {vs ? <div style={{ ...inset, padding: "8px 12px" }}><VsTypical vs={vs} e={e} long testId="details-vs" /></div>
-        : (e.type === "free_chat" || e.type === "imported" || e.type === "live") && e.isValid ? <div data-testid="details-vs-empty" style={{ fontSize: 12, color: C.muted }}>Comparison with your typical session needs 5 other meaningful sessions.</div> : null}
+      {vs ? <div style={{ ...inset, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+          <VsTypical vs={vs} e={e} long testId="details-vs" />
+          {vs.perHour && <span data-testid="details-vs-hourly" data-outcome={vs.perHour.outcome} style={{ fontSize: 12, color: C.text }}>
+            {fmtUsd(vs.perHour.usdPerHour)}/hr over the recorded show vs a typical {fmtUsd(vs.perHour.medianUSDPerHour)}/hr ({vs.perHour.deltaPct > 0 ? "+" : ""}{vs.perHour.deltaPct}%, median of {vs.perHour.sessions} of your {pName(e.platforms[0])} Live shows)
+          </span>}
+        </div>
+        : completeness?.status === "partial_verified" ? <div data-testid="details-vs-partial" style={{ fontSize: 12, color: C.muted }}>This session started before your Free history window, so it is not compared with your typical sessions.</div>
+        : completeness?.status === "unknown" ? <div data-testid="details-vs-unknown" style={{ fontSize: 12, color: C.muted }}>This session&apos;s completeness can&apos;t be confirmed with the history available, so it is not compared with your typical sessions.</div>
+        : (e.type === "free_chat" || e.type === "imported" || e.type === "live") && e.isValid ? <div data-testid="details-vs-empty" style={{ fontSize: 12, color: C.muted }}>Comparison with your typical session needs 5 other comparable sessions on the same platform and type.</div> : null}
       <div className="sx-dgrid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
         <Cell value={fmtUsd(e.publicUSD)} label="Public" testId="details-public" />
         <Cell value={fmtUsd(e.privateUSD)} label="Private" testId="details-private" accent={C.pink} />
@@ -634,7 +641,7 @@ function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, 
   )
 }
 
-export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null, plannedStreams = [], onOpenPlanner = null }) {
+export default function SessionsOverview({ tips, shows, paidSessions, tz, showsLoading, showsError, now: fixedNow, live, isPro = true, primaryPlatform = null, onPrimarySaved = () => {}, onImport = null, onStartLive = null, plannedStreams = [], onOpenPlanner = null, allTips = null, allPaidSessions = null, windowStarts = null, unlimitedPlatform = null, tipsLoadComplete = true }) {
   const historyNote = isPro ? "Full history on every platform" : primaryPlatform
     ? `Free: full history on ${pName(primaryPlatform)}, last 31 days on other platforms`
     : "Free: last 31 days on every platform until you choose a primary platform"
@@ -669,7 +676,14 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   const overall = useMemo(() => overallSessionStats({ tips: T0, history, paidSessions: P0 }), [history]) // eslint-disable-line react-hooks/exhaustive-deps
   const perf = useMemo(() => sessionPerformance({ history, tips: T0, overall }), [history, overall]) // eslint-disable-line react-hooks/exhaustive-deps
   const showPerf = scope === "overall" || (mode.kind !== "none" && mode.singlePlatform)
-  const vsById = useMemo(() => new Map(history.map((e) => [e.id, sessionVsTypical(e, history)]).filter(([, v]) => v)), [history])
+  // Free-window completeness uses the full (unwindowed) rows only to decide
+  // whether a visible session is complete; they are never rendered. If a Free
+  // caller does not supply them, every session is 'unknown' (no verdicts).
+  const completeness = useMemo(() => sessionCompletenessMap(history, {
+    allTips: allTips || [], allPaidSessions: allPaidSessions || [],
+    windowStarts: isPro ? null : (windowStarts || {}), unlimitedPlatform, isPro, loadComplete: tipsLoadComplete,
+  }), [history, allTips, allPaidSessions, windowStarts, unlimitedPlatform, isPro, tipsLoadComplete])
+  const vsById = useMemo(() => new Map(history.map((e) => [e.id, sessionVsTypical(e, history, { completeness })]).filter(([, v]) => v)), [history, completeness])
   const noData = mode.kind === "none" && !runningEntry && !showsLoading
   const light = mode.kind !== "none" && perf.meaningfulSessions < 3
   // Platform cards only for platforms the creator actually has data on.
@@ -765,7 +779,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
         </div>
         <div data-testid="session-details" style={card({ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(12,15,28,0.78)", boxShadow: "none" })}>
           <div style={{ fontSize: 19, fontWeight: 900, color: C.white }}>Session Details</div>
-          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} plans={plannedStreams} onOpenPlanner={onOpenPlanner} />
+          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} completeness={selected ? completeness.get(selected.id) || null : null} plans={plannedStreams} onOpenPlanner={onOpenPlanner} />
         </div>
       </div>
       </>}

@@ -5384,6 +5384,10 @@ const stopImportMessageRotation = () => {
             onStartLive={() => handleTabChange('live')}
             plannedStreams={plannedStreams}
             onOpenPlanner={() => handleTabChange('planner')}
+            allTips={tips}
+            allPaidSessions={paidSessions}
+            windowStarts={accessible.windowStarts}
+            unlimitedPlatform={accessible.unlimitedPlatform}
             tz={creatorTz}
             showsLoading={recentShows.loading}
             showsError={recentShows.error}

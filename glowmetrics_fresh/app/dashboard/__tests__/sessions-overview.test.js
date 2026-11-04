@@ -350,3 +350,76 @@ test('Schedule: Live show uses the exact start and shows end difference and over
   expect(val('schedule-text')).toMatch(/Started .* \(5 min late\)/)
   expect(val('schedule-overlap')).toBe('63%') // 17:00–18:00 of a 95-min window
 })
+
+// ── Sessions accuracy foundation (Batch 1) ───────────────────────────────────
+describe('completeness, $/hr and timezone', () => {
+  const MIN = 60000, DAY = 86400000
+  const T = Date.parse('2026-10-30T22:00:00Z'), WS = T - 30 * DAY
+  const at = (ms) => new Date(ms).toISOString()
+  // Chaturbate session straddling the Free window start: first two tips are hidden for Free.
+  const all = [
+    csvTip(1, at(WS - 25 * MIN), 'chaturbate', 'Old1', 9), csvTip(2, at(WS - 10 * MIN), 'chaturbate', 'Old2', 9),
+    csvTip(3, at(WS + 10 * MIN), 'chaturbate', 'Ann', 9), csvTip(4, at(WS + 25 * MIN), 'chaturbate', 'Ben', 9), csvTip(5, at(WS + 50 * MIN), 'chaturbate', 'Cy', 9),
+    csvTip(6, at(T), 'chaturbate', 'Late', 9),
+  ]
+  const freeProps = () => {
+    const visible = all.filter((t) => Date.parse(t.date_time) >= WS)
+    return { tips: visible, allTips: all, allPaidSessions: [], windowStarts: { chaturbate: new Date(WS) }, isPro: false, primaryPlatform: null }
+  }
+  // seven earlier comparable sessions so a verdict WOULD exist for a complete session
+  const history = Array.from({ length: 7 }, (_, i) => [
+    csvTip(100 + i * 2, at(WS + (2 + i) * DAY), 'chaturbate', 'H1', 10 + i), csvTip(101 + i * 2, at(WS + (2 + i) * DAY + 40 * MIN), 'chaturbate', 'H2', 10),
+  ]).flat()
+
+  test('Free: a session that started before the window is labeled partial and gets no verdict', () => {
+    // (Only the latest 5 sessions are listed today, so the straddling session is rendered
+    // on its own here; "partial gets no verdict even with a full baseline" is covered in
+    // lib/sessions/__tests__/batch1-accuracy.test.js.)
+    renderTab(freeProps())
+    expect(screen.getByTestId('details-vs-partial').textContent).toMatch(/before your Free history window/)
+    expect(screen.queryByTestId('details-vs')).toBeNull()
+    expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
+  })
+
+  test('Free without full-history inputs fails closed: no verdict is shown', () => {
+    renderTab({ tips: [...all.filter((t) => Date.parse(t.date_time) >= WS), ...history], isPro: false })
+    expect(screen.queryAllByTestId(/^row-vs-/)).toHaveLength(0)
+    expect(screen.queryByTestId('details-vs')).toBeNull()
+  })
+
+  test('Pro sees the same session complete (no partial label)', () => {
+    renderTab({ tips: [...all, ...history], isPro: true })
+    expect(screen.queryByTestId('details-vs-partial')).toBeNull()
+    expect(screen.queryByTestId('details-vs-unknown')).toBeNull()
+  })
+
+  test('no $/hr for imported sessions', () => {
+    renderTab({ tips: history, isPro: true })
+    expect(screen.queryByTestId('details-vs-hourly')).toBeNull()
+    expect(screen.getByTestId('session-details-body').textContent).not.toMatch(/\/hr/)
+  })
+
+  test('Live: $/hr shown only with >= 5 comparable verified Live shows', () => {
+    const live = (i, minutes, usd) => ({ id: `s${i}`, platform: 'chaturbate', startedAt: at(Date.parse('2026-10-01T19:00:00Z') + i * DAY), endedAt: at(Date.parse('2026-10-01T19:00:00Z') + i * DAY + minutes * MIN), finalizedAt: at(NOW), durationSeconds: minutes * 60, publicUsd: usd, privateUsd: 0, totalUsd: usd, privateSeconds: 0, privateIntervals: [], platformRevenue: [{ platform: 'chaturbate', usd, tips: 3 }], tipCount: 3, uniqueTippers: 2, isNew: false })
+    const six = [0, 1, 2, 3, 4, 5].map((i) => live(i, 60, 50 + i * 10))
+    const { unmount } = renderTab({ shows: six, isPro: true })
+    expect(val('details-vs-hourly')).toMatch(/\$100\.00\/hr over the recorded show vs a typical \$70\.00\/hr \(\+43%, median of 5 of your Chaturbate Live shows\)/)
+    unmount()
+    renderTab({ shows: six.slice(0, 5), isPro: true }) // only 4 others
+    expect(screen.queryByTestId('details-vs-hourly')).toBeNull()
+  })
+
+  test('times use the creator timezone, including across a DST change (America/New_York) and a :30 offset (Asia/Kolkata)', () => {
+    // 2026-11-01: US clocks go back at 06:00Z. Tips every ~40 min, 05:30Z → 07:10Z.
+    const dst = ['05:30', '06:10', '06:50', '07:10'].map((hm, i) => csvTip(900 + i, `2026-11-01T${hm}:00Z`, 'chaturbate', `F${i}`, 5))
+    let r = renderTab({ tips: dst, tz: 'America/New_York', isPro: true })
+    click('details-tab-timeline')
+    const ny = screen.getAllByTestId('bucket-row').map((x) => x.textContent)
+    expect(ny[0]).toMatch(/^1:30\sAM–1:45\sAM/) // 05:30Z = 1:30 AM EDT
+    expect(ny.join(' ')).toMatch(/1:45\sAM–1:00\sAM/) // 06:00Z is 1:00 AM EST: the hour repeats
+    r.unmount()
+    r = renderTab({ tips: dst, tz: 'Asia/Kolkata', isPro: true })
+    click('details-tab-timeline')
+    expect(screen.getAllByTestId('bucket-row')[0].textContent).toMatch(/^11:00\sAM–11:15\sAM/) // 05:30Z = 11:00 IST
+  })
+})
