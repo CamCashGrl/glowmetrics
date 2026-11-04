@@ -22,7 +22,7 @@ export function buildAccount({ now = Date.now(), plan = 'pro', uid = 'u1' } = {}
   const addTip = (platform, at, extra = {}) => {
     const tokens = 1 + Math.floor(rnd() * 150)
     tips.push({
-      id: `tip-${String(n++).padStart(6, '0')}`, user_id: uid, platform, username: pick(), tokens,
+      id: 1000000 + n++, user_id: uid, platform, username: pick(), tokens,
       usd: tokens * RATE[platform], date_time: iso(at), source: 'upload', live_session_id: null, ...extra,
     })
   }
@@ -38,7 +38,7 @@ export function buildAccount({ now = Date.now(), plan = 'pro', uid = 'u1' } = {}
   // A BongaCams fan seen ONLY 95 days ago: outside Free's 31-day window for a
   // non-primary platform (primary = Chaturbate). Free must never show this fan.
   for (const [k, tokens] of [[0, 30000], [12, 26000], [25, 31000]]) {
-    tips.push({ id: `tip-ancient-${k}`, user_id: uid, platform: 'BongaCams', username: 'ancient_bc_fan', tokens, usd: tokens * RATE.BongaCams, date_time: iso(base - 95 * DAY + k * MIN), source: 'upload', live_session_id: null })
+    tips.push({ id: 900000 + k, user_id: uid, platform: 'BongaCams', username: 'ancient_bc_fan', tokens, usd: tokens * RATE.BongaCams, date_time: iso(base - 95 * DAY + k * MIN), source: 'upload', live_session_id: null })
   }
   // Finalized Live shows on Chaturbate with their own linked tips (persisted-summary shape)
   const shows = []
@@ -60,11 +60,11 @@ export function buildAccount({ now = Date.now(), plan = 'pro', uid = 'u1' } = {}
     const group = Math.floor(c / 6)
     const at = base - (1 + group % 100) * DAY - (c % 6) * 2 * MIN
     paid.push({
-      id: `paid-${String(c).padStart(5, '0')}`, user_id: uid, platform: 'BongaCams', username: `vip${group % 9}`, username_lower: `vip${group % 9}`,
+      id: `00000000-0000-4000-8000-${String(c + 1).padStart(12, '0')}`, user_id: uid, platform: 'BongaCams', username: `vip${group % 9}`, username_lower: `vip${group % 9}`,
       session_type: ['private', 'group', 'spy'][group % 3], usd: 7.575, date_time: iso(at),
     })
   }
-  paid.push({ id: 'paid-anon', user_id: uid, platform: 'BongaCams', username: null, username_lower: null, session_type: 'group', usd: 4.4, date_time: iso(base - 2 * DAY) })
+  paid.push({ id: '00000000-0000-4000-8000-999999999999', user_id: uid, platform: 'BongaCams', username: null, username_lower: null, session_type: 'group', usd: 4.4, date_time: iso(base - 2 * DAY) })
 
   return {
     user: { id: uid, email: 'creator@example.com' },
@@ -91,7 +91,7 @@ export function buildEntitlementAccount({ now = Date.now(), plan = 'free', uid =
   const WS = T - 30 * DAY // Free window start for BongaCams
   let n = 0
   const tip = (platform, at, username, tokens) => ({
-    id: `ent-${String(n++).padStart(4, '0')}`, user_id: uid, platform, username, tokens,
+    id: 2000000 + n++, user_id: uid, platform, username, tokens,
     usd: tokens * RATE[platform], date_time: iso(at), source: 'upload', live_session_id: null,
   })
   const tips = [
