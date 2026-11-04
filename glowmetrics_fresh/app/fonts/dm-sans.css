@@ -1,0 +1,8 @@
+/* Fallback faces: exact metric overrides next/font/google generated (Arial-based),
+   so text keeps the same size/line metrics before the web font loads. Names are
+   deliberately NOT 'Inter' / 'DM Sans' (pages that reference those literal names
+   keep their existing behavior). */
+@font-face { font-family: 'DM Sans Fallback'; src: local("Arial"); ascent-override: 94.90%; descent-override: 29.66%; line-gap-override: 0.00%; size-adjust: 104.53%; }
+
+/* Same priority as the single Google family: latin, then latin-ext. */
+.font-dm-sans { font-family: var(--font-dm-sans-latin), var(--font-dm-sans-latin-ext), 'DM Sans Fallback'; font-style: normal; }
