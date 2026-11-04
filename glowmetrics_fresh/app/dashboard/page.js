@@ -839,7 +839,7 @@ function buildGameTitles(game, { mood = 'none', tokenGoal = 0, toy = '' }) {
   return results.slice(0, 5)
 }
 
-function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales }) {
+function TitleGenerator({ C, glassCard, analytics, tips, sessions, whales, creatorTz }) {
   const [innerTab,  setInnerTab]  = useState("quick")
 
   // Quick tab state
@@ -3457,8 +3457,10 @@ const stopImportMessageRotation = () => {
               // Meaningful sessions only (analytics.meaningfulSessions), matching the
               // valid-session rule used everywhere else — never the raw session list.
               const meaningfulSessions = analytics?.meaningfulSessions || []
-              const thisMonthMeaningful = meaningfulSessions.filter(s => new Date(s.startTime) >= thisMonthStart)
-              const prevMonthMeaningful = meaningfulSessions.filter(s => { const d = new Date(s.startTime); return d >= prevMonthStart && d < thisMonthStart })
+              // Creator-local month of a timestamp; null for unparseable dates (skipped, never thrown).
+              const _monthOf = (v) => { if (v == null) return null; const d = new Date(v); return isNaN(d) ? null : zonedMonthKey(d, creatorTz) }
+              const thisMonthMeaningful = meaningfulSessions.filter(s => _monthOf(s.startTime) === _momThisKey)
+              const prevMonthMeaningful = meaningfulSessions.filter(s => _monthOf(s.startTime) === _momPrevKey)
               const sessGrowth = (prevMonthMeaningful.length > 0 && thisMonthMeaningful.length > 0)
                 ? Math.round(((thisMonthMeaningful.length - prevMonthMeaningful.length) / prevMonthMeaningful.length) * 100) : null
 
@@ -3468,8 +3470,8 @@ const stopImportMessageRotation = () => {
               const avgSessionGrowth = (tmAvgSession !== null && pmAvgSession !== null && pmAvgSession > 0)
                 ? Math.round(((tmAvgSession - pmAvgSession) / pmAvgSession) * 100) : null
 
-              const thisMonthFans = new Set(tips.filter(t => new Date(t.date_time || t.dateRaw) >= thisMonthStart).map(t => t.username)).size
-              const prevMonthFans = new Set(tips.filter(t => { const d = new Date(t.date_time || t.dateRaw); return d >= prevMonthStart && d < thisMonthStart }).map(t => t.username)).size
+              const thisMonthFans = new Set(tips.filter(t => _monthOf(t.date_time || t.dateRaw) === _momThisKey).map(t => t.username)).size
+              const prevMonthFans = new Set(tips.filter(t => _monthOf(t.date_time || t.dateRaw) === _momPrevKey).map(t => t.username)).size
               const fansGrowth = (prevMonthFans > 0 && thisMonthFans > 0) ? Math.round(((thisMonthFans - prevMonthFans) / prevMonthFans) * 100) : null
 
               // trend badge renderer
@@ -6408,7 +6410,7 @@ const stopImportMessageRotation = () => {
 
         {activeTab === "titles" && (
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={accessible.tips} sessions={sessions} whales={whales} />
+            <TitleGenerator C={C} glassCard={glassCard} analytics={analytics} tips={accessible.tips} sessions={sessions} whales={whales} creatorTz={creatorTz} />
           </div>
         )}
 
