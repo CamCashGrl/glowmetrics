@@ -16,7 +16,7 @@
 // live_tips (the Live Mode UI stream) is never read here, so it can never be
 // added to tips.
 
-import { detectSessions, isValidSession, SESSION_GAP_MS } from '../analytics/sessions'
+import { detectSessions, isValidSession, SESSION_GAP_MS, MIN_VALID_SESSION_MINUTES } from '../analytics/sessions'
 import { freeWindowStartByPlatform } from '../analytics'
 
 export { isValidSession }
@@ -24,6 +24,8 @@ export { isValidSession }
 export const SUPPORTED_PLATFORMS = ['chaturbate', 'bongacams', 'myfreecams']
 
 const money = (v) => Math.round((Number(v) || 0) * 100) / 100
+// Float-noise cleanup only (1e-9), never cent rounding: BongaCams tokens are $0.025.
+const exactUSD = (v) => Math.round((Number(v) || 0) * 1e9) / 1e9
 const norm = (s) => String(s || '').trim().toLowerCase()
 
 // Fans are never merged across platforms by username alone.
@@ -807,17 +809,20 @@ export function sessionBuckets(entry, { tips = [] } = {}) {
   const buckets = Array.from({ length: n }, (_, i) => ({
     start: new Date(single ? start : start + i * width).toISOString(),
     end: new Date(single ? end : Math.min(end, start + (i + 1) * width)).toISOString(),
-    publicUSD: 0, privateUSD: 0, privateEstimated: false, count: 0, fans: new Map(),
+    publicUSD: 0, privateUSD: 0, privateEstimated: false, count: 0, fans: new Map(), attributedPublic: 0, attributedPrivate: 0,
   }))
   const idx = (ms) => single ? 0 : Math.min(n - 1, Math.max(0, Math.floor((ms - start) / width)))
   for (const p of points) {
     const b = buckets[idx(p.ms)]
-    if (ev.charges.includes(p)) b.privateUSD += p.usd; else b.publicUSD += p.usd
+    const isCharge = ev.charges.includes(p)
+    if (isCharge) b.privateUSD += p.usd; else b.publicUSD += p.usd
     b.count += 1
     if (p.username) {
       const k = fanKey(p.platform, p.username)
-      const f = b.fans.get(k) || { username: p.username, platform: p.platform, usd: 0 }
+      const f = b.fans.get(k) || { username: p.username, platform: p.platform, usd: 0, publicUSD: 0, privateUSD: 0, count: 0 }
       f.usd += p.usd
+      f.count += 1
+      if (isCharge) { f.privateUSD += p.usd; b.attributedPrivate += p.usd } else { f.publicUSD += p.usd; b.attributedPublic += p.usd }
       b.fans.set(k, f)
     }
   }
@@ -831,11 +836,29 @@ export function sessionBuckets(entry, { tips = [] } = {}) {
   }
   const out = buckets.map((b) => {
     const fans = [...b.fans.values()].sort((x, y) => y.usd - x.usd || norm(x.username).localeCompare(norm(y.username)))
+    const totalUSD = money(b.publicUSD + b.privateUSD)
     return {
       start: b.start, end: b.end,
       publicUSD: money(b.publicUSD), privateUSD: money(b.privateUSD), privateEstimated: b.privateEstimated,
-      totalUSD: money(b.publicUSD + b.privateUSD), count: b.count, uniqueFans: fans.length,
+      totalUSD, count: b.count, uniqueFans: fans.length,
       topFan: fans[0] ? { username: fans[0].username, platform: fans[0].platform, usd: money(fans[0].usd) } : null,
+      // ── additive (Batch 1): the full contributor list this function already
+      // builds, at full precision (display layers round; nothing is rounded to
+      // cents here). Ordered exactly like topFan's ranking.
+      //   Σ fans.usd + unattributedPublicUSD + unattributedPrivateUSD
+      //     = the bucket's raw public + private earnings.
+      // Live private intervals carry no fan detail, so they are all
+      // unattributed; imported charges are attributed when the row has a fan.
+      fans: fans.map((f) => ({
+        username: f.username, platform: f.platform, usd: exactUSD(f.usd),
+        publicUSD: exactUSD(f.publicUSD), privateUSD: exactUSD(f.privateUSD), count: f.count,
+      })),
+      unattributedPublicUSD: exactUSD(b.publicUSD - b.attributedPublic),
+      unattributedPrivateUSD: exactUSD(b.privateUSD - b.attributedPrivate),
+      // What an empty bucket means: Live = inside the recorded show times,
+      // imports = inside the first→last earning activity span. Neither proves
+      // that capture never dropped; this is the basis, not a guarantee.
+      zeroBasis: totalUSD === 0 ? (exact ? 'show_span' : 'activity_span') : null,
     }
   })
   const total = out.reduce((a, b) => a + b.totalUSD, 0)
@@ -887,30 +910,182 @@ export function sessionFanDrivers(entry, { tips = [], paidSessions = [] } = {}) 
 }
 
 // ── SESSION VS THE CREATOR'S OWN TYPICAL ────────────────────────────────
-// Compares one meaningful session's total with the median total of the
-// creator's OTHER meaningful sessions (never other creators).
-//   basis 'same': same platform and same type (live / free_chat / imported),
-//                 used when there are >= 5 of them;
-//   basis 'all' : all other meaningful sessions, when >= 5;
-//   otherwise null (not enough history to claim anything).
-// outcome: 'above' / 'below' the median, or 'par' when equal.
+// Compares one meaningful session's TOTAL EARNINGS with the median total of
+// the creator's OTHER meaningful sessions on the SAME platform and of the SAME
+// type (live / free_chat / imported). There is no fallback pool: a session is
+// never judged against other platforms or other session types, private
+// charges are never compared, and a multi-platform Live show is not compared
+// (no single comparable platform).
+//
+// Verdict gating (nothing is invented when evidence is missing):
+//   - needs >= VS_TYPICAL_MIN (5) comparable sessions, an existing threshold;
+//   - `completeness` (from sessionCompletenessMap) is optional; when given,
+//     the session AND every baseline session must be 'complete'. A Free-window
+//     partial/unknown session gets no verdict and does not skew the baseline.
+//     When omitted (no entitlement window, e.g. Pro) all sessions count.
+//
+// perHour (Live only, additive): the show's PERSISTED $/hr
+// (live_sessions.final_usd_per_hour = (public + private) / active seconds, set
+// by _finalize_live_session_metrics; no second formula here), against the
+// median of the persisted $/hr of >= 5 other verified Live shows on the same
+// platform. A show's duration is verified only when ALL hold (liveVerifiedHourly):
+//   - the record is usable (below);
+//   - it ended at a system-verified instant (normal_stop / free_active_limit;
+//     heartbeat / inactivity / chosen end times are inferred or user-entered);
+//   - 0 < active duration <= the start→end span (paused time only shortens it)
+//     and >= MIN_VALID_SESSION_MINUTES;
+//   - the persisted $/hr agrees with persisted total ÷ persisted duration
+//     (a contradictory record is not trusted).
+// Imported sessions and private charges never get $/hr: no verified duration.
+//
+// A Live record is usable for ANY verdict only when it is finalized, has valid
+// ordered start/end instants and was not marked invalid. Unfinalized shows
+// carry zeroed final_* totals and must not be judged or used as a baseline.
 export const VS_TYPICAL_MIN = 5
-export function sessionVsTypical(entry, history = []) {
-  if (!entry || !isMeaningfulSession(entry)) return null
-  const others = history.filter((e) => e.id !== entry.id && isMeaningfulSession(e))
-  const same = others.filter((e) => e.type === entry.type && e.platforms[0] === entry.platforms[0])
-  const pool = same.length >= VS_TYPICAL_MIN ? same : others.length >= VS_TYPICAL_MIN ? others : null
-  if (!pool) return null
+const toMs = (v) => { const ms = new Date(v).getTime(); return isNaN(ms) ? null : ms }
+const VERIFIED_END_TYPES = new Set(['normal_stop', 'free_active_limit'])
+export function liveRecordUsable(e) {
+  if (!e || e.type !== 'live' || !e.show) return false
+  const sh = e.show
+  if (!sh.finalizedAt || sh.endedHow === 'marked_invalid') return false
+  const a = toMs(sh.startedAt), b = toMs(sh.endedAt)
+  return a != null && b != null && b > a
+}
+export function liveVerifiedHourly(e) {
+  if (!liveRecordUsable(e) || e.running || e.durationEstimated) return null
+  const sh = e.show
+  if (!VERIFIED_END_TYPES.has(sh.endedHow)) return null
+  const dur = Number(sh.durationSeconds)
+  if (!Number.isFinite(dur) || dur <= 0) return null
+  const spanSeconds = (toMs(sh.endedAt) - toMs(sh.startedAt)) / 1000
+  if (dur > spanSeconds + 2) return null // active time cannot exceed the span (+2 s integer truncation)
+  if (dur / 60 < MIN_VALID_SESSION_MINUTES) return null
+  if (sh.usdPerHour === null || sh.usdPerHour === undefined || sh.usdPerHour === '') return null
+  const rate = Number(sh.usdPerHour)
+  if (!Number.isFinite(rate)) return null
+  const recomputed = (Number(sh.totalUsd) || 0) / (dur / 3600)
+  if (Math.abs(recomputed - rate) > 0.02) return null // cents rounding only; anything larger is contradictory
+  return money(rate)
+}
+export function sessionVsTypical(entry, history = [], { completeness = null } = {}) {
+  if (!entry || !isMeaningfulSession(entry) || (entry.platforms || []).length !== 1) return null
+  const complete = (e) => !completeness || completeness.get(e.id)?.status === 'complete'
+  const usable = (e) => e.type !== 'live' || liveRecordUsable(e)
+  if (!complete(entry) || !usable(entry)) return null
+  const pool = history.filter((e) => e.id !== entry.id
+    && isMeaningfulSession(e)
+    && (e.platforms || []).length === 1
+    && e.type === entry.type
+    && e.platforms[0] === entry.platforms[0]
+    && complete(e)
+    && usable(e))
+  if (pool.length < VS_TYPICAL_MIN) return null
   const med = median(pool.map((e) => e.totalUSD))
   if (!(med > 0)) return null
   const deltaPct = Math.round(((entry.totalUSD - med) / med) * 100)
-  return {
-    basis: pool === same ? 'same' : 'all',
+  const outcomeOf = (v, m) => (v > m ? 'above' : v < m ? 'below' : 'par')
+  const result = {
+    basis: 'same',
     sessions: pool.length,
     medianUSD: money(med),
     deltaPct,
-    outcome: entry.totalUSD > med ? 'above' : entry.totalUSD < med ? 'below' : 'par',
+    outcome: outcomeOf(entry.totalUSD, med),
+    perHour: null,
   }
+  const rate = liveVerifiedHourly(entry)
+  if (rate != null) {
+    const rates = pool.map(liveVerifiedHourly).filter((r) => r != null)
+    if (rates.length >= VS_TYPICAL_MIN) {
+      const medRate = median(rates)
+      if (medRate > 0) {
+        result.perHour = {
+          sessions: rates.length,
+          usdPerHour: rate,
+          medianUSDPerHour: money(medRate),
+          deltaPct: Math.round(((rate - medRate) / medRate) * 100),
+          outcome: outcomeOf(rate, medRate),
+        }
+      }
+    }
+  }
+  return result
+}
+
+// ── SESSION COMPLETENESS (Free history window) ──────────────────────────
+// Free history is cut per platform (lib/analytics.js accessibleDataset), and
+// session grouping then runs on the cut data. This answers, per visible
+// session, whether the Free view could be missing part of it. Only a status and
+// a reason code are returned: no hidden usernames, amounts or transactions.
+//   complete         nothing relevant is hidden and totals reconcile
+//   partial_verified hidden activity is PROVEN (a hidden tip linked to the
+//                    show, or the full history has the same session earlier)
+//   unknown          completeness cannot be established
+// Tip / private sessions: the EXISTING grouping (detectSessions /
+// groupPaidSessions, same 60-minute gap and platform rule) is re-run on the
+// full unwindowed rows and compared.
+// Live shows: start times prove nothing, so this compares the show's linked
+// tips in the FULL history with the visible ones (hidden linked tips →
+// partial_verified) and with the show's persisted summary (final_tip_count and
+// final_public_usd; a disagreement → unknown).
+// A session that is partial_verified or unknown receives no verdict.
+//
+// LIMITATION (tracked in issue #747): `loadComplete` defaults to true and the
+// dashboard does not yet pass the real tip / paid-session load status. Until
+// that is wired, an INCOMPLETE LOAD IS NOT DETECTED here. Do not describe
+// incomplete histories as protected.
+export function sessionCompletenessMap(history = [], {
+  allTips = [], visibleTips = null, allPaidSessions = [], windowStarts = null,
+  isPro = false, loadComplete = true,
+} = {}) {
+  const out = new Map()
+  const set = (e, status, reason = null) => out.set(e.id, { status, reason })
+  if (!loadComplete) { for (const e of history) set(e, 'unknown', 'tips_load_incomplete'); return out }
+  if (isPro || !windowStarts) { for (const e of history) set(e, 'complete'); return out }
+
+  // Full-history groupings, built once with the shared grouping rules.
+  const fullTipByPlatform = new Map()
+  for (const s of detectSessions(unlinkedTips(allTips))) {
+    const k = norm(s.platform)
+    if (!fullTipByPlatform.has(k)) fullTipByPlatform.set(k, [])
+    fullTipByPlatform.get(k).push({ startMs: new Date(s.startTime).getTime(), endMs: new Date(s.endTime).getTime(), tipCount: s.tipCount })
+  }
+  const tipKey = (t) => (t.id != null ? `id:${t.id}` : `k:${norm(t.platform)}|${t.date_time || t.dateRaw}|${norm(t.username)}|${t.usd}`)
+  const group = (rows) => {
+    const m = new Map()
+    for (const t of rows || []) if (t?.live_session_id) { if (!m.has(t.live_session_id)) m.set(t.live_session_id, []); m.get(t.live_session_id).push(t) }
+    return m
+  }
+  const fullLinked = group(allTips)
+  const visibleLinked = new Map([...group(visibleTips || [])].map(([id, rows]) => [id, new Set(rows.map(tipKey))]))
+  const fullPrivateByRow = new Map()
+  for (const g of groupPaidSessions(allPaidSessions)) for (const r of g.rows) fullPrivateByRow.set(r.id, g)
+
+  for (const e of history) {
+    const visStart = new Date(e.startTime).getTime()
+    if (e.type === 'live') {
+      if (!visibleTips) { set(e, 'unknown', 'visible_tips_not_supplied'); continue }
+      const full = fullLinked.get(e.sourceId) || []
+      const seen = visibleLinked.get(e.sourceId)
+      const hidden = full.filter((t) => !(seen && seen.has(tipKey(t)))).length
+      const fullUSD = full.reduce((a, t) => a + (Number(t.usd) || 0), 0)
+      if (hidden > 0) set(e, 'partial_verified', 'hidden_live_tips')
+      else if (full.length !== e.tipCount || Math.abs(fullUSD - e.publicUSD) > 0.011) set(e, 'unknown', 'live_summary_mismatch')
+      else set(e, 'complete')
+    } else if (e.type === 'private') {
+      const g = fullPrivateByRow.get(e.sourceId)
+      if (!g) set(e, 'unknown', 'no_full_history_match')
+      else if (g.startMs < visStart) set(e, 'partial_verified', 'hidden_earlier_activity')
+      else if (g.rows[0].id === e.sourceId && g.rows.length === e.chargeCount) set(e, 'complete')
+      else set(e, 'unknown', 'grouping_differs_from_full_history')
+    } else {
+      const full = (fullTipByPlatform.get(norm(e.platforms[0])) || []).find((s) => s.startMs <= visStart && visStart <= s.endMs)
+      if (!full) set(e, 'unknown', 'no_full_history_match')
+      else if (full.startMs < visStart) set(e, 'partial_verified', 'hidden_earlier_activity')
+      else if (full.startMs === visStart && full.tipCount === e.tipCount) set(e, 'complete')
+      else set(e, 'unknown', 'grouping_differs_from_full_history')
+    }
+  }
+  return out
 }
 
 // ── SCHEDULE STATUS (saved planned_streams only) ────────────────────────

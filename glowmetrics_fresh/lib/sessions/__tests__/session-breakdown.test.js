@@ -125,10 +125,13 @@ describe('sessionVsTypical', () => {
     expect(sessionVsTypical(at(14), history)).toMatchObject({ basis: 'same', sessions: 6, medianUSD: 15, deltaPct: 167, outcome: 'above' }) // 40 vs median of 30,20,20,10,10,10
     expect(sessionVsTypical(at(8), history)).toMatchObject({ outcome: 'below', deltaPct: -50 }) // 10 vs median 20
   })
-  test('falls back to all meaningful sessions, labeled, when the same platform/type has < 5', () => {
+  // CHANGED (approved, Sessions accuracy Batch 1): this used to assert a
+  // cross-platform fallback (basis 'all', 7 Chaturbate sessions judging a
+  // BongaCams one). Sessions are only compared with the same platform + type.
+  test('no cross-platform fallback: a BongaCams session with < 5 comparable sessions gets no verdict', () => {
     const bc = [tip(900, '2026-09-20T20:00:00Z', 'Ola', 9, 'bongacams'), tip(901, '2026-09-20T20:40:00Z', 'Pia', 9, 'bongacams')]
     const h = buildSessionHistory({ tips: [...tips, ...bc] })
-    expect(sessionVsTypical(h.find((e) => e.platforms[0] === 'bongacams'), h)).toMatchObject({ basis: 'all', sessions: 7 })
+    expect(sessionVsTypical(h.find((e) => e.platforms[0] === 'bongacams'), h)).toBeNull()
   })
   test('null with fewer than 5 comparable sessions, and for non-meaningful sessions', () => {
     const few = buildSessionHistory({ tips: tips.slice(0, 8) })
