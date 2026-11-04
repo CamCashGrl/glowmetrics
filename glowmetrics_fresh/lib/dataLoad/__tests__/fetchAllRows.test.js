@@ -148,6 +148,17 @@ describe('concurrent changes between pages (each page is its own snapshot)', () 
     expect(new Set(ids(r.rows)).size).toBe(r.rows.length)
   })
 
+  test('KNOWN LIMIT (documented, not hidden): a row moved NEWER plus a back-dated insert cancel out in the count, so "all" is reported while the moved row is missing', async () => {
+    const rows = mkTips(2500)
+    const mover = dbOrder(rows)[2300].id
+    const { r } = await tipsLoad(rows, onCall(2, (t) => {
+      t.tips = t.tips.map((x) => (x.id === mover ? { ...x, date_time: '2027-06-01T00:00:00.000Z' } : x))
+      t.tips = [...t.tips, { ...t.tips[0], id: 888889, date_time: '2025-01-01T00:00:00.000Z' }]
+    }))
+    expect(r.coverage).toEqual({ kind: 'all' }) // traversal completed and the count check passed...
+    expect(ids(r.rows)).not.toContain(String(mover)) // ...yet a row modified during the load is absent
+  })
+
   test('a row whose timestamp moves NEWER before it is read is missed → count shortfall, coverage "none"', async () => {
     const rows = mkTips(2500)
     const mover = dbOrder(rows)[2300].id

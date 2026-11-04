@@ -7,35 +7,41 @@
 //   (see lib/dataLoad/queries.js for the real sources)
 //
 // ── What the result guarantees ───────────────────────────────────────────
-// Each page is its own database request (its own snapshot). A multi-page load
-// is therefore NOT one consistent snapshot, and nothing below claims it is.
+// A successful TRAVERSAL is not a consistent SNAPSHOT. Each page is its own
+// database request at its own moment; a multi-page load is never one
+// point-in-time view, and nothing below claims it is. Totals computed from it
+// can mix rows read at different moments.
+//
+// The only row-level guarantee keyset paging gives: a row that EXISTED for the
+// whole load and whose sort key (date_time, id) did NOT CHANGE during it is
+// returned exactly once (inserts or deletes of OTHER rows cannot shift it, as
+// they could with offsets). Rows inserted, deleted or re-timed during the load
+// may or may not be reflected. The checks below detect some of those changes
+// (a row seen twice; fewer distinct rows than the page-1 count; a page with no
+// new row), but NOT all of them: a re-timed row that is missed can be masked
+// in the count by an insert elsewhere (see the KNOWN LIMIT test).
 //
 // coverage.kind === 'all'   (complete: true)
-//   Every page succeeded, the end of the data was reached, no row was seen
-//   twice, and at least as many distinct rows arrived as the exact count taken
-//   with the first page. Guarantee: every row that existed when the load
-//   started and was not deleted before the load finished is included exactly
-//   once. Rows inserted, updated or deleted WHILE the load ran may or may not
-//   be reflected.
+//   Traversal reached the end of the data; every page succeeded; no row was
+//   seen twice; distinct rows >= the exact count taken with page 1.
+//   Means: the guarantee above holds for the whole table. It does NOT mean
+//   "identical to the table at any single moment".
 //
 // coverage.kind === 'since' (complete: false)
-//   Pages 1..k of the dated rows succeeded, a later page failed (or the page
-//   limit was hit), no row was seen twice, and the NULL-dated rows loaded
-//   completely. Guarantee, with the same "existed for the whole load" caveat:
-//   every row with date_time STRICTLY AFTER `oldestExclusive` (the timestamp of
-//   the last row received, as exact database text) is included. Rows that share
-//   that exact timestamp may continue on the failed page, so that timestamp
-//   itself is NOT covered. `coveredFromMs` = floor(that instant to the
-//   millisecond) + 1 ms: only ever later than the true boundary, never earlier.
-//   `coveredToMs` = when the load started (client clock): rows newer than that
-//   are not covered.
+//   Dated pages 1..k succeeded, a later page failed (or the page limit was
+//   hit), no row was seen twice, and the NULL-dated rows loaded completely.
+//   Means: the guarantee above holds for rows with date_time STRICTLY AFTER
+//   `oldestExclusive` (exact database text of the last row received). That
+//   timestamp itself is NOT covered: rows sharing it may be on the failed page.
+//   `coveredFromMs` = that instant floored to the millisecond + 1 ms (never
+//   earlier than the true boundary). `coveredToMs` = when the load started
+//   (client clock); rows newer than that are not covered.
 //
 // coverage.kind === 'none'  (complete: false)
-//   Nothing can be claimed: the first page failed; the row count came up short
-//   (rows deleted or changed mid-load, or an inconsistent read); a row was seen
-//   twice (its sort position changed mid-load) or a page added no new row (the
-//   cursor did not advance); a cursor value was not exactly
-//   what the database type allows; the NULL-dated rows did not load; or the
+//   Nothing is claimed: the first page failed; distinct rows fell short of the
+//   count; a row was seen twice or a page added no new row (the order changed
+//   mid-load or the cursor did not advance); a cursor value was not exactly what
+//   the database type allows; the NULL-dated rows did not load; or the
 //   boundary timestamp could not be read.
 //
 // Retries: each page is retried with backoff (500/1000/2000 ms) before the
