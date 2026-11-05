@@ -1747,7 +1747,7 @@ function FindingCards({ noticed, cross, isPro, onUpgrade, multi }) {
 }
 
 // Daily earnings per platform: real daily totals, one lit line per platform.
-function TrendsSection({ daily, comparison }) {
+function TrendsSection({ daily, comparison, stack = false }) {
   const [hover, setHover] = useState(null)
   const series = comparison
     .map(r => ({ platform: r.platform, row: r, color: accentFor(r.platform), values: daily?.byPlatform?.[r.platform] }))
@@ -1768,8 +1768,9 @@ function TrendsSection({ daily, comparison }) {
   const total = sums.reduce((a, b) => a + b.sum, 0)
   const hx = hover === null ? 0 : (xAt(hover) / W) * 100
   return (
-    <div className="pl-trends" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 310px', gap: 14 }}>
+    <div className="pl-trends" style={{ display: 'grid', gridTemplateColumns: stack ? 'minmax(0,1fr)' : 'minmax(0,1fr) 310px', gap: 14 }}>
       <Glass style={{ padding: '20px 20px 16px' }}>
+        {stack && <PanelTitle icon="trend" title="Historical Trends" right={<span style={{ fontSize: 12, color: C.muted }}>Daily earnings · last 30 days</span>} />}
         <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr)', gap: 8 }}>
           <div aria-hidden="true" style={{ position: 'relative', height: H }}>
             {ticks.map((t, i) => (
@@ -1810,9 +1811,20 @@ function TrendsSection({ daily, comparison }) {
             {xi.map((k, i) => <span key={i}>{dayLabel(daily.days[k])}</span>)}
           </div>
         </div>
+        {stack && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px 22px', marginTop: 14, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+            {sums.map(x => (
+              <span key={x.platform} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: C.text }}>
+                <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 5, background: x.color, boxShadow: `0 0 8px ${x.color}` }} />
+                {x.platform} <strong style={{ color: C.white }}>{fmt$(x.sum)}</strong>
+              </span>
+            ))}
+            <span style={{ color: C.muted }}>30-day total <strong style={{ color: C.white }}>{fmt$(total)}</strong></span>
+          </div>
+        )}
       </Glass>
 
-      <Glass style={{ padding: '18px 18px 16px' }}>
+      {!stack && <Glass style={{ padding: '18px 18px 16px' }}>
         <div style={eyebrow}>Last 30 days · {dayLabel(daily.days[0])} – {dayLabel(daily.days[n - 1])}</div>
         <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
           {sums.map(x => (
@@ -1828,7 +1840,7 @@ function TrendsSection({ daily, comparison }) {
           <span style={{ fontSize: 13, color: C.text }}>Total</span>
           <span style={{ fontSize: 20, fontWeight: 700, color: C.white, fontVariantNumeric: 'tabular-nums' }}>{fmt$(total)}</span>
         </div>
-      </Glass>
+      </Glass>}
     </div>
   )
 }
@@ -1940,6 +1952,206 @@ function RecordsStrip({ comparison, extras, efficiency }) {
         </Glass>
       ))}
     </div>
+  )
+}
+
+
+// ============================================
+// PLATFORM INTELLIGENCE LAYOUT (reference 6)
+// KPI strip, Noticed list, performance cards, audience and timing rails.
+// Every value is read from the builders above; nothing new is derived.
+// ============================================
+
+function IconDot({ name, color = C.teal, size = 40 }) {
+  return (
+    <span aria-hidden="true" style={{ width: size, height: size, borderRadius: size / 2, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color, background: `${color}14`, boxShadow: `inset 0 0 0 1px ${color}38, 0 0 18px ${color}22` }}>
+      <Ico name={name} size={Math.round(size * 0.45)} />
+    </span>
+  )
+}
+
+function PanelTitle({ icon, title, right, color = C.teal }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 14, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.white }}>
+        <span style={{ color, display: 'inline-flex' }}><Ico name={icon} size={17} /></span>{title}
+      </span>
+      {right}
+    </div>
+  )
+}
+
+function KpiStrip({ snapshot, comparison, timeIntel }) {
+  const top = comparison[0]
+  const win = timeIntel?.hasPattern ? [timeIntel.bestDay?.day, timeIntel.bestHour ? `around ${timeIntel.bestHour.label}` : null].filter(Boolean).join(' · ') : null
+  const cells = [
+    { icon: 'dollar', color: C.teal, label: 'Total earned', value: fmt$(snapshot.totalEarnings), sub: plural(snapshot.totalTips, 'tip') },
+    { icon: 'trend', color: C.indigo, label: 'Avg $/hour', value: snapshot.usdPerHour ? fmt$(snapshot.usdPerHour) : '—', sub: snapshot.rateHours > 0 ? `from ${fmtH(snapshot.rateHours)} of timed sessions` : 'needs timed 30+ min sessions' },
+    { icon: 'clock', color: C.cyan, label: 'Total hours', value: fmtH(snapshot.totalHours), sub: plural(snapshot.sessions, 'meaningful session') },
+    { icon: 'trophy', color: C.pink, label: 'Top platform', value: top.platform, valueColor: accentFor(top.platform), sub: comparison.length > 1 ? `${top.earningsPercent}% of earnings` : 'your only platform' },
+    { icon: 'clock', color: C.purple, label: 'Best window (all platforms)', value: win || 'Still learning', wrap: true, sub: win ? timeIntel.confidence.label : 'needs more sessions' },
+  ]
+  return (
+    <Glass style={{ padding: '18px 22px' }}>
+      <div className="pl-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 0 }}>
+      {cells.map((c, i) => (
+        <div key={c.label} className="pl-kpi-cell" style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, padding: '4px 18px', borderLeft: i ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+          <IconDot name={c.icon} color={c.color} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...eyebrow, fontSize: 11 }}>{c.label}</div>
+            <div style={{ fontSize: c.wrap ? 17 : 21, fontWeight: 800, letterSpacing: '-0.03em', color: c.valueColor || C.white, marginTop: 4, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, ...(c.wrap ? {} : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>{c.value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.sub}</div>
+          </div>
+        </div>
+      ))}
+      </div>
+    </Glass>
+  )
+}
+
+function NoticedList({ noticed, cross, isPro, onUpgrade, multi }) {
+  const items = (isPro
+    ? [...cross.map(c => ({ id: c.id, text: c.text })), ...noticed.map((n, i) => ({ id: `n${i}`, text: n.text }))]
+    : noticed.map((n, i) => ({ id: `n${i}`, text: n.text }))
+  ).slice(0, 4)
+  const teasers = isPro ? [] : cross.slice(0, 2)
+  const count = items.length + teasers.length
+  const colors = [C.teal, C.pink, C.purple, C.cyan]
+  return (
+    <Glass accent={C.pink} style={{ padding: '20px 20px 18px' }}>
+      <PanelTitle icon="sparkle" title="CamCash Noticed" color={C.pink}
+        right={count > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: C.pink, padding: '4px 10px', borderRadius: 999, background: `${C.pink}14`, boxShadow: `inset 0 0 0 1px ${C.pink}44` }}>{plural(count, 'insight')}</span>} />
+      {count === 0 ? (
+        <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>
+          {multi
+            ? 'Nothing stands out between your platforms yet. Findings appear here when the gap is big enough to be real.'
+            : 'Findings appear here once a pattern in your data is strong enough to call out.'}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {items.map((it, i) => (
+            <div key={it.id} className="pl-chip" style={{ animationDelay: `${i * 60}ms`, display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.025)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+              <span style={{ color: colors[i % 4], display: 'inline-flex', marginTop: 2 }}><Ico name={FINDING_ICON[it.id] || 'bars'} size={18} /></span>
+              <span style={{ fontSize: 14, lineHeight: 1.5, color: i === 0 ? C.white : C.text, fontWeight: i === 0 ? 700 : 500 }}>{it.text}</span>
+            </div>
+          ))}
+          {teasers.map(c => (
+            <div key={c.id} style={{ padding: '12px 14px', borderRadius: 14, background: `${C.pink}0c`, boxShadow: `inset 0 0 0 1px ${C.pink}33` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', color: C.pink }}>PRO INSIGHT</span>
+                <span aria-hidden="true" style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
+              </div>
+              <div style={{ fontSize: 14, color: C.white, marginTop: 6, lineHeight: 1.5 }}>{c.teaser}</div>
+              <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 6, padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.pink }}>{c.cta} →</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Glass>
+  )
+}
+
+function PerfCard({ row, selected, onSelect, leading, multi }) {
+  const accent = accentFor(row.platform)
+  const mounted = useMounted()
+  return (
+    <div
+      role="button" tabIndex={0} aria-pressed={selected} onClick={onSelect} className="pl-click"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
+      style={{
+        position: 'relative', minWidth: 0, borderRadius: 18, padding: '16px 16px 14px',
+        background: leading ? `linear-gradient(160deg, ${accent}14, rgba(8,11,26,0.86) 60%)` : 'rgba(255,255,255,0.025)',
+        border: `1px solid ${selected || leading ? `${accent}aa` : 'rgba(255,255,255,0.08)'}`,
+        boxShadow: selected || leading ? `0 0 0 1px ${accent}22, 0 0 24px ${accent}26, inset 0 0 22px ${accent}0f` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <PlatformMark platform={row.platform} size={30} />
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.white, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+        </div>
+        {leading && multi && <span title="Highest earning platform" style={{ color: accent, display: 'inline-flex' }}><Ico name="trophy" size={18} /></span>}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginTop: 16 }}>
+        <span style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.035em', color: C.white, fontVariantNumeric: 'tabular-nums' }}>{fmt$(row.earnings)}</span>
+        <span style={{ fontSize: 12.5 }}><TrendCell trend={row.trend} /></span>
+      </div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>{row.earningsPercent}% of total</div>
+      <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', marginTop: 12 }}>
+        <div style={{ width: mounted ? `${row.earningsPercent}%` : 0, height: '100%', borderRadius: 3, background: `linear-gradient(90deg, ${accent}aa, ${accent})`, boxShadow: `0 0 10px ${accent}88`, transition: 'width 900ms cubic-bezier(.2,.8,.2,1)' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 12, fontSize: 12.5, color: C.text, fontVariantNumeric: 'tabular-nums', flexWrap: 'wrap' }}>
+        <span title="Timed sessions of 30+ minutes with 2+ tips only"><strong style={{ color: C.white }}>{row.rateHours > 0 ? fmt$(row.usdPerHour) : '—'}</strong>/hr</span>
+        <span>{fmtH(row.hours)}</span>
+        <span>{plural(row.tips, 'tip')}</span>
+      </div>
+    </div>
+  )
+}
+
+function AudienceCard({ comparison, extras, newFans, recap }) {
+  const tracked = comparison.reduce((sum, r) => sum + (extras?.[r.platform]?.uniqueFans || 0), 0)
+  const cells = [
+    { label: 'Fans tracked', value: fmtN(tracked), sub: 'counted per platform' },
+    { label: 'Returned', value: recap?.returningFans == null ? '—' : fmtN(recap.returningFans), sub: 'in your latest stream' },
+    { label: 'New', value: fmtN(newFans?.total || 0), sub: 'first tip this week' },
+  ]
+  return (
+    <Glass style={{ padding: '18px 20px' }}>
+      <PanelTitle icon="users" title="Audience" color={C.purple} />
+      <div className="pl-aud" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 0 }}>
+        {cells.map((c, i) => (
+          <div key={c.label} style={{ padding: '0 14px', borderLeft: i ? '1px solid rgba(255,255,255,0.07)' : 'none', minWidth: 0 }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.white, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>{c.value}</div>
+            <div style={{ fontSize: 13, color: C.text, marginTop: 2 }}>{c.label}</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+    </Glass>
+  )
+}
+
+function TimingList({ analytics, timeIntel, comparison, isPro }) {
+  const win = analytics?.canonicalBestTimes?.bestWindow || null
+  const early = analytics?.canonicalBestTimes?.earlySignal || null
+  const bestH = win ? win.localHour : early ? early.localHour : null
+  const day = win?.localDay || (early?.localDay && early.localDay !== 'Any day' ? early.localDay : null)
+  const others = isPro
+    ? comparison
+        .map(r => ({ platform: r.platform, t: analytics?.platformBestTimes?.[r.platform] }))
+        .filter(x => x.t && (x.t.hour || x.t.bestDay))
+        .slice(0, 3)
+    : []
+  const rowStyle = (hi) => ({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 14px', borderRadius: 14, background: hi ? `${C.pink}10` : 'rgba(255,255,255,0.025)', boxShadow: `inset 0 0 0 1px ${hi ? `${C.pink}55` : 'rgba(255,255,255,0.06)'}` })
+  return (
+    <Glass style={{ padding: '18px 20px' }}>
+      <PanelTitle icon="clock" title="Timing Opportunities" color={C.cyan} />
+      <div style={{ display: 'grid', gap: 8 }}>
+        {bestH !== null ? (
+          <div style={rowStyle(true)}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span style={{ color: C.pink, display: 'inline-flex' }}><Ico name="sparkle" size={16} /></span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.white }}>{day ? `${day} · ` : ''}around {formatHour(bestH)}</span>
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.pink, whiteSpace: 'nowrap' }}>{win ? 'Best window' : 'Early signal'} · {plural(win?.sessionCount ?? early?.sessionCount ?? 0, 'session')}</span>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>Timing appears here once a window is supported by enough sessions.</div>
+        )}
+        {isPro
+          ? others.map(x => (
+            <div key={x.platform} style={rowStyle(false)}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: accentFor(x.platform) }}>{x.platform}</span>
+              <span style={{ fontSize: 13, color: C.text }}>{[x.t.bestDay?.day, x.t.hour ? `around ${formatHour(x.t.hour.hour)}` : null].filter(Boolean).join(' · ')}</span>
+            </div>
+          ))
+          : <LockedRow text="Best hour and day for each platform" />}
+      </div>
+      {bestH !== null && timeIntel?.confidence && (
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Confidence: {timeIntel.confidence.level === 'Very Low' ? 'still learning' : timeIntel.confidence.label.toLowerCase()} · your timezone</div>
+      )}
+    </Glass>
   )
 }
 
@@ -2222,6 +2434,36 @@ export default function PlatformsIntelligence({
   }
 }
 
+@media (max-width: 1150px) {
+  .pl-root .pl-row2,
+  .pl-root .pl-row3 {
+    grid-template-columns: 1fr !important;
+  }
+  .pl-root .pl-kpi {
+    grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+    row-gap: 18px !important;
+  }
+  .pl-root .pl-kpi-cell:nth-child(4) {
+    border-left: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .pl-root .pl-kpi {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .pl-root .pl-kpi-cell {
+    border-left: none !important;
+    padding: 4px 6px !important;
+  }
+  .pl-root .pl-kpi-cell > span:first-child {
+    display: none !important;
+  }
+  .pl-root .pl-aud > * {
+    padding: 0 8px !important;
+  }
+}
+
 @media (max-width: 900px) {
   .pl-root .pl-trends,
   .pl-root .pl-timing {
@@ -2256,53 +2498,21 @@ export default function PlatformsIntelligence({
 }
       `}</style>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-          padding: '2px 2px 0',
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 36,
-              fontWeight: 800,
-              color: C.white,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.08,
-            }}
-          >
-            Platforms
-          </h1>
-
-          <div
-            style={{
-              fontSize: 13.5,
-              lineHeight: '22px',
-              color: C.muted,
-              marginTop: 6,
-            }}
-          >
-            See where your money is coming from — and what changed since your last stream.
+      <div className="pl-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: '2px 2px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+          <span aria-hidden="true" style={{ width: 56, height: 56, borderRadius: 28, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: C.pink, background: `radial-gradient(circle at 30% 30%, ${C.pink}33, ${C.indigo}1a)`, boxShadow: `inset 0 0 0 1px ${C.pink}44, 0 0 26px ${C.pink}33` }}>
+            <Ico name="bars" size={26} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...eyebrow }}>Platforms</div>
+            <h1 style={{ margin: '4px 0 0', fontSize: 34, fontWeight: 800, color: C.white, letterSpacing: '-0.04em', lineHeight: 1.08 }}>Platform Intelligence</h1>
+            <div style={{ fontSize: 14, color: C.text, marginTop: 5 }}>Cross-platform performance, trends &amp; opportunities</div>
           </div>
         </div>
-
-        {recap && (
-          <span
-            style={{
-              fontSize: 12,
-              color: C.muted,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Updated through {streamWhen(recap.endTime, tz)}
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {recap && <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>Updated through {streamWhen(recap.endTime, tz)}</span>}
+          {onNavigate && <BrandButton onClick={() => onNavigate('live')}>Go Live</BrandButton>}
+        </div>
       </div>
 
       {!analytics || comparison.length === 0 ? (
@@ -2310,15 +2520,9 @@ export default function PlatformsIntelligence({
       ) : (
         <>
           <SinceLastVisit visit={visit} tz={tz} />
-          <div>
-            <SectionHead icon="bars" title="Platform Pulse" note="Earnings across your analysed history · the badge compares the last 30 days with the 30 before"
-              right={snapshot && (
-                <span style={{ fontSize: 13, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
-                  Total <strong style={{ color: C.white, fontSize: 16 }}>{fmt$(snapshot.totalEarnings)}</strong> · {plural(snapshot.totalTips, 'tip')} · {plural(comparison.length, 'platform')}
-                </span>
-              )} />
+          {snapshot && <KpiStrip snapshot={snapshot} comparison={comparison} timeIntel={timeIntel} />}
             {learning.isLearning && (
-              <div style={{ fontSize: 13, color: C.text, margin: '-4px 2px 12px', lineHeight: 1.55 }}>
+              <div style={{ fontSize: 13, color: C.text, margin: '-6px 2px 0', lineHeight: 1.55 }}>
                 <span style={{ color: C.white, fontWeight: 700 }}>CamCash is still learning your platforms.</span>{' '}
                 {[
                   learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
@@ -2333,18 +2537,23 @@ export default function PlatformsIntelligence({
                 : <>Free plan: each platform shows its latest 31 days of activity.</>}
             </div>
           )}
-          <div className="pl-grid pl-platform-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
-            {comparison.map(row => (
-              <PulseCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
-                selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} spark={daily?.byPlatform?.[row.platform]} />
-            ))}
-            {!multi && <ExpansionCard onImport={onImport} />}
-          </div>
-          </div>
 
-
-          <LatestStream recap={recap} tz={tz} multi={multi} />
-          <ActivityFeed items={activity} />
+          <div className="pl-row2" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,0.9fr) minmax(0,1.5fr)', gap: 16, alignItems: 'start' }}>
+            <NoticedList noticed={noticed} cross={cross} isPro={isPro} onUpgrade={onUpgrade} multi={multi} />
+            <Glass style={{ padding: '20px 20px 18px' }}>
+              <PanelTitle icon="bars" title="Platform Performance"
+                right={multi && (
+                  <button type="button" onClick={() => document.getElementById('pl-compare')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.cyan }}>Compare platforms →</button>
+                )} />
+              <div className="pl-perf" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+                {comparison.map(row => (
+                  <PerfCard key={row.platform} row={row} multi={multi} selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} />
+                ))}
+                {!multi && <ExpansionCard onImport={onImport} />}
+              </div>
+            </Glass>
+          </div>
 
           {active && (
             <div>
@@ -2352,32 +2561,26 @@ export default function PlatformsIntelligence({
             </div>
           )}
 
-          <div>
-            <SectionHead icon="sparkle" title="CamCash Noticed" note="Personalized discoveries from your cross-platform data" />
-            <FindingCards noticed={noticed} cross={cross} isPro={isPro} onUpgrade={onUpgrade} multi={multi} />
-          </div>
-
-          {daily && (
-            <div>
-              <SectionHead icon="trend" title="Historical Trends" note="Daily earnings by platform, last 30 days" />
-              <TrendsSection daily={daily} comparison={comparison} />
+          <div className="pl-row3" style={{ display: 'grid', gridTemplateColumns: daily ? 'minmax(0,1.45fr) minmax(0,1fr)' : 'minmax(0,1fr)', gap: 16, alignItems: 'start' }}>
+            {daily && <TrendsSection daily={daily} comparison={comparison} stack />}
+            <div style={{ display: 'grid', gap: 16, minWidth: 0 }}>
+              <AudienceCard comparison={comparison} extras={extras} newFans={newFans} recap={recap} />
+              <TimingList analytics={analytics} timeIntel={timeIntel} comparison={comparison} isPro={isPro} />
             </div>
-          )}
-
-          <div>
-            <SectionHead icon="clock" title="Cross-Platform Timing" note="When you tend to earn most, across all platforms" />
-            <TimingSection analytics={analytics} timeIntel={timeIntel} comparison={comparison} isPro={isPro} />
           </div>
 
           {isPro && (
-            <div>
-              <SectionHead icon="trophy" title="Records & Breakdowns" note="Key facts and platform health" />
+            <Glass style={{ padding: '20px 20px 18px' }}>
+              <PanelTitle icon="trophy" title="Records & Milestones" color={C.pink} />
               <RecordsStrip comparison={comparison} extras={extras} efficiency={efficiency} />
-            </div>
+            </Glass>
           )}
 
+          <LatestStream recap={recap} tz={tz} multi={multi} />
+          <ActivityFeed items={activity} />
+
           {multi && (
-            <div>
+            <div id="pl-compare" style={{ scrollMarginTop: 16 }}>
               {isPro
                 ? <Comparison comparison={comparison} extras={extras} />
                 : <ComparisonTeaser comparison={comparison} anchor={fullHistoryPlatform} onUpgrade={onUpgrade} />}
