@@ -32,7 +32,7 @@ import SessionsOverview from './SessionsOverview'
 import PlannedStreams from './PlannedStreams'
 import LoadWarningBanner from './LoadWarningBanner'
 import { loadUserHistory, failureState } from '../../lib/dataLoad/resolveLoad'
-import { tipsPageFetcher, paidSessionsPageFetcher, toAscending } from '../../lib/dataLoad/queries'
+import { tipsSource, paidSessionsSource, toAscending } from '../../lib/dataLoad/queries'
 import { PrimaryPlatformBanner } from './PrimaryPlatformPrompt'
 import { SESSION_GAP_MS } from '../../lib/analytics/sessions'
 import { useRecentShows } from './useRecentShows'
@@ -1605,7 +1605,9 @@ export default function Dashboard() {
   // as tipsLoadComplete (covers tips AND private sessions). See lib/dataLoad.
   const [loadIssues, setLoadIssues] = useState([])
   const [dataComplete, setDataComplete] = useState(true)
-  const loadStateRef = useRef({ tips: false, paid: false })
+  // Per-table load state { complete, state, coverage, asOf } (lib/dataLoad/resolveLoad.js).
+  // S1 records coverage only; nothing on screen reads it yet.
+  const loadStateRef = useRef({ tips: { complete: false }, paid: { complete: false } })
   const [newTipCount, setNewTipCount] = useState(0)
   const [flashTipId, setFlashTipId] = useState(null)   // for new-tip highlight animation
   const prevTipCountRef = useRef(0)
@@ -2200,8 +2202,8 @@ export default function Dashboard() {
       // whether it is complete. A failed or partial load never replaces data that
       // came from a complete load (lib/dataLoad/resolveLoad.js).
       const history = await loadUserHistory({
-        fetchTips: tipsPageFetcher(supabase, uid),
-        fetchPaid: paidSessionsPageFetcher(supabase, uid),
+        tips: tipsSource(supabase, uid),
+        paid: paidSessionsSource(supabase, uid),
         previous: () => loadStateRef.current, // read when the fetches finish, not when they start
       })
       if (history.issues.length) console.error('[loadData] history load incomplete', history.issues.map((i) => ({ table: i.table, reason: i.reason, stale: i.stale, error: i.error, expected: i.expected, received: i.received })))
@@ -2273,7 +2275,7 @@ export default function Dashboard() {
       const { data: engineData, error: engineError } = await supabase.rpc('get_user_insights', { p_user_id: uid, p_timezone: userTz })
       if (engineError) console.error('[loadData] get_user_insights failed:', { code: engineError.code, message: engineError.message })
       else setEngineInsights(engineData) // a failed call never overwrites insights already on screen
-      loadStateRef.current = { tips: history.tips.complete, paid: history.paid.complete }
+      loadStateRef.current = history.loadState
       setDataComplete(history.complete)
       setLoadIssues(history.issues)
       if (history.fullyFresh) setLastRefreshed(new Date())
@@ -2281,7 +2283,7 @@ export default function Dashboard() {
       // Anything thrown (network, timezone lookup, engine): never claim completeness we cannot prove.
       console.error('[loadData] failed:', { message: err?.message })
       const f = failureState(loadStateRef.current)
-      loadStateRef.current = { tips: f.tipsComplete, paid: f.paidComplete }
+      loadStateRef.current = f.loadState
       setDataComplete(f.tipsComplete && f.paidComplete)
       setLoadIssues(f.issues)
     } finally {
