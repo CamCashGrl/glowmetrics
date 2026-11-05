@@ -26,7 +26,8 @@ Read-only investigation. Nothing in Vercel, GitHub or the code was changed.
 1. **(Critical, owner action)** Restore the Vercel GitHub App's access to `daphneoncam/glowmetrics` (steps in the chat reply).
 2. **(Critical)** Get PR #761 to production, either by a redeploy of `main` or automatically once item 1 is fixed. Then confirm `camcashgrl.com` serves commit `2928a0b`.
 3. **(High)** Test the fix: open a PR and confirm a Vercel status and preview URL appear on it.
-4. **(Medium)** Before any disconnect or reconnect, record the current Vercel settings: Root Directory, Production Branch, build and install commands, env var names, domains and deploy hooks.
+4. **(Medium, decision)** The Vercel dashboard is offering "Set Up Vercel CI" (`npx skills use vercel/ci@setup`). It was **not** run. Vercel CI is a separate product for running checks; it does not restore Git auto-deploys. The repo already runs build, test and test-integrity checks in GitHub Actions, so adding it now would duplicate them. Revisit after item 1 is fixed, and only with owner approval.
+5. **(Medium)** Before any disconnect or reconnect, record the current Vercel settings: Root Directory, Production Branch, build and install commands, env var names, domains and deploy hooks.
 
 ### In progress
 - None.
