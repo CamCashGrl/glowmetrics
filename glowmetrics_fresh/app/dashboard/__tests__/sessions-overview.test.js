@@ -731,3 +731,83 @@ test('Pulse recap action: Live show → review it; imported history → import m
   renderTab({ tips: freeChat, onImport: () => {} })
   expect(screen.getByTestId('pulse-action').textContent).toMatch(/Import more history/)
 })
+
+// ── Session Pulse feature card (approved reference layout) ────────────────────
+describe('Session Pulse feature card', () => {
+  const csvDay = (d, a, b) => [csvTip(d * 10, `2026-09-${String(d).padStart(2, '0')}T20:00:00Z`, 'chaturbate', 'Ann', a), csvTip(d * 10 + 1, `2026-09-${String(d).padStart(2, '0')}T20:40:00Z`, 'chaturbate', 'Ben', b)]
+  const rich = [...csvDay(2, 20, 10), ...csvDay(4, 10, 10), ...csvDay(6, 15, 5), ...csvDay(8, 8, 2), ...csvDay(10, 5, 5), ...csvDay(12, 6, 4), ...csvDay(14, 30, 10)]
+
+  test('rich data: headline is the session earnings; signal area holds identity, verified pill and the session stats', () => {
+    const onOpenPlanner = jest.fn()
+    renderTab({ tips: rich, onOpenPlanner })
+    const p = screen.getByTestId('session-pulse')
+    expect(p.getAttribute('data-kind')).toBe('comparison')
+    expect(val('pulse-amount')).toBe('$40.00')
+    expect(p.querySelector('h2').textContent).toBe('Your last session earned $40.00')
+    expect(screen.getByTestId('pulse-badge').getAttribute('data-tone')).toBe('up')
+    expect(val('pulse-signal')).toBe('+167%')
+    expect(val('pulse-platform')).toBe('Chaturbate')
+    expect(val('pulse-meta')).toMatch(/Imported$/) // CSV history labelled as imported
+    expect(val('pulse-meta')).toMatch(/~40m activity span/) // estimate, never stream time
+    expect(val('pulse-earned')).toBe('$40.00')
+    expect(val('pulse-count')).toBe('2')
+    expect(val('pulse-fans')).toBe('2')
+    expect(p.textContent).not.toMatch(/\/hr/) // imported history never shows $/hr
+    fireEvent.click(screen.getByTestId('pulse-second'))
+    expect(onOpenPlanner).toHaveBeenCalledTimes(1)
+  })
+
+  test('the lifetime total is not repeated in the Pulse', () => {
+    renderTab({ tips: rich })
+    const lifetime = screen.getByTestId('overall-total').textContent // inside the collapsed overview
+    expect(screen.getByTestId('session-pulse').textContent).not.toContain(lifetime)
+  })
+
+  test('one session: actual earnings and activity, no comparison pill or percentage', () => {
+    renderTab({ tips: freeChat, onImport: () => {}, onOpenPlanner: () => {} })
+    const p = screen.getByTestId('session-pulse')
+    expect(screen.queryByTestId('pulse-badge')).toBeNull()
+    expect(p.textContent).not.toMatch(/%/)
+    expect(val('pulse-signal')).toBe('$10.00')
+    expect(val('pulse-meta')).toMatch(/Free chat$/) // extension-captured, not called imported
+    expect(val('pulse-meta')).not.toMatch(/Imported/)
+    expect(val('pulse-second')).toMatch(/View session/)
+  })
+
+  test('Live show: recorded duration (no "~"), verified $/hr pill, no source tag', () => {
+    renderTab({ tips: liveTips, shows: [{ ...show, endedHow: 'normal_stop' }] })
+    expect(screen.getByTestId('session-pulse').getAttribute('data-kind')).toBe('new_show')
+    expect(val('pulse-meta')).toMatch(/· 1h 0m$/)
+    expect(val('pulse-signal')).toBe('$11.16/hr')
+    expect(val('pulse-earned')).toBe('$11.16')
+  })
+
+  test('Live show without a verified end: no $/hr pill', () => {
+    renderTab({ tips: liveTips, shows: [show] })
+    expect(screen.queryByTestId('pulse-badge')).toBeNull()
+    expect(screen.getByTestId('session-pulse').textContent).not.toMatch(/\/hr/)
+  })
+
+  test('private charges: no duration, counted as charges', () => {
+    renderTab({ paidSessions: [{ id: 9, date_time: '2026-10-07T15:00:00Z', platform: 'bongacams', username: 'Fay', username_lower: 'fay', session_type: 'Private Chat', usd: 30.3 }] })
+    expect(val('pulse-meta')).not.toMatch(/span|\dm\b/)
+    expect(screen.getByTestId('session-pulse').textContent).toMatch(/1Charge/)
+  })
+
+  test('no plan action without the planner; zero data shows activation, not a Pulse', () => {
+    const { unmount } = renderTab({ tips: rich })
+    expect(screen.queryByTestId('pulse-second')).toBeNull()
+    unmount()
+    renderTab({})
+    expect(screen.queryByTestId('session-pulse')).toBeNull()
+    expect(screen.getByTestId('sessions-activation')).toBeTruthy()
+  })
+
+  test('historical stats stay available in the collapsed overall overview', () => {
+    renderTab({ tips: rich })
+    fireEvent.click(screen.getByTestId('period-overview-toggle'))
+    for (const id of ['overall-total', 'overall-public', 'overall-private', 'overall-tips', 'overall-unique', 'overall-meaningful', 'overall-median', 'overall-top-tipper', 'overall-largest']) {
+      expect(screen.getByTestId(id).closest('[hidden]')).toBeNull()
+    }
+  })
+})

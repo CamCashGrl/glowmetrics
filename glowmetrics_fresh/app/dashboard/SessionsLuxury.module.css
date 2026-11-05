@@ -414,3 +414,124 @@
   .header { flex-wrap: wrap; }
   .headerActions { flex-wrap: wrap; }
 }
+
+/* ── Session Pulse feature card (approved reference, 2026-11-05) ─────────────
+ * Command Center navy glass (CommandCenter.js glassCard: rgba(15,20,32,.75),
+ * blur 20px) with the CamCash brand gradient (#22D3EE → #7C5CFF → #EC4899) as
+ * an illuminated border. Insight left (~65%) | signal area right (~35%).
+ * Scoped to this module; the earlier .pulse* rules above are left unchanged. */
+.pulseCard {
+  position: relative; isolation: isolate; min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr);
+  align-items: center; gap: 0;
+  margin-bottom: 16px; padding: 24px 28px 26px;
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse 60% 90% at 78% -10%, rgba(236,72,153,.24), transparent 62%),
+    radial-gradient(ellipse 55% 80% at 0% 110%, rgba(34,211,238,.10), transparent 60%),
+    radial-gradient(ellipse 50% 70% at 35% 0%, rgba(124,92,255,.12), transparent 60%),
+    linear-gradient(120deg, rgba(13,17,38,.94), rgba(17,15,40,.9) 55%, rgba(30,16,46,.9));
+  -webkit-backdrop-filter: blur(20px) saturate(130%); backdrop-filter: blur(20px) saturate(130%);
+  box-shadow: 0 0 46px rgba(236,72,153,.20), 0 0 32px rgba(34,211,238,.10), 0 24px 64px rgba(1,0,8,.38), inset 0 1px rgba(255,255,255,.09);
+}
+.pulseCard::before { /* illuminated gradient border */
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  border-radius: inherit; padding: 1.5px;
+  background: linear-gradient(105deg, rgba(34,211,238,.85) 0%, rgba(124,92,255,.55) 32%, rgba(236,72,153,.75) 62%, rgba(255,120,200,.95) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.pulseCard::after { /* inner glass reflection along the top edge */
+  content: ''; position: absolute; left: 12%; right: 12%; top: 0; height: 1px; z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,214,240,.85), transparent);
+}
+.pulseInsight { min-width: 0; padding-right: 30px; }
+.pulseEyebrow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #e8e4f4; font-size: 13.5px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; }
+.pulseWave { flex: 0 0 auto; filter: drop-shadow(0 0 6px rgba(236,72,153,.45)); }
+.pulseHeadline { margin: 0 0 8px; color: #fff; font-size: clamp(24px, 2.35vw, 34px); font-weight: 800; line-height: 1.12; letter-spacing: -.03em; }
+.pulseAmount { color: #f055b0; text-shadow: 0 0 22px rgba(236,72,153,.38); white-space: nowrap; }
+.pulseSentence { margin: 0; max-width: 60ch; color: #c9c5d8; font-size: 15.5px; font-weight: 500; line-height: 1.45; }
+.pulseActions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 18px; }
+.pulseCard .pulsePrimary { /* .pulseCard prefix outranks .page button { font: inherit } */
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 44px; padding: 0 30px; border-radius: 13px;
+  color: #fff; font-size: 15px; font-weight: 780; text-transform: capitalize;
+  background: linear-gradient(90deg, #22D3EE 0%, #7C5CFF 52%, #EC4899 100%);
+  border: 1px solid rgba(255,214,240,.35);
+  box-shadow: 0 0 22px rgba(34,211,238,.22), 0 6px 24px rgba(236,72,153,.28), inset 0 1px rgba(255,255,255,.25);
+  transition: transform .18s var(--s-ease), filter .18s var(--s-ease);
+}
+.pulseCard .pulsePrimary:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.pulseCard .pulseSecondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 44px; padding: 0 22px; border-radius: 13px;
+  color: #f4f0ff; font-size: 14.5px; font-weight: 720; text-transform: capitalize;
+  background: rgba(23,18,44,.66); border: 1px solid rgba(236,72,153,.45);
+  box-shadow: inset 0 1px rgba(255,255,255,.05);
+  transition: background .18s ease, border-color .18s ease;
+}
+.pulseCard .pulseSecondary:hover { background: rgba(52,30,76,.72); border-color: rgba(236,72,153,.7); }
+.pulseSide { min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 18px; padding-left: 30px; border-left: 1px solid rgba(208,187,244,.16); }
+.pulseSideTop { display: flex; align-items: flex-start; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid rgba(208,187,244,.14); }
+.pulseCam { flex: 0 0 auto; display: grid; place-items: center; margin-top: 4px; filter: drop-shadow(0 0 10px rgba(167,139,250,.35)); }
+.pulseIdentity { min-width: 0; flex: 1 1 auto; }
+.pulseSideLabel { color: #d9d4e8; font-size: 12px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.pulsePlatform { margin-top: 4px; color: #fff; font-size: 17px; font-weight: 780; overflow-wrap: anywhere; }
+.pulseMeta { margin-top: 2px; color: #b9b4c9; font-size: 14px; }
+.pulseBadge {
+  flex: 0 0 auto; padding: 10px 16px; border-radius: 16px; text-align: center;
+  background: rgba(10,16,32,.62); border: 1px solid rgba(255,255,255,.12);
+  box-shadow: inset 0 1px rgba(255,255,255,.06);
+}
+.pulseBadgeValue { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 22px; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; white-space: nowrap; }
+.pulseBadgeLabel { margin-top: 3px; color: #c9c5d8; font-size: 13px; white-space: nowrap; }
+.pulseBadge_up .pulseBadgeValue { color: #34E3B0; text-shadow: 0 0 14px rgba(16,185,129,.35); }
+.pulseBadge_up { border-color: rgba(16,185,129,.30); }
+.pulseBadge_down .pulseBadgeValue { color: var(--s-negative); }
+.pulseBadge_neutral .pulseBadgeValue { color: #f4f0ff; font-size: 18px; }
+.pulseBadge_live .pulseBadgeValue { color: #34E3B0; font-size: 15px; letter-spacing: .08em; }
+.pulseBadge_live { border-color: rgba(16,185,129,.35); }
+.pulseLiveDot { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 10px #10B981; }
+.pulseStats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pulseStat { min-width: 0; padding: 0 14px; border-left: 1px solid rgba(208,187,244,.16); }
+.pulseStat:first-child { padding-left: 0; border-left: 0; }
+.pulseStatValue { color: #fff; font-size: 24px; font-weight: 800; line-height: 1.15; white-space: nowrap; }
+.pulseStatLabel { margin-top: 3px; color: #b9b4c9; font-size: 13.5px; white-space: nowrap; }
+
+@media (max-width: 1190px) {
+  .pulseCard { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); padding: 20px 22px; }
+  .pulseInsight { padding-right: 22px; }
+  .pulseSide { padding-left: 22px; gap: 14px; }
+  .pulseSideTop { padding-bottom: 14px; }
+  .pulseSentence { font-size: 14px; }
+  .pulseStatValue { font-size: 20px; }
+  .pulseStatLabel { font-size: 12px; }
+  .pulseBadge { padding: 8px 12px; }
+  .pulseBadgeValue { font-size: 18px; }
+  .pulseBadgeLabel { font-size: 11.5px; }
+}
+@media (max-width: 840px) {
+  .pulseCard { grid-template-columns: minmax(0, 1fr); padding: 18px; }
+  .pulseInsight { padding-right: 0; }
+  .pulseSide { padding-left: 0; padding-top: 16px; margin-top: 16px; border-left: 0; border-top: 1px solid rgba(208,187,244,.16); }
+}
+@media (max-width: 610px) {
+  .pulseCard { padding: 16px 15px; margin-bottom: 11px; border-radius: 17px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .pulseEyebrow { font-size: 11.5px; margin-bottom: 9px; }
+  .pulseWave { width: 28px; height: 20px; }
+  .pulseHeadline { font-size: 22px; }
+  .pulseSentence { font-size: 13px; }
+  .pulseActions { gap: 9px; margin-top: 14px; }
+  .pulseCard .pulsePrimary, .pulseCard .pulseSecondary { flex: 1 1 140px; min-height: 44px; padding: 0 14px; font-size: 13.5px; }
+  .pulseSide { gap: 12px; padding-top: 13px; margin-top: 14px; }
+  .pulseSideTop { gap: 11px; padding-bottom: 12px; }
+  .pulseCam svg { width: 28px; height: 22px; }
+  .pulsePlatform { font-size: 15px; }
+  .pulseMeta { font-size: 12.5px; }
+  .pulseBadge { padding: 7px 10px; border-radius: 13px; }
+  .pulseBadgeValue { font-size: 16px; }
+  .pulseBadgeLabel { font-size: 11px; }
+  .pulseStat { padding: 0 10px; }
+  .pulseStatValue { font-size: 18px; }
+  .pulseStatLabel { font-size: 11.5px; }
+}
