@@ -9,7 +9,7 @@ BEGIN
 END $f$;
 -- test helpers only (schema t exists solely in the disposable rehearsal database)
 GRANT USAGE ON SCHEMA t TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION t.expect(text, boolean, text), t.ok(boolean, text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION t.expect(text, boolean, text), t.ok(boolean, text), t.v17() TO anon, authenticated, service_role;
 
 -- 1. anon: every write, truncate, lock and sequence change is denied
 BEGIN; SET LOCAL ROLE anon;
@@ -49,6 +49,20 @@ SELECT t.ok(NOT EXISTS (SELECT 1 FROM public.paid_sessions WHERE username = 'gra
 SELECT t.expect('DELETE FROM public.tips WHERE user_id = ''00000000-0000-0000-0000-00000000000b''', false, 'authenticated: DELETE of another user''s tips runs but RLS limits it');
 RESET ROLE;
 SELECT t.ok((SELECT count(*) FROM public.tips WHERE user_id = '00000000-0000-0000-0000-00000000000b') = 30, 'authenticated: another creator''s 30 tips are untouched');
+ROLLBACK;
+
+-- 2b. Postgres 17: MAINTAIN is gone for anon and authenticated (both tables)
+DO $v17$
+DECLARE r record;
+BEGIN
+  IF NOT t.v17() THEN RAISE NOTICE 'SKIP (Postgres < 17): MAINTAIN checks'; RETURN; END IF;
+  FOR r IN SELECT * FROM (VALUES ('anon','public.paid_sessions'), ('anon','public.tips'), ('authenticated','public.paid_sessions'), ('authenticated','public.tips')) v(role, tbl) LOOP
+    PERFORM t.ok(NOT has_table_privilege(r.role, r.tbl, 'MAINTAIN'), format('17: %s has no MAINTAIN on %s', r.role, r.tbl));
+  END LOOP;
+  PERFORM t.ok(has_table_privilege('service_role', 'public.paid_sessions', 'MAINTAIN') AND has_table_privilege('service_role', 'public.tips', 'MAINTAIN'), '17: service_role keeps MAINTAIN');
+END $v17$;
+BEGIN; SET LOCAL ROLE anon;
+SELECT CASE WHEN t.v17() THEN t.expect('LOCK TABLE public.tips IN ACCESS EXCLUSIVE MODE', true, '17: anon LOCK tips denied (MAINTAIN revoked)') END;
 ROLLBACK;
 
 -- 3. service_role unchanged

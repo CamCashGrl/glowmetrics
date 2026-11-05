@@ -39,4 +39,16 @@ RESET ROLE;
 SELECT t.ok(true, 'baseline: anon CAN take an ACCESS EXCLUSIVE lock on paid_sessions');
 ROLLBACK;
 
+-- Postgres 17 only: MAINTAIN alone (anon on tips holds no write privilege)
+-- allows an ACCESS EXCLUSIVE lock. (ANALYZE is not used as evidence: without
+-- the privilege Postgres only warns and skips the table, it does not fail.)
+DO $v17$
+BEGIN
+  IF NOT t.v17() THEN RAISE NOTICE 'SKIP (Postgres < 17): MAINTAIN baseline'; RETURN; END IF;
+  SET LOCAL ROLE anon;
+  LOCK TABLE public.tips IN ACCESS EXCLUSIVE MODE;
+  RESET ROLE;
+  RAISE NOTICE 'PASS: baseline (17): anon CAN take an ACCESS EXCLUSIVE lock on tips via MAINTAIN alone';
+END $v17$;
+
 SELECT t.assert_history_unchanged('baseline end (all rolled back)');
