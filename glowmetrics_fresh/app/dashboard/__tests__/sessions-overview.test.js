@@ -622,7 +622,8 @@ describe('Sessions workspace (corrective plan)', () => {
     expect(p.getAttribute('data-kind')).toBe('recap')
     expect(p.textContent).toMatch(/Your first recorded session/)
     expect(p.textContent).toMatch(/2 tips from 2 fans/)
-    expect(val('pulse-signal')).toBe('1') // recorded sessions; the driver card names Dan
+    expect(val('pulse-signal')).toBe('$10.00') // what was earned (Cara $4 + Dan $6), not a session count
+    expect(p.textContent).toMatch(/activity span/)
     expect(p.textContent).not.toMatch(/Dan/)
     expect(p.textContent).not.toMatch(/%/)
     expect(val('details-top')).toBe('Dan')
@@ -721,4 +722,12 @@ describe('Sessions workspace (corrective plan)', () => {
     fireEvent.click(toggle)
     expect(screen.getByTestId('today-stats').closest('[hidden]')).toBeNull()
   })
+})
+
+test('Pulse recap action: Live show → review it; imported history → import more', () => {
+  const { unmount } = renderTab({ tips: liveTips, shows: [{ ...show, isNew: false }], onImport: () => {} })
+  expect(screen.getByTestId('pulse-action').textContent).toMatch(/Review show/)
+  unmount()
+  renderTab({ tips: freeChat, onImport: () => {} })
+  expect(screen.getByTestId('pulse-action').textContent).toMatch(/Import more history/)
 })

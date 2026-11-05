@@ -824,7 +824,7 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
       {!tipsLoadComplete && <div data-testid="sessions-load-note" className={L.warning} style={{ marginBottom: 14 }}>Some of your history didn&apos;t finish loading. Sessions shows what loaded, and comparisons are paused until it does.</div>}
 
       {noData ? <Activation onImport={onImport} onStartLive={onStartLive} /> : <>
-        <SessionsPulse pick={pulse} tz={tz} topFan={pulseFan} hourly={pulseHourly} onOpen={openSession} onImport={onImport} sessionCount={filterSessionHistory(history, {}).length} />
+        <SessionsPulse pick={pulse} tz={tz} topFan={pulseFan} hourly={pulseHourly} onOpen={openSession} onImport={onImport} />
 
         <div className={L.workspace}>
           <aside className={L.leftRail}>

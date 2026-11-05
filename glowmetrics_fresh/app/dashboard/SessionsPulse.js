@@ -37,7 +37,7 @@ const PulseIcon = () => (
   </span>
 )
 
-export default function SessionsPulse({ pick, tz, topFan = null, hourly = null, onOpen, onImport = null, sessionCount = null }) {
+export default function SessionsPulse({ pick, tz, topFan = null, hourly = null, onOpen, onImport = null }) {
   if (!pick) return null
   const { kind, e } = pick
   let title, message, evidence, signalLabel, signalValue, action
@@ -63,11 +63,15 @@ export default function SessionsPulse({ pick, tz, topFan = null, hourly = null, 
   } else {
     const n = e.type === "private" ? e.chargeCount : e.tipCount
     title = pick.first ? "Your first recorded session" : "Your latest session"
-    message = `${pName(e.platforms[0])} ${typeWord(e)} on ${day(e.startTime, tz)} · ${n} ${unit(e, n)} from ${e.uniqueTippers} ${e.uniqueTippers === 1 ? "fan" : "fans"}${e.type === "live" ? ` over ${fmtDuration((e.durationMinutes || 0) * 60)}` : ""}.`
+    const span = e.type === "live" ? ` over ${fmtDuration((e.durationMinutes || 0) * 60)}`
+      : e.type === "private" ? ""
+      : e.durationUnknown ? "" : ` across a ~${Math.round(e.durationMinutes || 0)}-minute activity span`
+    message = `${pName(e.platforms[0])} ${typeWord(e)} on ${day(e.startTime, tz)}: ${n} ${unit(e, n)} from ${e.uniqueTippers} ${e.uniqueTippers === 1 ? "fan" : "fans"}${span}.`
     evidence = e.type === "live" ? "Recorded by Live Mode" : e.type === "private" ? "From imported private charges" : "Reconstructed from imported transactions"
-    // The driver card below already names the top contributor; the Pulse adds history context instead.
-    signalLabel = "Recorded sessions"; signalValue = sessionCount != null ? String(sessionCount) : "1"
-    action = onImport ? { label: "Import more history", onClick: onImport, secondary: true } : { label: "Open session", onClick: () => onOpen(e.id), secondary: true }
+    // Lead with what was earned and recorded (no session count as an "insight").
+    signalLabel = "Earned"; signalValue = fmtUsd(e.totalUSD)
+    // Live Mode creators review the show; imported history invites more history.
+    action = e.type !== "live" && onImport ? { label: "Import more history", onClick: onImport, secondary: true } : { label: e.type === "live" ? "Review show" : "Open session", onClick: () => onOpen(e.id), secondary: true }
   }
   return (
     <section data-testid="session-pulse" data-kind={kind} className={cx(L.glassFeature, L.pulse)} aria-label="Session Pulse">
