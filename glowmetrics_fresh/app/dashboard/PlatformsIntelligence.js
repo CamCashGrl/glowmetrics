@@ -12,6 +12,7 @@ import {
   formatHour,
 } from '../../lib/platformIntelligenceAnalytics'
 import { computeDataVaultStats } from './DashboardPreview'
+import PlatformsUnifiedRedesign from './PlatformsUnifiedRedesign'
 
 const C = {
   card: "#0d1322", card2: "#111829", border: "#1e2d45", border2: "#2a3f5f",
@@ -687,7 +688,7 @@ export default function PlatformsIntelligence({ analytics = null, tips = [], isP
           No platform has enough session data to analyse yet. Import tips from a platform and CamCash will build its intelligence from there.
         </Empty>
       ) : view === 'unified' ? (
-        <UnifiedView analytics={analytics} coverage={coverage} isPro={isPro} onOpenPlanner={onOpenPlanner} />
+        <PlatformsUnifiedRedesign analytics={analytics} tips={tips} isPro={isPro} onSelectPlatform={p => { setSelectedPlatform(p); setView('split') }} />
       ) : (
         <>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
