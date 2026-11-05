@@ -27,19 +27,19 @@ import { computeDataVaultStats } from './DashboardPreview'
 // positive revenue; cyan = information; violet/purple = intelligence,
 // premium, selected; pink = rare emphasis (Pro insight, special finding).
 // Neon appears as light in the environment, never as card fills.
-const CTA_GRADIENT = 'linear-gradient(90deg, #22E6D1 0%, #8B5CF6 52%, #FF3D9A 100%)'
-const CTA_GLOW = '0 0 24px rgba(139,92,246,0.22), 0 0 18px rgba(34,230,209,0.12)'
+const CTA_GRADIENT = 'linear-gradient(90deg, #16F4FF 0%, #7C5CFF 48%, #FF2BAE 100%)'
+const CTA_GLOW = '0 0 24px rgba(22,244,255,0.28), 0 0 34px rgba(255,43,174,0.26), 0 14px 34px rgba(0,0,0,0.45)'
 
 const C = {
-  bg: "#070914", card: "#0D1020", card2: "#12152A", border: "rgba(255,255,255,0.07)", border2: "rgba(255,255,255,0.10)",
-  white: "#F7F8FC", text: "#A8B0C3", muted: "#727D96", cell: "#CBD2DF",
-  cyan: "#23C7FF", teal: "#22E6D1", blue: "#23C7FF",
-  indigo: "#8B5CF6", purple: "#A855F7", pink: "#FF3D9A",
+  bg: "#050713", card: "#0D1126", card2: "#10142A", border: "rgba(255,255,255,0.07)", border2: "rgba(255,255,255,0.10)",
+  white: "#FFFFFF", text: "#D7D9EA", muted: "#8D93AA", cell: "#D7D9EA",
+  cyan: "#48E9FF", teal: "#16F4FF", blue: "#48E9FF",
+  indigo: "#7C5CFF", purple: "#D83DFF", pink: "#FF2BAE",
   green: "#32E6A1", red: "#FF5C7C",
 }
 
 const PLATFORM_ACCENT = {
-  chaturbate: C.purple, bongacams: C.pink, myfreecams: C.teal,
+  chaturbate: C.teal, bongacams: C.pink, myfreecams: C.indigo,
   camsoda: C.cyan, stripchat: C.indigo, flirt4free: C.pink,
 }
 export const accentFor = (p) => PLATFORM_ACCENT[(p || '').toLowerCase().trim()] || C.cyan
@@ -77,13 +77,13 @@ export function MetricStrip({ items }) {
     }}>
       {items.map((it, i) => (
         <div key={i} style={{ background: C.card, padding: '10px 12px', minWidth: 0 }}>
-          <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {it.label}
           </div>
           <div style={{ fontSize: 17, fontWeight: 700, color: it.color || C.white, marginTop: 2, lineHeight: 1.2 }}>
             {it.value}
           </div>
-          {it.sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{it.sub}</div>}
+          {it.sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{it.sub}</div>}
         </div>
       ))}
     </div>
@@ -100,7 +100,7 @@ function DataTable({ columns, rows }) {
             {columns.map((c, i) => (
               <th key={i} style={{
                 textAlign: c.align || 'right', padding: '8px 12px', background: C.card2,
-                color: C.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
                 textTransform: 'uppercase', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.border}`,
               }}>{c.label}</th>
             ))}
@@ -126,8 +126,8 @@ function DataTable({ columns, rows }) {
 function FactRow({ label, facts, accent = C.cyan }) {
   return (
     <div style={{ padding: '9px 12px', borderLeft: `2px solid ${accent}`, background: 'rgba(255,255,255,0.02)', borderRadius: '0 8px 8px 0' }}>
-      <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
-      <div style={{ fontSize: 13, color: C.white, fontWeight: 600, marginTop: 2 }}>{facts}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
+      <div style={{ fontSize: 13, color: C.white, fontWeight: 700, marginTop: 2 }}>{facts}</div>
     </div>
   )
 }
@@ -137,7 +137,7 @@ function Empty({ children }) {
 }
 
 function ProTag() {
-  return <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: C.pink, background: `${C.pink}14`, border: `1px solid ${C.pink}40`, borderRadius: 6, padding: '2px 7px', marginLeft: 8, verticalAlign: 'middle' }}>PRO</span>
+  return <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: C.pink, background: `${C.pink}14`, border: `1px solid ${C.pink}40`, borderRadius: 6, padding: '2px 7px', marginLeft: 8, verticalAlign: 'middle' }}>PRO</span>
 }
 
 function LockedRow({ text }) {
@@ -477,7 +477,7 @@ function Badge({ kind }) {
         background: 'rgba(255,255,255,0.025)',
         padding: '4px 9px',
         fontSize: 9,
-        fontWeight: 600,
+        fontWeight: 700,
         letterSpacing: '0.09em',
         textTransform: 'uppercase',
         color: C.text,
@@ -492,7 +492,7 @@ function Badge({ kind }) {
 // The one canonical glass surface. Thin low-opacity border, inset top
 // highlight, soft drop shadow. `accent` is for the selected state only;
 // `glow` adds ambient light.
-const GLASS_BG = 'linear-gradient(145deg, rgba(18,21,42,0.74), rgba(7,9,20,0.92))'
+const GLASS_BG = 'linear-gradient(145deg, rgba(16,20,42,0.78), rgba(8,11,26,0.90))'
 const GLASS_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.045), 0 22px 56px rgba(0,0,0,0.30)'
 
 function Glass({ children, style, accent, glow, className, onClick, ...rest }) {
@@ -503,10 +503,10 @@ function Glass({ children, style, accent, glow, className, onClick, ...rest }) {
       style={{
         position: 'relative',
         overflow: 'hidden',
-        borderRadius: 22,
+        borderRadius: 20,
         padding: 24,
         minWidth: 0,
-        border: `1px solid ${accent ? `${accent}66` : 'rgba(255,255,255,0.055)'}`,
+        border: `1px solid ${accent ? `${accent}cc` : 'rgba(255,255,255,0.09)'}`,
         background: GLASS_BG,
         backdropFilter: 'blur(30px)',
         WebkitBackdropFilter: 'blur(30px)',
@@ -541,16 +541,16 @@ function Glass({ children, style, accent, glow, className, onClick, ...rest }) {
 }
 
 function Label({ children, style }) {
-  return <div style={{ fontSize: 18, fontWeight: 600, color: C.white, letterSpacing: '-0.02em', ...style }}>{children}</div>
+  return <div style={{ fontSize: 18, fontWeight: 700, color: C.white, letterSpacing: '-0.02em', ...style }}>{children}</div>
 }
 
-const eyebrow = { fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase', color: C.muted, lineHeight: 1.2 }
+const eyebrow = { fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted, lineHeight: 1.2 }
 
 function BrandButton({ children, onClick, style }) {
   return (
     <button type="button" onClick={onClick} className="pl-brand" style={{
-      background: CTA_GRADIENT, border: 'none', borderRadius: 12, padding: '0 20px', minHeight: 44,
-      fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', color: C.white, cursor: 'pointer', whiteSpace: 'nowrap',
+      background: CTA_GRADIENT, border: 'none', borderRadius: 18, padding: '0 22px', minHeight: 46,
+      fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', color: C.white, cursor: 'pointer', whiteSpace: 'nowrap',
       boxShadow: CTA_GLOW, ...style,
     }}>{children}</button>
   )
@@ -766,7 +766,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
   const accent = accentFor(leader.platform)
   const pill = (color) => ({
     display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 13px',
-    fontSize: 12.5, fontWeight: 600, color, background: `${color}14`, boxShadow: `inset 0 0 0 1px ${color}38`,
+    fontSize: 12.5, fontWeight: 700, color, background: `${color}14`, boxShadow: `inset 0 0 0 1px ${color}38`,
   })
 
   return (
@@ -775,13 +775,13 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
       style={{
         position: 'relative', overflow: 'hidden', borderRadius: 28, padding: '38px 42px 34px',
         border: '1px solid rgba(255,255,255,0.065)',
-        background: 'linear-gradient(145deg, rgba(16,19,38,0.92), rgba(6,8,18,0.98))',
+        background: 'linear-gradient(145deg, rgba(13,17,38,0.92), rgba(5,7,19,0.98))',
         backdropFilter: 'blur(34px)', WebkitBackdropFilter: 'blur(34px)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.055), 0 34px 84px rgba(0,0,0,0.42)',
       }}
     >
-      <span aria-hidden="true" className="pl-drift" style={{ position: 'absolute', left: -150, top: -155, width: 430, height: 430, borderRadius: '50%', background: 'rgba(35,199,255,0.12)', filter: 'blur(120px)', pointerEvents: 'none' }} />
-      <span aria-hidden="true" className="pl-drift pl-drift-b" style={{ position: 'absolute', right: -80, top: -80, width: 390, height: 390, borderRadius: '50%', background: 'rgba(139,92,246,0.12)', filter: 'blur(120px)', pointerEvents: 'none' }} />
+      <span aria-hidden="true" className="pl-drift" style={{ position: 'absolute', left: -150, top: -155, width: 430, height: 430, borderRadius: '50%', background: 'rgba(72,233,255,0.12)', filter: 'blur(120px)', pointerEvents: 'none' }} />
+      <span aria-hidden="true" className="pl-drift pl-drift-b" style={{ position: 'absolute', right: -80, top: -80, width: 390, height: 390, borderRadius: '50%', background: 'rgba(124,92,255,0.12)', filter: 'blur(120px)', pointerEvents: 'none' }} />
       <span aria-hidden="true" style={{ position: 'absolute', right: '16%', bottom: -190, width: 320, height: 320, borderRadius: '50%', background: `${accent}12`, filter: 'blur(115px)', pointerEvents: 'none' }} />
 
       <div className="pl-hero-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: daily ? 'minmax(0,0.86fr) minmax(0,1.14fr)' : 'minmax(0,1fr) 300px', gap: 48, alignItems: 'center' }}>
@@ -791,7 +791,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
             <span style={eyebrow}>Platform pulse</span>
           </div>
 
-          <div style={{ marginTop: 16, fontSize: 44, fontWeight: 600, color: C.white, letterSpacing: '-0.04em', lineHeight: 1.06 }}>
+          <div style={{ marginTop: 16, fontSize: 44, fontWeight: 700, color: C.white, letterSpacing: '-0.04em', lineHeight: 1.06 }}>
             {multi ? <>{leader.platform} <span style={{ color: C.text }}>is leading</span></> : <>Everything on <span style={{ color: C.text }}>{leader.platform}</span></>}
           </div>
 
@@ -815,7 +815,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
 
           {learning.isLearning && (
             <div style={{ fontSize: 13.5, color: C.text, marginTop: 18, lineHeight: 1.65, maxWidth: 510 }}>
-              <span style={{ color: C.white, fontWeight: 600 }}>CamCash is still learning your platforms.</span>{' '}
+              <span style={{ color: C.white, fontWeight: 700 }}>CamCash is still learning your platforms.</span>{' '}
               {[
                 learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
                 learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
@@ -839,7 +839,7 @@ function PlatformPulse({ comparison, snapshot, recap, learning, newFans, daily }
                     +<Counter value={recap.earned} />
                   </div>
                   <div style={{ fontSize: 12.5, color: C.text, marginTop: 5 }}>
-                    on <span style={{ color: C.white, fontWeight: 600 }}>{recap.platform}</span> · {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
+                    on <span style={{ color: C.white, fontWeight: 700 }}>{recap.platform}</span> · {plural(recap.tips, 'tip')} from {plural(recap.fans, 'fan')}
                   </div>
                   {recap.tookLead && <div style={{ fontSize: 12.5, color: C.purple, marginTop: 4 }}>{recap.platform} moved into the lead</div>}
                 </div>
@@ -904,11 +904,11 @@ function LatestStream({ recap, tz, multi }) {
     <div className="pl-stream-rail" style={{
       borderRadius: 18, padding: '18px 22px',
       border: '1px solid rgba(255,255,255,0.04)',
-      background: 'linear-gradient(90deg, rgba(34,230,209,0.035), rgba(255,255,255,0.015) 48%, rgba(139,92,246,0.025))',
+      background: 'linear-gradient(90deg, rgba(22,244,255,0.035), rgba(255,255,255,0.015) 48%, rgba(124,92,255,0.025))',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>Since your last stream</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>Since your last stream</span>
         <span style={{ fontSize: 12, color: C.muted }}>{streamWhen(recap.endTime, tz)}</span>
       </div>
       <div className="pl-rail-items" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 0' }}>
@@ -918,7 +918,7 @@ function LatestStream({ recap, tz, multi }) {
               <Ico name={it.icon} size={16} />
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, color: it.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: it.color, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                 {it.value}{it.label && <span style={{ fontWeight: 400, color: C.muted }}> {it.label}</span>}
               </div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{it.sub}</div>
@@ -958,8 +958,8 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark 
       style={{
         padding: '22px 24px 20px',
         background: leading
-          ? `radial-gradient(circle at 4% -8%, ${accent}1f, transparent 52%), linear-gradient(150deg, rgba(15,18,36,0.78), rgba(7,9,20,0.92))`
-          : 'linear-gradient(150deg, rgba(15,18,36,0.72), rgba(7,9,20,0.90))',
+          ? `radial-gradient(circle at 4% -8%, ${accent}1f, transparent 52%), linear-gradient(150deg, rgba(13,17,38,0.78), rgba(5,7,19,0.92))`
+          : 'linear-gradient(150deg, rgba(13,17,38,0.72), rgba(5,7,19,0.90))',
         ...(selected ? {} : { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.035), 0 16px 42px rgba(0,0,0,0.23)' }),
       }}
     >
@@ -969,7 +969,7 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark 
         <PlatformMark platform={row.platform} />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: C.white, letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: C.white, letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
             {fresh && <span title={BADGE_HELP.fresh} className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.teal, boxShadow: `0 0 8px ${C.teal}`, flexShrink: 0 }} />}
           </div>
           {shownBadges.length > 0 && <div style={{ marginTop: 6 }}>{shownBadges.map(b => <Badge key={b} kind={b} />)}</div>}
@@ -981,7 +981,7 @@ function PlatformCard({ row, extras, badges, selected, onSelect, leading, spark 
           <div style={{ fontSize: 34, fontWeight: 700, color: C.white, letterSpacing: '-0.045em', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
             <Counter value={row.earnings} />
           </div>
-          <div style={{ fontSize: 13, color: accent, fontWeight: 600, marginTop: 9 }}>{row.earningsPercent}% of earnings</div>
+          <div style={{ fontSize: 13, color: accent, fontWeight: 700, marginTop: 9 }}>{row.earningsPercent}% of earnings</div>
         </div>
         {hasSpark && (
           <div style={{ width: '42%', maxWidth: 150, flexShrink: 0, marginBottom: -2 }}>
@@ -1095,7 +1095,7 @@ function ComparisonTeaser({ comparison, anchor, onUpgrade }) {
           <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 15 }}>
               <span style={{ color: C.white, fontWeight: 700, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><PlatformCell platform={a.platform} /></span>
-              <span style={{ color: C.white, fontWeight: 800, whiteSpace: 'nowrap' }}>{fmt$(a.earnings)}{a.usdPerHour > 0 && a.rateHours > 0 ? <span style={{ color: C.text, fontWeight: 600 }}> · {fmt$(a.usdPerHour)}/hr</span> : null}</span>
+              <span style={{ color: C.white, fontWeight: 800, whiteSpace: 'nowrap' }}>{fmt$(a.earnings)}{a.usdPerHour > 0 && a.rateHours > 0 ? <span style={{ color: C.text, fontWeight: 700 }}> · {fmt$(a.usdPerHour)}/hr</span> : null}</span>
             </div>
             {others.map(p => (
               <div key={p.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 15 }}>
@@ -1124,7 +1124,7 @@ function MonthlyHistory({ months, platforms }) {
   return (
     <Glass>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <Label>Platform history <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>· revenue split by month</span></Label>
+        <Label>Platform history <span style={{ fontSize: 13, color: C.muted, fontWeight: 700 }}>· revenue split by month</span></Label>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {platforms.map(p => <span key={p} style={{ fontSize: 12, color: C.text }}><PlatformCell platform={p} /></span>)}
         </div>
@@ -1193,7 +1193,7 @@ function MoneyBars({ comparison }) {
                     minWidth: 42,
                     fontSize: 14,
                     color: C.white,
-                    fontWeight: 600,
+                    fontWeight: 700,
                     textAlign: 'right',
                   }}
                 >
@@ -1241,7 +1241,7 @@ function IntelligenceArea({ comparison, multi, noticedProps }) {
       style={{
         padding: '30px 30px 28px',
         background:
-          'linear-gradient(145deg, rgba(14,17,34,0.78), rgba(7,9,20,0.91))',
+          'linear-gradient(145deg, rgba(13,17,38,0.78), rgba(5,7,19,0.91))',
       }}
     >
       <span
@@ -1253,7 +1253,7 @@ function IntelligenceArea({ comparison, multi, noticedProps }) {
           width: 380,
           height: 380,
           borderRadius: '50%',
-          background: 'rgba(139,92,246,0.08)',
+          background: 'rgba(124,92,255,0.08)',
           filter: 'blur(115px)',
           pointerEvents: 'none',
         }}
@@ -1293,8 +1293,8 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
   const [lead, ...rest] = shown
 
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', minWidth: 0, borderRadius: 18, padding: '2px 0 2px 26px', borderLeft: '1px solid rgba(139,92,246,0.22)' }}>
-      <span aria-hidden="true" style={{ position: 'absolute', left: -80, top: -70, width: 220, height: 220, borderRadius: '50%', background: 'rgba(139,92,246,0.10)', filter: 'blur(85px)', pointerEvents: 'none' }} />
+    <div style={{ position: 'relative', overflow: 'hidden', minWidth: 0, borderRadius: 18, padding: '2px 0 2px 26px', borderLeft: '1px solid rgba(124,92,255,0.22)' }}>
+      <span aria-hidden="true" style={{ position: 'absolute', left: -80, top: -70, width: 220, height: 220, borderRadius: '50%', background: 'rgba(124,92,255,0.10)', filter: 'blur(85px)', pointerEvents: 'none' }} />
 
       <div style={{ position: 'relative' }}>
         <div style={{ ...eyebrow, color: C.text, marginBottom: 17 }}>
@@ -1312,10 +1312,10 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
             {lead && (
               <div className="pl-chip" style={{
                 display: 'flex', alignItems: 'flex-start', gap: 14, borderRadius: 16, padding: '16px 18px', maxWidth: 680,
-                background: 'linear-gradient(135deg, rgba(139,92,246,0.11), rgba(34,230,209,0.035))',
-                boxShadow: 'inset 0 0 0 1px rgba(139,92,246,0.20)',
+                background: 'linear-gradient(135deg, rgba(124,92,255,0.11), rgba(22,244,255,0.035))',
+                boxShadow: 'inset 0 0 0 1px rgba(124,92,255,0.20)',
               }}>
-                <span style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(139,92,246,0.16)', color: C.purple }}>
+                <span style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(124,92,255,0.16)', color: C.purple }}>
                   <Ico name="bars" size={16} />
                 </span>
                 <span style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.6, color: C.white, letterSpacing: '-0.01em' }}>{lead}</span>
@@ -1335,11 +1335,11 @@ function Noticed({ noticed, cross, isPro, onUpgrade, multi }) {
             {freeTeasers.slice(0, 2).map((c, i) => (
               <div key={c.id} style={{ marginTop: lead || i ? 20 : 0, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.045)', maxWidth: 680 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: C.pink }}>✦ PRO INSIGHT</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', color: C.pink }}>✦ PRO INSIGHT</span>
                   <span aria-hidden="true" style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
                 </div>
                 <div style={{ fontSize: 14, color: C.white, marginTop: 7, lineHeight: 1.6 }}>{c.teaser}</div>
-                <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 7, padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.pink }}>
+                <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 7, padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.pink }}>
                   {c.cta} →
                 </button>
               </div>
@@ -1378,10 +1378,10 @@ function Comparison({ comparison, extras }) {
     const finite = comparison.map(c.get).filter(v => v !== null && Number.isFinite(v))
     return finite.length > 1 ? Math.max(...finite) : null
   })
-  const th = { textAlign: 'right', padding: '0 18px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', verticalAlign: 'bottom' }
+  const th = { textAlign: 'right', padding: '0 18px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, whiteSpace: 'nowrap', verticalAlign: 'bottom' }
 
   return (
-    <Glass style={{ padding: '22px 6px 8px', background: 'linear-gradient(145deg, rgba(14,17,34,0.7), rgba(7,9,20,0.9))' }}>
+    <Glass style={{ padding: '22px 6px 8px', background: 'linear-gradient(145deg, rgba(13,17,38,0.7), rgba(5,7,19,0.9))' }}>
       <div style={{ ...eyebrow, padding: '0 24px 18px' }}>Platform comparison</div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760, fontVariantNumeric: 'tabular-nums' }}>
@@ -1428,7 +1428,7 @@ function Comparison({ comparison, extras }) {
 function ShareShift({ shift }) {
   return (
     <Glass>
-      <Label style={{ marginBottom: 14 }}>Revenue split <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>· last 30 days vs the 30 before</span></Label>
+      <Label style={{ marginBottom: 14 }}>Revenue split <span style={{ fontSize: 13, color: C.muted, fontWeight: 700 }}>· last 30 days vs the 30 before</span></Label>
       <div style={{ display: 'grid', gap: 7 }}>
         {shift.map(r => (
           <div key={r.platform} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 70px 70px 80px', gap: 10, fontSize: 12.5, alignItems: 'center', fontVariantNumeric: 'tabular-nums' }}>
@@ -1458,12 +1458,12 @@ function UnlockPanel({ findings, platforms, hiddenTipCount, supporters, hasPlatf
   ].filter(Boolean)
   if (items.length === 0) return null
   return (
-    <div style={{ borderRadius: 20, padding: 28, position: 'relative', overflow: 'hidden', border: '1px solid rgba(167,139,250,0.14)', background: GLASS_BG, boxShadow: GLASS_SHADOW }}>
-      <div aria-hidden style={{ position: 'absolute', left: -80, bottom: -110, width: 280, height: 280, borderRadius: '50%', background: 'rgba(139,92,246,0.14)', filter: 'blur(100px)', pointerEvents: 'none' }} />
+    <div style={{ borderRadius: 20, padding: 28, position: 'relative', overflow: 'hidden', border: '1px solid rgba(124,92,255,0.14)', background: GLASS_BG, boxShadow: GLASS_SHADOW }}>
+      <div aria-hidden style={{ position: 'absolute', left: -80, bottom: -110, width: 280, height: 280, borderRadius: '50%', background: 'rgba(124,92,255,0.14)', filter: 'blur(100px)', pointerEvents: 'none' }} />
       <div style={{ position: 'relative', display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ flex: '1 1 380px', minWidth: 0 }}>
           <div style={{ ...eyebrow, marginBottom: 12 }}>Your full picture</div>
-          <div style={{ fontSize: 22, fontWeight: 600, color: C.white, letterSpacing: '-0.025em' }}>It&apos;s already in your account</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.white, letterSpacing: '-0.025em' }}>It&apos;s already in your account</div>
           <div style={{ fontSize: 13.5, color: C.text, marginTop: 6, lineHeight: 1.55 }}>
             Everything below comes from data you&apos;ve already imported. It&apos;s all there when you upgrade, with no re-upload needed.
           </div>
@@ -1518,11 +1518,11 @@ function SinceLastVisit({ visit, tz }) {
     )
   }
   return (
-    <div className="pl-chip" style={{ borderRadius: 16, padding: '14px 20px', border: '1px solid rgba(34,230,209,0.12)', background: 'linear-gradient(90deg, rgba(34,230,209,0.06), rgba(255,255,255,0.02) 55%)' }}>
+    <div className="pl-chip" style={{ borderRadius: 16, padding: '14px 20px', border: '1px solid rgba(22,244,255,0.12)', background: 'linear-gradient(90deg, rgba(22,244,255,0.06), rgba(255,255,255,0.02) 55%)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <span className="pl-live" style={{ width: 6, height: 6, borderRadius: 3, background: C.teal, boxShadow: `0 0 10px ${C.teal}` }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.white }}>Since your last visit</span>
-        <span style={{ fontSize: 22, fontWeight: 600, color: C.teal, letterSpacing: '-0.025em', fontVariantNumeric: 'tabular-nums' }}>+<Counter value={visit.totalUSD} /></span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.white }}>Since your last visit</span>
+        <span style={{ fontSize: 22, fontWeight: 700, color: C.teal, letterSpacing: '-0.025em', fontVariantNumeric: 'tabular-nums' }}>+<Counter value={visit.totalUSD} /></span>
         <span style={{ fontSize: 13, color: C.text }}>
           {plural(visit.tips, 'tip')}{visit.newFans ? ` · ${plural(visit.newFans, 'new fan')}` : ''}
           {visit.platforms.length > 1 ? ` · ${visit.platforms.map(p => `${p.platform} +${fmt$(p.usd)}`).join(' · ')}` : ` on ${visit.platforms[0].platform}`}
@@ -1581,11 +1581,11 @@ function PlatformDetail({ analytics, platformName, isPro, extras, onNavigate, de
   ]
   return (
     <div ref={detailRef} style={{ scrollMarginTop: 16 }}>
-      <Glass accent={accent} style={{ padding: '20px 22px 22px', marginTop: 4, background: 'linear-gradient(145deg, rgba(13,16,32,0.82), rgba(7,9,20,0.94))' }}>
+      <Glass accent={accent} style={{ padding: '20px 22px 22px', marginTop: 4, background: 'linear-gradient(145deg, rgba(13,16,32,0.82), rgba(5,7,19,0.94))' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
             <PlatformMark platform={platformName} size={34} />
-            <span style={{ fontSize: 18, fontWeight: 600, color: C.white, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{platformName} in detail</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: C.white, letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{platformName} in detail</span>
             {extras?.biggestTip > 0 && <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>· biggest tip {fmt$(extras.biggestTip)} · {plural(extras.uniqueFans, 'fan')}</span>}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1622,7 +1622,7 @@ function SectionHead({ icon, title, note, right }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', margin: '4px 2px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 19, fontWeight: 600, color: C.white, letterSpacing: '-0.02em' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 14, fontWeight: 800, color: C.white, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
           <span style={{ color: C.teal, display: 'inline-flex' }}><Ico name={icon} size={18} /></span>{title}
         </span>
         {note && <span style={{ fontSize: 12.5, color: C.muted }}>{note}</span>}
@@ -1639,8 +1639,8 @@ function PulseCard({ row, extras, badges, selected, onSelect, leading, spark }) 
   const hasSpark = Boolean(spark && spark.some(v => v > 0))
   const stat = (label, value, title) => (
     <div style={{ minWidth: 0 }} title={title}>
-      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 600, color: C.white, marginTop: 4, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{value}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.white, marginTop: 4, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{value}</div>
     </div>
   )
   return (
@@ -1654,14 +1654,14 @@ function PulseCard({ row, extras, badges, selected, onSelect, leading, spark }) 
       style={{
         padding: '18px 20px 16px',
         background: leading
-          ? `radial-gradient(circle at 4% -8%, ${accent}22, transparent 55%), linear-gradient(150deg, rgba(15,18,36,0.78), rgba(7,9,20,0.92))`
-          : 'linear-gradient(150deg, rgba(15,18,36,0.72), rgba(7,9,20,0.90))',
+          ? `radial-gradient(circle at 4% -8%, ${accent}22, transparent 55%), linear-gradient(150deg, rgba(13,17,38,0.78), rgba(5,7,19,0.92))`
+          : 'linear-gradient(150deg, rgba(13,17,38,0.72), rgba(5,7,19,0.90))',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <PlatformMark platform={row.platform} size={28} />
-          <span style={{ fontSize: 16, fontWeight: 600, color: C.white, letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.white, letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
           {fresh && <span title={BADGE_HELP.fresh} className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.teal, boxShadow: `0 0 8px ${C.teal}`, flexShrink: 0 }} />}
         </div>
         <span style={{ fontSize: 12, padding: '3px 9px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', whiteSpace: 'nowrap' }}>
@@ -1685,7 +1685,7 @@ function PulseCard({ row, extras, badges, selected, onSelect, leading, spark }) 
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.04)', fontSize: 12.5, color: C.muted }}>
-        <span style={{ color: accent, fontWeight: 600 }}>{row.earningsPercent}% of earnings</span>
+        <span style={{ color: accent, fontWeight: 700 }}>{row.earningsPercent}% of earnings</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: selected ? accent : C.text }}>
           {selected ? 'Viewing' : 'View details'} <Ico name="arrow" size={12} style={selected ? { transform: 'rotate(90deg)' } : undefined} />
         </span>
@@ -1724,7 +1724,7 @@ function FindingCards({ noticed, cross, isPro, onUpgrade, multi }) {
               <span style={{ width: 30, height: 30, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: `${color}1f`, color }}>
                 <Ico name={FINDING_ICON[it.id] || 'sparkle'} size={16} />
               </span>
-              {lead && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '0.14em', color: C.pink, padding: '3px 8px', borderRadius: 6, background: `${C.pink}14`, boxShadow: `inset 0 0 0 1px ${C.pink}40` }}>TOP FINDING</span>}
+              {lead && <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', color: C.pink, padding: '3px 8px', borderRadius: 6, background: `${C.pink}14`, boxShadow: `inset 0 0 0 1px ${C.pink}40` }}>TOP FINDING</span>}
             </div>
             <div style={{ fontSize: 14, lineHeight: 1.55, color: lead ? C.white : C.cell, fontWeight: lead ? 500 : 400 }}>{it.text}</div>
           </Glass>
@@ -1733,11 +1733,11 @@ function FindingCards({ noticed, cross, isPro, onUpgrade, multi }) {
       {teasers.map((c, i) => (
         <Glass key={c.id} className="pl-chip" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: C.pink }}>PRO INSIGHT</span>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', color: C.pink }}>PRO INSIGHT</span>
             <span aria-hidden="true" style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
           </div>
           <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55 }}>{c.teaser}</div>
-          <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 'auto', padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.pink, textAlign: 'left' }}>
+          <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 'auto', padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.pink, textAlign: 'left' }}>
             {c.cta} →
           </button>
         </Glass>
@@ -1796,7 +1796,7 @@ function TrendsSection({ daily, comparison }) {
                   <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{dayLabel(daily.days[hover])}</div>
                   {sums.map(x => (
                     <div key={x.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
-                      <span style={{ color: x.color }}>{x.platform}</span><span style={{ color: C.white, fontWeight: 600 }}>{fmt$(x.values[hover])}</span>
+                      <span style={{ color: x.color }}>{x.platform}</span><span style={{ color: C.white, fontWeight: 700 }}>{fmt$(x.values[hover])}</span>
                     </div>
                   ))}
                 </div>
@@ -1819,7 +1819,7 @@ function TrendsSection({ daily, comparison }) {
             <div key={x.platform} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto', gap: 10, alignItems: 'baseline', fontSize: 13.5, fontVariantNumeric: 'tabular-nums' }}>
               <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: x.color, boxShadow: `0 0 8px ${x.color}`, alignSelf: 'center' }} />
               <span style={{ color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.platform}</span>
-              <span style={{ color: C.white, fontWeight: 600 }}>{fmt$(x.sum)}</span>
+              <span style={{ color: C.white, fontWeight: 700 }}>{fmt$(x.sum)}</span>
               <span style={{ fontSize: 12 }}><TrendCell trend={x.row.trend} /></span>
             </div>
           ))}
@@ -1853,8 +1853,8 @@ function TimingSection({ analytics, timeIntel, comparison, isPro }) {
     : []
   const row = (label, value) => (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: C.white, marginTop: 4 }}>{value}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.white, marginTop: 4 }}>{value}</div>
     </div>
   )
   return (
@@ -1882,7 +1882,7 @@ function TimingSection({ analytics, timeIntel, comparison, isPro }) {
         <div style={eyebrow}>{win ? 'Best window' : 'Early signal'}</div>
         {bestH !== null ? (
           <>
-            <div style={{ fontSize: 22, fontWeight: 600, color: C.white, letterSpacing: '-0.02em', marginTop: 10 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.white, letterSpacing: '-0.02em', marginTop: 10 }}>
               {(win?.localDay || (early?.localDay !== 'Any day' ? early?.localDay : null)) ? `${win?.localDay || early.localDay} · ` : ''}around {formatHour(bestH)}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 14, marginTop: 14 }}>
@@ -1901,7 +1901,7 @@ function TimingSection({ analytics, timeIntel, comparison, isPro }) {
               ? <div style={{ fontSize: 13, color: C.muted }}>No other platform has a timing pattern yet.</div>
               : others.map(x => (
                 <div key={x.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13.5, padding: '5px 0' }}>
-                  <span style={{ color: accentFor(x.platform), fontWeight: 600 }}>{x.platform}</span>
+                  <span style={{ color: accentFor(x.platform), fontWeight: 700 }}>{x.platform}</span>
                   <span style={{ color: C.text }}>{[x.t.bestDay?.day, x.t.hour ? `around ${formatHour(x.t.hour.hour)}` : null].filter(Boolean).join(' · ')}</span>
                 </div>
               ))
@@ -1988,6 +1988,19 @@ export default function PlatformsIntelligence({
       <style>{`
 .pl-root {
   max-width: 100%;
+  position: relative;
+  isolation: isolate;
+}
+
+.pl-root::before {
+  content: '';
+  position: absolute;
+  inset: -40px -40px 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(22,244,255,0.10), transparent 34%),
+    radial-gradient(circle at 88% 30%, rgba(255,43,174,0.10), transparent 36%);
 }
 
 .pl-root section,
@@ -2011,7 +2024,7 @@ export default function PlatformsIntelligence({
 
 .pl-click:hover {
   transform: translateY(-2px);
-  border-color: rgba(139,92,246,.20) !important;
+  border-color: rgba(124,92,255,.20) !important;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,.05),
     0 24px 60px rgba(0,0,0,.32) !important;
@@ -2033,13 +2046,13 @@ export default function PlatformsIntelligence({
 .pl-brand:hover {
   transform: translateY(-1px);
   box-shadow:
-    0 0 30px rgba(34,230,209,.28),
-    0 0 34px rgba(255,61,154,.20) !important;
+    0 0 30px rgba(22,244,255,.28),
+    0 0 34px rgba(255,43,174,.20) !important;
 }
 
 @keyframes plGlow {
   0% { text-shadow: 0 0 0 transparent; }
-  30% { text-shadow: 0 0 18px rgba(34,230,209,.55); }
+  30% { text-shadow: 0 0 18px rgba(22,244,255,.55); }
   100% { text-shadow: 0 0 0 transparent; }
 }
 
@@ -2257,10 +2270,10 @@ export default function PlatformsIntelligence({
           <h1
             style={{
               margin: 0,
-              fontSize: 32,
-              fontWeight: 600,
+              fontSize: 36,
+              fontWeight: 800,
               color: C.white,
-              letterSpacing: '-0.035em',
+              letterSpacing: '-0.04em',
               lineHeight: 1.08,
             }}
           >
@@ -2306,7 +2319,7 @@ export default function PlatformsIntelligence({
               )} />
             {learning.isLearning && (
               <div style={{ fontSize: 13, color: C.text, margin: '-4px 2px 12px', lineHeight: 1.55 }}>
-                <span style={{ color: C.white, fontWeight: 600 }}>CamCash is still learning your platforms.</span>{' '}
+                <span style={{ color: C.white, fontWeight: 700 }}>CamCash is still learning your platforms.</span>{' '}
                 {[
                   learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
                   learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
