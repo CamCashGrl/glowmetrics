@@ -211,7 +211,8 @@ describe('Free Sessions entitlement: visible history, selected-session details, 
   const bucketTotals = () => screen.getAllByTestId('bucket-row').reduce((a, r) => {
     const td = r.querySelectorAll('td'); return { usd: a.usd + money(td[1].textContent), tips: a.tips + Number(td[3].textContent) }
   }, { usd: 0, tips: 0 })
-  const fanNames = () => screen.getAllByTestId('fan-driver').map((f) => f.querySelector('span[style*="font-weight: 900"]')?.textContent || f.textContent).sort()
+  // name element located by test id (was: an inline font-weight style selector, which the Sessions restyle no longer uses)
+  const fanNames = () => screen.getAllByTestId('fan-driver').map((f) => f.querySelector('[data-testid="fan-driver-name"]')?.textContent || f.textContent).sort()
 
   test('Free: restricted sessions are not listed; the straddling session shows only in-window tips in details, buckets and contributors', async () => {
     const x = await openSessions('free')
@@ -225,12 +226,12 @@ describe('Free Sessions entitlement: visible history, selected-session details, 
     expect(screen.getByTestId('details-total').textContent).toBe('$8.00') // $5 + $3, not the hidden $10
     expect(screen.getByTestId('details-vs-partial').textContent).toMatch(/started before your Free history window/)
 
-    await click(screen.getByTestId('details-tab-timeline'))
+    await click(screen.getByTestId('details-more-intervals')) // was: details-tab-timeline (tabs replaced by sections)
     const b = bucketTotals()
     expect(b.usd).toBeCloseTo(8, 2)
     expect(b.tips).toBe(2)
 
-    await click(screen.getByTestId('details-tab-fans'))
+    // contributors are always visible (was: click details-tab-fans)
     expect(fanNames()).toEqual(['vis_a', 'vis_b'])
 
     for (const name of ['straddle_hidden_fan', 'restricted_only_fan']) expect(document.body.innerHTML).not.toContain(name)
@@ -245,11 +246,11 @@ describe('Free Sessions entitlement: visible history, selected-session details, 
 
     await select(x.straddleProId)
     expect(screen.getByTestId('details-total').textContent).toBe('$18.00')
-    await click(screen.getByTestId('details-tab-timeline'))
+    await click(screen.getByTestId('details-more-intervals')) // was: details-tab-timeline
     const b = bucketTotals()
     expect(b.usd).toBeCloseTo(18, 2)
     expect(b.tips).toBe(3)
-    await click(screen.getByTestId('details-tab-fans'))
+    // contributors are always visible (was: click details-tab-fans)
     expect(fanNames()).toEqual(['straddle_hidden_fan', 'vis_a', 'vis_b'])
   })
 })

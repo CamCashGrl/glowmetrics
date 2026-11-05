@@ -18,7 +18,7 @@ import { platformDisplayName, platformColor } from "../../lib/constants"
 import {
   SUPPORTED_PLATFORMS, buildSessionHistory, filterSessionHistory, dailySessionStats,
   liveSessionSnapshot, withTodayDerived, todaySignal, vsYesterdayByNow, todayCumulative,
-  timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, sessionCompletenessMap, matchPlannedStream, sessionsMode, overallSessionStats, sessionPerformance, overallSignal, fanKey,
+  timeAgo, sessionBuckets, sessionFanDrivers, sessionVsTypical, sessionCompletenessMap, matchPlannedStream, sessionsMode, overallSessionStats, sessionPerformance, overallSignal, fanKey, liveVerifiedHourly,
 } from "../../lib/sessions/normalize"
 import { fmtUsd, fmtDuration } from "./LatestShows"
 import { card, HERO_GRADIENT } from "./CommandCenter"
@@ -26,6 +26,9 @@ import { PlatformCell } from "./PlatformsIntelligence"
 import { Pill, PlatChip } from "./StreamPlanner"
 import { PrimaryPlatformControl } from "./PrimaryPlatformPrompt"
 import { BucketChart, BucketPanel, PlatformTile } from "./SessionsBuckets"
+import SessionsPulse, { pickPulse } from "./SessionsPulse"
+import L from "./SessionsLuxury.module.css"
+import { summarizeWindowExclusion } from "../../lib/analytics"
 
 const C = {
   cyan: "#22D3EE", green: "#10B981", gold: "#F59E0B", pink: "#EC4899", violet: "#a855f7", indigo: "#7C5CFF",
@@ -331,34 +334,32 @@ function SessionPerformanceCards({ perf, onImport }) {
 }
 
 // ── No data yet: activation instead of a grid of zeros ───────────────────────
+// Zero-data state: what Sessions will show, and the actions that exist today.
 const PREVIEW = [
-  ["💰", "Session earnings", "Every session's public and private earnings, compared with your typical session."],
-  ["🧑‍🤝‍🧑", "Fan behavior", "Who tips, how often they come back, and which fans drive each session."],
-  ["🔒", "Private earnings", "Private, group and spy revenue kept separate from tips."],
-  ["🗂", "Recent sessions", "A timeline of each session with its peak period and top contributors."],
+  ["What happened", "Each session's earnings, length and source (Live Mode or imported history)."],
+  ["What drove it", "The fans and moments that produced the money, with public and private kept apart."],
+  ["Private earnings", "Private, group and spy revenue kept separate from tips."],
+  ["How it compares", "Verified comparisons with your own similar sessions once there is enough history."],
 ]
 function Activation({ onImport, onStartLive }) {
-  const btn = (primary) => ({ border: primary ? "none" : `1px solid ${C.line}`, background: primary ? `linear-gradient(135deg, ${C.cyan}, #38D5E8)` : "rgba(255,255,255,0.04)", color: primary ? "#0b0e1a" : C.white, boxShadow: primary ? `0 0 18px ${C.cyan}55` : "none", fontWeight: 800, fontSize: 14, padding: "10px 18px", borderRadius: 10, cursor: "pointer" })
   return (
-    <div data-testid="sessions-activation" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={card({ padding: "22px 24px", border: "1px solid rgba(124,92,255,0.45)", background: `radial-gradient(120% 140% at 0% 0%, rgba(34,211,238,0.16) 0%, transparent 45%), rgba(10,13,26,0.86)` })}>
-        <div style={{ fontSize: 24, fontWeight: 900, color: C.white }}>No performance data yet</div>
-        <div style={{ fontSize: 14, color: C.text, marginTop: 4 }}>Import your tip history or start a Live Mode show and your sessions will appear here.</div>
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-          <button data-testid="activation-import" onClick={onImport} style={btn(true)}>Import CSV history</button>
-          <button data-testid="activation-live" onClick={onStartLive} style={btn(false)}>Start Live Mode</button>
-        </div>
+    <section data-testid="sessions-activation" className={cx(L.glassFeature, L.emptyState)} aria-label="Get started with Sessions">
+      <div className={L.eyebrow}>Sessions</div>
+      <h2 className={L.emptyTitle}>No performance data yet</h2>
+      <p className={L.emptyBody}>Import your tip history or start a Live Mode show and your sessions will appear here.</p>
+      <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+        <button data-testid="activation-import" onClick={onImport} className={L.primaryAction}>Import CSV history</button>
+        <button data-testid="activation-live" onClick={onStartLive} className={L.secondaryAction}>Start Live Mode</button>
       </div>
-      <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 14 }}>
-        {PREVIEW.map(([icon, title, text]) => (
-          <div key={title} data-testid="activation-preview" style={{ ...inset, padding: "16px 18px", borderStyle: "dashed" }}>
-            <div style={{ fontSize: 20 }} aria-hidden="true">{icon}</div>
-            <div style={{ fontWeight: 900, color: C.white, fontSize: 15, marginTop: 6 }}>{title}</div>
-            <div style={{ color: C.text, fontSize: 12.5, marginTop: 4, lineHeight: 1.4 }}>{text}</div>
+      <div className={L.driverGrid} style={{ width: "100%", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+        {PREVIEW.map(([title, text]) => (
+          <div key={title} data-testid="activation-preview" className={L.driverTile}>
+            <div className={L.microLabel}>{title}</div>
+            <div className={L.driverNote} style={{ fontSize: 12 }}>{text}</div>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -388,138 +389,134 @@ function VsTypical({ vs, testId, long = false, e }) {
 // earnings + comparison chip. Count column hidden on phones.
 function SessionRow({ e, tz, selected, onSelect, vs }) {
   const t = TYPE[e.type]
-  const status = e.running ? { label: "LIVE NOW", color: C.green } : e.isNew ? { label: "JUST ENDED", color: C.pink } : null
+  const status = e.running ? "LIVE NOW" : e.isNew ? "JUST ENDED" : null
   const p0 = e.platforms[0]
+  const n = e.type === "private" ? e.chargeCount : e.tipCount
   return (
-    <button data-testid={`history-${e.id}`} onClick={onSelect} aria-pressed={selected} className="sx-row" style={{
-      width: "100%", textAlign: "left", cursor: "pointer", padding: "10px 12px", display: "grid",
-      gridTemplateColumns: "40px minmax(0,1fr) 44px auto", gap: 10, alignItems: "center", color: C.white,
-      borderRadius: 14, background: "rgba(13,17,38,0.72)", border: `1px solid ${C.line}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-      ...(selected ? { border: `1px solid ${C.pink}`, boxShadow: `0 0 0 1px ${C.indigo}44, 0 0 22px ${C.pink}40, inset 0 0 18px ${C.pink}14`, background: "rgba(30,18,52,0.78)" } : {}),
-    }}>
-      <PlatformTile platform={p0} size={38} />
-      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", overflow: "hidden" }}>
-          <span data-testid={`platform-badge-${p0}`} style={{ fontWeight: 800, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis" }}>{pName(p0)}</span>
-          {e.platforms.length > 1 && <span title={e.platforms.slice(1).map(pName).join(", ")} style={{ color: C.text, fontSize: 11.5 }}>+{e.platforms.length - 1}</span>}
-          {status && <Badge text={status.label} color={status.color} />}
-          {e.isNew && <span data-testid="row-new-badge" style={{ display: "none" }}>NEW</span>}
+    <button data-testid={`history-${e.id}`} onClick={onSelect} aria-pressed={selected} className={cx(L.sessionRow, selected && L.sessionRowActive)}>
+      <PlatformTile platform={p0} />
+      <span className={L.sessionMain}>
+        <span className={L.sessionName}>
+          <span data-testid={`platform-badge-${p0}`}>{pName(p0)}</span>
+          {e.platforms.length > 1 && <span className={L.muted} title={e.platforms.slice(1).map(pName).join(", ")}> +{e.platforms.length - 1}</span>}
+          {status && <span className={L.statusBadge}>{status}</span>}
+          {e.isNew && <span data-testid="row-new-badge" hidden>NEW</span>}
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
-          <span className="sx-when-long" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{whenText(e.startTime, tz)}</span>
-          <span className="sx-when-short" style={{ display: "none" }}>{new Date(e.startTime).toLocaleString([], { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-          <span aria-hidden="true">·</span>
-          <span data-testid={`type-badge-${e.type}`} data-label={t.label} style={{ color: e.type === "imported" ? C.muted : C.text, ...(e.type === "imported" ? { border: `1px solid ${C.line}`, borderRadius: 6, padding: "0 6px", fontSize: 10.5 } : {}) }}>{typeWord(e)}</span>
+        <span className={L.sessionMeta}>
+          {whenText(e.startTime, tz)} · <span data-testid={`type-badge-${e.type}`} data-label={t.label}>{typeWord(e)}</span>
+          <span className={L.srOnly}>{n}{e.type === "private" ? (n === 1 ? "Charge" : "Charges") : (n === 1 ? "Tip" : "Tips")}</span>
         </span>
       </span>
-      <span className="sx-row-count" style={{ textAlign: "right" }}><div style={{ fontWeight: 800, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{e.type === "private" ? e.chargeCount : e.tipCount}</div><div style={{ fontSize: 10.5, color: C.text }}>{e.type === "private" ? (e.chargeCount === 1 ? "Charge" : "Charges") : (e.tipCount === 1 ? "Tip" : "Tips")}</div></span>
-      <span style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-        <span style={{ fontWeight: 900, fontSize: 15, fontVariantNumeric: "tabular-nums" }}>{fmtUsd(e.totalUSD)}</span>
-        {vs ? <VsTypical vs={vs} testId={`row-vs-${e.id}`} /> : lengthText(e) !== "—" ? <span style={{ fontSize: 10.5, color: C.muted }}>{lengthText(e)}</span> : null}
+      <span className={L.sessionAmount}>
+        {fmtUsd(e.totalUSD)}
+        {vs && <span className={cx(L.sessionDelta, vs.outcome === "above" ? L.deltaPositive : vs.outcome === "below" ? L.deltaNegative : L.deltaNeutral)}><VsTypical vs={vs} testId={`row-vs-${e.id}`} /></span>}
       </span>
     </button>
   )
 }
 
-// ── Row 4 right: details ─────────────────────────────────────────────────────
+// ── Selected-session workspace ───────────────────────────────────────────────
 const clock = (iso, tz) => new Date(iso).toLocaleTimeString([], { timeZone: tz, hour: "numeric", minute: "2-digit" })
+const cx = (...a) => a.filter(Boolean).join(" ")
 
-// Interactive chart + selected-bucket contributors (shared by Overview and the
-// Timeline tab). Selection / mode / highlight state lives in Details so both
-// views and the Fans tab stay in sync for the selected session.
-function BucketExplorer({ e, d, tz, ui, testId }) {
-  const sel = Math.min(ui.bucket ?? defaultBucket(d), d.buckets.length - 1)
-  return (
-    <div className="sx-bx" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 250px", gap: 12, alignItems: "start" }}>
-      <div style={{ background: "rgba(13,17,38,0.72)", border: `1px solid ${C.line}`, borderRadius: 16, padding: "12px 14px", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)", minWidth: 0 }}>
-        <BucketChart d={d} tz={tz} type={e.type} selected={sel} onSelect={ui.setBucket} mode={ui.mode} onMode={ui.setMode} highlightKey={ui.highlight} testId={testId} />
-      </div>
-      <BucketPanel d={d} index={sel} onIndex={(i) => ui.setBucket(Math.max(0, Math.min(d.buckets.length - 1, i)))} tz={tz} type={e.type} highlightKey={ui.highlight} onHighlight={ui.setHighlight} />
-    </div>
-  )
-}
-// Default selection: the highest-earning bucket (the engine's own peak when it
-// has one), else the first bucket.
+// Default selection: the engine's peak bucket when it has one, else the first.
 function defaultBucket(d) {
   if (d.peak) { const i = d.buckets.findIndex((b) => b.start === d.peak.start); if (i >= 0) return i }
   return 0
 }
 
-// Timeline tab: span details, peak callout, the explorer and the full table.
-function BucketsView({ e, tips, tz, ui }) {
-  const d = sessionBuckets(e, { tips })
-  if (!d) return <div data-testid="buckets-empty" style={{ color: C.muted, fontSize: 13 }}>No time-stamped activity in this session.</div>
+// Secondary exploration: interval chart + selected interval detail.
+function ActivityExplorer({ e, d, tz, ui, testId }) {
+  const sel = Math.min(ui.bucket ?? defaultBucket(d), d.buckets.length - 1)
+  return (
+    <div className={L.chartAndBucket}>
+      <div className={cx(L.glassPanel, L.chartCard)}>
+        <BucketChart d={d} tz={tz} type={e.type} selected={sel} onSelect={ui.setBucket} mode={ui.mode} onMode={ui.setMode} highlightKey={ui.highlight} testId={testId} />
+      </div>
+      <div className={cx(L.glassPanel, L.bucketCard)}>
+        <BucketPanel d={d} index={sel} onIndex={(i) => ui.setBucket(Math.max(0, Math.min(d.buckets.length - 1, i)))} tz={tz} type={e.type} highlightKey={ui.highlight} onHighlight={ui.setHighlight} />
+      </div>
+    </div>
+  )
+}
+
+// "More" → interval table (the engine's buckets, every row).
+function BucketsView({ e, d, tz }) {
+  if (!d) return <div data-testid="buckets-empty" className={L.quietNote}>No time-stamped activity in this session.</div>
   const spanText = d.exact ? fmtDuration(d.spanMinutes * 60) : fmtMinutes(d.spanMinutes, true)
   const anyEstimated = d.buckets.some((b) => b.privateEstimated && b.privateUSD > 0)
   return (
-    <div data-testid="buckets" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", fontSize: 12.5, color: C.text }}>
-        <span><T id="buckets-span-label">{d.label}</T>: <span style={{ color: C.white, fontWeight: 800 }}><T id="buckets-span">{spanText}</T></span> · {clock(d.start, tz)}–{clock(d.end, tz)}</span>
-        <span>{d.single ? "Too short to split into time buckets" : `${d.bucketMinutes}-minute buckets`}</span>
+    <div data-testid="buckets" style={{ display: "grid", gap: 10 }}>
+      <div className={L.sectionHint} style={{ marginTop: 0 }}>
+        <T id="buckets-span-label">{d.label}</T>: <strong style={{ color: "#f7f4ff" }}><T id="buckets-span">{spanText}</T></strong> · {clock(d.start, tz)}–{clock(d.end, tz)} · {d.single ? "too short to split" : `${d.bucketMinutes}-minute intervals`}
       </div>
       {d.peak && d.peak.sharePct != null && (
-        <div data-testid="buckets-peak" style={{ ...inset, border: `1px solid ${C.pink}66`, padding: "8px 12px", fontSize: 13, color: C.white }}>
-          <span style={{ color: C.pink, fontWeight: 800 }}>Peak period:</span> {clock(d.peak.start, tz)}–{clock(d.peak.end, tz)} generated <strong>{d.peak.sharePct}%</strong> of this session&apos;s earnings ({fmtUsd(d.peak.totalUSD)}).
+        <div data-testid="buckets-peak" className={L.quietNote}>
+          Peak interval {clock(d.peak.start, tz)}–{clock(d.peak.end, tz)} produced <strong>{d.peak.sharePct}%</strong> of this session&apos;s earnings ({fmtUsd(d.peak.totalUSD)}).
         </div>
       )}
-      <BucketExplorer e={e} d={d} tz={tz} ui={ui} testId="bucket-chart-timeline" />
-      <div style={{ overflowX: "auto" }}>
-        <table data-testid="buckets-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, color: C.text, fontVariantNumeric: "tabular-nums" }}>
-          <thead><tr style={{ textAlign: "left", color: C.muted }}>
-            <th style={{ padding: "4px 6px" }}>Time</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Public</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Private</th>
-            <th style={{ padding: "4px 6px", textAlign: "right" }}>{e.type === "private" ? "Charges" : "Tips"}</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Fans</th><th style={{ padding: "4px 6px" }}>Top fan</th>
-          </tr></thead>
+      <div className={L.tableWrap}>
+        <table data-testid="buckets-table" className={L.table}>
+          <thead><tr><th>Time</th><th style={{ textAlign: "right" }}>Public</th><th style={{ textAlign: "right" }}>Private</th><th style={{ textAlign: "right" }}>{e.type === "private" ? "Charges" : "Tips"}</th><th style={{ textAlign: "right" }}>Fans</th><th>Top fan</th></tr></thead>
           <tbody>
             {d.buckets.map((b, i) => (
-              <tr key={i} data-testid="bucket-row" style={{ borderTop: `1px solid ${C.line}`, color: d.peak && b.start === d.peak.start ? C.white : C.text }}>
-                <td style={{ padding: "5px 6px", whiteSpace: "nowrap" }}>{clock(b.start, tz)}–{clock(b.end, tz)}</td>
-                <td style={{ padding: "5px 6px", textAlign: "right" }}>{fmtUsd(b.publicUSD)}</td>
-                <td style={{ padding: "5px 6px", textAlign: "right" }}>{b.privateUSD > 0 ? `${b.privateEstimated ? "~" : ""}${fmtUsd(b.privateUSD)}` : "—"}</td>
-                <td style={{ padding: "5px 6px", textAlign: "right" }}>{b.count}</td>
-                <td style={{ padding: "5px 6px", textAlign: "right" }}>{b.uniqueFans}</td>
-                <td style={{ padding: "5px 6px" }}>{b.topFan ? `${b.topFan.username} ${fmtUsd(b.topFan.usd)}` : "—"}</td>
+              <tr key={i} data-testid="bucket-row">
+                <td style={{ whiteSpace: "nowrap" }}>{clock(b.start, tz)}–{clock(b.end, tz)}</td>
+                <td style={{ textAlign: "right" }}>{fmtUsd(b.publicUSD)}</td>
+                <td style={{ textAlign: "right" }}>{b.privateUSD > 0 ? `${b.privateEstimated ? "~" : ""}${fmtUsd(b.privateUSD)}` : "—"}</td>
+                <td style={{ textAlign: "right" }}>{b.count}</td>
+                <td style={{ textAlign: "right" }}>{b.uniqueFans}</td>
+                <td>{b.topFan ? `${b.topFan.username} ${fmtUsd(b.topFan.usd)}` : "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {anyEstimated && <div style={{ fontSize: 11.5, color: C.muted }}>~ Live private earnings are estimated and spread across the minutes each private interval covered.</div>}
-      {!d.exact && <div style={{ fontSize: 11.5, color: C.muted }}>Imported history shows when earnings happened, not proof of continuous streaming.</div>}
+      {anyEstimated && <div className={L.contributorMeta}>~ Live private earnings are estimated from the private rate and spread over the minutes each private period covered.</div>}
+      {!d.exact && <div className={L.contributorMeta}>Imported history shows when transactions were recorded, not proof of continuous streaming.</div>}
     </div>
   )
 }
 
-// Fans tab: who drove the selected session.
-function FanDriversView({ e, tips, paidSessions, isPro, primaryPlatform, onShowFan = null }) {
-  const fans = sessionFanDrivers(e, { tips, paidSessions })
-  if (!fans.length) return <div data-testid="fans-empty" style={{ color: C.muted, fontSize: 13 }}>No fan-level detail for this session{e.type === "live" ? " (private time in Live Mode is not attributed to a fan)" : ""}.</div>
+// Contributors: who drove the session (sessionFanDrivers), top 5 then all.
+function FanDriversView({ e, fans, isPro, primaryPlatform, onShowFan = null, highlight = null }) {
+  const [all, setAll] = useState(false)
   // Free sees full history only on the primary platform; elsewhere "new" may just be outside the window.
   const newLabel = (platform) => !isPro && String(platform).toLowerCase() !== String(primaryPlatform || "").toLowerCase() ? "New in your available history" : "New"
+  const liveUnattributed = e.type === "live" && e.privateUSD > 0
+  if (!fans.length) {
+    return <div data-testid="fans-empty" className={L.quietNote}>No individual contributor detail for this session{e.type === "live" ? " (Live Mode private time is not attributed to a fan)" : ""}.</div>
+  }
+  const shown = all ? fans : fans.slice(0, 5)
   return (
-    <div data-testid="fan-drivers" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {fans.map((f, i) => (
-        <div key={`${f.platform}:${f.username}`} data-testid="fan-driver" role={onShowFan ? "button" : undefined} tabIndex={onShowFan ? 0 : undefined}
-          title={onShowFan ? "Show this fan's buckets on the timeline" : undefined}
-          onClick={onShowFan ? () => onShowFan(fanKey(f.platform, f.username)) : undefined}
-          onKeyDown={onShowFan ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onShowFan(fanKey(f.platform, f.username)) } } : undefined}
-          style={{ padding: "10px 14px", display: "grid", gridTemplateColumns: "22px minmax(0,1fr) auto", gap: 10, alignItems: "center", borderRadius: 14, background: "rgba(13,17,38,0.72)", border: `1px solid ${C.line}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)", cursor: onShowFan ? "pointer" : "default" }}>
-          <span style={{ color: C.muted, fontWeight: 800 }}>{i + 1}</span>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 900, color: C.white }}>{f.username}</span>
-              <PlatformCell platform={pName(f.platform)} />
-              <Badge text={f.returning ? "RETURNING" : newLabel(f.platform).toUpperCase()} color={f.returning ? C.green : C.cyan} testId={`fan-status-${f.returning ? "returning" : "new"}`} />
-            </div>
-            <div style={{ fontSize: 12, color: C.text, marginTop: 3 }}>{f.count} {e.type === "private" ? (f.count === 1 ? "charge" : "charges") : (f.count === 1 ? "tip" : "tips")}</div>
+    <div data-testid="fan-drivers" className={L.contributorList} style={{ marginTop: 0 }}>
+      {shown.map((f, i) => {
+        const k = fanKey(f.platform, f.username)
+        const on = highlight === k
+        return (
+          <div key={k} data-testid="fan-driver" role={onShowFan ? "button" : undefined} tabIndex={onShowFan ? 0 : undefined} aria-pressed={onShowFan ? on : undefined}
+            title={onShowFan ? "Highlight this fan's intervals in the activity chart" : undefined}
+            onClick={onShowFan ? () => onShowFan(on ? null : k) : undefined}
+            onKeyDown={onShowFan ? (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onShowFan(on ? null : k) } } : undefined}
+            className={cx(L.contributorRow, on && L.contributorActive)} style={{ cursor: onShowFan ? "pointer" : "default" }}>
+            <span className={L.contributorRank}>{i + 1}</span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+                <span data-testid="fan-driver-name" className={L.contributorName} style={{ fontSize: 12 }}>{f.username}</span>
+                <span className={L.chip} data-testid={`fan-status-${f.returning ? "returning" : "new"}`}>{f.returning ? "RETURNING" : newLabel(f.platform).toUpperCase()}</span>
+              </span>
+              <span className={L.contributorMeta} style={{ display: "block" }}>{f.count} {e.type === "private" ? (f.count === 1 ? "charge" : "charges") : (f.count === 1 ? "tip" : "tips")} · {pName(f.platform)}</span>
+            </span>
+            <span style={{ textAlign: "right" }}>
+              <span className={L.contributorAmount} style={{ display: "block" }}>{fmtUsd(f.usd)}</span>
+              {f.sharePct != null && <span className={L.contributorMeta} style={{ display: "block" }}>{f.sharePct}% of session</span>}
+              {f.sharePct != null && <span aria-hidden="true" className={L.shareTrack} style={{ display: "block" }}><span className={L.shareFill} style={{ display: "block", width: `${Math.min(100, f.sharePct)}%` }} /></span>}
+            </span>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontWeight: 900, color: C.white }}>{fmtUsd(f.usd)}</div>
-            {f.sharePct != null && <div style={{ fontSize: 11.5, color: C.text }}>{f.sharePct}% of session</div>}
-            {f.sharePct != null && <div aria-hidden="true" style={{ marginTop: 4, width: 96, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)", marginLeft: "auto" }}><div style={{ width: `${Math.min(100, f.sharePct)}%`, height: "100%", borderRadius: 2, background: `linear-gradient(90deg, ${C.cyan}, ${C.pink})` }} /></div>}
-          </div>
-        </div>
-      ))}
-      {e.type === "live" && e.privateUSD > 0 && <div style={{ fontSize: 11.5, color: C.muted }}>Live private earnings ({fmtUsd(e.privateUSD)}) are not attributed to individual fans, so shares can add up to less than 100%.</div>}
+        )
+      })}
+      {liveUnattributed && <div className={cx(L.contributorRow, L.unattributed)}><span className={L.contributorName} style={{ fontWeight: 600 }}>Private (no tipper detail) · estimated</span><span className={L.contributorAmount}>{fmtUsd(e.privateUSD)}</span></div>}
+      {fans.length > 5 && <button data-testid="fans-show-all" className={L.linkButton} style={{ justifySelf: "start" }} onClick={() => setAll((v) => !v)}>{all ? "Show top 5" : `Show all ${fans.length} contributors`}</button>}
     </div>
   )
 }
@@ -572,112 +569,161 @@ function ScheduleView({ e, plans, tz, onOpenPlanner }) {
   )
 }
 
-const DETAIL_TABS = [["overview", "Overview"], ["timeline", "Timeline"], ["fans", "Fans"], ["schedule", "Schedule"]]
-
-// Planner status chip for the header (matchPlannedStream, unchanged).
+// Planner status (matchPlannedStream, unchanged). Hidden when there are no saved plans.
 function PlannerChip({ e, plans }) {
   const m = matchPlannedStream(e, plans)
-  if (!m) return null
+  if (!m || m.status === "no_plans") return null
   const map = {
-    no_plans: ["No saved plan", C.muted], unscheduled: ["Not in Planner", C.gold],
-    on_schedule: ["In Planner · on schedule", C.green], early: ["In Planner · early", C.cyan], late: ["In Planner · late", "#F87171"],
+    unscheduled: "Not in Planner", on_schedule: "In Planner · on schedule", early: "In Planner · started early", late: "In Planner · started late",
   }
-  const [label, color] = map[m.status] || ["In Planner", C.cyan]
+  return <span data-testid="details-planner-chip" data-status={m.status} className={L.chip}>{map[m.status] || "In Planner"}</span>
+}
+
+const SOURCE = { live: "Live Mode", free_chat: "Free chat", imported: "Imported", private: "Private charges" }
+
+// One compact metric inside the performance card. `missing` = value not
+// recorded (rendered as text, never as $0.00).
+function Metric({ label, value, testId, detail, missing = false }) {
   return (
-    <span data-testid="details-planner-chip" data-status={m.status} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color, padding: "4px 10px", borderRadius: 10, border: `1px solid ${color}66`, background: `${color}12`, whiteSpace: "nowrap" }}>
-      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /></svg>
-      {label}
-    </span>
+    <div className={L.metric}>
+      <div className={L.microLabel}>{label}</div>
+      <div data-testid={testId} className={missing ? cx(L.metricValue, L.missing) : L.metricValue}>{value}</div>
+      {detail && <div className={L.metricDetail}>{detail}</div>}
+    </div>
   )
 }
 
-const Stat = ({ value, label, testId, accent }) => (
-  <div style={{ minWidth: 0, padding: "2px 12px", borderLeft: `1px solid ${C.line}` }}>
-    <div data-testid={testId} style={{ fontSize: String(value).length > 7 ? 16 : 20, fontWeight: 900, color: accent || C.white, lineHeight: 1.15, fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" }}>{value}</div>
-    <div style={{ fontSize: 11.5, color: C.text, marginTop: 3 }}>{label}</div>
-  </div>
-)
+function Disclosure({ id, title, open, onToggle, children }) {
+  return (
+    <div className={L.glassPanel}>
+      <button data-testid={`details-more-${id}`} aria-expanded={open} onClick={onToggle} className={L.disclosureButton}>
+        <span>{title}</span><span aria-hidden="true" className={L.muted}>{open ? "–" : "+"}</span>
+      </button>
+      <div className={L.disclosureBody} hidden={!open}>{children}</div>
+    </div>
+  )
+}
 
-function Details({ e, tips, paidSessions = [], tz, today, signal, isPro = true, primaryPlatform = null, vs = null, plans = [], onOpenPlanner = null, completeness = null }) {
-  const [tab, setTab] = useState("overview")
+function Details({ e, tips, paidSessions = [], tz, isPro = true, primaryPlatform = null, vs = null, plans = [], onOpenPlanner = null, completeness = null, loadComplete = true }) {
   const [bucket, setBucket] = useState(null)
   const [mode, setMode] = useState("usd")
   const [highlight, setHighlight] = useState(null)
-  // A different session starts with a clean chart.
+  const [more, setMore] = useState({ intervals: false, schedule: false })
+  // A different session starts clean: no stale interval, highlight or open panels.
   useEffect(() => { setBucket(null); setHighlight(null) }, [e?.id])
   const buckets = useMemo(() => (e ? sessionBuckets(e, { tips }) : null), [e, tips])
-  if (!e) return <div style={{ color: C.text, fontSize: 13 }}>Select a session to see its details.</div>
-  const status = e.running ? { label: "LIVE NOW", color: C.green } : e.isNew ? { label: "JUST ENDED", color: C.pink } : null
-  const leader = today.platforms.find((p) => p.platform === today.bestPlatform)
+  const fans = useMemo(() => (e ? sessionFanDrivers(e, { tips, paidSessions }) : []), [e, tips, paidSessions])
+  if (!e) return <div className={L.quietNote}>Select a session to see its details.</div>
   const ui = { bucket, setBucket, mode, setMode, highlight, setHighlight }
-  const showFan = (k) => { setHighlight(k); setBucket(null); setTab("overview") }
-  const outcomeWord = vs ? (vs.outcome === "above" ? `Outperformed by ${vs.deltaPct}%` : vs.outcome === "below" ? `Underperformed by ${Math.abs(vs.deltaPct)}%` : "On par with your typical session") : null
-  const outcomeColor = vs ? (vs.outcome === "above" ? C.green : vs.outcome === "below" ? "#F87171" : C.text) : C.text
+  const showFan = (k) => { setHighlight(k); setBucket(null) }
+  const status = e.running ? "LIVE NOW" : e.isNew ? "JUST ENDED" : null
+  const hourly = e.type === "live" && !e.running ? liveVerifiedHourly(e) : null
+  const top = fans[0] || null
+  const peak = buckets?.peak && buckets.peak.sharePct != null ? buckets.peak : null
+  const isLive = e.type === "live"
+  const mixedMoney = e.publicUSD > 0 && e.privateUSD > 0 // composition only adds information when both exist
+  const showContributors = fans.length > 1 || (fans.length === 1 && isLive && e.privateUSD > 0)
+
+  // ── comparison (sessionVsTypical) or a subtle eligibility note ──
+  const comparison = vs ? (
+    <>
+      <p data-testid="details-outcome" className={L.outcome} style={{ color: vs.outcome === "above" ? "#10B981" : vs.outcome === "below" ? "#F87171" : "#e6e1f1" }}>
+        {vs.outcome === "above" ? `Outperformed by ${vs.deltaPct}%` : vs.outcome === "below" ? `Underperformed by ${Math.abs(vs.deltaPct)}%` : "On par with your typical session"}
+      </p>
+      <p className={L.comparisonLine}>{fmtUsd(e.totalUSD)} vs. your usual {fmtUsd(vs.medianUSD)} per session<span className={L.sampleChip}>{vs.sessions} comparable</span></p>
+      <p className={L.earningsDescriptor}><VsTypical vs={vs} e={e} long testId="details-vs" /></p>
+      {vs.perHour && <p data-testid="details-vs-hourly" data-outcome={vs.perHour.outcome} className={L.earningsDescriptor}>
+        {fmtUsd(vs.perHour.usdPerHour)}/hr over the recorded show vs a typical {fmtUsd(vs.perHour.medianUSDPerHour)}/hr ({vs.perHour.deltaPct > 0 ? "+" : ""}{vs.perHour.deltaPct}%, median of {vs.perHour.sessions} of your {pName(e.platforms[0])} Live shows)
+      </p>}
+    </>
+  ) : !loadComplete || completeness?.status === "unknown" ? <p data-testid="details-vs-unknown" className={L.comparisonNote} style={{ marginTop: 10 }}>This session&apos;s completeness can&apos;t be confirmed with the history available, so it isn&apos;t compared with your typical sessions.</p>
+    : completeness?.status === "partial_verified" ? <p data-testid="details-vs-partial" className={L.comparisonNote} style={{ marginTop: 10 }}>{completeness.reason === "hidden_live_tips" ? "Some of this show's tips are outside your Free history window" : "This session started before your Free history window"}, so it isn&apos;t compared with your typical sessions.</p>
+    : (e.type === "free_chat" || e.type === "imported" || e.type === "live") && e.isValid ? <p data-testid="details-vs-empty" className={L.comparisonNote} style={{ marginTop: 10 }}>Comparisons start after 5 comparable {pName(e.platforms[0])} sessions of this type.</p>
+    : null
+
+  // ── what drove it: one lead, at most two supporting facts ──
+  const lead = top
+    ? <><span data-testid="details-top">{top.username}</span>{top.sharePct != null ? <> drove <span className={L.money}>{top.sharePct}%</span> of this session</> : <> was the top contributor</>}</>
+    : peak ? <>{clock(peak.start, tz)}–{clock(peak.end, tz)} produced {peak.sharePct}% of the earnings</>
+    : <>No individual contributor detail was recorded</>
+  const leadNote = top
+    ? `${fmtUsd(top.usd)} from ${top.count} ${e.type === "private" ? (top.count === 1 ? "charge" : "charges") : (top.count === 1 ? "tip" : "tips")} on ${pName(top.platform)} · ${top.returning ? "returning fan" : (!isPro && String(top.platform).toLowerCase() !== String(primaryPlatform || "").toLowerCase() ? "new in your available history" : "first time in your history")}`
+    : isLive && e.privateUSD > 0 ? "Live Mode private earnings aren't attributed to a fan." : null
+
   return (
-    <div data-testid="session-details-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
-          <PlatformTile platform={e.platforms[0]} size={42} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 900, fontSize: 18, color: C.white, letterSpacing: "-0.01em" }}>{e.platforms.map(pName).join(" + ")}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text, padding: "3px 9px", borderRadius: 9, border: `1px solid ${C.line}`, background: "rgba(255,255,255,0.03)" }}>{sessionTitle(e, tz)}</span>
-              {status && <Badge text={status.label} color={status.color} />}
-            </div>
-            <div style={{ fontSize: 12, color: C.text, marginTop: 4 }}>{whenText(e.startTime, tz)}</div>
-          </div>
+    <div data-testid="session-details-body" className={L.detail}>
+      <div className={L.identityRow}>
+        <div className={L.identityMain}>
+          <PlatformTile platform={e.platforms[0]} size={34} />
+          <span className={L.identityName}>{e.platforms.map(pName).join(" + ")}</span>
+          <span className={L.chip}>{SOURCE[e.type] || "Session"}</span>
+          {status && <span className={L.chip} style={{ color: "#fc91c5" }}>{status}</span>}
+          <span className={L.identityDate}>{whenText(e.startTime, tz)} · {sessionTitle(e, tz)}</span>
         </div>
         <PlannerChip e={e} plans={plans} />
       </div>
-      <div data-testid="details-tabs" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-        {DETAIL_TABS.map(([k, l]) => <span key={k} data-testid={`details-tab-${k}`}><Pill active={tab === k} onClick={() => setTab(k)}>{l}</Pill></span>)}
-      </div>
-      {tab === "timeline" && <BucketsView e={e} tips={tips} tz={tz} ui={ui} />}
-      {tab === "schedule" && <ScheduleView e={e} plans={plans} tz={tz} onOpenPlanner={onOpenPlanner} />}
-      {tab === "fans" && <FanDriversView e={e} tips={tips} paidSessions={paidSessions} isPro={isPro} primaryPlatform={primaryPlatform} onShowFan={buckets ? showFan : null} />}
-      {tab === "overview" && <>
-        <div data-testid="details-summary" style={{ borderRadius: 18, padding: "14px 16px", background: "linear-gradient(120deg, rgba(34,211,238,0.08) 0%, rgba(124,92,255,0.10) 46%, rgba(236,72,153,0.08) 100%), rgba(13,17,38,0.72)", border: `1px solid ${C.line}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)", display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(0,2fr)", gap: 14, alignItems: "center" }} className="sx-summary">
-          <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
-            {vs && <span aria-hidden="true" style={{ width: 42, height: 42, borderRadius: 21, flexShrink: 0, display: "grid", placeItems: "center", border: `1px solid ${outcomeColor}88`, background: `${outcomeColor}14`, color: outcomeColor, fontSize: 18, fontWeight: 900 }}>{vs.outcome === "above" ? "↗" : vs.outcome === "below" ? "↘" : "="}</span>}
-            <div style={{ minWidth: 0 }}>
-              {vs ? <>
-                <div data-testid="details-outcome" style={{ fontSize: 19, fontWeight: 900, color: C.white, letterSpacing: "-0.01em" }}>{outcomeWord}</div>
-                <div style={{ fontSize: 12.5, color: C.text, marginTop: 3 }}>{fmtUsd(e.totalUSD)} vs. your usual {fmtUsd(vs.medianUSD)} per session</div>
-                <div style={{ marginTop: 4 }}><VsTypical vs={vs} e={e} long testId="details-vs" /></div>
-                {vs.perHour && <div data-testid="details-vs-hourly" data-outcome={vs.perHour.outcome} style={{ fontSize: 12, color: C.text, marginTop: 4 }}>
-                  {fmtUsd(vs.perHour.usdPerHour)}/hr over the recorded show vs a typical {fmtUsd(vs.perHour.medianUSDPerHour)}/hr ({vs.perHour.deltaPct > 0 ? "+" : ""}{vs.perHour.deltaPct}%, median of {vs.perHour.sessions} of your {pName(e.platforms[0])} Live shows)
-                </div>}
-              </>
-              : completeness?.status === "partial_verified" ? <div data-testid="details-vs-partial" style={{ fontSize: 12.5, color: C.text }}>{completeness.reason === "hidden_live_tips" ? "Some of this show's tips are outside your Free history window" : "This session started before your Free history window"}, so it is not compared with your typical sessions.</div>
-              : completeness?.status === "unknown" ? <div data-testid="details-vs-unknown" style={{ fontSize: 12.5, color: C.text }}>This session&apos;s completeness can&apos;t be confirmed with the history available, so it is not compared with your typical sessions.</div>
-              : (e.type === "free_chat" || e.type === "imported" || e.type === "live") && e.isValid ? <div data-testid="details-vs-empty" style={{ fontSize: 12.5, color: C.text }}>Comparison with your typical session needs 5 other comparable sessions on the same platform and type.</div>
-              : <div style={{ fontSize: 12.5, color: C.text }}>No comparison for this session type.</div>}
-            </div>
-          </div>
-          <div className="sx-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 0 }}>
-            <Stat value={fmtUsd(e.totalUSD)} label="Earned" testId="details-total" accent={C.green} />
-            <Stat value={e.type === "private" ? `${e.chargeCount} ${e.chargeCount === 1 ? "charge" : "charges"}` : e.tipCount} label={e.type === "private" ? "Billing" : (e.tipCount === 1 ? "Tip" : "Tips")} testId="details-tips" />
-            <Stat value={e.uniqueTippers} label={e.uniqueTippers === 1 ? "Unique Tipper" : "Unique Tippers"} testId="details-unique" />
-            <Stat value={lengthText(e)} label={e.type === "private" ? "Charge span" : e.type === "live" ? "Duration" : "Est. span (first→last tip)"} testId="details-duration" />
-          </div>
+
+      <section data-testid="details-summary" className={cx(L.glassPanel, L.performance)} aria-label="Session performance">
+        <div className={L.earningsHero}>
+          <div className={L.microLabel}>Session earnings</div>
+          <div data-testid="details-total" className={L.earningsAmount}>{fmtUsd(e.totalUSD)}</div>
+          {comparison}
         </div>
-        <div className="sx-dgrid" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 8 }}>
-          <Cell value={fmtUsd(e.publicUSD)} label="Public" testId="details-public" />
-          <Cell value={fmtUsd(e.privateUSD)} label="Private" testId="details-private" accent={C.pink} />
-          <Cell value={e.type === "live" ? fmtUsd(e.show?.largestTipUsd) : e.type === "private" ? "—" : fmtUsd(Math.max(0, ...(e.session?.tips || []).map((x) => Number(x.usd) || 0)))} label="Largest Tip" testId="details-largest" />
-          <Cell value={e.topTipper ? e.topTipper.username : e.fan || "—"} label={e.type === "private" ? "Fan" : "Top Tipper"} testId="details-top" />
-          <Cell value={e.type === "live" ? fmtDuration(e.show?.privateSeconds || 0) : "—"} label="Private Time" testId="details-private-time" />
+        <div className={L.metricGrid}>
+          <Metric label={e.type === "live" ? "Duration" : e.type === "private" ? "Charge span" : "Activity span"} testId="details-duration"
+            value={e.type === "private" && e.chargeSpanMinutes == null ? "Unknown" : lengthText(e)} missing={e.type === "private" && e.chargeSpanMinutes == null}
+            detail={e.type === "live" ? "Recorded by Live Mode" : e.type === "private" ? "First to last charge" : "Est. span (first→last tip), not time online"} />
+          {hourly != null
+            ? <Metric label="Verified $/hr" testId="details-hourly" value={`${fmtUsd(hourly)}/hr`} detail="Persisted by Live Mode" />
+            : <Metric label={e.type === "private" ? "Billing" : "Tips"} testId="details-tips" value={e.type === "private" ? `${e.chargeCount} ${e.chargeCount === 1 ? "charge" : "charges"}` : e.tipCount} />}
+          <Metric label={e.uniqueTippers === 1 ? "Unique tipper" : "Unique tippers"} testId="details-unique" value={e.uniqueTippers} />
+          <Metric label="Public" testId="details-public" value={fmtUsd(e.publicUSD)} />
+          <Metric label="Private" testId="details-private" value={fmtUsd(e.privateUSD)} detail={isLive && e.privateUSD > 0 ? "Estimated from private rate" : null} />
+          {hourly != null && <Metric label={e.type === "private" ? "Billing" : "Tips"} testId="details-tips" value={e.tipCount} />}
+          {isLive && <Metric label="Private time" testId="details-private-time" value={fmtDuration(e.show?.privateSeconds || 0)} />}
+          {isLive && (e.show?.largestTipUsd != null
+            ? <Metric label="Largest tip" testId="details-largest" value={fmtUsd(e.show.largestTipUsd)} />
+            : <Metric label="Largest tip" testId="details-largest" value="Not recorded" missing />)}
         </div>
-        {buckets
-          ? <div data-testid="details-timeline"><BucketExplorer e={e} d={buckets} tz={tz} ui={ui} testId="bucket-chart" /></div>
-          : <div data-testid="details-timeline-empty" style={{ fontSize: 12.5, color: C.muted, padding: "18px 0" }}>No time-stamped activity in this session to chart.</div>}
-        {signal && (
-          <div data-testid="today-signal" style={{ ...inset, border: `1px solid ${C.cyan}55`, padding: "10px 14px" }}>
-            <div style={{ color: C.cyan, fontWeight: 800, fontSize: 13 }}>Strongest signal: {signal}</div>
-            {leader && <div style={{ color: C.text, fontSize: 12, marginTop: 2 }}>{fmtUsd(leader.totalUSD)} of {today.days === 1 ? "today's" : "this range's"} {fmtUsd(today.totalUSD)} came from {pName(leader.platform)}.</div>}
-          </div>
-        )}
-      </>}
+      </section>
+
+      <section className={cx(L.glassPanel, L.drivers)} aria-label="What drove this session">
+        <div className={L.eyebrow}>What drove this session</div>
+        <p className={L.driverLead}>{lead}</p>
+        {leadNote && <p className={L.driverExplanation}>{leadNote}</p>}
+        {(mixedMoney || peak) && <div className={L.driverGrid}>
+          {mixedMoney && <div className={L.driverTile}>
+            <div className={L.microLabel}>Public vs private</div>
+            <div className={L.driverValue}>{fmtUsd(e.publicUSD)} <span className={L.muted} style={{ fontSize: 12, fontWeight: 600 }}>public</span> · {fmtUsd(e.privateUSD)} <span className={L.muted} style={{ fontSize: 12, fontWeight: 600 }}>private</span></div>
+            <div className={L.driverNote}>{isLive ? `Private estimated from the private rate over ${fmtDuration(e.show?.privateSeconds || 0)}; no fan attribution.` : "Private charges are recorded per fan."}</div>
+          </div>}
+          {peak && <div className={L.driverTile}>
+            <div className={L.microLabel}>Strongest interval</div>
+            <div className={L.driverValue}>{clock(peak.start, tz)}–{clock(peak.end, tz)}</div>
+            <div className={L.driverNote}>{peak.sharePct}% of earnings ({fmtUsd(peak.totalUSD)}){buckets && !buckets.exact ? " · recorded transactions" : ""}.</div>
+          </div>}
+        </div>}
+      </section>
+
+      {showContributors && <section className={cx(L.glassPanel, L.section)} aria-label="Contributors">
+        <div className={L.cardHeading} style={{ marginBottom: 10 }}>
+          <div><h3 className={L.sectionTitle}>Contributors</h3><p className={L.sectionHint}>{buckets ? "Select a fan to see their intervals below." : "Ranked by earnings in this session."}</p></div>
+        </div>
+        <FanDriversView e={e} fans={fans} isPro={isPro} primaryPlatform={primaryPlatform} onShowFan={buckets && buckets.buckets.length > 1 ? showFan : null} highlight={highlight} />
+      </section>}
+
+      {buckets && buckets.buckets.length > 1
+        ? <div data-testid="details-timeline"><ActivityExplorer e={e} d={buckets} tz={tz} ui={ui} testId="bucket-chart" /></div>
+        : buckets
+        ? <div data-testid="details-timeline" className={L.quietNote}>All recorded activity fell within one interval ({clock(buckets.start, tz)}–{clock(buckets.end, tz)}), so there is no timeline to compare.</div>
+        : <div data-testid="details-timeline-empty" className={L.quietNote}>No time-stamped activity in this session to chart.</div>}
+
+      <Disclosure id="intervals" title="Interval table" open={more.intervals} onToggle={() => setMore((m) => ({ ...m, intervals: !m.intervals }))}>
+        <BucketsView e={e} d={buckets} tz={tz} />
+      </Disclosure>
+      <Disclosure id="schedule" title="Schedule vs Stream Planner" open={more.schedule} onToggle={() => setMore((m) => ({ ...m, schedule: !m.schedule }))}>
+        <ScheduleView e={e} plans={plans} tz={tz} onOpenPlanner={onOpenPlanner} />
+      </Disclosure>
     </div>
   )
 }
@@ -691,7 +737,9 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   const [scopePick, setScopePick] = useState(null)
   const [filter, setFilter] = useState("all")
   const [selectedId, setSelectedId] = useState(null)
-  const [showAll, setShowAll] = useState(false)
+  const [visible, setVisible] = useState(ROWS)
+  const [platformPick, setPlatformPick] = useState("all")
+  const [overviewOpen, setOverviewOpen] = useState(false)
   const [loadedAt, setLoadedAt] = useState(() => new Date())
   useEffect(() => { setLoadedAt(new Date()) }, [tips, shows, paidSessions])
 
@@ -710,11 +758,15 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
     privateUSD: 0, totalUSD: snap.publicUSD, tipCount: snap.tipCount, uniqueTippers: snap.uniqueTippers,
     topTipper: snap.topTipper, show: { largestTipUsd: snap.largestTipUSD, privateSeconds: 0 }, privateIntervals: [],
   } : null
-  const listed = useMemo(() => filterSessionHistory(history, { type: filter }), [history, filter])
-  // "View all" only widens the visible slice of the already plan-gated list.
-  const allRows = [...(runningEntry && (filter === "all" || filter === "live") ? [runningEntry] : []), ...listed]
-  const rows = showAll ? allRows : allRows.slice(0, ROWS)
-  const selected = rows.find((r) => r.id === selectedId) || rows[0] || null
+  const platformFilter = platformPick
+  const listed = useMemo(() => filterSessionHistory(history, { type: filter, platform: platformFilter }), [history, filter, platformFilter])
+  // Paging only widens the visible slice of the already plan-gated list (20 at a time; no full-history DOM).
+  const runningShown = runningEntry && (filter === "all" || filter === "live") && (platformFilter === "all" || runningEntry.platforms.includes(platformFilter))
+  const allRows = [...(runningShown ? [runningEntry] : []), ...listed]
+  const rows = allRows.slice(0, visible)
+  const selected = allRows.find((r) => r.id === selectedId) || allRows[0] || null
+  const rowsShown = selected && !rows.some((r) => r.id === selected.id) ? [...rows, selected] : rows
+
   const mode = useMemo(() => sessionsMode({ tips: T0, shows: S0, paidSessions: P0, live: !!live?.session }), [tips, shows, paidSessions, live?.session]) // eslint-disable-line react-hooks/exhaustive-deps
   const scope = mode.kind === "csv" ? "overall" : mode.kind === "mixed" ? (scopePick || "today") : "today"
   const overall = useMemo(() => overallSessionStats({ tips: T0, history, paidSessions: P0 }), [history]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -723,13 +775,20 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   // Free-window completeness uses the full (unwindowed) rows only to decide
   // whether a visible session is complete; they are never rendered. If a Free
   // caller does not supply them, every session is 'unknown' (no verdicts).
-  // NOTE: tipsLoadComplete defaults to true and the dashboard does not pass the
-  // real load status yet (issue #747), so an incomplete load is NOT detected.
+  // page.js passes the real load status (dataComplete) as tipsLoadComplete.
   const completeness = useMemo(() => sessionCompletenessMap(history, {
     allTips: allTips || [], visibleTips: T0, allPaidSessions: allPaidSessions || [],
     windowStarts: isPro ? null : (windowStarts || {}), isPro, loadComplete: tipsLoadComplete,
   }), [history, allTips, tips, allPaidSessions, windowStarts, isPro, tipsLoadComplete])
   const vsById = useMemo(() => new Map(history.map((e) => [e.id, sessionVsTypical(e, history, { completeness })]).filter(([, v]) => v)), [history, completeness])
+  // Session Pulse: one observation by the approved priority (selection only).
+  const pulse = useMemo(() => pickPulse({ running: runningEntry, history: filterSessionHistory(history, {}), vsById }), [history, vsById, runningEntry?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pulseFan = useMemo(() => (pulse && pulse.e && !pulse.e.running ? sessionFanDrivers(pulse.e, { tips: T0, paidSessions: P0 })[0] || null : null), [pulse, tips, paidSessions]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pulseHourly = pulse && pulse.kind === "new_show" ? liveVerifiedHourly(pulse.e) : null
+  // Free only: history really held back on secondary platforms (existing helper).
+  const exclusion = useMemo(() => (!isPro && allTips ? summarizeWindowExclusion(allTips, T0) : null), [isPro, allTips, tips]) // eslint-disable-line react-hooks/exhaustive-deps
+  const heldBack = exclusion && exclusion.excludedCount > 0 ? Object.keys(exclusion.byPlatform || {}).map(pName) : []
+  const openSession = (id) => { setFilter("all"); setPlatformPick("all"); setSelectedId(id) }
   const noData = mode.kind === "none" && !runningEntry && !showsLoading
   const light = mode.kind !== "none" && perf.meaningfulSessions < 3
   // Platform cards only for platforms the creator actually has data on.
@@ -739,114 +798,126 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   const byPlatform = Object.fromEntries(stats.platforms.map((p) => [p.platform, p]))
 
   return (
-    <div data-testid="sessions-overview" className="sx-root" style={{ display: "flex", flexDirection: "column", gap: 18, marginBottom: 24 }}>
+    <div data-testid="sessions-overview" className={cx("sx-root", L.page)}>
+      <div className={L.ambient} aria-hidden="true" />
       <style>{`
+        @media (max-width: 1024px) { .sx-root .sx-hero { grid-template-columns: 1fr !important; } .sx-root .sx-plat { grid-template-columns: 1fr !important; } }
+        @media (max-width: 640px) { .sx-root .sx-cells { grid-template-columns: repeat(2, minmax(0,1fr)) !important; } }
         .sx-root .sx-pulse { width: 8px; height: 8px; border-radius: 50%; background: ${C.green}; animation: sxPulse 1.6s infinite; }
         @keyframes sxPulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,.6); } 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0); } 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); } }
         .sx-root .sx-flash { animation: sxFlash 1.2s ease-out; }
         @keyframes sxFlash { 0% { filter: drop-shadow(0 0 26px rgba(34,211,238,.9)); } 100% { filter: drop-shadow(0 0 18px rgba(124,92,255,.45)); } }
-        .sx-root .sx-row { transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease; }
-        .sx-root .sx-row:hover { transform: translateY(-1px); border-color: rgba(34,211,238,0.35); }
-        @media (prefers-reduced-motion: reduce) { .sx-root .sx-pulse, .sx-root .sx-flash { animation: none; } .sx-root .sx-row { transition: none; } .sx-root .sx-row:hover { transform: none; } }
-        @media (max-width: 1150px) { .sx-root .sx-hero { grid-template-columns: 1fr !important; } }
-        @media (max-width: 1000px) { .sx-root .sx-plat, .sx-root .sx-md { grid-template-columns: 1fr !important; } }
-        .sx-root .sx-bar:focus-visible { outline: 2px solid ${C.cyan}; outline-offset: 2px; border-radius: 8px; }
-        .sx-root .sx-row:focus-visible { outline: 2px solid ${C.cyan}; outline-offset: 2px; }
-        @media (max-width: 1280px) { .sx-root .sx-bx { grid-template-columns: 1fr !important; } }
-        @media (max-width: 1150px) { .sx-root .sx-summary { grid-template-columns: 1fr !important; } }
-        @media (max-width: 640px) {
-          .sx-root .sx-cells, .sx-root .sx-dgrid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
-          .sx-root .sx-stats { grid-template-columns: repeat(2, minmax(0,1fr)) !important; row-gap: 10px !important; }
-          .sx-root .sx-row { grid-template-columns: 36px minmax(0,1fr) auto !important; }
-          .sx-root .sx-row .sx-row-count { display: none; }
-          .sx-root .sx-row .sx-when-long { display: none; }
-          .sx-root .sx-row .sx-when-short { display: inline !important; }
-        }
+        @media (prefers-reduced-motion: reduce) { .sx-root .sx-pulse, .sx-root .sx-flash { animation: none; } }
       `}</style>
 
-      {/* Row 1 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.white, margin: 0, letterSpacing: "-0.03em", display: "flex", alignItems: "center", gap: 12 }}>
-            <svg aria-hidden="true" width="34" height="28" viewBox="0 0 34 28" fill="none"><defs><linearGradient id="sxPulseIcon" x1="0" x2="1"><stop offset="0" stopColor={C.pink} /><stop offset="1" stopColor={C.violet} /></linearGradient></defs><path d="M1 15h7l3-8 5 17 4-12 2 3h11" stroke="url(#sxPulseIcon)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 6px ${C.pink}88)` }} /></svg>
-            Sessions
-          </h1>
-          <div style={{ fontSize: 14, color: C.text, marginTop: 4 }}>Review your shows, see what drove earnings, and plan smarter streams.</div>
+      <header className={L.header}>
+        <div className={L.headerCopy}>
+          <h1 className={L.pageTitle}>Sessions</h1>
+          <p className={L.pageSubtitle}>What happened in each show, what drove the money, and what to take into the next one.</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          {mode.kind === "mixed" && (
-            <div data-testid="scope-switch" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)" }}>
-              {[["today", "Today"], ["overall", "Overall"]].map(([k, l]) => <span key={k} data-testid={`scope-${k}`}><Pill active={scope === k} onClick={() => setScopePick(k)}>{l}</Pill></span>)}
-            </div>
-          )}
-          {scope === "today" && !noData && <div data-testid="range-group" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)", alignItems: "center" }}>
-            {mode.kind === "mixed" && <span style={{ fontSize: 11, color: C.muted, padding: "0 6px" }}>Range</span>}
-            {RANGES.map(([d, l]) => <span key={d} data-testid={`range-${d}`}><Pill active={range === d} onClick={() => setRange(d)}>{mode.kind === "mixed" && d === 1 ? "1 Day" : l}</Pill></span>)}
-          </div>}
- <PrimaryPlatformControl isPro={isPro} primary={primaryPlatform} onSaved={onPrimarySaved} />
-          <span data-testid="updated" style={{ fontSize: 12, color: C.text, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 4, background: C.green }} />Updated {timeAgo(loadedAt.toISOString(), now)}
-          </span>
+        <div className={L.headerActions}>
+          <PrimaryPlatformControl isPro={isPro} primary={primaryPlatform} onSaved={onPrimarySaved} />
+          <span data-testid="updated" className={L.sectionHint} style={{ margin: 0, whiteSpace: "nowrap" }}><span className={L.statusDot} />Updated {timeAgo(loadedAt.toISOString(), now)}</span>
         </div>
-      </div>
+      </header>
+
+      {!tipsLoadComplete && <div data-testid="sessions-load-note" className={L.warning} style={{ marginBottom: 14 }}>Some of your history didn&apos;t finish loading. Sessions shows what loaded, and comparisons are paused until it does.</div>}
 
       {noData ? <Activation onImport={onImport} onStartLive={onStartLive} /> : <>
-      {/* Row 2 */}
-      {scope === "overall"
-        ? <OverallHero o={overall} sourceLabel={sourceLabel} historyNote={historyNote} tz={tz} light={light} />
-        : <Hero stats={stats} range={range} comparison={comparison} trend={trend} live={snap} now={now} light={light} onStartLive={onStartLive} />}
+        <SessionsPulse pick={pulse} tz={tz} topFan={pulseFan} hourly={pulseHourly} onOpen={openSession} onImport={onImport} sessionCount={filterSessionHistory(history, {}).length} />
 
-      {/* Row 3 */}
-      {showPerf ? (
-        <div data-testid="session-performance">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-            <span style={{ fontSize: 20, fontWeight: 900, color: C.white }}>Session Performance</span>
-            <span style={{ fontSize: 12.5, color: C.text }}>{scope === "overall" ? "Across your available history" : "Your meaningful sessions"} · platform comparison lives in the Platforms tab</span>
-          </div>
-          <SessionPerformanceCards perf={perf} onImport={onImport} />
-        </div>
-      ) : (
-      <div data-testid="today-by-platform">
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-          <span style={{ fontSize: 20, fontWeight: 900, color: C.white }}>{range === 1 ? "Today by Platform" : `Last ${range} days by Platform`}</span>
-          <span style={{ fontSize: 12.5, color: C.text }}>Compare your earnings across platforms</span>
-        </div>
-        <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(cardPlatforms.length, 2)}, minmax(0,1fr))`, gap: 14 }}>
-          {cardPlatforms.map((p) => (
-            <PlatformCard key={p} platform={p} p={byPlatform[p]} best={stats.bestPlatform === p} range={range} />
-          ))}
-        </div>
-      </div>
-      )}
-
-      {/* Row 4 */}
-      <div className="sx-md" style={{ display: "grid", gridTemplateColumns: "minmax(0,38fr) minmax(0,62fr)", gap: 16, alignItems: "start" }}>
-        <div data-testid="session-history" style={card({ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 10, background: "rgba(12,15,28,0.80)", borderRadius: 20, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)" })}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: C.white, letterSpacing: "-0.02em" }}>Recent Sessions</div>
-              <div style={{ fontSize: 12.5, color: C.text }}>{mode.kind === "csv" ? "Grouped from your imported tip history (60-min gap) · spans are estimated" : showAll ? "All your sessions in this view" : `Your latest ${ROWS} sessions`}</div>
+        <div className={L.workspace}>
+          <aside className={L.leftRail}>
+            <div data-testid="session-history" className={cx(L.glassPanel, L.railCard)}>
+              <div className={L.cardHeading}>
+                <div>
+                  <h2 className={L.sectionTitle}>Sessions</h2>
+                  <p className={L.sectionHint}>{mode.kind === "csv" ? "Reconstructed from imported transactions (60-min gap)" : mode.kind === "mixed" ? "Live Mode shows and imported history" : "Your Live Mode shows"}</p>
+                </div>
+                {allRows.length > ROWS && (
+                  <button data-testid="history-view-all" aria-expanded={visible >= allRows.length} onClick={() => setVisible((v) => (v >= allRows.length ? ROWS : v + 20))} className={L.linkButton}>
+                    {visible >= allRows.length ? "Show fewer" : `Show more (${allRows.length - Math.min(visible, allRows.length)})`}
+                  </button>
+                )}
+              </div>
+              {mode.platforms.length > 1 && (
+                <div className={cx(L.segmented, L.filterScroll)} role="group" aria-label="Platform">
+                  {[["all", "All platforms"], ...mode.platforms.map((p) => [p, pName(p)])].map(([k, l]) => (
+                    <button key={k} data-testid={`filter-platform-${k}`} aria-pressed={platformPick === k} onClick={() => { setPlatformPick(k); setVisible(ROWS) }} className={cx(L.segment, platformPick === k && L.segmentActive)}>{l}</button>
+                  ))}
+                </div>
+              )}
+              <div className={cx(L.segmented, L.filterScroll)} role="group" aria-label="Session type">
+                {FILTERS.map(([k, l]) => <span key={k} data-testid={`filter-type-${k}`}><button aria-pressed={filter === k} onClick={() => { setFilter(k); setVisible(ROWS) }} className={cx(L.segment, filter === k && L.segmentActive)}>{l}</button></span>)}
+              </div>
+              {showsError && <p className={L.quietNote}>Couldn&apos;t load your Live Mode shows. They&apos;ll appear on the next refresh.</p>}
+              {showsLoading && !history.length && <div className={L.skeleton} style={{ height: 60 }} aria-label="Loading sessions" />}
+              {!showsLoading && !history.length && !runningEntry && <p data-testid="history-empty" className={L.quietNote}>No sessions yet. Start a Live Mode show or import your tip history.</p>}
+              {(history.length > 0 || runningEntry) && !allRows.length && <p data-testid="history-filter-empty" className={L.quietNote}>No sessions match this filter. Short tip groups (under 30 min or a single tip) are not listed.</p>}
+              <div className={L.sessionList}>
+                {rowsShown.map((e) => <SessionRow key={e.id} e={e} tz={tz} selected={selected?.id === e.id} onSelect={() => setSelectedId(e.id)} vs={vsById.get(e.id)} />)}
+              </div>
             </div>
-            {allRows.length > ROWS && (
-              <button data-testid="history-view-all" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)} style={{ flexShrink: 0, background: "transparent", border: "none", padding: "2px 0", color: C.pink, fontWeight: 800, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
-                {showAll ? "Show fewer" : `View All (${allRows.length})`} <span aria-hidden="true">→</span>
-              </button>
+            {!isPro && heldBack.length > 0 && (
+              <div data-testid="sessions-free-note" className={cx(L.glassPanel, L.upgrade)}>
+                <p className={L.upgradeTitle}>Older {heldBack.join(", ")} history is Pro</p>
+                <p className={L.upgradeText} style={{ marginBottom: 0 }}>{historyNote}. Everything shown here is complete for what you can see.</p>
+              </div>
+            )}
+          </aside>
+          <div data-testid="session-details">
+            <span className={L.srOnly}>Session Details</span>
+            <Details e={selected} tips={T0} paidSessions={P0} tz={tz} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} completeness={selected ? completeness.get(selected.id) || null : null} plans={plannedStreams} onOpenPlanner={onOpenPlanner} loadComplete={tipsLoadComplete} />
+          </div>
+        </div>
+
+        <div className={cx(L.glassPanel, L.overviewWrap)}>
+          <button data-testid="period-overview-toggle" aria-expanded={overviewOpen} onClick={() => setOverviewOpen((v) => !v)} className={L.disclosureButton}>
+            <span>{scope === "overall" ? "Overall performance" : "Period overview"} <span className={L.muted} style={{ fontWeight: 500 }}>· totals across sessions</span></span>
+            <span aria-hidden="true" className={L.muted}>{overviewOpen ? "–" : "+"}</span>
+          </button>
+          <div className={L.disclosureBody} hidden={!overviewOpen} style={{ display: overviewOpen ? "flex" : undefined, flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              {mode.kind === "mixed" && (
+                <div data-testid="scope-switch" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)" }}>
+                  {[["today", "Today"], ["overall", "Overall"]].map(([k, l]) => <span key={k} data-testid={`scope-${k}`}><Pill active={scope === k} onClick={() => setScopePick(k)}>{l}</Pill></span>)}
+                </div>
+              )}
+              {scope === "today" && <div data-testid="range-group" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 10, border: `1px solid ${C.line}`, background: "rgba(8,11,22,0.6)", alignItems: "center" }}>
+                {mode.kind === "mixed" && <span style={{ fontSize: 11, color: C.muted, padding: "0 6px" }}>Range</span>}
+                {RANGES.map(([d, l]) => <span key={d} data-testid={`range-${d}`}><Pill active={range === d} onClick={() => setRange(d)}>{mode.kind === "mixed" && d === 1 ? "1 Day" : l}</Pill></span>)}
+              </div>}
+            </div>
+            {scope === "overall"
+              ? <OverallHero o={overall} sourceLabel={sourceLabel} historyNote={historyNote} tz={tz} light={light} />
+              : <Hero stats={stats} range={range} comparison={comparison} trend={trend} live={snap} now={now} light={light} onStartLive={onStartLive} />}
+            {showPerf ? (
+              <div data-testid="session-performance">
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+                  <span className={L.sectionTitle}>Session Performance</span>
+                  <span className={L.sectionHint} style={{ margin: 0 }}>{scope === "overall" ? "Across your available history" : "Your meaningful sessions"} · platform comparison lives in the Platforms tab</span>
+                </div>
+                <SessionPerformanceCards perf={perf} onImport={onImport} />
+              </div>
+            ) : (
+              <div data-testid="today-by-platform">
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+                  <span className={L.sectionTitle}>{range === 1 ? "Today by Platform" : `Last ${range} days by Platform`}</span>
+                  <span className={L.sectionHint} style={{ margin: 0 }}>Compare your earnings across platforms</span>
+                </div>
+                <div className="sx-plat" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(cardPlatforms.length, 2)}, minmax(0,1fr))`, gap: 14 }}>
+                  {cardPlatforms.map((p) => <PlatformCard key={p} platform={p} p={byPlatform[p]} best={stats.bestPlatform === p} range={range} />)}
+                </div>
+              </div>
+            )}
+            {signal && (
+              <div data-testid="today-signal" className={L.quietNote}>
+                <strong style={{ color: C.cyan }}>Strongest signal: {signal}</strong>
+                {scope === "today" && stats.platforms.find((x) => x.platform === stats.bestPlatform) && <span> · {fmtUsd(stats.platforms.find((x) => x.platform === stats.bestPlatform).totalUSD)} of {stats.days === 1 ? "today's" : "this range's"} {fmtUsd(stats.totalUSD)} came from {pName(stats.bestPlatform)}.</span>}
+              </div>
             )}
           </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {FILTERS.map(([k, l]) => <span key={k} data-testid={`filter-type-${k}`}><Pill active={filter === k} onClick={() => setFilter(k)}>{l}</Pill></span>)}
-          </div>
-          {showsError && <div style={{ color: C.text, fontSize: 12 }}>Couldn&apos;t load your Live Mode shows. They&apos;ll appear on the next refresh.</div>}
-          {showsLoading && !history.length && <div style={{ color: C.text, fontSize: 12 }}>Loading…</div>}
-          {!showsLoading && !history.length && !runningEntry && <div data-testid="history-empty" style={{ color: C.text, fontSize: 13 }}>No sessions yet. Start a Live Mode show or import your tip history.</div>}
-          {(history.length > 0 || runningEntry) && !rows.length && <div data-testid="history-filter-empty" style={{ color: C.text, fontSize: 13 }}>No sessions of this type yet. Short tip groups (under 30 min or a single tip) are not listed.</div>}
-          {rows.map((e) => <SessionRow key={e.id} e={e} tz={tz} selected={selected?.id === e.id} onSelect={() => setSelectedId(e.id)} vs={vsById.get(e.id)} />)}
         </div>
-        <div data-testid="session-details" style={card({ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 12, background: "rgba(12,15,28,0.80)", borderRadius: 20, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)", minWidth: 0 })}>
-          <div style={SR_ONLY}>Session Details</div>
-          <Details e={selected} tips={T0} paidSessions={P0} tz={tz} today={scope === "today" ? stats : { platforms: [], bestPlatform: null }} signal={signal} isPro={isPro} primaryPlatform={primaryPlatform} vs={selected ? vsById.get(selected.id) || null : null} completeness={selected ? completeness.get(selected.id) || null : null} plans={plannedStreams} onOpenPlanner={onOpenPlanner} />
-        </div>
-      </div>
       </>}
     </div>
   )
