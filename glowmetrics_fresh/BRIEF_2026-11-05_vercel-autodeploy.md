@@ -21,11 +21,17 @@ Read-only investigation. Nothing in Vercel, GitHub or the code was changed.
    - PR #703 was merged "from CamCashGrl/…", so the repo has been associated with two GitHub owners.
    - Most likely cause: the Vercel GitHub App's access to the repo was lost when the repo changed owner. This could not be confirmed directly, because GitHub App installation settings are not visible from this session.
 
+4. **NEW — Vercel deployment storage is almost full: 9.89 GB of 10 GB** (Hobby plan, last 30 days, from the owner's dashboard screenshot).
+   - Other usage from the same screenshot: Fluid Active CPU 2h 41m / 4h, Fluid Provisioned Memory 202.5 / 360 GB-hrs, ISR Reads 245K / 1M.
+   - The Vercel docs search did not say what Hobby does when deployment storage hits the limit. It may block new deployments, including the fix for PR #761. Not yet confirmed.
+   - This is separate from the GitHub problem: the manual production deploy on Nov 5 succeeded.
+
 ## Tasks, most important first
 ### New / to do
 1. **(Critical, owner action)** Restore the Vercel GitHub App's access to `daphneoncam/glowmetrics` (steps in the chat reply).
 2. **(Critical)** Get PR #761 to production, either by a redeploy of `main` or automatically once item 1 is fixed. Then confirm `camcashgrl.com` serves commit `2928a0b`.
-3. **(High)** Test the fix: open a PR and confirm a Vercel status and preview URL appear on it.
+3. **(Critical, needs owner approval)** Free up deployment storage before it reaches 10 GB. Options: set a Deployment Retention policy, or delete old preview/errored deployments. Never delete the current or previous production deployment, because Hobby can only roll back to the previous production deployment. Deleted deployments can be recovered for 30 days.
+3b. **(High)** Test the fix: open a PR and confirm a Vercel status and preview URL appear on it.
 4. **(Medium, decision)** The Vercel dashboard is offering "Set Up Vercel CI" (`npx skills use vercel/ci@setup`). It was **not** run. Vercel CI is a separate product for running checks; it does not restore Git auto-deploys. The repo already runs build, test and test-integrity checks in GitHub Actions, so adding it now would duplicate them. Revisit after item 1 is fixed, and only with owner approval.
 5. **(Medium)** Before any disconnect or reconnect, record the current Vercel settings: Root Directory, Production Branch, build and install commands, env var names, domains and deploy hooks.
 
