@@ -1,6 +1,7 @@
 
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import Script from 'next/script'
 import { interClassName } from './fonts/inter'
 import FeedbackWidgetGate from './components/FeedbackWidgetGate'
@@ -162,6 +163,7 @@ export default function RootLayout({ children }) {
         {children}
         <FeedbackWidgetGate />
         <Analytics />
+        <SpeedInsights />
 
         {/* X (Twitter) Conversion Tracking Pixel */}
         <Script
