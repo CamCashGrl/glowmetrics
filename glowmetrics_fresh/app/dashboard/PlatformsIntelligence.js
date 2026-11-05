@@ -1611,6 +1611,338 @@ function PlatformDetail({ analytics, platformName, isPro, extras, onNavigate, de
 // PAGE
 // ============================================
 
+
+// ============================================
+// MOCK LAYOUT · Pulse row, finding cards, trends, timing, records
+// Every figure below comes from the existing builders (comparison rows,
+// extras, buildDailySeries, canonicalBestTimes); nothing is derived here.
+// ============================================
+
+function SectionHead({ icon, title, note, right }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', margin: '4px 2px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9, fontSize: 19, fontWeight: 600, color: C.white, letterSpacing: '-0.02em' }}>
+          <span style={{ color: C.teal, display: 'inline-flex' }}><Ico name={icon} size={18} /></span>{title}
+        </span>
+        {note && <span style={{ fontSize: 12.5, color: C.muted }}>{note}</span>}
+      </div>
+      {right}
+    </div>
+  )
+}
+
+function PulseCard({ row, extras, badges, selected, onSelect, leading, spark }) {
+  const accent = accentFor(row.platform)
+  const fresh = badges.includes('fresh')
+  const shown = badges.filter(b => b !== 'fresh').slice(0, 1)
+  const hasSpark = Boolean(spark && spark.some(v => v > 0))
+  const stat = (label, value, title) => (
+    <div style={{ minWidth: 0 }} title={title}>
+      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 600, color: C.white, marginTop: 4, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{value}</div>
+    </div>
+  )
+  return (
+    <Glass
+      accent={selected ? accent : undefined}
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() } }}
+      style={{
+        padding: '18px 20px 16px',
+        background: leading
+          ? `radial-gradient(circle at 4% -8%, ${accent}22, transparent 55%), linear-gradient(150deg, rgba(15,18,36,0.78), rgba(7,9,20,0.92))`
+          : 'linear-gradient(150deg, rgba(15,18,36,0.72), rgba(7,9,20,0.90))',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <PlatformMark platform={row.platform} size={28} />
+          <span style={{ fontSize: 16, fontWeight: 600, color: C.white, letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.platform}</span>
+          {fresh && <span title={BADGE_HELP.fresh} className="pl-live" style={{ width: 5, height: 5, borderRadius: 3, background: C.teal, boxShadow: `0 0 8px ${C.teal}`, flexShrink: 0 }} />}
+        </div>
+        <span style={{ fontSize: 12, padding: '3px 9px', borderRadius: 999, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', whiteSpace: 'nowrap' }}>
+          <TrendCell trend={row.trend} />
+        </span>
+      </div>
+      {shown.length > 0 && <div style={{ marginTop: 8 }}>{shown.map(b => <Badge key={b} kind={b} />)}</div>}
+
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginTop: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,auto))', gap: '12px 26px', minWidth: 0 }}>
+          {stat('Earnings', fmt$(row.earnings))}
+          {stat('$/hr', row.rateHours > 0 ? fmt$(row.usdPerHour) : '—', 'Timed sessions of 30+ minutes with 2+ tips only')}
+          {stat('Hours', fmtH(row.hours))}
+          {stat('Fans', fmtN(extras?.uniqueFans ?? 0))}
+        </div>
+        {hasSpark && (
+          <div style={{ width: '40%', maxWidth: 150, flexShrink: 0 }}>
+            <GlowChart values={spark} color={accent} height={64} strokeWidth={2} pulse={leading} />
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.04)', fontSize: 12.5, color: C.muted }}>
+        <span style={{ color: accent, fontWeight: 600 }}>{row.earningsPercent}% of earnings</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: selected ? accent : C.text }}>
+          {selected ? 'Viewing' : 'View details'} <Ico name="arrow" size={12} style={selected ? { transform: 'rotate(90deg)' } : undefined} />
+        </span>
+      </div>
+    </Glass>
+  )
+}
+
+const FINDING_ICON = { avg_tip: 'dollar', growth: 'trend', top_spenders: 'users' }
+
+function FindingCards({ noticed, cross, isPro, onUpgrade, multi }) {
+  const items = (isPro
+    ? [...cross.map(c => ({ id: c.id, text: c.text })), ...noticed.map((n, i) => ({ id: `n${i}`, text: n.text }))]
+    : noticed.map((n, i) => ({ id: `n${i}`, text: n.text }))
+  ).slice(0, 4)
+  const teasers = isPro ? [] : cross.slice(0, 2)
+  if (items.length === 0 && teasers.length === 0) {
+    return (
+      <Glass style={{ padding: '18px 22px' }}>
+        <div style={{ fontSize: 14, color: C.text, lineHeight: 1.7 }}>
+          {multi
+            ? 'Nothing stands out between your platforms yet. Findings appear here when the gap is big enough to be real.'
+            : 'Findings appear here once a pattern in your data is strong enough to call out.'}
+        </div>
+      </Glass>
+    )
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
+      {items.map((it, i) => {
+        const lead = i === 0
+        const color = lead ? C.pink : i % 2 ? C.cyan : C.purple
+        return (
+          <Glass key={it.id} accent={lead ? C.pink : undefined} className="pl-chip" style={{ padding: '16px 18px', animationDelay: `${i * 70}ms`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: `${color}1f`, color }}>
+                <Ico name={FINDING_ICON[it.id] || 'sparkle'} size={16} />
+              </span>
+              {lead && <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '0.14em', color: C.pink, padding: '3px 8px', borderRadius: 6, background: `${C.pink}14`, boxShadow: `inset 0 0 0 1px ${C.pink}40` }}>TOP FINDING</span>}
+            </div>
+            <div style={{ fontSize: 14, lineHeight: 1.55, color: lead ? C.white : C.cell, fontWeight: lead ? 500 : 400 }}>{it.text}</div>
+          </Glass>
+        )
+      })}
+      {teasers.map((c, i) => (
+        <Glass key={c.id} className="pl-chip" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.16em', color: C.pink }}>PRO INSIGHT</span>
+            <span aria-hidden="true" style={{ fontSize: 12, color: C.text, filter: 'blur(4px)', userSelect: 'none' }}>██████████ · ██%</span>
+          </div>
+          <div style={{ fontSize: 14, color: C.white, lineHeight: 1.55 }}>{c.teaser}</div>
+          <button type="button" onClick={() => onUpgrade?.(`platforms_insight_${c.id}`)} style={{ marginTop: 'auto', padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.pink, textAlign: 'left' }}>
+            {c.cta} →
+          </button>
+        </Glass>
+      ))}
+    </div>
+  )
+}
+
+// Daily earnings per platform: real daily totals, one lit line per platform.
+function TrendsSection({ daily, comparison }) {
+  const [hover, setHover] = useState(null)
+  const series = comparison
+    .map(r => ({ platform: r.platform, row: r, color: accentFor(r.platform), values: daily?.byPlatform?.[r.platform] }))
+    .filter(x => x.values && x.values.some(v => v > 0))
+  if (!daily || series.length === 0) return null
+  const n = daily.days.length
+  const W = 700, H = 240, pad = 6
+  const max = niceTop(Math.max(...series.flatMap(x => x.values), 0.01))
+  const xAt = (i) => (n === 1 ? W / 2 : (i / (n - 1)) * W)
+  const yAt = (v) => H - pad - (v / max) * (H - pad * 2)
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => max * f)
+  const xi = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * (n - 1)))
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    setHover(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left) / Math.max(1, r.width)) * (n - 1)))))
+  }
+  const sums = series.map(x => ({ ...x, sum: x.values.reduce((a, b) => a + b, 0) }))
+  const total = sums.reduce((a, b) => a + b.sum, 0)
+  const hx = hover === null ? 0 : (xAt(hover) / W) * 100
+  return (
+    <div className="pl-trends" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 310px', gap: 14 }}>
+      <Glass style={{ padding: '20px 20px 16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr)', gap: 8 }}>
+          <div aria-hidden="true" style={{ position: 'relative', height: H }}>
+            {ticks.map((t, i) => (
+              <span key={i} style={{ position: 'absolute', right: 0, top: Math.min(H - 14, Math.max(0, yAt(t) - 7)), fontSize: 12, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{axisMoney(t)}</span>
+            ))}
+          </div>
+          <div style={{ position: 'relative', height: H }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+            {ticks.map((t, i) => <span key={i} aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: yAt(t), height: 1, background: 'rgba(255,255,255,0.045)' }} />)}
+            <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} style={{ display: 'block', overflow: 'visible', position: 'relative' }}>
+              {sums.map(x => (
+                <path key={x.platform} d={smoothPath(x.values.map((v, i) => [xAt(i), yAt(v)]))} fill="none" stroke={x.color} strokeWidth="2.2"
+                  vectorEffect="non-scaling-stroke" pathLength="1" className="pl-draw" style={{ filter: `drop-shadow(0 0 6px ${x.color}) drop-shadow(0 0 12px ${x.color}66)` }} />
+              ))}
+            </svg>
+            {hover !== null && (
+              <>
+                <span aria-hidden="true" style={{ position: 'absolute', left: `${hx}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.18)' }} />
+                <div role="status" style={{
+                  position: 'absolute', left: `${hx}%`, top: 6, pointerEvents: 'none', zIndex: 5,
+                  transform: hover > n * 0.6 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)',
+                  padding: '8px 12px', borderRadius: 10, whiteSpace: 'nowrap', background: 'rgba(10,12,26,0.92)',
+                  backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.07), 0 12px 28px rgba(0,0,0,0.5)',
+                }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{dayLabel(daily.days[hover])}</div>
+                  {sums.map(x => (
+                    <div key={x.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ color: x.color }}>{x.platform}</span><span style={{ color: C.white, fontWeight: 600 }}>{fmt$(x.values[hover])}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr)', gap: 8, marginTop: 8 }}>
+          <span />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.muted }}>
+            {xi.map((k, i) => <span key={i}>{dayLabel(daily.days[k])}</span>)}
+          </div>
+        </div>
+      </Glass>
+
+      <Glass style={{ padding: '18px 18px 16px' }}>
+        <div style={eyebrow}>Last 30 days · {dayLabel(daily.days[0])} – {dayLabel(daily.days[n - 1])}</div>
+        <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+          {sums.map(x => (
+            <div key={x.platform} style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto', gap: 10, alignItems: 'baseline', fontSize: 13.5, fontVariantNumeric: 'tabular-nums' }}>
+              <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: x.color, boxShadow: `0 0 8px ${x.color}`, alignSelf: 'center' }} />
+              <span style={{ color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.platform}</span>
+              <span style={{ color: C.white, fontWeight: 600 }}>{fmt$(x.sum)}</span>
+              <span style={{ fontSize: 12 }}><TrendCell trend={x.row.trend} /></span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <span style={{ fontSize: 13, color: C.text }}>Total</span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: C.white, fontVariantNumeric: 'tabular-nums' }}>{fmt$(total)}</span>
+        </div>
+      </Glass>
+    </div>
+  )
+}
+
+// When to earn: the engine's hour-of-day strength and its best window.
+function TimingSection({ analytics, timeIntel, comparison, isPro }) {
+  const grid = analytics?.canonicalBestTimes?.grid || []
+  const win = analytics?.canonicalBestTimes?.bestWindow || null
+  const early = analytics?.canonicalBestTimes?.earlySignal || null
+  if (grid.length === 0 && !win && !early) return null
+  const byHour = new Map(grid.map(g => [Number(g.hour), g]))
+  const peak = Math.max(...grid.map(g => g.avg), 0.01)
+  const bestH = win ? Number(win.localHour) : early ? Number(early.localHour) : null
+  const level = timeIntel?.confidence?.level
+  const topPlatform = win?.topPlatform || null
+  const others = isPro
+    ? comparison
+        .filter(r => r.platform !== topPlatform)
+        .map(r => ({ platform: r.platform, t: analytics?.platformBestTimes?.[r.platform] }))
+        .filter(x => x.t && (x.t.hour || x.t.bestDay))
+        .slice(0, 3)
+    : []
+  const row = (label, value) => (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: C.muted }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: C.white, marginTop: 4 }}>{value}</div>
+    </div>
+  )
+  return (
+    <div className="pl-timing" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 14 }}>
+      <Glass style={{ padding: '18px 20px 14px' }}>
+        <div style={eyebrow}>Earning strength by hour · your timezone</div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 130, marginTop: 16 }}>
+          {Array.from({ length: 24 }, (_, h) => {
+            const g = byHour.get(h)
+            const isBest = bestH === h
+            return (
+              <div key={h} title={g ? `${formatHour(h)} · ${plural(g.count, 'session')}` : `${formatHour(h)} · not enough data`}
+                style={{ flex: 1, height: g ? `${Math.max(6, (g.avg / peak) * 100)}%` : 3, borderRadius: 3,
+                  background: !g ? 'rgba(255,255,255,0.05)' : isBest ? `linear-gradient(180deg, ${C.pink}, ${C.purple})` : `linear-gradient(180deg, ${C.teal}aa, ${C.indigo}66)`,
+                  boxShadow: isBest ? `0 0 14px ${C.pink}77` : 'none' }} />
+            )
+          })}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: C.muted, marginTop: 8 }}>
+          {[0, 6, 12, 18, 23].map(h => <span key={h}>{formatHour(h)}</span>)}
+        </div>
+      </Glass>
+
+      <Glass accent={bestH !== null ? C.pink : undefined} style={{ padding: '18px 20px' }}>
+        <div style={eyebrow}>{win ? 'Best window' : 'Early signal'}</div>
+        {bestH !== null ? (
+          <>
+            <div style={{ fontSize: 22, fontWeight: 600, color: C.white, letterSpacing: '-0.02em', marginTop: 10 }}>
+              {(win?.localDay || (early?.localDay !== 'Any day' ? early?.localDay : null)) ? `${win?.localDay || early.localDay} · ` : ''}around {formatHour(bestH)}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 14, marginTop: 14 }}>
+              {topPlatform && row('Top platform', topPlatform)}
+              {row('Sample', plural(win?.sessionCount ?? early?.sessionCount ?? 0, 'session'))}
+              {row('Confidence', level && level !== 'Very Low' ? timeIntel.confidence.label : 'Still learning')}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 13.5, color: C.text, marginTop: 10, lineHeight: 1.6 }}>Timing appears here once a window is supported by enough sessions.</div>
+        )}
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ ...eyebrow, marginBottom: 10 }}>Also worth considering</div>
+          {isPro ? (
+            others.length === 0
+              ? <div style={{ fontSize: 13, color: C.muted }}>No other platform has a timing pattern yet.</div>
+              : others.map(x => (
+                <div key={x.platform} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13.5, padding: '5px 0' }}>
+                  <span style={{ color: accentFor(x.platform), fontWeight: 600 }}>{x.platform}</span>
+                  <span style={{ color: C.text }}>{[x.t.bestDay?.day, x.t.hour ? `around ${formatHour(x.t.hour.hour)}` : null].filter(Boolean).join(' · ')}</span>
+                </div>
+              ))
+          ) : (
+            <LockedRow text="Best hour and day for each platform" />
+          )}
+        </div>
+      </Glass>
+    </div>
+  )
+}
+
+// Records: only facts already on the rows, so each reconciles to the table.
+function RecordsStrip({ comparison, extras, efficiency }) {
+  const recs = []
+  const tip = comparison
+    .map(r => ({ platform: r.platform, usd: extras?.[r.platform]?.biggestTip || 0 }))
+    .sort((a, b) => b.usd - a.usd)[0]
+  if (tip && tip.usd > 0) recs.push({ icon: 'trophy', label: 'Biggest tip', value: fmt$(tip.usd), sub: tip.platform, color: C.pink })
+  if (efficiency.length > 0) recs.push({ icon: 'clock', label: 'Best $/hr', value: fmt$(efficiency[0].usdPerHour), sub: efficiency[0].platform, color: C.teal })
+  const growing = comparison
+    .filter(r => r.trend && r.trend.pct !== null && r.trend.pct > 0)
+    .sort((a, b) => b.trend.pct - a.trend.pct)[0]
+  if (growing) recs.push({ icon: 'trend', label: 'Fastest 30-day growth', value: `+${Math.round(growing.trend.pct)}%`, sub: growing.platform, color: C.cyan })
+  if (recs.length === 0) return null
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+      {recs.map(r => (
+        <Glass key={r.label} style={{ padding: '16px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 30, height: 30, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: `${r.color}1f`, color: r.color }}><Ico name={r.icon} size={16} /></span>
+            <span style={{ fontSize: 12.5, color: C.text }}>{r.label}</span>
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: C.white, letterSpacing: '-0.03em', marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>{r.value}</div>
+          <div style={{ fontSize: 12.5, color: accentFor(r.sub), marginTop: 4 }}>{r.sub}</div>
+        </Glass>
+      ))}
+    </div>
+  )
+}
+
 export default function PlatformsIntelligence({
   analytics = null, tips = [], isPro = false, onOpenPlanner = null,
   onNavigate = null, onUpgrade = null, tz = null, hiddenTipCount = 0,
@@ -1877,6 +2209,13 @@ export default function PlatformsIntelligence({
   }
 }
 
+@media (max-width: 900px) {
+  .pl-root .pl-trends,
+  .pl-root .pl-timing {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 @media (max-width: 600px) {
   .pl-root .pl-rail-items {
     display: grid !important;
@@ -1958,34 +2297,41 @@ export default function PlatformsIntelligence({
       ) : (
         <>
           <SinceLastVisit visit={visit} tz={tz} />
-          <PlatformPulse comparison={comparison} snapshot={snapshot} recap={recap} learning={learning} newFans={newFans} daily={daily} />
+          <div>
+            <SectionHead icon="bars" title="Platform Pulse" note="Earnings across your analysed history · the badge compares the last 30 days with the 30 before"
+              right={snapshot && (
+                <span style={{ fontSize: 13, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
+                  Total <strong style={{ color: C.white, fontSize: 16 }}>{fmt$(snapshot.totalEarnings)}</strong> · {plural(snapshot.totalTips, 'tip')} · {plural(comparison.length, 'platform')}
+                </span>
+              )} />
+            {learning.isLearning && (
+              <div style={{ fontSize: 13, color: C.text, margin: '-4px 2px 12px', lineHeight: 1.55 }}>
+                <span style={{ color: C.white, fontWeight: 600 }}>CamCash is still learning your platforms.</span>{' '}
+                {[
+                  learning.sessionsNeeded > 0 ? plural(learning.sessionsNeeded, 'more meaningful session') : null,
+                  learning.hoursNeeded > 0 ? `${learning.hoursNeeded} more streamed hours` : null,
+                ].filter(Boolean).join(' and ')}{[learning.sessionsNeeded > 0, learning.hoursNeeded > 0].some(Boolean) ? ' will unlock early patterns.' : ''}
+              </div>
+            )}
           {!isPro && multi && (
-            <div style={{ fontSize: 13, color: C.text, marginTop: -8, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 13, color: C.text, marginTop: -2, lineHeight: 1.55 }}>
               {fullHistoryPlatform && names.includes(fullHistoryPlatform)
                 ? <>Free plan: <strong style={{ color: C.white }}>{fullHistoryPlatform}</strong> (your primary) includes its full history; other platforms show their latest 31 days, so shares compare different spans.</>
                 : <>Free plan: each platform shows its latest 31 days of activity.</>}
             </div>
           )}
-          <LatestStream recap={recap} tz={tz} multi={multi} />
-          <ActivityFeed items={activity} />
-
-          <div
-  className="pl-grid pl-platform-grid"
-  style={{
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: 16,
-    marginTop: -10,
-    position: 'relative',
-    zIndex: 3,
-  }}
->
+          <div className="pl-grid pl-platform-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
             {comparison.map(row => (
-              <PlatformCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
+              <PulseCard key={row.platform} row={row} extras={extras[row.platform]} badges={freshPlatforms.has(row.platform) ? ['fresh', ...(statuses[row.platform] || [])] : (statuses[row.platform] || [])}
                 selected={active === row.platform} onSelect={() => select(row.platform)} leading={multi && row.platform === comparison[0].platform} spark={daily?.byPlatform?.[row.platform]} />
             ))}
             {!multi && <ExpansionCard onImport={onImport} />}
           </div>
+          </div>
+
+
+          <LatestStream recap={recap} tz={tz} multi={multi} />
+          <ActivityFeed items={activity} />
 
           {active && (
             <div>
@@ -1993,8 +2339,29 @@ export default function PlatformsIntelligence({
             </div>
           )}
 
-          <IntelligenceArea comparison={comparison} multi={multi}
-            noticedProps={{ noticed, cross, isPro, onUpgrade, multi }} />
+          <div>
+            <SectionHead icon="sparkle" title="CamCash Noticed" note="Personalized discoveries from your cross-platform data" />
+            <FindingCards noticed={noticed} cross={cross} isPro={isPro} onUpgrade={onUpgrade} multi={multi} />
+          </div>
+
+          {daily && (
+            <div>
+              <SectionHead icon="trend" title="Historical Trends" note="Daily earnings by platform, last 30 days" />
+              <TrendsSection daily={daily} comparison={comparison} />
+            </div>
+          )}
+
+          <div>
+            <SectionHead icon="clock" title="Cross-Platform Timing" note="When you tend to earn most, across all platforms" />
+            <TimingSection analytics={analytics} timeIntel={timeIntel} comparison={comparison} isPro={isPro} />
+          </div>
+
+          {isPro && (
+            <div>
+              <SectionHead icon="trophy" title="Records & Breakdowns" note="Key facts and platform health" />
+              <RecordsStrip comparison={comparison} extras={extras} efficiency={efficiency} />
+            </div>
+          )}
 
           {multi && (
             <div>
