@@ -93,7 +93,14 @@ test('earnings timeline uses real data; honest empty state otherwise', () => {
   const { unmount } = renderTab({ tips: liveTips, shows: [show] })
   expect(screen.getByTestId('details-timeline')).toBeTruthy()
   unmount()
-  renderTab({ paidSessions: [{ id: 7, date_time: '2026-10-07T15:00:00Z', platform: 'bongacams', username: 'Fay', session_type: 'Private Chat', usd: 7 }] })
+  // Batch 2: the Overview chart is the bucket chart (sessionBuckets), so a
+  // single timestamped private charge is one real bucket, not an empty state.
+  const r = renderTab({ paidSessions: [{ id: 7, date_time: '2026-10-07T15:00:00Z', platform: 'bongacams', username: 'Fay', session_type: 'Private Chat', usd: 7 }] })
+  expect(screen.getByTestId('details-timeline')).toBeTruthy()
+  expect(screen.getAllByTestId('bucket-bar')).toHaveLength(1)
+  r.unmount()
+  // No time-stamped activity at all (a Live show with no tips and no private time): honest empty state.
+  renderTab({ shows: [{ ...show, id: 'show-empty', privateIntervals: [], privateSeconds: 0, privateUsd: 0, publicUsd: 0, totalUsd: 0, tipCount: 0, uniqueTippers: 0, topTipper: null, platformRevenue: [] }] })
   expect(screen.getByTestId('details-timeline-empty')).toBeTruthy()
 })
 
@@ -466,5 +473,135 @@ describe('completeness, $/hr and timezone', () => {
     r = renderTab({ tips: dst, tz: 'Asia/Kolkata', isPro: true })
     click('details-tab-timeline')
     expect(screen.getAllByTestId('bucket-row')[0].textContent).toMatch(/^11:00\sAM–11:15\sAM/) // 05:30Z = 11:00 IST
+  })
+})
+
+// ── Batch 2: presentation (compact rows, summary card, interactive buckets) ──
+describe('Batch 2 Sessions UI', () => {
+  const bars = () => screen.getAllByTestId('bucket-bar')
+  const inChart = () => within(screen.getByTestId('details-timeline'))
+
+  test('rows are platform-first: platform tile + name lead, then local time and type; Imported is a secondary tag', () => {
+    renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
+    const row = screen.getByTestId('history-live:show-a')
+    expect(row.textContent.startsWith('CBChaturbate')).toBe(true) // tile initials, then the platform name
+    expect(within(row).getByTestId('type-badge-live').textContent).toBe('Live')
+    const csv = renderTab({ tips: csvTips })
+    expect(within(csv.container).getAllByTestId('type-badge-imported')[0].textContent).toBe('Imported')
+  })
+
+  test('"View All" widens the same (plan-gated) list; never more rows than the data passed in', () => {
+    const tips = Array.from({ length: 7 }, (_, d) => [csvTip(500 + d * 2, `2026-09-${String(10 + d).padStart(2, '0')}T20:00:00Z`, 'chaturbate', 'Ann', 5), csvTip(501 + d * 2, `2026-09-${String(10 + d).padStart(2, '0')}T20:40:00Z`, 'chaturbate', 'Ben', 5)]).flat()
+    renderTab({ tips })
+    expect(screen.getAllByTestId(/^history-tips:/)).toHaveLength(5)
+    fireEvent.click(screen.getByTestId('history-view-all'))
+    expect(screen.getAllByTestId(/^history-tips:/)).toHaveLength(7)
+    fireEvent.click(screen.getByTestId('history-view-all'))
+    expect(screen.getAllByTestId(/^history-tips:/)).toHaveLength(5)
+  })
+
+  test('no "View All" when everything already fits', () => {
+    renderTab({ tips: liveTips, shows: [show] })
+    expect(screen.queryByTestId('history-view-all')).toBeNull()
+  })
+
+  test('summary card: outcome headline, median basis and n come from sessionVsTypical', () => {
+    const day = (d, a, b) => [csvTip(d * 10, `2026-09-${String(d).padStart(2, '0')}T20:00:00Z`, 'chaturbate', 'Ann', a), csvTip(d * 10 + 1, `2026-09-${String(d).padStart(2, '0')}T20:40:00Z`, 'chaturbate', 'Ben', b)]
+    renderTab({ tips: [...day(2, 20, 10), ...day(4, 10, 10), ...day(6, 15, 5), ...day(8, 8, 2), ...day(10, 5, 5), ...day(12, 6, 4), ...day(14, 30, 10)] })
+    expect(val('details-outcome')).toBe('Outperformed by 167%')
+    expect(screen.getByTestId('details-summary').textContent).toMatch(/\$40\.00 vs\. your usual \$15\.00 per session/)
+    expect(val('details-vs')).toMatch(/median \$15\.00 of 6 of your Chaturbate imported sessions/)
+  })
+
+  test('no outcome headline for a private session (engine gives no comparison)', () => {
+    renderTab({ paidSessions: [{ id: 9, date_time: '2026-10-07T15:00:00Z', platform: 'bongacams', username: 'Fay', username_lower: 'fay', session_type: 'Private Chat', usd: 30.3 }] })
+    expect(screen.queryByTestId('details-outcome')).toBeNull()
+    expect(val('details-total')).toBe('$30.30')
+  })
+
+  test('planner chip reflects matchPlannedStream', () => {
+    const { unmount } = renderTab({ tips: liveTips, shows: [show] })
+    expect(screen.getByTestId('details-planner-chip').getAttribute('data-status')).toBe('no_plans')
+    unmount()
+    renderTab({ tips: liveTips, shows: [show], plannedStreams: [{ id: 'p', planned_start_at: '2026-10-08T17:00:00Z', planned_end_at: '2026-10-08T18:00:00Z', planned_date: '2026-10-08' }] })
+    expect(screen.getByTestId('details-planner-chip').getAttribute('data-status')).toBe('unscheduled')
+  })
+
+  test('bucket chart: $0 buckets are drawn, default selection is the top bucket, click and arrow keys move the selection', () => {
+    renderTab({ tips: liveTips, shows: [show] }) // 60-min show → four 15-minute buckets
+    expect(bars()).toHaveLength(4)
+    expect(bars().map((b) => b.getAttribute('data-zero'))).toEqual(['false', 'true', 'false', 'true'])
+    expect(bars()[0].getAttribute('aria-pressed')).toBe('true') // $8.00 bucket
+    expect(val('bucket-panel-title')).toBe('Bucket 1 · 0–15m')
+    expect(val('bucket-panel-total')).toBe('$8.00')
+    fireEvent.click(bars()[1])
+    expect(val('bucket-panel-title')).toBe('Bucket 2 · 15–30m')
+    expect(screen.getByTestId('bucket-panel-empty').textContent).toMatch(/No earnings recorded in this part of the show/)
+    fireEvent.keyDown(bars()[1], { key: 'ArrowRight' })
+    expect(bars()[2].getAttribute('aria-pressed')).toBe('true')
+    expect(val('bucket-panel-title')).toBe('Bucket 3 · 30–45m')
+  })
+
+  test('Earnings / Tips toggle switches the bar values between USD and counts', () => {
+    renderTab({ tips: liveTips, shows: [show] })
+    expect(bars()[0].textContent).toMatch(/\$8\.00/)
+    expect(bars().map((b) => b.getAttribute('data-value'))).toEqual(['8', '0', '3.16', '0']) // bar heights scale from these
+    fireEvent.click(inChart().getByTestId('bucket-mode-count'))
+    expect(bars().map((b) => b.getAttribute('data-value'))).toEqual(['2', '0', '1', '0'])
+    expect(inChart().getByTestId('bucket-mode-count').getAttribute('aria-pressed')).toBe('true')
+    expect(bars()[0].textContent).toMatch(/B10–15m2$/) // label, range, 2 tips
+    expect(bars()[0].textContent).not.toMatch(/\$/)
+  })
+
+  test('contributor panel: fans from the engine plus "Private (no tipper detail)"; rows add up to the bucket total', () => {
+    renderTab({ tips: liveTips, shows: [show] })
+    fireEvent.click(bars()[2]) // 17:30–17:45: Bob $2.50 + Live private $0.66 (estimated)
+    const rows = screen.getAllByTestId('bucket-contributor')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].textContent).toMatch(/Bob/)
+    expect(rows[0].textContent).toMatch(/\$2\.50/)
+    expect(screen.getByTestId('bucket-private-unattributed').textContent).toMatch(/Private \(no tipper detail\) · estimated~\$0\.66/)
+    expect(val('bucket-panel-total')).toBe('~$3.16') // 2.50 + 0.66
+  })
+
+  test('tipper highlight marks exactly the buckets with that platform:username; the same name on two platforms is not merged', () => {
+    renderTab({ tips: liveTips, shows: [show] })
+    const alices = screen.getAllByTestId('bucket-contributor').filter((r) => /Alice/.test(r.textContent))
+    expect(alices).toHaveLength(2) // Alice on Chaturbate and Alice on MyFreeCams stay separate
+    fireEvent.click(alices.find((r) => /Chaturbate/.test(r.textContent)))
+    expect(bars().map((b) => b.getAttribute('data-highlighted'))).toEqual(['true', 'false', 'false', 'false'])
+    fireEvent.click(screen.getAllByTestId('bucket-contributor').find((r) => /Chaturbate/.test(r.textContent)))
+    expect(bars().every((b) => b.getAttribute('data-highlighted') === 'false')).toBe(true)
+  })
+
+  test('Fans tab: choosing a fan returns to the chart with their buckets highlighted', () => {
+    renderTab({ tips: liveTips, shows: [show] })
+    click('details-tab-fans')
+    fireEvent.click(screen.getAllByTestId('fan-driver').find((r) => /Bob/.test(r.textContent)))
+    expect(screen.getByTestId('details-timeline')).toBeTruthy()
+    expect(bars().map((b) => b.getAttribute('data-highlighted'))).toEqual(['false', 'false', 'true', 'false'])
+  })
+
+  test('selecting another session resets the chart selection and highlight', () => {
+    renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
+    fireEvent.click(screen.getAllByTestId('bucket-contributor').find((r) => /Chaturbate/.test(r.textContent))) // highlight on
+    fireEvent.click(bars()[2]) // non-default bucket
+    expect(screen.getByText('Clear highlight')).toBeTruthy()
+    fireEvent.click(screen.getAllByTestId(/^history-tips:/)[0]) // free chat 12:00–12:45: 10-min buckets, Dan's $6 bucket is the top one
+    const b = screen.getAllByTestId('bucket-bar')
+    expect(b.findIndex((x) => x.getAttribute('aria-pressed') === 'true')).toBe(b.length - 1) // back to the default (top) bucket, not B3
+    expect(screen.queryByText('Clear highlight')).toBeNull()
+    expect(b.every((x) => x.style.opacity === '1')).toBe(true) // nothing dimmed by a stale highlight
+  })
+
+  test('bucket panel times use the creator timezone', () => {
+    renderTab({ tips: liveTips, shows: [show], tz: 'America/New_York' })
+    expect(screen.getByTestId('bucket-panel').textContent).toMatch(/1:00\sPM–1:15\sPM/) // 17:00Z = 1:00 PM EDT
+  })
+
+  test('no decorative emoji in the session list or details', () => {
+    renderTab({ tips: [...liveTips, ...freeChat], shows: [show] })
+    const text = screen.getByTestId('session-history').textContent + screen.getByTestId('session-details').textContent
+    expect(text).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u)
   })
 })
