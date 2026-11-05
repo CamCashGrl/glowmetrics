@@ -64,6 +64,9 @@ describe('query shape', () => {
     expect(d1.filters).toEqual([['eq', 'user_id', 'u1'], ['notnull', 'date_time']])
     expect(d2.count).toBe(null)
     expect(d2.logic).toEqual(['date_time.lt."2026-01-01 00:00:00+00",and(date_time.eq."2026-01-01 00:00:00+00",id.lt.2)'])
+    expect(d2.filters).toContainEqual(['lte', 'date_time', '2026-01-01 00:00:00+00']) // index-range hint, same exact cursor text
+    expect(d1.filters.some(([op]) => op === 'lte')).toBe(false) // first page: no range condition
+    expect(u2.filters.some(([op]) => op === 'lte')).toBe(false) // NULL-dated query unchanged
     expect(u1).toMatchObject({ orders: [['id', false]], limit: 1000, count: 'exact' })
     expect(u1.filters).toEqual([['eq', 'user_id', 'u1'], ['isnull', 'date_time']])
     expect(u2.filters).toContainEqual(['lt', 'id', '9'])

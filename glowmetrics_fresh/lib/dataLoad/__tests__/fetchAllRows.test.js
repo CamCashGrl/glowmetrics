@@ -359,3 +359,62 @@ test('paid sessions load end to end with the same guarantees', async () => {
   expect(new Set(r.rows.map((x) => x.id)).size).toBe(2100)
   expect(keysetFilter({ ts: '2026-06-01 00:00:00+00', id: '3' }, 'bigint')).toContain('id.lt.3)')
 })
+
+describe('date_time <= cursor range condition (performance hint) never changes the result', () => {
+  // the same source without the extra condition, for comparison
+  const withoutLte = (db, uid, make) => {
+    const src = make(db, uid)
+    return { ...src, dated: { ...src.dated, fetchPage: (c, l, o) => {
+      const q = src.dated.fetchPage(null, l, o) // build the base query, then add only the keyset filter
+      return c ? q.or(keysetFilter(c, src.idKind)) : q
+    } } }
+  }
+  const sequence = async (src) => {
+    const r = await fetchAllRows(src, noSleep)
+    return { r, ids: r.rows.map((x) => `${x.date_time}|${x.username}|${x.id}`) }
+  }
+  const base = BigInt(Number.MAX_SAFE_INTEGER) + 1n
+  const fixtures = {
+    'small (25 rows)': () => mkTips(25),
+    'page-sized ties (1,000 identical timestamps + 1)': () => [...mkTips(1000, { sameTime: true }), ...mkTips(1, { idBase: 5000 })],
+    'large (5,500 rows, groups of 40 tied timestamps, microseconds, ids above 2^53)': () =>
+      Array.from({ length: 5500 }, (_, i) => ({ id: base + BigInt(i), user_id: 'u1', platform: 'chaturbate', username: `f${i}`, usd: 1,
+        date_time: `2026-10-01T00:${String(Math.floor(i / 40 / 60) % 60).padStart(2, '0')}:${String(Math.floor(i / 40) % 60).padStart(2, '0')}.${String((i % 3) * 7).padStart(6, '0')}Z` })),
+  }
+  test.each(Object.keys(fixtures))('tips, %s: identical rows, order and coverage', async (name) => {
+    const rows = fixtures[name]()
+    const a = await sequence(withoutLte(fakeSupabase({ tips: rows }), 'u1', tipsSource))
+    const dbB = fakeSupabase({ tips: rows })
+    const b = await sequence(tipsSource(dbB, 'u1'))
+    expect(b.r.complete).toBe(true)
+    expect(b.r.coverage).toEqual(a.r.coverage)
+    expect(b.ids).toEqual(a.ids)
+    expect(b.ids).toHaveLength(rows.length)
+    expect(dated(dbB).slice(1).every((c) => c.filters.some(([op, col]) => op === 'lte' && col === 'date_time'))).toBe(true)
+  })
+
+  test('paid_sessions (BIGINT above 2^53) large fixture: identical rows, order and coverage', async () => {
+    const rows = Array.from({ length: 3200 }, (_, i) => ({ id: base + BigInt(i), user_id: 'u1', platform: 'bongacams', username: `v${i}`, session_type: 'private', usd: 7.575, date_time: new Date(Date.UTC(2026, 5, 1) + Math.floor(i / 30) * 60000).toISOString() }))
+    const a = await sequence(withoutLte(fakeSupabase({ paid_sessions: rows }), 'u1', paidSessionsSource))
+    const b = await sequence(paidSessionsSource(fakeSupabase({ paid_sessions: rows }), 'u1'))
+    expect(b.ids).toEqual(a.ids)
+    expect(b.r.coverage).toEqual({ kind: 'all' })
+  })
+
+  test.each([2, 3, 5])('partial load failing from page %i: identical rows and coverage boundary', async (k) => {
+    const rows = mkTips(5500, { sameTime: false })
+    const failFrom = (db) => ({ fail: (ctx) => (ctx.table === 'tips' && !ctx.undated && ctx.call >= k ? true : null) })
+    const run = async (make) => {
+      const db = fakeSupabase({ tips: rows }, failFrom())
+      return fetchAllRows(make(db), noSleep)
+    }
+    const a = await run((db) => withoutLte(db, 'u1', tipsSource))
+    const b = await run((db) => tipsSource(db, 'u1'))
+    expect(b.complete).toBe(false)
+    expect(b.coverage.kind).toBe('since')
+    const { coveredToMs: _a, ...ca } = a.coverage
+    const { coveredToMs: _b, ...cb } = b.coverage
+    expect(cb).toEqual(ca)
+    expect(b.rows.map((x) => x.id)).toEqual(a.rows.map((x) => x.id))
+  })
+})
