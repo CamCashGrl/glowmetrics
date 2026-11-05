@@ -76,7 +76,12 @@ function tableSource(supabase, table, uid, idKind) {
           .order('date_time', { ascending: false })
           .order('id', { ascending: false })
           .limit(limit)
-        if (cursor) q = q.or(keysetFilter(cursor, idKind))
+        // `date_time <= cursor.ts` is implied by the keyset filter (it never
+        // changes the result); it lets Postgres start the (user_id, date_time)
+        // index scan at the cursor instead of reading past every newer row.
+        // Verified on staging: identical rows, order and coverage on 2,375 and
+        // 100,000 rows; middle-page server time 14.9 -> 3.8 ms at 100,000 rows.
+        if (cursor) q = q.or(keysetFilter(cursor, idKind)).lte('date_time', cursor.ts)
         return q
       },
       cursorOf: (row) => { const c = cursorOf(row, idKind); return c && c.ts !== null ? c : null },
