@@ -163,25 +163,49 @@
   box-shadow: 0 0 0 1px rgba(236,72,153,.18), 0 9px 25px rgba(236,72,153,.12), inset 0 1px rgba(255,255,255,.085) !important;
 }
 
-/* Session Pulse */
+/* Session Pulse — one wide feature card: insight (~65%) | signal (~35%).
+   Desktop target is about half the old Overall Performance hero (263px). */
 .pulse {
-  display: grid; grid-template-columns: minmax(0,1.5fr) minmax(190px,.9fr) auto;
-  align-items: center; gap: 20px; min-height: 112px;
-  padding: 21px 24px; margin-bottom: 16px;
+  display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(250px, 1fr);
+  align-items: stretch; gap: 18px;
+  padding: 12px 12px 12px 20px; margin-bottom: 16px;
 }
-.pulseLead { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
+.pulse::after { /* illuminated top edge: violet → magenta, cyan accent */
+  content: ''; position: absolute; inset: 0 22px auto; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(124,92,255,.55) 22%, rgba(236,72,153,.6) 62%, rgba(34,211,238,.45) 88%, transparent);
+}
+.pulseLead { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.pulseTop { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
 .pulseIcon {
-  display: grid; place-items: center; flex: 0 0 37px; height: 37px;
-  border: 1px solid rgba(250,141,201,.36); border-radius: 12px;
+  display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px;
+  border: 1px solid rgba(250,141,201,.36); border-radius: 9px;
   color: #ff9cce; background: rgba(236,72,153,.12);
-  box-shadow: inset 0 1px rgba(255,255,255,.12), 0 0 18px rgba(236,72,153,.08);
+  box-shadow: inset 0 1px rgba(255,255,255,.12), 0 0 18px rgba(236,72,153,.1);
 }
-.pulseTitle { margin: 0 0 5px; font-size: 17px; font-weight: 770; letter-spacing: -.027em; }
-.pulseMessage { margin: 0; color: #e9e4f2; font-size: 13px; font-weight: 590; max-width: 58ch; }
-.pulseEvidence { margin: 5px 0 0; color: var(--s-muted); font-size: 11px; }
-.pulseSignal { padding-left: 20px; border-left: 1px solid rgba(208,187,244,.17); }
-.signalValue { margin-top: 4px; font-size: 19px; font-weight: 780; line-height: 1.2; letter-spacing: -.035em; }
-.pulseAction { justify-self: end; }
+.pulseBadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  color: #d9d2ea; background: rgba(255,255,255,.045); border: 1px solid var(--s-border);
+}
+.pulseBadgeLive { color: #a7f3d0; border-color: rgba(16,185,129,.38); background: rgba(16,185,129,.1); }
+.pulseLiveDot { width: 6px; height: 6px; border-radius: 50%; background: var(--s-positive); box-shadow: 0 0 8px rgba(16,185,129,.8); }
+.pulseTitle { margin: 0; font-size: 19px; font-weight: 780; line-height: 1.2; letter-spacing: -.03em; color: #fffaff; }
+.pulseEvidence { margin: 2px 0 0; color: var(--s-muted); font-size: 12.5px; max-width: 68ch; }
+.pulseAction { margin-top: 8px; }
+.pulseAction .primaryAction, .pulseAction .secondaryAction { min-height: 32px; padding: 0 14px; }
+.pulseSignal {
+  display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  padding: 11px 16px; border-color: rgba(34,211,238,.16);
+  background: linear-gradient(150deg, rgba(34,211,238,.06), rgba(8,10,23,.62) 45%, rgba(124,92,255,.08));
+}
+.pulseContext { font-size: 11px; font-weight: 650; color: #cfe9f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pulseValueRow { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.signalValue { font-size: 28px; font-weight: 800; line-height: 1.05; letter-spacing: -.04em; color: #fffaff; }
+.signalUp { color: var(--s-positive); }
+.signalDown { color: var(--s-negative); }
+.pulseFacts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: #d6d0e4; }
+.pulseFacts li { position: relative; }
+.pulseFacts li + li::before { content: ''; position: absolute; left: -8px; top: 50%; width: 3px; height: 3px; border-radius: 50%; background: var(--s-subtle); }
 
 /* Master/detail grid */
 .workspace { display: grid; grid-template-columns: minmax(235px, .31fr) minmax(0, .69fr); gap: 15px; align-items: start; }
@@ -308,8 +332,7 @@
 /* Desktop compression — the first view must contain useful content */
 @media (max-width: 1190px) {
   .workspace { grid-template-columns: minmax(215px,.34fr) minmax(0,.66fr); gap: 12px; }
-  .pulse { grid-template-columns: 1fr minmax(170px,.75fr); }
-  .pulseAction { grid-column: 2; justify-self: start; }
+  .pulse { grid-template-columns: minmax(0,1.5fr) minmax(220px,1fr); }
   .performance { grid-template-columns: 1fr; gap: 12px; }
   .metric:first-child { border-left: 0; padding-left: 0; }
   .chartAndBucket { grid-template-columns: minmax(0,1fr); }
@@ -317,9 +340,12 @@
 @media (max-width: 840px) {
   .page { padding: 0; }
   .header { align-items: center; }
-  .pulse { grid-template-columns: 1fr; padding: 18px; gap: 11px; }
-  .pulseSignal { padding-left: 0; padding-top: 9px; border-left: 0; border-top: 1px solid rgba(208,187,244,.15); }
-  .pulseAction { grid-column: auto; }
+  .pulse { grid-template-columns: 1fr; padding: 15px; gap: 10px; }
+  .pulseLead { display: contents; }
+  .pulseTop, .pulseTitle, .pulseEvidence { order: 0; }
+  .pulseSignal { order: 1; }
+  .pulseAction { order: 2; margin-top: 0; }
+  .pulseAction .primaryAction, .pulseAction .secondaryAction { width: 100%; min-height: 44px; }
   .workspace { grid-template-columns: minmax(0,1fr); }
   .leftRail { gap: 10px; }
   .sessionList { grid-template-columns: repeat(2,minmax(0,1fr)); }
@@ -332,9 +358,10 @@
   .pageTitle { font-size: 28px; }
   .pageSubtitle { font-size: 11px; line-height: 1.45; }
   .primaryAction { min-height: 36px; padding: 0 11px; }
-  .pulse { padding: 15px; min-height: auto; margin-bottom: 11px; }
-  .pulseMessage { font-size: 12px; }
-  .pulseIcon { width: 32px; height: 32px; flex-basis: 32px; }
+  .pulse { padding: 14px; gap: 10px; margin-bottom: 11px; }
+  .pulseTitle { font-size: 17px; }
+  .pulseEvidence { font-size: 12px; }
+  .signalValue { font-size: 24px; }
   .railCard { padding: 13px 11px; }
   .sessionList { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 5px; scroll-snap-type: x proximity; overscroll-behavior-inline: contain; scrollbar-width: thin; }
   .sessionRow { flex: 0 0 min(77vw,252px); min-height: 62px; scroll-snap-align: start; }
