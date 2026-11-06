@@ -5,6 +5,12 @@ import { useEffect, useState } from 'react'
 import SiteFooter from '../components/SiteFooter'
 import Button from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
+import { track } from '../../lib/track'
+
+// Pricing-page analytics. Every event goes through lib/track.js (GTM dataLayer
+// + /api/track -> analytics_events); the server attaches user_id itself, so
+// no personal data (email, name) is ever put in event properties.
+const PLAN_PRICE = { standard_monthly: 9.99, standard_annual: 99 }
 
 /*
  * IMPORTANT:
@@ -20,6 +26,12 @@ import { supabase } from '../../lib/supabase'
  */
 async function startCheckout(planType, setLoading) {
   setLoading(planType)
+  track('pricing_plan_selected', { plan_type: planType, plan_price: PLAN_PRICE[planType] })
+  let failureTracked = false
+  const fail = (reason, extra = {}) => {
+    failureTracked = true
+    track('pricing_checkout_failed', { plan_type: planType, reason, ...extra })
+  }
 
   try {
     const {
@@ -27,6 +39,7 @@ async function startCheckout(planType, setLoading) {
     } = await supabase.auth.getSession()
 
     if (!session?.access_token) {
+      fail('no_session')
       alert(
         'Your login session could not be found. Please sign in again, then return to pricing.'
       )
@@ -48,19 +61,23 @@ async function startCheckout(planType, setLoading) {
     const data = await response.json().catch(() => ({}))
 
     if (!response.ok) {
+      fail('api_error', { status_code: response.status })
       throw new Error(
         data.error || 'Unable to start Stripe Checkout.'
       )
     }
 
     if (!data.url) {
+      fail('no_checkout_url')
       throw new Error(
         'Stripe Checkout did not return a payment URL.'
       )
     }
 
+    track('pricing_checkout_redirected', { plan_type: planType, plan_price: PLAN_PRICE[planType] })
     window.location.assign(data.url)
   } catch (error) {
+    if (!failureTracked) fail('network_error')
     alert(
       error?.message ||
         'Something went wrong while opening Stripe Checkout. Please try again.'
@@ -145,6 +162,7 @@ function TopBar({ user }) {
     >
       <a
         href="/"
+        onClick={() => track('pricing_cta_clicked', { cta: 'logo', logged_in: !!user })}
         style={{
           textDecoration: 'none',
           display: 'flex',
@@ -197,6 +215,7 @@ function TopBar({ user }) {
       <Button
         as="a"
         href={user ? '/dashboard' : '/landing'}
+        onClick={() => track('pricing_cta_clicked', { cta: user ? 'topbar_dashboard' : 'topbar_create_account', logged_in: !!user })}
         style={{
           padding: '8px 18px',
           fontSize: 13,
@@ -348,6 +367,7 @@ function PricingSection({
             <Button
               as="a"
               href={user ? '/dashboard' : '/landing'}
+              onClick={() => track('pricing_cta_clicked', { cta: user ? 'free_card_dashboard' : 'free_card_start_free', logged_in: !!user })}
               variant="secondary"
               style={{
                 display: 'block',
@@ -667,9 +687,10 @@ function FAQSection() {
                 <button
                   type="button"
                   aria-expanded={isOpen}
-                  onClick={() =>
+                  onClick={() => {
+                    track('pricing_faq_toggled', { question: item.q, action: isOpen ? 'close' : 'open' })
                     setOpen(isOpen ? null : index)
-                  }
+                  }}
                   style={{
                     width: '100%',
                     display: 'flex',
@@ -786,6 +807,7 @@ function FinalCTA({ user }) {
         <Button
           as="a"
           href={user ? '/dashboard' : '/landing'}
+          onClick={() => track('pricing_cta_clicked', { cta: user ? 'final_dashboard' : 'final_create_account', logged_in: !!user })}
           style={{
             padding: '14px 28px',
           }}
@@ -798,6 +820,7 @@ function FinalCTA({ user }) {
         <Button
           as="a"
           href="/extension"
+          onClick={() => track('pricing_cta_clicked', { cta: 'final_view_extension', logged_in: !!user })}
           variant="secondary"
           style={{
             padding: '14px 28px',
@@ -883,6 +906,17 @@ function AmbientBackground() {
   )
 }
 
+function trafficSource() {
+  try {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('utm_source')) return p.get('utm_source')
+    if (!document.referrer) return 'direct'
+    return new URL(document.referrer).hostname
+  } catch {
+    return 'unknown'
+  }
+}
+
 export default function PricingClient() {
   const [checkoutLoading, setCheckoutLoading] =
     useState(null)
@@ -898,7 +932,26 @@ export default function PricingClient() {
         if (mounted) {
           setUser(session?.user || null)
         }
+        track('pricing_page_viewed', { logged_in: !!session?.user, traffic_source: trafficSource() })
       })
+      .catch(() => {
+        track('pricing_page_viewed', { logged_in: false, traffic_source: trafficSource() })
+      })
+
+    // Scroll depth: each threshold fires at most once per page view.
+    const firedDepths = new Set()
+    const onScroll = () => {
+      const doc = document.documentElement
+      const scrollable = doc.scrollHeight - window.innerHeight
+      const pct = scrollable <= 0 ? 100 : ((window.scrollY + 1) / scrollable) * 100
+      for (const t of [25, 50, 75, 100]) {
+        if (pct >= t && !firedDepths.has(t)) {
+          firedDepths.add(t)
+          track('pricing_scroll_depth', { percent: t })
+        }
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
 
     const {
       data: { subscription },
@@ -913,6 +966,7 @@ export default function PricingClient() {
     return () => {
       mounted = false
       subscription.unsubscribe()
+      window.removeEventListener('scroll', onScroll)
     }
   }, [])
 
