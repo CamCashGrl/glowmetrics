@@ -671,7 +671,8 @@ export default function SessionsOverview({ tips, shows, paidSessions, tz, showsL
   } : null
   const listed = useMemo(() => filterSessionHistory(history, { type: filter }), [history, filter])
   const rows = [...(runningEntry && (filter === "all" || filter === "live") ? [runningEntry] : []), ...listed].slice(0, ROWS)
-  const selected = rows.find((r) => r.id === selectedId) || rows[0] || null
+  // Look beyond the first ROWS listed rows, so a session the Pulse opens is selected, not replaced by rows[0].
+  const selected = rows.find((r) => r.id === selectedId) || listed.find((r) => r.id === selectedId) || rows[0] || null
   const mode = useMemo(() => sessionsMode({ tips: T0, shows: S0, paidSessions: P0, live: !!live?.session }), [tips, shows, paidSessions, live?.session]) // eslint-disable-line react-hooks/exhaustive-deps
   const scope = mode.kind === "csv" ? "overall" : mode.kind === "mixed" ? (scopePick || "today") : "today"
   const overall = useMemo(() => overallSessionStats({ tips: T0, history, paidSessions: P0 }), [history]) // eslint-disable-line react-hooks/exhaustive-deps
