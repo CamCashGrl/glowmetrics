@@ -33,63 +33,88 @@ export function pickPulse({ running = null, history = [], vsById = new Map() }) 
 
 const PulseIcon = () => (
   <span className={L.pulseIcon} aria-hidden="true">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l3-7 4 14 3-7h6" /></svg>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l3-7 4 14 3-7h6" /></svg>
   </span>
 )
 
+// Source badge: says where the numbers come from (never a performance claim).
+const sourceBadge = (kind, e) => kind === "live_now" ? "Live now"
+  : e.type === "live" ? "Live Mode"
+  : e.type === "private" ? "Imported charges"
+  : "Imported history"
+
+const typeLabel = (e) => e.type === "live" ? "Live show" : e.type === "free_chat" ? "Free chat" : e.type === "private" ? "Private" : "Imported"
+const fansText = (n) => `${n} ${n === 1 ? "fan" : "fans"}`
+
+// Presentation only: every value below is an engine output passed in as a prop
+// (session entry, sessionVsTypical, sessionFanDrivers[0], liveVerifiedHourly).
 export default function SessionsPulse({ pick, tz, topFan = null, hourly = null, onOpen, onImport = null }) {
   if (!pick) return null
   const { kind, e } = pick
-  let title, message, evidence, signalLabel, signalValue, action
+  const platform = pName(e.platforms[0])
+  const count = e.type === "private" ? e.chargeCount : e.tipCount
+  const countFacts = `${count} ${unit(e, count)} from ${fansText(e.uniqueTippers)}`
+  let title, evidence, value, valueLabel, facts = [], action
   if (kind === "live_now") {
-    title = "You're live"
-    message = `${pName(e.platforms[0])} · ${fmtDuration((e.durationMinutes || 0) * 60)} so far · ${e.tipCount} ${unit(e, e.tipCount)} from ${e.uniqueTippers} ${e.uniqueTippers === 1 ? "fan" : "fans"}.`
+    title = `You're live on ${platform}`
     evidence = "Live Mode · linked tips so far, updates as they arrive"
-    signalLabel = "Earned so far"; signalValue = fmtUsd(e.totalUSD)
+    valueLabel = "Earned so far"; value = fmtUsd(e.totalUSD)
+    facts = [`${fmtDuration((e.durationMinutes || 0) * 60)} so far`, countFacts]
     action = { label: "View show", onClick: () => onOpen(e.id) }
   } else if (kind === "new_show") {
     title = "Your show just ended"
-    message = `${pName(e.platforms[0])} Live show · ${fmtDuration((e.durationMinutes || 0) * 60)}${topFan ? ` · ${topFan.username} was your top contributor` : ""}.`
-    evidence = "Recorded by Live Mode"
-    if (hourly != null) { signalLabel = "Verified $/hr"; signalValue = `${fmtUsd(hourly)}/hr` } else { signalLabel = "Earned"; signalValue = fmtUsd(e.totalUSD) }
+    evidence = topFan ? `${topFan.username} was your top contributor · recorded by Live Mode` : "Recorded by Live Mode"
+    if (hourly != null) { valueLabel = "Verified $/hr"; value = `${fmtUsd(hourly)}/hr`; facts = [`${fmtUsd(e.totalUSD)} earned`, `${fmtDuration((e.durationMinutes || 0) * 60)} streamed`] }
+    else { valueLabel = "Earned"; value = fmtUsd(e.totalUSD); facts = [`${fmtDuration((e.durationMinutes || 0) * 60)} streamed`, countFacts] }
     action = { label: "Review show", onClick: () => onOpen(e.id) }
   } else if (kind === "comparison") {
     const { vs } = pick
     title = vs.outcome === "above" ? "Your latest session beat your usual" : vs.outcome === "below" ? "Your latest session came in under your usual" : "Your latest session matched your usual"
-    message = `${pName(e.platforms[0])} ${typeWord(e)} on ${day(e.startTime, tz)}: ${fmtUsd(e.totalUSD)} vs your median ${fmtUsd(vs.medianUSD)}.`
-    evidence = `Compared with ${vs.sessions} ${pName(e.platforms[0])} ${typeWord(e)}s · same platform and type`
-    signalLabel = "vs typical"; signalValue = vs.outcome === "par" ? "On par" : `${vs.deltaPct > 0 ? "+" : ""}${vs.deltaPct}%`
-    action = { label: "Open session", onClick: () => onOpen(e.id) }
+    evidence = `${fmtUsd(e.totalUSD)} vs your median ${fmtUsd(vs.medianUSD)} across ${vs.sessions} ${platform} ${typeWord(e)}s · same platform and type`
+    valueLabel = "vs typical"; value = vs.outcome === "par" ? "On par" : `${vs.deltaPct > 0 ? "+" : ""}${vs.deltaPct}%`
+    facts = [`${fmtUsd(e.totalUSD)} earned`, countFacts]
+    action = { label: "View session", onClick: () => onOpen(e.id) }
   } else {
-    const n = e.type === "private" ? e.chargeCount : e.tipCount
     title = pick.first ? "Your first recorded session" : "Your latest session"
-    const span = e.type === "live" ? ` over ${fmtDuration((e.durationMinutes || 0) * 60)}`
-      : e.type === "private" ? ""
-      : e.durationUnknown ? "" : ` across a ~${Math.round(e.durationMinutes || 0)}-minute activity span`
-    message = `${pName(e.platforms[0])} ${typeWord(e)} on ${day(e.startTime, tz)}: ${n} ${unit(e, n)} from ${e.uniqueTippers} ${e.uniqueTippers === 1 ? "fan" : "fans"}${span}.`
-    evidence = e.type === "live" ? "Recorded by Live Mode" : e.type === "private" ? "From imported private charges" : "Reconstructed from imported transactions"
+    const span = e.type === "live" ? `${fmtDuration((e.durationMinutes || 0) * 60)} streamed`
+      : e.type === "private" ? null
+      : e.durationUnknown ? null : `~${Math.round(e.durationMinutes || 0)}-minute activity span`
+    evidence = e.type === "live" ? "Recorded by Live Mode"
+      : e.type === "private" ? "From imported private charges · billed per charge"
+      : "Reconstructed from imported transactions · not a measured stream length"
     // Lead with what was earned and recorded (no session count as an "insight").
-    signalLabel = "Earned"; signalValue = fmtUsd(e.totalUSD)
-    // Live Mode creators review the show; imported history invites more history.
-    action = e.type !== "live" && onImport ? { label: "Import more history", onClick: onImport, secondary: true } : { label: e.type === "live" ? "Review show" : "Open session", onClick: () => onOpen(e.id), secondary: true }
+    valueLabel = "Earned"; value = fmtUsd(e.totalUSD)
+    facts = [countFacts, span].filter(Boolean)
+    // Live Mode creators review the show; a first imported session invites more history.
+    action = e.type !== "live" && pick.first && onImport ? { label: "Import more history", onClick: onImport, secondary: true }
+      : { label: e.type === "live" ? "Review show" : "View session", onClick: () => onOpen(e.id) }
   }
+  const live = kind === "live_now"
   return (
     <section data-testid="session-pulse" data-kind={kind} className={cx(L.glassFeature, L.pulse)} aria-label="Session Pulse">
       <div className={L.pulseLead}>
-        <PulseIcon />
-        <div style={{ minWidth: 0 }}>
-          <div className={L.eyebrow} style={{ marginBottom: 4 }}>Session Pulse</div>
-          <h2 className={L.pulseTitle}>{title}</h2>
-          <p className={L.pulseMessage}>{message}</p>
-          {evidence && <p className={L.pulseEvidence}>{evidence}</p>}
+        <div className={L.pulseTop}>
+          <PulseIcon />
+          <span className={L.eyebrow}>Session Pulse</span>
+          <span data-testid="pulse-source" className={cx(L.pulseBadge, live && L.pulseBadgeLive)}>{live && <span className={L.pulseLiveDot} aria-hidden="true" />}{sourceBadge(kind, e)}</span>
+        </div>
+        <h2 className={L.pulseTitle}>{title}</h2>
+        <p className={L.pulseEvidence}>{evidence}</p>
+        <div className={L.pulseAction}>
+          <button data-testid="pulse-action" onClick={action.onClick} className={action.secondary ? L.secondaryAction : L.primaryAction}>{action.label} <span aria-hidden="true">→</span></button>
         </div>
       </div>
-      <div className={L.pulseSignal}>
-        <div className={L.microLabel}>{signalLabel}</div>
-        <div data-testid="pulse-signal" className={cx(L.signalValue, L.money)}>{signalValue}</div>
-      </div>
-      <div className={L.pulseAction}>
-        <button data-testid="pulse-action" onClick={action.onClick} className={action.secondary ? L.secondaryAction : L.primaryAction}>{action.label} <span aria-hidden="true">→</span></button>
+      <div data-testid="pulse-signal-area" className={cx(L.glassInset, L.pulseSignal)}>
+        <div data-testid="pulse-context" className={L.pulseContext}>{platform} · {typeLabel(e)} · {day(e.startTime, tz)}</div>
+        <div className={L.pulseValueRow}>
+          <div data-testid="pulse-signal" className={cx(L.signalValue, L.money, kind === "comparison" && (pick.vs.outcome === "above" ? L.signalUp : pick.vs.outcome === "below" ? L.signalDown : null))}>{value}</div>
+          <div className={L.microLabel}>{valueLabel}</div>
+        </div>
+        {facts.length > 0 && (
+          <ul className={L.pulseFacts}>
+            {facts.slice(0, 2).map((f) => <li key={f}>{f}</li>)}
+          </ul>
+        )}
       </div>
     </section>
   )

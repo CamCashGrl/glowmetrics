@@ -731,3 +731,86 @@ test('Pulse recap action: Live show → review it; imported history → import m
   renderTab({ tips: freeChat, onImport: () => {} })
   expect(screen.getByTestId('pulse-action').textContent).toMatch(/Import more history/)
 })
+
+// ── Session Pulse feature card (targeted edit 01): presentation only ────────
+describe('Session Pulse feature card', () => {
+  const runSession = { id: 'run-1', status: 'live', started_at: '2026-10-07T19:00:00Z', active_duration_seconds: 2520 }
+  const runTips = [
+    { id: 9, date_time: '2026-10-07T19:30:00Z', platform: 'chaturbate', username: 'Gus', usd: 20, tokens: 400, live_session_id: 'run-1', source: 'extension' },
+    { id: 10, date_time: '2026-10-07T19:31:00Z', platform: 'bongacams', username: 'Gus', usd: 5, tokens: 200, live_session_id: 'run-1', source: 'extension' },
+  ]
+  const facts = () => Array.from(screen.getByTestId('pulse-signal-area').querySelectorAll('li')).map((li) => li.textContent)
+
+  test('one integrated signal area: context, one value, at most two facts (no KPI tile grid)', () => {
+    renderTab({ tips: freeChat })
+    expect(val('pulse-context')).toBe('BongaCams · Free chat · Wed, Oct 7')
+    expect(val('pulse-signal')).toBe('$10.00')
+    expect(facts()).toEqual(['2 tips from 2 fans', '~45-minute activity span'])
+    expect(screen.getByTestId('session-pulse').querySelectorAll('[data-testid^="overall-"]')).toHaveLength(0)
+  })
+
+  test('imported history is labelled as reconstructed; no duration claim and no $/hr', () => {
+    renderTab({ tips: csvTips })
+    const p = screen.getByTestId('session-pulse')
+    expect(val('pulse-source')).toBe('Imported history')
+    expect(p.textContent).toMatch(/Reconstructed from imported transactions · not a measured stream length/)
+    expect(p.textContent).not.toMatch(/\/hr|streamed|duration/i)
+  })
+
+  test('does not repeat the lifetime total of the Overall Performance stats', () => {
+    renderTab({ tips: csvTips }) // lifetime $55.00; latest session $15.00
+    const p = screen.getByTestId('session-pulse')
+    expect(val('pulse-signal')).toBe('$15.00')
+    expect(p.textContent).not.toMatch(/\$55\.00/)
+  })
+
+  test('rich imported history: the action opens the session (not an import upsell)', () => {
+    const onImport = jest.fn()
+    renderTab({ tips: csvTips, onImport })
+    expect(val('pulse-action')).toMatch(/View session/)
+    fireEvent.click(screen.getAllByTestId(/^history-tips:/)[1].querySelector('button') || screen.getAllByTestId(/^history-tips:/)[1]) // select another session first
+    expect(val('details-total')).not.toBe('$15.00')
+    fireEvent.click(screen.getByTestId('pulse-action')) // Pulse brings the latest session back into Details
+    expect(val('details-total')).toBe('$15.00')
+    expect(onImport).not.toHaveBeenCalled()
+  })
+
+  test('comparison: delta from sessionVsTypical, evidence names the sample', () => {
+    const day = (d, a, b) => [csvTip(d * 10, `2026-09-${String(d).padStart(2, '0')}T20:00:00Z`, 'chaturbate', 'Ann', a), csvTip(d * 10 + 1, `2026-09-${String(d).padStart(2, '0')}T20:40:00Z`, 'chaturbate', 'Ben', b)]
+    renderTab({ tips: [...day(2, 20, 10), ...day(4, 10, 10), ...day(6, 15, 5), ...day(8, 8, 2), ...day(10, 5, 5), ...day(12, 6, 4), ...day(14, 30, 10)] })
+    expect(val('pulse-signal')).toBe('+167%')
+    expect(screen.getByTestId('session-pulse').textContent).toMatch(/across 6 Chaturbate imported sessions · same platform and type/)
+    expect(facts()[0]).toBe('$40.00 earned')
+  })
+
+  test('Live now: badge, earned so far, persisted duration; no $/hr while running', () => {
+    renderTab({ tips: [...liveTips, ...runTips], shows: [show], live: { session: runSession, privateInterval: null } })
+    expect(screen.getByTestId('session-pulse').getAttribute('data-kind')).toBe('live_now')
+    expect(val('pulse-source')).toBe('Live now')
+    expect(val('pulse-signal')).toBe('$25.00')
+    expect(facts()[0]).toBe('42m so far')
+    expect(screen.getByTestId('session-pulse').textContent).not.toMatch(/\/hr/)
+  })
+
+  test('zero data: no Pulse and no fake signal, the real import action instead', () => {
+    const onImport = jest.fn()
+    renderTab({ onImport })
+    expect(screen.queryByTestId('session-pulse')).toBeNull()
+    fireEvent.click(screen.getByTestId('activation-import')); expect(onImport).toHaveBeenCalled()
+  })
+
+  test('Free: the Pulse never advertises Pro or upgrades', () => {
+    renderTab({ tips: csvTips, isPro: false, primaryPlatform: 'Chaturbate', allTips: csvTips })
+    expect(screen.getByTestId('session-pulse').textContent).not.toMatch(/Pro|upgrade/i)
+  })
+
+  test('historical stats stay available in the collapsed overview (all eight)', () => {
+    renderTab({ tips: csvTips })
+    const toggle = screen.getByTestId('period-overview-toggle')
+    expect(toggle.textContent).toMatch(/Overall performance/)
+    fireEvent.click(toggle)
+    for (const id of ['overall-public', 'overall-private', 'overall-total', 'overall-tips', 'overall-unique', 'overall-meaningful', 'overall-median', 'overall-top-tipper', 'overall-largest']) {
+      expect(screen.getByTestId(id).closest('[hidden]')).toBeNull()
+    }
+  })
+})
